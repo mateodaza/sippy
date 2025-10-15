@@ -1,126 +1,139 @@
 /**
- * SIPPY - WhatsApp Payments with PYUSD
- * Landing page for the demo
+ * SIPPY - WhatsApp Digital Assistant
+ * Clean, centered landing page
  */
 
 export default function HomePage() {
   return (
-    <div className='min-h-screen bg-gradient-to-br from-green-50 to-blue-50'>
-      <div className='container mx-auto px-4 py-8'>
+    <div className='min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-purple-50'>
+      <div className='container mx-auto px-6 py-16 max-w-6xl'>
+        
         {/* Header */}
-        <div className='text-center mb-12'>
-          <h1 className='text-4xl md:text-6xl font-bold text-gray-900 mb-4'>
-            💸 SIPPY
+        <div className='text-center mb-24'>
+          <h1 className='text-7xl md:text-8xl font-black bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-blue-500 mb-4'>
+            SIPPY
           </h1>
-          <p className='text-xl md:text-2xl text-gray-600 mb-8'>
-            Send money via WhatsApp using PYUSD
+          <div className='text-5xl mb-6'>💬</div>
+          <p className='text-3xl md:text-4xl text-gray-900 mb-6 font-bold'>
+            Your Smart WhatsApp Assistant
           </p>
-          <div className='bg-white rounded-lg shadow-lg p-6 max-w-2xl mx-auto'>
-            <h2 className='text-2xl font-semibold mb-4'>🚀 Demo Ready!</h2>
-            <p className='text-gray-700 mb-4'>
-              SIPPY allows users to create crypto wallets and send PYUSD
-              directly through WhatsApp messages.
-            </p>
-            <div className='bg-green-100 border border-green-300 rounded-lg p-4'>
-              <p className='text-green-800 font-medium'>
-                ✅ Backend server running
-                <br />
-                ✅ CDP wallets working
-                <br />✅ WhatsApp integration active
-              </p>
-            </div>
-          </div>
+          <p className='text-xl text-gray-600 max-w-3xl mx-auto'>
+            Connect, communicate, and manage your digital services through WhatsApp.
+            <br />
+            <span className='text-green-600 font-semibold'>Simple, secure, and available to everyone.</span>
+          </p>
         </div>
 
         {/* How it works */}
-        <div className='grid md:grid-cols-3 gap-8 mb-12'>
-          <div className='bg-white rounded-lg shadow-lg p-6 text-center'>
-            <div className='text-4xl mb-4'>📱</div>
-            <h3 className='text-xl font-semibold mb-2'>
-              1. Send &ldquo;start&rdquo;
-            </h3>
-            <p className='text-gray-600'>
-              Message our WhatsApp number to create your secure crypto wallet
-              instantly
-            </p>
-          </div>
-
-          <div className='bg-white rounded-lg shadow-lg p-6 text-center'>
-            <div className='text-4xl mb-4'>💰</div>
-            <h3 className='text-xl font-semibold mb-2'>2. Get your wallet</h3>
-            <p className='text-gray-600'>
-              Receive your wallet address and start receiving PYUSD
-            </p>
-          </div>
-
-          <div className='bg-white rounded-lg shadow-lg p-6 text-center'>
-            <div className='text-4xl mb-4'>🚀</div>
-            <h3 className='text-xl font-semibold mb-2'>3. Send money</h3>
-            <p className='text-gray-600'>
-              Use &ldquo;send 5 to +57XXX&rdquo; to transfer PYUSD to other
-              SIPPY users
-            </p>
-          </div>
-        </div>
-
-        {/* Commands */}
-        <div className='bg-white rounded-lg shadow-lg p-8 mb-12'>
-          <h2 className='text-2xl font-semibold mb-6 text-center'>
-            📖 Available Commands
+        <div className='mb-24'>
+          <h2 className='text-4xl md:text-5xl font-bold text-center mb-16 text-gray-900'>
+            How It Works
           </h2>
-          <div className='grid md:grid-cols-2 gap-6'>
-            <div className='bg-gray-50 rounded-lg p-4'>
-              <code className='text-green-600 font-mono'>start</code>
-              <p className='text-gray-700 mt-2'>Create your wallet</p>
+          <div className='grid md:grid-cols-3 gap-8'>
+            <div className='text-center'>
+              <div className='bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-all duration-300 h-full flex flex-col items-center justify-center'>
+                <div className='text-6xl mb-6'>📱</div>
+                <h3 className='text-2xl font-bold mb-4 text-gray-900'>1. Connect</h3>
+                <p className='text-gray-600'>
+                  Send "start" to our WhatsApp number
+                </p>
+              </div>
             </div>
-            <div className='bg-gray-50 rounded-lg p-4'>
-              <code className='text-green-600 font-mono'>balance</code>
-              <p className='text-gray-700 mt-2'>Check your PYUSD balance</p>
+
+            <div className='text-center'>
+              <div className='bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-all duration-300 h-full flex flex-col items-center justify-center'>
+                <div className='text-6xl mb-6'>🔐</div>
+                <h3 className='text-2xl font-bold mb-4 text-gray-900'>2. Setup</h3>
+                <p className='text-gray-600'>
+                  Get your secure account instantly
+                </p>
+              </div>
             </div>
-            <div className='bg-gray-50 rounded-lg p-4'>
-              <code className='text-green-600 font-mono'>
-                send 10 to +57XXX
-              </code>
-              <p className='text-gray-700 mt-2'>Send money to friends</p>
-            </div>
-            <div className='bg-gray-50 rounded-lg p-4'>
-              <code className='text-green-600 font-mono'>help</code>
-              <p className='text-gray-700 mt-2'>Show all commands</p>
+
+            <div className='text-center'>
+              <div className='bg-white rounded-2xl shadow-lg p-8 hover:shadow-xl transition-all duration-300 h-full flex flex-col items-center justify-center'>
+                <div className='text-6xl mb-6'>🚀</div>
+                <h3 className='text-2xl font-bold mb-4 text-gray-900'>3. Use</h3>
+                <p className='text-gray-600'>
+                  Access services through messages
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Tech Stack */}
-        <div className='bg-white rounded-lg shadow-lg p-8'>
-          <h2 className='text-2xl font-semibold mb-6 text-center'>
-            🛠️ Built With
+        {/* Features */}
+        <div className='mb-24'>
+          <h2 className='text-4xl md:text-5xl font-bold text-center mb-16 text-gray-900'>
+            Why Choose SIPPY?
           </h2>
-          <div className='grid md:grid-cols-4 gap-4 text-center'>
-            <div className='p-4'>
-              <div className='text-3xl mb-2'>💬</div>
-              <p className='font-semibold'>WhatsApp Cloud API</p>
+          <div className='grid md:grid-cols-4 gap-6'>
+            <div className='text-center'>
+              <div className='bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-all duration-300 h-full flex flex-col items-center'>
+                <div className='text-5xl mb-4'>🔒</div>
+                <h3 className='text-xl font-bold mb-3 text-gray-900'>Secure</h3>
+                <p className='text-gray-600 text-sm'>Enterprise-grade encryption</p>
+              </div>
             </div>
-            <div className='p-4'>
-              <div className='text-3xl mb-2'>🏦</div>
-              <p className='font-semibold'>Coinbase CDP</p>
+
+            <div className='text-center'>
+              <div className='bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-all duration-300 h-full flex flex-col items-center'>
+                <div className='text-5xl mb-4'>⚡</div>
+                <h3 className='text-xl font-bold mb-3 text-gray-900'>Instant</h3>
+                <p className='text-gray-600 text-sm'>Real-time responses 24/7</p>
+              </div>
             </div>
-            <div className='p-4'>
-              <div className='text-3xl mb-2'>💎</div>
-              <p className='font-semibold'>PYUSD</p>
+
+            <div className='text-center'>
+              <div className='bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-all duration-300 h-full flex flex-col items-center'>
+                <div className='text-5xl mb-4'>🤖</div>
+                <h3 className='text-xl font-bold mb-3 text-gray-900'>Smart</h3>
+                <p className='text-gray-600 text-sm'>AI-powered automation</p>
+              </div>
             </div>
-            <div className='p-4'>
-              <div className='text-3xl mb-2'>⚡</div>
-              <p className='font-semibold'>Arbitrum</p>
+
+            <div className='text-center'>
+              <div className='bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-all duration-300 h-full flex flex-col items-center'>
+                <div className='text-5xl mb-4'>📱</div>
+                <h3 className='text-xl font-bold mb-3 text-gray-900'>Simple</h3>
+                <p className='text-gray-600 text-sm'>No app download needed</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div className='mb-20 max-w-3xl mx-auto'>
+          <div className='bg-gradient-to-r from-green-500 to-blue-500 rounded-3xl shadow-xl p-16 text-center text-white'>
+            <h2 className='text-4xl md:text-5xl font-bold mb-6'>
+              Ready to Get Started?
+            </h2>
+            <p className='text-xl md:text-2xl mb-10'>
+              Join our growing community
+            </p>
+            <div className='bg-white rounded-2xl p-8 inline-block shadow-lg'>
+              <p className='text-gray-600 font-medium mb-2 text-lg'>Launching Soon</p>
+              <p className='text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-blue-500'>
+                SIPPY
+              </p>
+              <p className='text-gray-500 text-sm mt-3'>Stay tuned for updates</p>
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className='text-center mt-12'>
-          <p className='text-gray-500'>
-            Built for EthGlobal Hackathon 2024 • Made with ❤️
+        <footer className='text-center text-gray-500 space-y-4 pb-12 pt-8 border-t border-gray-200'>
+          <div className='flex justify-center space-x-6 text-sm'>
+            <a href='#' className='hover:text-gray-900 transition-colors'>About</a>
+            <a href='#' className='hover:text-gray-900 transition-colors'>Privacy</a>
+            <a href='#' className='hover:text-gray-900 transition-colors'>Terms</a>
+            <a href='#' className='hover:text-gray-900 transition-colors'>Contact</a>
+          </div>
+          <p className='text-sm text-gray-700'>
+            © 2025 SIPPY. All rights reserved.
           </p>
-        </div>
+        </footer>
+
       </div>
     </div>
   );

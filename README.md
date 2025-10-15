@@ -1,214 +1,299 @@
-# 💸 SIPPY - WhatsApp Payments with PYUSD
+# SIPPY - WhatsApp Payments with PYUSD
 
-**Send money via WhatsApp using PYUSD on Arbitrum!**
-
-Built for **EthGlobal Hackathon 2025** 🏆
+**Gasless crypto payments via WhatsApp using Coinbase CDP Server Wallets and PYUSD on Arbitrum**
 
 ---
 
-## 🚀 **What is SIPPY?**
+## 🎯 Vision
 
-SIPPY is a **WhatsApp-native payment system** that allows users to:
-- ✅ **Create crypto wallets instantly** via WhatsApp messages
-- 💰 **Send PYUSD** to friends using simple commands like `"send 5 to +57XXX"`
-- 📱 **Check balances** with `"balance"` command
-- 🔐 **Secure infrastructure** powered by Coinbase CDP Server Wallets
+SIPPY enables **anyone with a phone number** to send and receive PYUSD (PayPal USD stablecoin) without:
 
-**No app downloads, no complex setup - just WhatsApp! 📱**
+- Installing wallets
+- Buying ETH for gas
+- Understanding blockchain
+
+Just send a WhatsApp message: `send 5 to +573001234567`
 
 ---
 
-## 🏗️ **Architecture**
+## ✨ Current Features
+
+### 1. **WhatsApp Bot Integration**
+
+- Commands: `/start`, `/balance`, `/send [amount] to [phone]`
+- Natural language processing for payments
+- Real-time transaction notifications
+
+### 2. **Gasless Wallet Creation**
+
+- Each phone number gets a **non-custodial Coinbase CDP Server Wallet**
+- Private keys secured in Trusted Execution Environment (TEE)
+- Users never manage keys or seed phrases
+
+### 3. **PYUSD Transfers on Arbitrum**
+
+- Send PYUSD to any phone number (creates wallet if needed)
+- Transactions confirmed in seconds
+- Arbitrum explorer links for transparency
+
+### 4. **Security & Limits**
+
+- Daily spending limits per user
+- Activity tracking
+- Persistent storage in `wallets.json`
+
+---
+
+## 🏗️ Architecture
 
 ```
-WhatsApp Message → SIPPY Backend → CDP Server Wallet → Arbitrum Mainnet → PYUSD
+┌─────────────┐
+│  WhatsApp   │
+│    User     │
+└──────┬──────┘
+       │ Message: "send 5 to +57..."
+       ▼
+┌─────────────────────────────────┐
+│   Backend (Node.js/TypeScript)  │
+│                                 │
+│  ┌──────────────────────────┐  │
+│  │  WhatsApp Service        │  │
+│  │  (message parsing)       │  │
+│  └────────┬─────────────────┘  │
+│           │                     │
+│           ▼                     │
+│  ┌──────────────────────────┐  │
+│  │  CDP Wallet Service      │  │
+│  │  (create, send PYUSD)    │  │
+│  └────────┬─────────────────┘  │
+│           │                     │
+│           ▼                     │
+│  ┌──────────────────────────┐  │
+│  │ Coinbase CDP SDK v2      │  │
+│  │ (Server Wallets + TEE)   │  │
+│  └────────┬─────────────────┘  │
+└───────────┼─────────────────────┘
+            │
+            ▼
+    ┌───────────────┐
+    │   Arbitrum    │
+    │   Mainnet     │
+    │               │
+    │  PYUSD Token  │
+    └───────────────┘
 ```
 
-### **Tech Stack:**
-- **Backend**: Express.js + TypeScript + Coinbase CDP SDK
-- **Frontend**: Next.js 15 + React 19 + TailwindCSS  
-- **Blockchain**: Arbitrum Mainnet (where PYUSD lives)
-- **Wallet**: Coinbase CDP Server Wallet v2
-- **Integration**: WhatsApp Cloud API + Meta Webhooks
-
 ---
 
-## 📱 **User Flow**
+## 🚀 Getting Started
 
-1. **User sends**: `"start"` to SIPPY WhatsApp number
-2. **SIPPY creates**: Instant crypto wallet on Arbitrum
-3. **User receives**: Wallet address + instructions
-4. **User can**:
-   - `"balance"` - Check PYUSD balance
-   - `"send 5 to +573116613414"` - Send money to friends
-   - `"help"` - Show all commands
+### Prerequisites
 
-**Everything happens in WhatsApp - no external apps needed! 🎉**
-
----
-
-## 🛠️ **Setup & Development**
-
-### **Prerequisites:**
-- Node.js 18+
+- Node.js v20+
 - pnpm
-- Coinbase CDP API credentials
-- WhatsApp Business API access
-- ngrok (for webhook testing)
+- Coinbase Developer Platform (CDP) API credentials
 
-### **Backend Setup:**
+### Backend Setup
+
+1. **Install dependencies**
 
 ```bash
 cd backend
 pnpm install
+```
+
+2. **Configure environment**
+
+```bash
 cp .env.example .env
 ```
 
-**Configure `.env` with:**
-```bash
-# WhatsApp API
-WHATSAPP_ACCESS_TOKEN=your_whatsapp_token
-WHATSAPP_VERIFY_TOKEN=sippy_hackathon_2025
-PHONE_NUMBER_ID=your_phone_number_id
+Required environment variables:
 
-# Coinbase CDP
-CDP_API_KEY_NAME=your_cdp_key_name
-CDP_PRIVATE_KEY="-----BEGIN EC PRIVATE KEY-----\nYOUR_KEY_HERE\n-----END EC PRIVATE KEY-----"
+```env
+# Coinbase CDP v2 Credentials
+CDP_API_KEY_ID=your_api_key_id
+CDP_API_KEY_SECRET=your_api_key_secret
+CDP_WALLET_SECRET=your_wallet_secret
 
-# Server
-PORT=3001
-FRONTEND_URL=http://localhost:3000
+# WhatsApp Business API
+WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
+WHATSAPP_ACCESS_TOKEN=your_access_token
+WEBHOOK_VERIFY_TOKEN=your_verify_token
+
+# RPC Endpoints
+ARBITRUM_RPC_URL=https://arb-mainnet.g.alchemy.com/v2/YOUR_KEY
 ```
 
-**Run Backend:**
+3. **Run the backend**
+
 ```bash
 pnpm dev
 ```
 
-### **Frontend Setup:**
+### Frontend Setup (Basic Demo)
 
 ```bash
-cd frontend  
+cd frontend
 pnpm install
 pnpm dev
 ```
 
-**Visit**: http://localhost:3000
-
 ---
 
-## 🧪 **Testing**
+## 📱 Usage Examples
 
-### **Webhook Testing:**
-```bash
-# Terminal 1: Start backend
-cd backend && pnpm dev
-
-# Terminal 2: Expose to internet
-ngrok http 3001
-
-# Terminal 3: Test webhook
-curl -X POST http://localhost:3001/webhook/whatsapp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "object": "whatsapp_business_account",
-    "entry": [{
-      "changes": [{
-        "value": {
-          "messages": [{
-            "from": "573116613414",
-            "text": {"body": "start"}
-          }]
-        }
-      }]
-    }]
-  }'
-```
-
-### **WhatsApp Commands:**
-- `start` - Create wallet
-- `balance` - Check PYUSD balance  
-- `send 5 to +573116613414` - Send money
-- `help` - Show commands
-
----
-
-## 📊 **Current Status**
-
-### ✅ **Completed:**
-- ✅ **Backend**: Express server with webhook handling
-- ✅ **CDP Integration**: Server Wallet v2 working on Arbitrum
-- ✅ **Wallet Management**: Create + reuse wallets per phone number
-- ✅ **WhatsApp Integration**: Receiving and sending messages
-- ✅ **Commands**: start, balance, send, help implemented
-- ✅ **Frontend**: Clean demo landing page
-- ✅ **Security**: Daily/transaction limits, session management
-
-### 🚧 **In Progress:**
-- 🔧 **WhatsApp Permissions**: Add phone numbers to allowed list
-- 🧪 **End-to-end Testing**: With real PYUSD transactions  
-- 📱 **Demo Polish**: Screenshots and presentation materials
-
----
-
-## 🎯 **Prize Targets**
-
-This project targets these **EthGlobal 2025** prizes:
-- 🥇 **PayPal - PYUSD Integration Prize**
-- 🏆 **Arbitrum - Best L2 Application** 
-- 🎖️ **Coinbase - CDP Integration Prize**
-- ⭐ **Best Consumer Application**
-
----
-
-## 🔐 **Security Features**
-
-- 🛡️ **CDP Server Wallet**: Private keys secured by Coinbase TEE
-- ⏰ **Session Management**: 24-hour session expiry
-- 💰 **Spending Limits**: $500 daily, $100 per transaction  
-- 📱 **Phone Verification**: WhatsApp number as identity
-- 🔒 **No Private Keys**: Users never handle sensitive data
-
----
-
-## 📁 **Project Structure**
+### Create Wallet
 
 ```
-sippy/
-├── backend/                 # Express + TypeScript server
-│   ├── src/
-│   │   ├── commands/       # WhatsApp command handlers
-│   │   ├── services/       # CDP, WhatsApp services  
-│   │   ├── types/          # TypeScript interfaces
-│   │   └── utils/          # Message parsing utilities
-│   ├── dist/               # Compiled TypeScript
-│   └── server.ts           # Main server entry point
-├── frontend/               # Next.js React app
-│   ├── app/               # App Router pages
-│   └── components/        # React components (cleaned)
-├── docs/                  # Documentation and progress
-└── README.md             # This file
+User: /start
+Bot:  Welcome! Your wallet is ready.
+      Address: 0x5Aa5...bcde4
+      Balance: 0 PYUSD
+```
+
+### Check Balance
+
+```
+User: /balance
+Bot:  Balance: 10.5 PYUSD
+      Address: 0x5Aa5...bcde4
+```
+
+### Send PYUSD
+
+```
+User: send 5 to +573001234567
+Bot:  ✅ Sent 5 PYUSD to +573001234567
+      Tx: 0xabc123...
+      View: https://arbiscan.io/tx/0xabc123...
 ```
 
 ---
 
-## 🎬 **Demo Video**
+## 🔐 Security Model
 
-*Coming soon - will showcase complete WhatsApp payment flow*
+### Wallet Security
+
+- **Coinbase CDP Server Wallets**: Private keys stored in Coinbase's Trusted Execution Environment (TEE)
+- **No seed phrases**: Users can't lose their keys
+- **Server signing**: All transactions signed by CDP infrastructure
+
+### User Protection
+
+- Daily spending limits (configurable per user)
+- Transaction confirmations required
+- Activity logging and monitoring
+- Rate limiting on commands
+
+### Data Storage
+
+- `wallets.json`: Phone → wallet address mapping (no private keys!)
+- CDP handles all key material securely
+- Local storage for metadata only
 
 ---
 
-## 👨‍💻 **Built by**
+## 🛠️ Technology Stack
 
-**Mateo Daza** for **EthGlobal Online Hackathon 2025**
+### Backend
 
-- 🐦 Twitter: @mateodazab
-- 💼 GitHub: mateodazab
+- **Runtime**: Node.js 20 + TypeScript
+- **Framework**: Express.js
+- **Blockchain SDK**: Coinbase CDP SDK v2
+- **HTTP Client**: Axios
+- **Package Manager**: pnpm
+
+### Blockchain
+
+- **Network**: Arbitrum Mainnet
+- **Token**: PYUSD (0x46850aD61C2B7d64d08c9C754F45254596696984)
+- **Wallet Infrastructure**: Coinbase CDP Server Wallets v2
+
+### Frontend (Demo)
+
+- **Framework**: Next.js 15
+- **Styling**: Tailwind CSS
+- **Package Manager**: pnpm
 
 ---
 
-## 🚀 **What's Next?**
+## 📋 Roadmap & Next Steps
 
-See `TOMORROW-PLAN.md` for detailed next steps and demo preparation roadmap.
+### Phase 1: Core Features (Current)
 
-**Built with ❤️ for EthGlobal Hackathon 2025**
+- ✅ WhatsApp bot integration
+- ✅ Wallet creation per phone number
+- ✅ PYUSD transfers on Arbitrum
+- ✅ Balance queries
+- ✅ Daily spending limits
+
+### Phase 2: Gasless Experience (In Progress)
+
+- 🔄 **Gas Refuel Contract on Arbitrum**: Smart contract to manage ETH top-ups for users with low gas
+- 🔄 **Automatic refuel**: Backend detects low ETH and funds user automatically
+- 🔄 **"Fund My Phone"**: Frontend page with Avail Nexus SDK for cross-chain funding
+
+### Phase 3: Advanced Features (Planned)
+
+- ⏳ Multi-currency support (USDC, USDT)
+- ⏳ Group payments and splits
+- ⏳ Recurring payments
+- ⏳ Payment requests
+- ⏳ Transaction history in WhatsApp
+
+---
+
+## 🏆 EthGlobal ETHOnline 2025
+
+### Tracks & Prizes
+
+**Avail - Unified Gas Refuel**
+
+- Using Avail Nexus SDK for cross-chain ETH bridging
+- "Fund My Phone" feature: Send ETH/PYUSD to a phone number from any chain
+- Meaningful use of Bridge & Execute functionality
+
+**Coinbase - CDP Server Wallets**
+
+- Non-custodial wallets for every phone number
+- Gasless UX with server-side signing
+- PYUSD transfers on Arbitrum
+
+**PayPal - PYUSD Integration**
+
+- Native PYUSD stablecoin for payments
+- Arbitrum mainnet deployment
+- WhatsApp as payment interface
+
+---
+
+## 📚 Documentation
+
+- [Implementation Plan](./IMPLEMENTATION-PLAN.md) - Next steps and technical details
+- [Project Status](./PROJECT-STATUS.md) - What's working, what's next
+
+---
+
+## 🤝 Contributing
+
+This is a hackathon project for ETHOnline 2025.
+
+---
+
+## 📄 License
+
+MIT License - See [LICENSE](./LICENSE) for details
+
+---
+
+## 🔗 Links
+
+- [Coinbase CDP Docs](https://docs.cdp.coinbase.com/)
+- [Avail Nexus Docs](https://docs.availproject.org/nexus)
+- [Arbitrum Explorer](https://arbiscan.io/)
+- [PYUSD on Arbitrum](https://arbiscan.io/token/0x46850aD61C2B7d64d08c9C754F45254596696984)
+
+---
+
+**Built with ❤️ for ETHOnline 2025**

@@ -13,6 +13,8 @@ import {
   getUserBalance,
 } from '../services/cdp-wallet.service';
 import { sendTextMessage } from '../services/whatsapp.service';
+// TODO: Implement new GasRefuel.sol contract integration
+// import { getRefuelService } from '../services/refuel.service';
 
 /**
  * Handle "send X to +57XXX" command
@@ -109,6 +111,23 @@ export async function handleSendCommand(
         `Please wait while we process your transaction.`
     );
 
+    // TODO: Implement new GasRefuel.sol contract integration
+    // Check and refuel gas if needed using the smart contract approach
+    // See IMPLEMENTATION-PLAN.md for details
+    /*
+    let refuelMessage = '';
+    try {
+      const refuelService = getRefuelService();
+      const refuelResult = await refuelService.checkAndRefuel(senderWallet.walletAddress);
+      
+      if (refuelResult.success) {
+        refuelMessage = `⚡ Gas auto-topped up via smart contract\n\n`;
+      }
+    } catch (refuelError) {
+      console.error('⚠️ Refuel check failed:', refuelError);
+    }
+    */
+
     // Execute transfer
     console.log(`🔄 Executing transfer...`);
     const result = await sendPYUSDToUser(
@@ -118,18 +137,18 @@ export async function handleSendCommand(
     );
 
     // Send success confirmation to sender
-    await sendTextMessage(
-      fromPhoneNumber,
-      `✅ Money sent successfully!\n\n` +
-        `💰 Amount: ${amount} PYUSD\n` +
-        `📍 To: +${toPhoneNumber}\n` +
-        `🔗 Transaction: ${result.transactionHash.substring(
-          0,
-          10
-        )}...${result.transactionHash.substring(54)}\n\n` +
-        `⏰ Completed: ${new Date(result.timestamp).toLocaleString()}\n\n` +
-        `Check balance: "balance"`
-    );
+    const successMessage =
+      `✅ Enviado exitosamente\n` +
+      `• Monto: ${amount} PYUSD\n` +
+      `• Para: +${toPhoneNumber}\n` +
+      `• TX: ${result.transactionHash.substring(
+        0,
+        10
+      )}...${result.transactionHash.substring(54)}\n` +
+      `• Gas: Cubierto por SIPPY\n\n` +
+      `Balance: "balance"`;
+
+    await sendTextMessage(fromPhoneNumber, successMessage);
 
     // Notify recipient
     await sendTextMessage(

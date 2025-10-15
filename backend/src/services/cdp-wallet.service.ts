@@ -1,32 +1,29 @@
 /**
- * CDP Server Wallet Service
+ * CDP Server Wallet Service v2
  *
- * Handles wallet creation, transfers, and balance queries using Coinbase CDP Server Wallet v2
+ * Handles wallet creation, transfers, and balance queries using Coinbase CDP SDK v2
  */
 
-import { Coinbase, Wallet } from '@coinbase/coinbase-sdk';
+import { CdpClient } from '@coinbase/cdp-sdk';
+import { ethers } from 'ethers';
 import { UserWallet, SecurityLimits, TransferResult } from '../types';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-// Configure CDP (do this once at startup)
-let cdpConfigured = false;
+// PYUSD contract on Arbitrum
+const PYUSD_CONTRACT = '0x46850aD61C2B7d64d08c9C754F45254596696984';
+const PYUSD_DECIMALS = 6;
+const PYUSD_ABI = ['function balanceOf(address owner) view returns (uint256)'];
 
-function configureCDP() {
-  if (cdpConfigured) return;
+// CDP v2 Client (singleton)
+let cdpClient: CdpClient | null = null;
 
-  try {
-    Coinbase.configure({
-      apiKeyName: process.env.CDP_API_KEY_NAME || '',
-      privateKey: process.env.CDP_PRIVATE_KEY?.replace(/\\n/g, '\n') || '',
-      useServerSigner: false, // REVERT: Server Signer requires AWS infrastructure deployment
-    });
-    cdpConfigured = true;
-    console.log('✅ CDP configured successfully');
-  } catch (error) {
-    console.error('❌ Failed to configure CDP:', error);
-    throw error;
+function getCDPClient(): CdpClient {
+  if (!cdpClient) {
+    cdpClient = new CdpClient();
+    console.log('✅ CDP v2 Client initialized');
   }
+  return cdpClient;
 }
 
 // Security limits for MVP
@@ -39,7 +36,6 @@ const SECURITY_LIMITS: SecurityLimits = {
 // Persistent storage for wallets (JSON file for MVP - use database in production)
 const WALLET_STORAGE_PATH = path.join(process.cwd(), 'wallets.json');
 const userWallets = new Map<string, UserWallet>();
-const walletInstances = new Map<string, Wallet>(); // Cache wallet instances
 
 // Load wallets from persistent storage on startup
 async function loadWallets(): Promise<void> {
@@ -54,7 +50,6 @@ async function loadWallets(): Promise<void> {
     console.log(`✅ Loaded ${userWallets.size} wallets from storage`);
   } catch (error: any) {
     // CRITICAL: Only swallow file-not-found errors
-    // All other errors (corruption, permission, parse failures) should bubble up
     if (error.code === 'ENOENT') {
       console.log('📂 No existing wallet storage found - starting fresh');
       return;
@@ -82,26 +77,6 @@ async function saveWallets(): Promise<void> {
     console.log(`💾 Saved ${userWallets.size} wallets to storage`);
   } catch (error) {
     console.error('❌ Failed to save wallets:', error);
-  }
-}
-
-// Rehydrate wallet instance from CDP using wallet ID
-async function rehydrateWallet(
-  phoneNumber: string
-): Promise<Wallet | undefined> {
-  const userWallet = userWallets.get(phoneNumber);
-  if (!userWallet) return undefined;
-
-  try {
-    console.log(
-      `🔄 Rehydrating wallet ${userWallet.cdpWalletId} for +${phoneNumber}`
-    );
-    const wallet = await Wallet.fetch(userWallet.cdpWalletId);
-    walletInstances.set(phoneNumber, wallet);
-    return wallet;
-  } catch (error) {
-    console.error(`❌ Failed to rehydrate wallet for +${phoneNumber}:`, error);
-    return undefined;
   }
 }
 
@@ -136,33 +111,26 @@ export async function ensureWalletsReady(): Promise<void> {
 export async function createUserWallet(
   phoneNumber: string
 ): Promise<UserWallet> {
-  configureCDP();
-  await ensureWalletsReady(); // CRITICAL: Ensure wallets loaded before operation
+  await ensureWalletsReady();
 
   try {
     console.log(`\n🏦 Creating CDP wallet for +${phoneNumber}...`);
 
-    // Create new CDP wallet on Arbitrum Mainnet (where PYUSD is available)
-    const wallet = await Wallet.create({ networkId: 'arbitrum-mainnet' });
-    const defaultAddress = await wallet.getDefaultAddress();
-    const walletAddress = defaultAddress.getId();
+    const cdp = getCDPClient();
+    const accountName = `wallet-${phoneNumber}`;
 
-    const walletId = wallet.getId();
-    if (!walletId) {
-      throw new Error('Failed to get wallet ID');
-    }
+    // Create new account using CDP v2
+    const account = await cdp.evm.createAccount({ name: accountName });
+    const walletAddress = account.address;
 
     console.log(`✅ CDP Wallet created:`);
-    console.log(`   Wallet ID: ${walletId}`);
+    console.log(`   Account Name: ${accountName}`);
     console.log(`   Address: ${walletAddress}`);
-
-    // Cache wallet instance for future use
-    walletInstances.set(phoneNumber, wallet);
 
     // Create user wallet record
     const userWallet: UserWallet = {
       phoneNumber,
-      cdpWalletId: walletId,
+      cdpWalletId: accountName, // Store account name instead of wallet ID for v2
       walletAddress,
       createdAt: Date.now(),
       lastActivity: Date.now(),
@@ -172,7 +140,7 @@ export async function createUserWallet(
 
     // Store in memory and persist to file
     userWallets.set(phoneNumber, userWallet);
-    await saveWallets(); // Persist to storage
+    await saveWallets();
 
     console.log(`✅ User wallet registered and saved for +${phoneNumber}`);
     return userWallet;
@@ -188,7 +156,7 @@ export async function createUserWallet(
 export async function getUserWallet(
   phoneNumber: string
 ): Promise<UserWallet | null> {
-  await ensureWalletsReady(); // CRITICAL: Ensure wallets loaded before lookup
+  await ensureWalletsReady();
   return userWallets.get(phoneNumber) || null;
 }
 
@@ -198,7 +166,7 @@ export async function getUserWallet(
 export async function updateLastActivity(
   phoneNumber: string
 ): Promise<boolean> {
-  await ensureWalletsReady(); // CRITICAL: Ensure wallets loaded before lookup
+  await ensureWalletsReady();
   const userWallet = userWallets.get(phoneNumber);
   if (!userWallet) return false;
 
@@ -221,7 +189,7 @@ export async function updateLastActivity(
  * Check if user session is still valid
  */
 export async function isSessionValid(phoneNumber: string): Promise<boolean> {
-  await ensureWalletsReady(); // CRITICAL: Ensure wallets loaded before lookup
+  await ensureWalletsReady();
   const userWallet = userWallets.get(phoneNumber);
   if (!userWallet) return false;
 
@@ -238,7 +206,7 @@ export async function checkSecurityLimits(
   phoneNumber: string,
   amount: number
 ): Promise<{ allowed: boolean; reason?: string }> {
-  await ensureWalletsReady(); // CRITICAL: Ensure wallets loaded before lookup
+  await ensureWalletsReady();
   const userWallet = userWallets.get(phoneNumber);
   if (!userWallet) {
     return { allowed: false, reason: 'User wallet not found' };
@@ -265,11 +233,10 @@ export async function checkSecurityLimits(
 }
 
 /**
- * Get PYUSD balance for user
+ * Get PYUSD balance for user using ethers.js
  */
 export async function getUserBalance(phoneNumber: string): Promise<number> {
-  configureCDP();
-  await ensureWalletsReady(); // CRITICAL: Ensure wallets loaded before operation
+  await ensureWalletsReady();
 
   const userWallet = userWallets.get(phoneNumber);
   if (!userWallet) {
@@ -277,23 +244,22 @@ export async function getUserBalance(phoneNumber: string): Promise<number> {
   }
 
   try {
-    console.log(`\n💰 Getting balance for +${phoneNumber}...`);
+    console.log(`\n💰 Getting PYUSD balance for +${phoneNumber}...`);
 
-    // Try to get cached wallet instance first, then rehydrate if needed
-    let wallet = walletInstances.get(phoneNumber);
-    if (!wallet) {
-      console.log(`🔄 Wallet not in cache, rehydrating from CDP...`);
-      wallet = await rehydrateWallet(phoneNumber);
-      if (!wallet) {
-        throw new Error('Failed to rehydrate wallet from CDP');
-      }
-    }
+    // Use ethers to check PYUSD balance directly
+    const provider = new ethers.providers.JsonRpcProvider(
+      'https://arb1.arbitrum.io/rpc'
+    );
+    const pyusdContract = new ethers.Contract(
+      PYUSD_CONTRACT,
+      PYUSD_ABI,
+      provider
+    );
 
-    const defaultAddress = await wallet.getDefaultAddress();
-
-    // Get PYUSD balance on Arbitrum
-    const balance = await defaultAddress.getBalance('PYUSD');
-    const balanceAmount = parseFloat(balance.toString());
+    const balance = await pyusdContract.balanceOf(userWallet.walletAddress);
+    const balanceAmount = parseFloat(
+      ethers.utils.formatUnits(balance, PYUSD_DECIMALS)
+    );
 
     console.log(`✅ Balance: ${balanceAmount} PYUSD`);
     return balanceAmount;
@@ -304,15 +270,14 @@ export async function getUserBalance(phoneNumber: string): Promise<number> {
 }
 
 /**
- * Send PYUSD to another address
+ * Send PYUSD to another address using CDP SDK v2
  */
 export async function sendPYUSD(
   fromPhoneNumber: string,
   toAddress: string,
   amount: number
 ): Promise<TransferResult> {
-  configureCDP();
-  await ensureWalletsReady(); // CRITICAL: Ensure wallets loaded before operation
+  await ensureWalletsReady();
 
   const userWallet = userWallets.get(fromPhoneNumber);
   if (!userWallet) {
@@ -324,36 +289,53 @@ export async function sendPYUSD(
       `\n💸 Sending ${amount} PYUSD from +${fromPhoneNumber} to ${toAddress}...`
     );
 
-    // Try to get cached wallet instance first, then rehydrate if needed
-    let wallet = walletInstances.get(fromPhoneNumber);
-    if (!wallet) {
-      console.log(`🔄 Wallet not in cache, rehydrating from CDP...`);
-      wallet = await rehydrateWallet(fromPhoneNumber);
-      if (!wallet) {
-        throw new Error('Failed to rehydrate wallet from CDP');
-      }
-    }
+    const cdp = getCDPClient();
 
-    // Create gasless transfer (no ETH needed for gas fees)
-    const transfer = await wallet.createTransfer({
-      amount: amount,
-      assetId: 'PYUSD',
-      destination: toAddress,
-      gasless: true, // EXPERIMENT: Test if gasless works with Smart Accounts/Paymasters
+    // Get account by name
+    const accountName = userWallet.cdpWalletId; // This is the account name
+    const account = await cdp.evm.getOrCreateAccount({ name: accountName });
+
+    console.log(`✅ Account loaded: ${account.address}`);
+
+    // Prepare PYUSD transfer call data
+    console.log(`📝 Preparing PYUSD transfer...`);
+
+    // Use ethers.utils.parseUnits for precise decimal handling (avoids float precision issues)
+    const amountBigNumber = ethers.utils.parseUnits(
+      amount.toString(),
+      PYUSD_DECIMALS
+    );
+    const selector = '0xa9059cbb'; // transfer(address,uint256)
+    const toAddressPadded = ethers.utils.hexZeroPad(toAddress, 32).slice(2);
+    const amountPadded = ethers.utils
+      .hexZeroPad(amountBigNumber.toHexString(), 32)
+      .slice(2);
+    const callData =
+      `${selector}${toAddressPadded}${amountPadded}` as `0x${string}`;
+
+    console.log(
+      `   Amount: ${amount} PYUSD (${amountBigNumber.toString()} units)`
+    );
+    console.log(`   Sending transaction...\n`);
+
+    // Send transaction via CDP v2
+    const result = await cdp.evm.sendTransaction({
+      address: account.address,
+      transaction: {
+        to: PYUSD_CONTRACT as `0x${string}`,
+        data: callData,
+      },
+      network: 'arbitrum' as any,
     });
 
-    // Wait for completion
-    await transfer.wait();
-    const transactionHash = transfer.getTransactionHash();
+    console.log(`✅ Transfer successful! Hash: ${result.transactionHash}`);
 
     // Update daily spending and persist
     userWallet.dailySpent += amount;
-    await updateLastActivity(fromPhoneNumber); // This now persists automatically
-
-    console.log(`✅ Transfer completed! Hash: ${transactionHash}`);
+    await updateLastActivity(fromPhoneNumber);
 
     return {
-      transactionHash: transactionHash || '',
+      transactionHash: result.transactionHash,
       amount,
       recipient: toAddress,
       timestamp: Date.now(),
@@ -372,7 +354,7 @@ export async function sendPYUSDToUser(
   toPhoneNumber: string,
   amount: number
 ): Promise<TransferResult> {
-  await ensureWalletsReady(); // CRITICAL: Ensure wallets loaded before operation
+  await ensureWalletsReady();
 
   const toUserWallet = userWallets.get(toPhoneNumber);
   if (!toUserWallet) {
@@ -392,7 +374,7 @@ export async function getAllWallets(): Promise<
     address: string;
   }>
 > {
-  await ensureWalletsReady(); // CRITICAL: Ensure wallets loaded before lookup
+  await ensureWalletsReady();
   return Array.from(userWallets.entries()).map(([phone, wallet]) => ({
     phone: `+${phone}`,
     wallet: wallet.cdpWalletId,
