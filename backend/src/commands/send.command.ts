@@ -13,8 +13,7 @@ import {
   getUserBalance,
 } from '../services/cdp-wallet.service';
 import { sendTextMessage } from '../services/whatsapp.service';
-// TODO: Implement new GasRefuel.sol contract integration
-// import { getRefuelService } from '../services/refuel.service';
+import { getRefuelService } from '../services/refuel.service';
 
 /**
  * Handle "send X to +57XXX" command
@@ -111,22 +110,29 @@ export async function handleSendCommand(
         `Please wait while we process your transaction.`
     );
 
-    // TODO: Implement new GasRefuel.sol contract integration
-    // Check and refuel gas if needed using the smart contract approach
-    // See IMPLEMENTATION-PLAN.md for details
-    /*
-    let refuelMessage = '';
+    // Check and refuel gas if needed using the GasRefuel smart contract
+    let refuelTxHash = '';
     try {
       const refuelService = getRefuelService();
-      const refuelResult = await refuelService.checkAndRefuel(senderWallet.walletAddress);
       
-      if (refuelResult.success) {
-        refuelMessage = `⚡ Gas auto-topped up via smart contract\n\n`;
+      if (refuelService.isAvailable()) {
+        console.log('⛽ Checking if refuel is needed for', senderWallet.walletAddress);
+        const refuelResult = await refuelService.checkAndRefuel(senderWallet.walletAddress);
+        
+        if (refuelResult.success) {
+          refuelTxHash = refuelResult.txHash || '';
+          console.log('✅ Gas auto-refueled via smart contract');
+          console.log('  • Refuel TX:', refuelTxHash);
+        } else {
+          console.log('ℹ️ No refuel needed:', refuelResult.error);
+        }
+      } else {
+        console.log('⚠️ Refuel service not configured');
       }
     } catch (refuelError) {
       console.error('⚠️ Refuel check failed:', refuelError);
+      // Continue with transfer even if refuel fails
     }
-    */
 
     // Execute transfer
     console.log(`🔄 Executing transfer...`);

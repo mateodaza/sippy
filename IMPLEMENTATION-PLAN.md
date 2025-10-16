@@ -181,11 +181,11 @@ contract GasRefuel is Ownable, Pausable, ReentrancyGuard {
 
 **Tasks:**
 
-- [ ] Create Hardhat project structure
-- [ ] Write and test contract
-- [ ] Deploy to Arbitrum mainnet
-- [ ] Verify contract on Arbiscan
-- [ ] Fund contract with initial ETH (~0.1 ETH)
+- [x] Create Hardhat project structure
+- [x] Write and test contract (11/11 tests passing)
+- [x] Deploy to Arbitrum mainnet (`0xC8367a549e05D9184B8e320856cb9A10FDc1DE46`)
+- [x] Verify contract on Arbiscan
+- [x] Fund contract with initial ETH (0.005 ETH)
 
 ---
 
@@ -257,10 +257,10 @@ export class RefuelService {
 
 **Tasks:**
 
-- [ ] Create `refuel.service.ts`
-- [ ] Integrate with `cdp-wallet.service.ts`
-- [ ] Add error handling and logging
-- [ ] Test with real transactions
+- [x] Create `refuel.service.ts`
+- [x] Integrate with `cdp-wallet.service.ts` (auto-refuel before each transfer)
+- [x] Add error handling and logging
+- [x] Test with real transactions (successful test with TX `0xb85a5199ce2c5e16eac86d55ad22586fc8c62bf1dc096a5cb2511aeeef70c2eb`)
 
 ---
 

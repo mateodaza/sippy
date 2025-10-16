@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Environment variables (sensitive!)
+.env
+
+# Test coverage
+coverage/
+coverage.json
+
+# Hardhat
+cache/
+artifacts/
+typechain/
+typechain-types/
+
+# Logs
+*.log
+scripts/*.log
+
+# OS
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Editor
+.vscode/
+.idea/
+
+# Don't ignore lock files - they ensure consistent builds
+# pnpm-lock.yaml should be committed
+

@@ -228,11 +228,12 @@ Bot:  ✅ Sent 5 PYUSD to +573001234567
 - ✅ Balance queries
 - ✅ Daily spending limits
 
-### Phase 2: Gasless Experience (In Progress)
+### Phase 2: Gasless Experience
 
-- 🔄 **Gas Refuel Contract on Arbitrum**: Smart contract to manage ETH top-ups for users with low gas
-- 🔄 **Automatic refuel**: Backend detects low ETH and funds user automatically
-- 🔄 **"Fund My Phone"**: Frontend page with Avail Nexus SDK for cross-chain funding
+- ✅ **Gas Refuel Contract**: Deployed on Arbitrum (`0xC8367a549e05D9184B8e320856cb9A10FDc1DE46`)
+- ✅ **Automatic refuel**: Works! Detects balance < 0.00001 ETH and auto-funds before each PYUSD transfer
+- ✅ **Tested in production**: Successfully refueled and sent PYUSD in complete flow test
+- 🔄 **"Fund My Phone"**: Frontend with Avail Nexus SDK for cross-chain funding (next)
 
 ### Phase 3: Advanced Features (Planned)
 
@@ -272,6 +273,9 @@ Bot:  ✅ Sent 5 PYUSD to +573001234567
 
 - [Implementation Plan](./IMPLEMENTATION-PLAN.md) - Next steps and technical details
 - [Project Status](./PROJECT-STATUS.md) - What's working, what's next
+- [GasRefuel Implementation](./GASREFUEL_IMPLEMENTATION.md) - Complete guide for gas refuel system
+- [Backend Refuel Setup](./backend/REFUEL_SETUP.md) - Backend integration guide
+- [Contract Documentation](./contracts/gas-refuel/README.md) - Smart contract details
 
 ---
 
