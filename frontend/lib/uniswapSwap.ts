@@ -114,7 +114,21 @@ async function getQuote(
       path,
     };
   } catch (error: any) {
-    console.error('Failed to get quote:', error);
+    console.error('❌ Failed to get quote:', error);
+
+    // Check if it's a liquidity/pool issue
+    if (
+      error.message?.includes('INSUFFICIENT_LIQUIDITY') ||
+      error.message?.includes('cannot estimate') ||
+      error.code === 'UNPREDICTABLE_GAS_LIMIT'
+    ) {
+      throw new Error(
+        'Insufficient liquidity for WETH→USDC→PYUSD swap on Uniswap. ' +
+          'The PYUSD pools on Arbitrum may not have enough liquidity for this trade. ' +
+          'Try a smaller amount or check pool status at app.uniswap.org'
+      );
+    }
+
     throw new Error('Failed to get swap quote: ' + error.message);
   }
 }
@@ -252,9 +266,31 @@ export async function swapETHToPYUSD(
     }
   } catch (error: any) {
     console.error('❌ Swap error:', error);
+
+    let errorMessage = error.message || 'Unknown error';
+
+    // Provide user-friendly error messages
+    if (error.code === 'INSUFFICIENT_FUNDS') {
+      errorMessage = 'Insufficient ETH balance to complete the swap';
+    } else if (error.code === 'UNPREDICTABLE_GAS_LIMIT') {
+      errorMessage =
+        'Swap simulation failed. The PYUSD pool may not have enough liquidity.';
+    } else if (
+      error.message?.includes('user rejected') ||
+      error.code === 4001
+    ) {
+      errorMessage = 'Transaction cancelled by user';
+    } else if (error.message?.includes('insufficient liquidity')) {
+      errorMessage =
+        'Insufficient liquidity in PYUSD pool. Try a smaller amount.';
+    } else if (error.message?.includes('network')) {
+      errorMessage =
+        'Network error. Please check your connection and try again.';
+    }
+
     return {
       success: false,
-      error: error.message || 'Unknown error',
+      error: errorMessage,
     };
   }
 }

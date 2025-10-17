@@ -10,8 +10,8 @@ import { UserWallet, SecurityLimits, TransferResult } from '../types/index.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 
-// PYUSD contract on Arbitrum
-const PYUSD_CONTRACT = '0x46850aD61C2B7d64d08c9C754F45254596696984';
+// PYUSD contract on Arbitrum (verified via successful transactions)
+const PYUSD_CONTRACT = '0x46850ad61c2b7d64d08c9c754f45254596696984';
 const PYUSD_DECIMALS = 6;
 const PYUSD_ABI = ['function balanceOf(address owner) view returns (uint256)'];
 

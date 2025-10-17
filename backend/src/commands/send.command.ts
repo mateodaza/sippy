@@ -114,11 +114,16 @@ export async function handleSendCommand(
     let refuelTxHash = '';
     try {
       const refuelService = getRefuelService();
-      
+
       if (refuelService.isAvailable()) {
-        console.log('⛽ Checking if refuel is needed for', senderWallet.walletAddress);
-        const refuelResult = await refuelService.checkAndRefuel(senderWallet.walletAddress);
-        
+        console.log(
+          '⛽ Checking if refuel is needed for',
+          senderWallet.walletAddress
+        );
+        const refuelResult = await refuelService.checkAndRefuel(
+          senderWallet.walletAddress
+        );
+
         if (refuelResult.success) {
           refuelTxHash = refuelResult.txHash || '';
           console.log('✅ Gas auto-refueled via smart contract');
@@ -143,16 +148,21 @@ export async function handleSendCommand(
     );
 
     // Send success confirmation to sender
-    const successMessage =
+    let successMessage =
       `✅ Enviado exitosamente\n` +
       `• Monto: ${amount} PYUSD\n` +
       `• Para: +${toPhoneNumber}\n` +
       `• TX: ${result.transactionHash.substring(
         0,
         10
-      )}...${result.transactionHash.substring(54)}\n` +
-      `• Gas: Cubierto por SIPPY\n\n` +
-      `Balance: "balance"`;
+      )}...${result.transactionHash.substring(54)}\n`;
+
+    // Only show gas covered message if refuel was successful
+    if (refuelTxHash) {
+      successMessage += `• Gas: Cubierto por SIPPY\n`;
+    }
+
+    successMessage += `\nBalance: "balance"`;
 
     await sendTextMessage(fromPhoneNumber, successMessage);
 

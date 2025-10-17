@@ -151,7 +151,7 @@ export function NexusProvider({ children, isConnected }: NexusProviderProps) {
               try {
                 const result2 = await sdk.transfer({
                   token: {
-                    address: '0x6c3ea9036406852006290770BEdFcAbA0e23A0e8',
+                    address: '0x46850aD61C2B7d64d08c9C754F45254596696984',
                     symbol: 'PYUSD',
                     decimals: 6,
                   } as any,
@@ -171,7 +171,7 @@ export function NexusProvider({ children, isConnected }: NexusProviderProps) {
                 const result3 = await sdk.bridge({
                   chainId: 1, // From Ethereum
                   token: {
-                    address: '0x6c3ea9036406852006290770BEdFcAbA0e23A0e8',
+                    address: '0x46850aD61C2B7d64d08c9C754F45254596696984',
                     symbol: 'PYUSD',
                     decimals: 6,
                   } as any,
@@ -211,7 +211,7 @@ export function NexusProvider({ children, isConnected }: NexusProviderProps) {
                 '0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6';
               const USDC_ADDRESS = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'; // Arbitrum USDC
               const PYUSD_ADDRESS =
-                '0x6c3ea9036406852006290770BEdFcAbA0e23A0e8'; // Arbitrum PYUSD
+                '0x46850aD61C2B7d64d08c9C754F45254596696984'; // Arbitrum PYUSD
 
               // Check if we're on Arbitrum
               const provider = (window as any).ethereum;
