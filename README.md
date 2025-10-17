@@ -26,7 +26,7 @@ Just send a WhatsApp message: `send 5 to +573001234567`
 
 ### 2. **Gasless Wallet Creation**
 
-- Each phone number gets a **non-custodial Coinbase CDP Server Wallet**
+- Each phone number gets a **Coinbase CDP Server Wallet**
 - Private keys secured in Trusted Execution Environment (TEE)
 - Users never manage keys or seed phrases
 
@@ -305,7 +305,7 @@ See `frontend/TESTING.md` for detailed testing guide and QA checklist.
 
 **Coinbase - CDP Server Wallets**
 
-- Non-custodial wallets for every phone number
+- wallets for every phone number
 - Gasless UX with server-side signing
 - PYUSD transfers on Arbitrum
 
@@ -330,12 +330,6 @@ See `frontend/TESTING.md` for detailed testing guide and QA checklist.
 ## 🤝 Contributing
 
 This is a hackathon project for ETHOnline 2025.
-
----
-
-## 📄 License
-
-MIT License - See [LICENSE](./LICENSE) for details
 
 ---
 

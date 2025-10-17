@@ -22,10 +22,13 @@ import { useAccount } from 'wagmi';
 interface NexusContextType {
   nexusSdk: NexusSDK | undefined;
   isInitialized: boolean;
+  isInitializing: boolean;
+  initializationStep: string;
   allowanceModal: OnAllowanceHookData | null;
   setAllowanceModal: Dispatch<SetStateAction<OnAllowanceHookData | null>>;
   intentModal: OnIntentHookData | null;
   setIntentModal: Dispatch<SetStateAction<OnIntentHookData | null>>;
+  initializeSDK: () => Promise<void>;
   cleanupSDK: () => void;
 }
 
@@ -39,6 +42,8 @@ interface NexusProviderProps {
 export function NexusProvider({ children, isConnected }: NexusProviderProps) {
   const [nexusSdk, setNexusSdk] = useState<NexusSDK | undefined>(undefined);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [isInitializing, setIsInitializing] = useState<boolean>(false);
+  const [initializationStep, setInitializationStep] = useState<string>('');
   const [allowanceModal, setAllowanceModal] =
     useState<OnAllowanceHookData | null>(null);
   const [intentModal, setIntentModal] = useState<OnIntentHookData | null>(null);
@@ -47,7 +52,12 @@ export function NexusProvider({ children, isConnected }: NexusProviderProps) {
 
   const initializeSDK = useCallback(async () => {
     if (isConnected && !nexusSdk && connector) {
+      if (isInitializing) return; // Prevent multiple calls
+
       try {
+        setIsInitializing(true);
+        setInitializationStep('Connecting to wallet...');
+
         // Get the EIP-1193 provider from the connector
         const isTestnet = process.env.NEXT_PUBLIC_ENABLE_TESTNET === 'true';
         const provider = (await connector.getProvider()) as EthereumProvider;
@@ -60,15 +70,21 @@ export function NexusProvider({ children, isConnected }: NexusProviderProps) {
           throw new Error('No EIP-1193 provider available');
         }
 
+        setInitializationStep('Creating Nexus SDK...');
         const sdk = new NexusSDK({
           network: isTestnet ? 'testnet' : 'mainnet',
           debug: true,
         });
 
+        setInitializationStep('Waiting for signature...');
         console.log('⏳ Initializing SDK with provider...');
+        console.log(
+          '🔐 Please sign the message in your wallet to initialize Nexus SDK'
+        );
         await sdk.initialize(provider);
         console.log('✅ SDK initialized successfully');
         setNexusSdk(sdk);
+        setInitializationStep('');
 
         console.log('Nexus SDK initialized');
         const supportedChains = sdk.utils.getSupportedChains();
@@ -97,6 +113,7 @@ export function NexusProvider({ children, isConnected }: NexusProviderProps) {
         }
 
         setIsInitialized(true);
+        setIsInitializing(false);
 
         // Expose SDK to window for testing
         if (typeof window !== 'undefined') {
@@ -371,6 +388,8 @@ export function NexusProvider({ children, isConnected }: NexusProviderProps) {
       } catch (error) {
         console.error('Failed to initialize NexusSDK:', error);
         setIsInitialized(false);
+        setIsInitializing(false);
+        setInitializationStep('');
       }
     }
   }, [isConnected, nexusSdk, connector]);
@@ -380,32 +399,45 @@ export function NexusProvider({ children, isConnected }: NexusProviderProps) {
       nexusSdk.deinit();
       setNexusSdk(undefined);
       setIsInitialized(false);
+      setIsInitializing(false);
+      setInitializationStep('');
     }
   }, [nexusSdk]);
 
   useEffect(() => {
     if (!isConnected) {
       cleanupSDK();
-    } else {
-      initializeSDK();
     }
+    // Note: We no longer auto-initialize. User must click "Initialize Bridge" button.
 
     return () => {
       cleanupSDK();
     };
-  }, [isConnected, cleanupSDK, initializeSDK]);
+  }, [isConnected, cleanupSDK]);
 
   const contextValue: NexusContextType = useMemo(
     () => ({
       nexusSdk,
       isInitialized,
+      isInitializing,
+      initializationStep,
       allowanceModal,
       setAllowanceModal,
       intentModal,
       setIntentModal,
+      initializeSDK,
       cleanupSDK,
     }),
-    [nexusSdk, isInitialized, allowanceModal, intentModal, cleanupSDK]
+    [
+      nexusSdk,
+      isInitialized,
+      isInitializing,
+      initializationStep,
+      allowanceModal,
+      intentModal,
+      initializeSDK,
+      cleanupSDK,
+    ]
   );
 
   return (

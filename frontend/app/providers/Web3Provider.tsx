@@ -61,7 +61,7 @@ function InternalProvider({ children }: { children: ReactNode }) {
 
 export function Web3Provider({ children }: { children: ReactNode }) {
   return (
-    <WagmiProvider config={config} reconnectOnMount={false}>
+    <WagmiProvider config={config} reconnectOnMount={true}>
       <QueryClientProvider client={queryClient}>
         <InternalProvider>{children}</InternalProvider>
       </QueryClientProvider>
