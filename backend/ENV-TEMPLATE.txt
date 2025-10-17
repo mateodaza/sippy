@@ -1,0 +1,26 @@
+# Copia este contenido a un archivo .env en el mismo directorio
+
+# WhatsApp Business API (Meta)
+# Get these from: https://developers.facebook.com/apps/
+WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id_here
+WHATSAPP_ACCESS_TOKEN=your_permanent_access_token_here
+WHATSAPP_VERIFY_TOKEN=sippy_hackathon_2025
+
+# Coinbase CDP SDK v2
+# Get these from: https://portal.cdp.coinbase.com/
+CDP_API_KEY_ID=your_api_key_id
+CDP_API_KEY_SECRET=your_api_key_secret
+CDP_WALLET_SECRET=your_wallet_secret_ec_private_key
+
+# Arbitrum Network RPC
+ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
+
+# Gas Refuel Contract (Optional - for auto gas coverage)
+# Deploy contract from /contracts/gas-refuel first
+REFUEL_CONTRACT_ADDRESS=0xYourGasRefuelContractAddress
+REFUEL_ADMIN_PRIVATE_KEY=0xYourPrivateKeyWithFunds
+
+# Server Configuration
+PORT=3001
+NODE_ENV=production
+
