@@ -6,7 +6,7 @@
 
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { ethers } from 'ethers';
-import { UserWallet, SecurityLimits, TransferResult } from '../types';
+import { UserWallet, SecurityLimits, TransferResult } from '../types/index.js';
 import { promises as fs } from 'fs';
 import path from 'path';
 

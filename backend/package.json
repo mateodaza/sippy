@@ -1,14 +1,15 @@
 {
   "name": "sippy-backend",
   "version": "1.0.0",
+  "type": "module",
   "description": "SIPPY WhatsApp payment backend",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
     "start": "npm run build && node dist/server.js",
-    "dev": "ts-node server.ts",
-    "dev:watch": "nodemon --exec ts-node server.ts",
-    "test-webhook": "ts-node webhook-test.ts"
+    "dev": "tsx server.ts",
+    "dev:watch": "nodemon --exec tsx server.ts",
+    "test-webhook": "tsx webhook-test.ts"
   },
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.38.4",

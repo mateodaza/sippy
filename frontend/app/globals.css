@@ -60,3 +60,39 @@
     transform: translateY(0);
   }
 }
+
+/* Phone Input Customization */
+.react-international-phone-input-container {
+  width: 100%;
+}
+
+.react-international-phone-input-container .react-international-phone-input {
+  width: 100%;
+  padding-left: 3.5rem;
+  padding-right: 1rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+
+.react-international-phone-input-container
+  .react-international-phone-input:focus {
+  outline: none;
+  ring: 2px;
+  ring-color: #3b82f6;
+  border-color: transparent;
+}
+
+.react-international-phone-country-selector-button {
+  border: none !important;
+  border-right: 1px solid #d1d5db !important;
+  padding: 0.5rem !important;
+}
+
+.react-international-phone-country-selector-dropdown {
+  max-height: 300px;
+  overflow-y: auto;
+}

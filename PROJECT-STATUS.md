@@ -214,7 +214,7 @@ sippy/
 │   └── package.json           ✅ Dependencies
 │
 ├── README.md                  ✅ Project overview
-├── IMPLEMENTATION-PLAN.md     ✅ Next steps
+├── DEV-NOTES-2025-10-16.md    ✅ Current notes & next steps
 └── PROJECT-STATUS.md          ✅ Current state (this file)
 ```
 

@@ -233,7 +233,55 @@ Bot:  ✅ Sent 5 PYUSD to +573001234567
 - ✅ **Gas Refuel Contract**: Deployed on Arbitrum (`0xC8367a549e05D9184B8e320856cb9A10FDc1DE46`)
 - ✅ **Automatic refuel**: Works! Detects balance < 0.00001 ETH and auto-funds before each PYUSD transfer
 - ✅ **Tested in production**: Successfully refueled and sent PYUSD in complete flow test
-- 🔄 **"Fund My Phone"**: Frontend with Avail Nexus SDK for cross-chain funding (next)
+- ✅ **"Fund My Phone"**: Frontend with Avail Nexus SDK for cross-chain ETH bridging
+
+#### Fund My Phone (Cross-Chain ETH Bridge) 🆕
+
+**Send gas to any phone number from ANY supported blockchain!**
+
+**Features:**
+
+- 🔗 **Unified Balance**: Aggregates ETH from Ethereum, Optimism, Base, Polygon & Arbitrum
+- 🤖 **Smart Routing**: Automatically selects best source chain for lowest fees
+- 🌍 **Professional Phone Input**: Country picker with auto-formatting (+57 311...)
+- 🎯 **Simple UX**: Just phone number + transaction count (1, 5, 10, or 20 tx)
+- 🔐 **Clear Wallet Connection**: Choose between MetaMask, Coinbase Wallet, WalletConnect
+
+**How to Use:**
+
+1. Go to http://localhost:3000/fund
+2. **Connect wallet** - clear modal shows all supported wallets
+3. **Enter phone** - use country picker to select code
+4. **Choose gas amount** - pick how many transactions (auto-calculates ETH)
+5. **Sign once** - clear message explains what you're signing
+6. **Done!** - ETH arrives on Arbitrum in ~30 seconds
+
+**Setup:**
+
+```bash
+# Frontend
+cd frontend
+pnpm install
+pnpm dev  # runs on http://localhost:3000
+
+# Backend (must be running)
+cd backend
+pnpm start  # runs on http://localhost:3001
+
+# Environment variables
+# Frontend: Create .env.local (optional)
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id
+
+# Backend: Uses existing .env (no changes needed)
+```
+
+**Testing:**  
+See `frontend/TESTING.md` for detailed testing guide and QA checklist.
+
+**PYUSD Bridge Research:**
+
+- See `PYUSD-RESEARCH.md` for cross-chain options
+- See `PYUSD-MAINNET-ARBITRUM.md` for Ethereum→Arbitrum implementation plan
 
 ### Phase 3: Advanced Features (Planned)
 
@@ -271,7 +319,7 @@ Bot:  ✅ Sent 5 PYUSD to +573001234567
 
 ## 📚 Documentation
 
-- [Implementation Plan](./IMPLEMENTATION-PLAN.md) - Next steps and technical details
+- [Developer Notes (2025-10-16)](./DEV-NOTES-2025-10-16.md) - Current state and next steps
 - [Project Status](./PROJECT-STATUS.md) - What's working, what's next
 - [GasRefuel Implementation](./GASREFUEL_IMPLEMENTATION.md) - Complete guide for gas refuel system
 - [Backend Refuel Setup](./backend/REFUEL_SETUP.md) - Backend integration guide

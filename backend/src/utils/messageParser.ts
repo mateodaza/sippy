@@ -4,7 +4,7 @@
  * Parse incoming WhatsApp messages and extract commands
  */
 
-import { ParsedCommand } from '../types';
+import { ParsedCommand } from '../types/index.js';
 
 /**
  * Parse a message and determine command type

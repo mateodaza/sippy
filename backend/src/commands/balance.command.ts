@@ -10,8 +10,8 @@ import {
   isSessionValid,
   updateLastActivity,
   getSecurityLimits,
-} from '../services/cdp-wallet.service';
-import { sendTextMessage } from '../services/whatsapp.service';
+} from '../services/cdp-wallet.service.js';
+import { sendTextMessage } from '../services/whatsapp.service.js';
 
 /**
  * Handle "balance" command

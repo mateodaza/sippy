@@ -11,9 +11,9 @@ import {
   checkSecurityLimits,
   sendPYUSDToUser,
   getUserBalance,
-} from '../services/cdp-wallet.service';
-import { sendTextMessage } from '../services/whatsapp.service';
-import { getRefuelService } from '../services/refuel.service';
+} from '../services/cdp-wallet.service.js';
+import { sendTextMessage } from '../services/whatsapp.service.js';
+import { getRefuelService } from '../services/refuel.service.js';
 
 /**
  * Handle "send X to +57XXX" command

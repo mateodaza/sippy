@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { Web3Provider } from './providers/Web3Provider';
 
 export const metadata: Metadata = {
   title: 'SIPPY - WhatsApp Digital Assistant',
@@ -23,19 +24,21 @@ export default function RootLayout({
   return (
     <html lang='en'>
       <body>
-        <script
-          type='application/ld+json'
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'Organization',
-              name: 'SIPPY',
-              legalName: 'Mateo Jose Daza Benjumea',
-              url: 'https://sippy.app',
-            }),
-          }}
-        />
-        {children}
+        <Web3Provider>
+          <script
+            type='application/ld+json'
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'Organization',
+                name: 'SIPPY',
+                legalName: 'Mateo Jose Daza Benjumea',
+                url: 'https://sippy.app',
+              }),
+            }}
+          />
+          {children}
+        </Web3Provider>
       </body>
     </html>
   );

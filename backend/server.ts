@@ -6,16 +6,21 @@
 
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
-import { parseMessage, getHelpText } from './src/utils/messageParser';
-import { handleStartCommand } from './src/commands/start.command';
-import { handleBalanceCommand } from './src/commands/balance.command';
-import { handleSendCommand } from './src/commands/send.command';
-import { sendTextMessage, markAsRead } from './src/services/whatsapp.service';
+import { parseMessage, getHelpText } from './src/utils/messageParser.js';
+import { handleStartCommand } from './src/commands/start.command.js';
+import { handleBalanceCommand } from './src/commands/balance.command.js';
+import { handleSendCommand } from './src/commands/send.command.js';
+import {
+  sendTextMessage,
+  markAsRead,
+} from './src/services/whatsapp.service.js';
 import {
   getAllWallets,
   ensureWalletsReady,
-} from './src/services/cdp-wallet.service';
-import { ParsedCommand, WebhookPayload } from './src/types';
+  getUserWallet,
+  createUserWallet,
+} from './src/services/cdp-wallet.service.js';
+import { ParsedCommand, WebhookPayload } from './src/types/index.js';
 
 const app = express();
 
@@ -210,6 +215,51 @@ async function handleCommand(
 }
 
 /**
+ * Resolve phone number to wallet address
+ * GET /resolve-phone?phone=+573116613414
+ */
+app.get('/resolve-phone', async (req: Request, res: Response) => {
+  try {
+    const phone = req.query.phone as string;
+
+    if (!phone) {
+      return res.status(400).json({
+        error: 'Phone number is required',
+      });
+    }
+
+    // Remove '+' prefix if present for consistency
+    const cleanPhone = phone.replace(/^\+/, '');
+
+    console.log(`\n📞 Resolving phone number: +${cleanPhone}`);
+
+    // Try to get existing wallet
+    let wallet = await getUserWallet(cleanPhone);
+
+    // If wallet doesn't exist, create it
+    if (!wallet) {
+      console.log(`  ℹ️  Wallet not found, creating new wallet...`);
+      wallet = await createUserWallet(cleanPhone);
+      console.log(`  ✅ New wallet created: ${wallet.walletAddress}`);
+    } else {
+      console.log(`  ✅ Wallet found: ${wallet.walletAddress}`);
+    }
+
+    res.json({
+      address: wallet.walletAddress,
+      phone: `+${cleanPhone}`,
+      isNew: !wallet.lastActivity || wallet.lastActivity === wallet.createdAt,
+    });
+  } catch (error) {
+    console.error('❌ Error resolving phone:', error);
+    res.status(500).json({
+      error: 'Failed to resolve phone number',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
  * Health check endpoint for CDP wallet service
  */
 app.get('/api/health', async (req: Request, res: Response) => {
@@ -241,6 +291,7 @@ app.listen(PORT, () => {
   console.log('\n📋 Endpoints:');
   console.log(`  GET  / - Health check`);
   console.log(`  GET  /debug/wallets - See registered wallets`);
+  console.log(`  GET  /resolve-phone - Resolve phone to wallet address`);
   console.log(`  GET  /webhook/whatsapp - Webhook verification`);
   console.log(`  POST /webhook/whatsapp - Webhook events`);
   console.log(`  POST /api/register - Register wallet`);

@@ -12,8 +12,8 @@ import {
   getUserWallet,
   isSessionValid,
   updateLastActivity,
-} from '../services/cdp-wallet.service';
-import { sendTextMessage } from '../services/whatsapp.service';
+} from '../services/cdp-wallet.service.js';
+import { sendTextMessage } from '../services/whatsapp.service.js';
 
 /**
  * Handle "start" command with CDP Server Wallet

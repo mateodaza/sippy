@@ -5,7 +5,7 @@
  */
 
 import 'dotenv/config';
-import { WhatsAppAPIResponse, WhatsAppAPIError } from '../types';
+import { WhatsAppAPIResponse, WhatsAppAPIError } from '../types/index.js';
 
 const WHATSAPP_API_URL = 'https://graph.facebook.com/v18.0';
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
