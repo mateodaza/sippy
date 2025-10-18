@@ -10,17 +10,26 @@ import type { UserAsset } from '@avail-project/nexus-core';
 import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';
 import { useNexus } from '../providers/NexusProvider';
+import Image from 'next/image';
+import Link from 'next/link';
+import {
+  ArrowLeft,
+  Wallet,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react';
 
 const phoneSchema = z
   .string()
   .regex(/^\+?\d{10,15}$/, 'Invalid phone number format');
 
-// Constants for refuel amounts
+// Constants for refuel amounts (based on ERC20 transfer costs ~0.00000065 ETH/tx with buffer)
 const REFUEL_AMOUNTS = [
-  { label: '1 transaction', amount: '0.0001', txCount: 1 },
-  { label: '5 transactions', amount: '0.0005', txCount: 5 },
-  { label: '10 transactions', amount: '0.001', txCount: 10 },
-  { label: '20 transactions', amount: '0.002', txCount: 20 },
+  { label: '~150 transfers', amount: '0.0001', txCount: 150 },
+  { label: '~750 transfers', amount: '0.0005', txCount: 750 },
+  { label: '~1,500 transfers', amount: '0.001', txCount: 1500 },
+  { label: '~3,000 transfers', amount: '0.002', txCount: 3000 },
 ];
 
 // Helper to format step names
@@ -64,7 +73,7 @@ export default function FundPage() {
     }
     return false;
   });
-  const [selectedRefuel, setSelectedRefuel] = useState(REFUEL_AMOUNTS[1]); // Default: 5 tx
+  const [selectedRefuel, setSelectedRefuel] = useState(REFUEL_AMOUNTS[0]); // Default: ~150 transfers
   const [pyusdAmount, setPyusdAmount] = useState('0.001'); // Default amount for PYUSD operations
   const [transferMode, setTransferMode] = useState<'gas' | 'pyusd'>('pyusd'); // Default to PYUSD
   const [isLoading, setIsLoading] = useState(false);
@@ -81,6 +90,37 @@ export default function FundPage() {
   const [totalEthBalance, setTotalEthBalance] = useState('0');
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);
   const [supportedChainsCount, setSupportedChainsCount] = useState<number>(0);
+
+  // ETH price state
+  const [ethPrice, setEthPrice] = useState<number | null>(null);
+  const [isLoadingPrice, setIsLoadingPrice] = useState(false);
+
+  // Fetch ETH price on mount
+  useEffect(() => {
+    const fetchEthPrice = async () => {
+      setIsLoadingPrice(true);
+      try {
+        const response = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd'
+        );
+        const data = await response.json();
+        if (data.ethereum?.usd) {
+          setEthPrice(data.ethereum.usd);
+        }
+      } catch (err) {
+        console.error('Failed to fetch ETH price:', err);
+        // Fallback to approximate price
+        setEthPrice(3758);
+      } finally {
+        setIsLoadingPrice(false);
+      }
+    };
+
+    fetchEthPrice();
+    // Refresh price every 60 seconds
+    const interval = setInterval(fetchEthPrice, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Save phone number to localStorage whenever it changes
   useEffect(() => {
@@ -332,787 +372,925 @@ export default function FundPage() {
   };
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4'>
-      <div className='max-w-md mx-auto'>
-        <div className='bg-white rounded-2xl shadow-xl p-8'>
-          <h1 className='text-3xl font-bold text-gray-900 mb-2'>
-            ⛽ Fund My Phone
-          </h1>
-          <p className='text-gray-600 mb-8'>
-            Send gas to any phone number instantly
-          </p>
+    <div className='min-h-screen'>
+      {/* Navigation */}
+      <nav className='sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-white/60'>
+        <div className='max-w-7xl mx-auto px-6 py-4 flex justify-between items-center'>
+          <Link
+            href='/'
+            className='flex items-center gap-2 animate-fade-in-up group'
+          >
+            <ArrowLeft className='w-5 h-5 text-gray-600 group-hover:text-[#059669] transition-colors' />
+            <Image
+              src='/images/logos/sippy_full_green.svg'
+              alt='Sippy Logo'
+              width={110}
+              height={44}
+              priority
+              className='transition-smooth hover:scale-105'
+            />
+          </Link>
+        </div>
+      </nav>
 
-          {!isConnected ? (
-            <div className='text-center py-8'>
-              <div className='mb-6'>
-                <div className='w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full mx-auto mb-4 flex items-center justify-center'>
-                  <svg
-                    className='w-8 h-8 text-white'
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
-                  >
-                    <path
-                      strokeLinecap='round'
-                      strokeLinejoin='round'
-                      strokeWidth={2}
-                      d='M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z'
-                    />
-                  </svg>
-                </div>
-                <h2 className='cursor-pointer text-xl font-bold text-gray-900 mb-2'>
-                  Connect Your Wallet
-                </h2>
-                <p className='text-gray-600 mb-6 max-w-sm mx-auto'>
-                  Choose your preferred wallet to get started. We support
-                  MetaMask, Coinbase Wallet, WalletConnect, and more.
-                </p>
-              </div>
-              <ConnectKitButton />
-              <div className='mt-6 p-4 bg-blue-50 rounded-lg max-w-sm mx-auto'>
-                <p className='text-xs text-blue-700'>
-                  💡 <strong>New to crypto?</strong> We recommend{' '}
-                  <a
-                    href='https://www.coinbase.com/wallet'
-                    target='_blank'
-                    rel='noopener noreferrer'
-                    className='underline font-semibold'
-                  >
-                    Coinbase Wallet
-                  </a>{' '}
-                  for beginners
-                </p>
-              </div>
+      {/* Hero Section with gradient background */}
+      <section className='relative overflow-hidden'>
+        <div className='absolute inset-0 pointer-events-none'>
+          <div className='absolute top-[-120px] right-[-160px] w-[560px] h-[560px] bg-[#bbf7d0]/28 blur-[150px]' />
+          <div className='absolute bottom-[-180px] left-[-120px] w-[520px] h-[520px] bg-[#bfdbfe]/22 blur-[170px]' />
+          <div className='absolute inset-x-0 bottom-0 h-[500px] bg-gradient-to-b from-transparent via-[#f4fcf8]/85 via-[#eefaf4]/88 to-[#eefaf4]' />
+        </div>
+
+        <div className='relative z-10 max-w-4xl mx-auto px-6 py-12 md:py-16'>
+          {/* Page Header */}
+          <div className='text-center mb-10 animate-fade-in-up'>
+            <div className='inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#dcfce7] border border-[#bbf7d0] rounded-full text-sm text-[#15803d] shadow-sm mb-6'>
+              <Wallet className='w-4 h-4' />
+              <span className='font-medium'>Fund Any Sippy Phone Number</span>
             </div>
-          ) : (
-            <>
-              {/* Wallet Info & Actions */}
-              <div className='mb-6 space-y-3'>
-                <div className='p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200'>
-                  <p className='text-xs text-gray-500 mb-1'>Connected Wallet</p>
-                  <p className='text-sm font-mono text-gray-900'>
-                    {address?.slice(0, 6)}...{address?.slice(-4)}
+            <h1 className='text-4xl md:text-[3.2rem] font-black text-[#0f172a] leading-[1.08] tracking-[-0.025em] mb-4'>
+              Fund Your
+              <br />
+              <span className='text-[#059669]'>Phone Number</span>
+            </h1>
+            <p className='text-lg md:text-xl text-gray-600 leading-[1.75] max-w-2xl mx-auto'>
+              Fund any phone number with{' '}
+              <span className='font-semibold text-[#0f172a]'>ETH</span> or{' '}
+              <span className='font-semibold text-[#0f172a]'>PYUSD</span>.
+              <br className='hidden md:block' />
+              No wallet address needed.
+            </p>
+          </div>
+
+          {/* Main Card */}
+          <div className='relative max-w-2xl mx-auto animate-fade-in-up animation-delay-100'>
+            <div className='absolute -inset-4 rounded-[40px] bg-gradient-to-br from-[#dcfce7]/40 via-white/0 to-[#dbeafe]/30 blur-[40px]' />
+            <div className='relative bg-white/90 backdrop-blur-xl rounded-[32px] shadow-[0_28px_70px_rgba(15,23,42,0.16)] p-8 md:p-10 border border-white/50 hover:shadow-[0_36px_86px_rgba(15,23,42,0.22)] hover:border-white/70 transition-all duration-500'>
+              {!isConnected ? (
+                <div className='text-center py-10'>
+                  <div className='w-24 h-24 bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] rounded-full mx-auto mb-6 flex items-center justify-center shadow-lg'>
+                    <Wallet className='w-12 h-12 text-[#059669]' />
+                  </div>
+                  <h2 className='text-2xl font-bold text-[#0f172a] mb-3'>
+                    Start Funding
+                  </h2>
+                  <p className='text-gray-600 mb-6 max-w-md mx-auto'>
+                    Connect your wallet to fund any phone number
                   </p>
-                </div>
-
-                {/* SDK Status */}
-                {!isInitialized && !isInitializing && (
-                  <div className='p-4 bg-yellow-50 border border-yellow-200 rounded-lg'>
-                    <div className='flex items-center justify-between'>
-                      <div className='flex-1'>
-                        <p className='text-sm font-medium text-yellow-900'>
-                          🔐 Bridge Needs Initialization
-                        </p>
-                        <p className='text-xs text-yellow-600 mt-1'>
-                          Click to sign and enable cross-chain transfers
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => initializeSDK()}
-                        className='px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm font-medium hover:bg-yellow-700 transition-colors'
-                      >
-                        Initialize Bridge
-                      </button>
-                    </div>
+                  <div className='flex justify-center mb-6'>
+                    <ConnectKitButton />
                   </div>
-                )}
-
-                {!isInitialized && isInitializing && (
-                  <div className='p-4 bg-blue-50 border border-blue-200 rounded-lg'>
-                    <div className='flex items-center justify-between'>
-                      <div className='flex-1'>
-                        <p className='text-sm font-medium text-blue-900'>
-                          {initializationStep === 'Waiting for signature...'
-                            ? '✍️ Signature Required'
-                            : '🔄 Initializing bridge...'}
-                        </p>
-                        <p className='text-xs text-blue-600 mt-1'>
-                          {initializationStep ||
-                            'Setting up cross-chain connections'}
-                        </p>
-                        {initializationStep === 'Waiting for signature...' && (
-                          <p className='text-xs text-blue-500 mt-2 font-medium'>
-                            📱 Please sign the message in your wallet
-                          </p>
-                        )}
-                      </div>
-                      <div className='animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600'></div>
-                    </div>
-                  </div>
-                )}
-
-                {isInitialized && (
-                  <div className='p-3 bg-green-50 border border-green-200 rounded-lg'>
-                    <p className='text-sm text-green-800 flex items-center'>
-                      <svg
-                        className='w-4 h-4 mr-2'
-                        fill='currentColor'
-                        viewBox='0 0 20 20'
+                  <div className='p-4 bg-[#dcfce7]/50 border border-[#bbf7d0] rounded-xl max-w-md mx-auto'>
+                    <p className='text-sm text-[#15803d]'>
+                      💡 <strong>New to crypto?</strong> We recommend{' '}
+                      <a
+                        href='https://www.coinbase.com/wallet'
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='underline font-semibold hover:text-[#059669] transition-colors'
                       >
-                        <path
-                          fillRule='evenodd'
-                          d='M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z'
-                          clipRule='evenodd'
-                        />
-                      </svg>
-                      Ready to bridge! Connected to {supportedChainsCount}{' '}
-                      chains
+                        Coinbase Wallet
+                      </a>{' '}
+                      for beginners
                     </p>
                   </div>
-                )}
-              </div>
-
-              {/* Balance Display - Only show after SDK is initialized */}
-              {isInitialized && (
+                </div>
+              ) : (
                 <>
-                  {isLoadingBalance ? (
-                    <div className='mb-6 p-4 bg-blue-50 rounded-lg'>
-                      <p className='text-sm text-gray-600'>
-                        Loading your balance...
-                      </p>
-                    </div>
-                  ) : parseFloat(totalEthBalance) > 0 ? (
-                    <div className='mb-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200'>
-                      <div className='flex justify-between items-center'>
-                        <span className='text-sm font-medium text-gray-700'>
-                          💰 Available ETH (All Chains)
-                        </span>
-                        <span className='text-lg font-bold text-gray-900'>
-                          {parseFloat(totalEthBalance).toFixed(6)} ETH
-                        </span>
+                  {/* Wallet Info & Actions */}
+                  <div className='mb-6 space-y-3'>
+                    <div className='p-4 bg-gradient-to-r from-[#f9fafb] to-[#f3f4f6] rounded-xl border border-gray-200/60 shadow-sm'>
+                      <div className='flex items-center justify-between'>
+                        <div>
+                          <p className='text-xs font-medium text-gray-500 mb-1.5'>
+                            Connected Wallet
+                          </p>
+                          <p className='text-sm font-mono text-[#0f172a] font-semibold'>
+                            {address?.slice(0, 6)}...{address?.slice(-4)}
+                          </p>
+                        </div>
+                        <ConnectKitButton />
                       </div>
-                      <p className='text-xs text-gray-500 mt-1'>
-                        Aggregated across all supported chains
-                      </p>
-                    </div>
-                  ) : (
-                    <div className='mb-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200'>
-                      <p className='text-sm text-yellow-800'>
-                        ⚠️ No ETH available. Please add funds to any supported
-                        chain.
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
-
-              <form onSubmit={handleSubmit} className='space-y-6'>
-                {/* Transfer Mode Selection */}
-                <div>
-                  <label className='block text-sm font-medium text-gray-700 mb-3'>
-                    💸 What would you like to send?
-                  </label>
-                  <div className='grid grid-cols-2 gap-3'>
-                    <button
-                      type='button'
-                      onClick={() => setTransferMode('gas')}
-                      disabled={isLoading}
-                      className={`p-4 rounded-lg border-2 transition-all ${
-                        transferMode === 'gas'
-                          ? 'border-blue-500 bg-blue-50 shadow-md'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
-                    >
-                      <div className='text-center'>
-                        <p className='text-2xl mb-1'>⛽</p>
-                        <p className='font-semibold text-gray-900'>Gas (ETH)</p>
-                        <p className='text-xs text-gray-500 mt-1'>
-                          For transactions
-                        </p>
-                      </div>
-                    </button>
-                    <button
-                      type='button'
-                      onClick={() => setTransferMode('pyusd')}
-                      disabled={isLoading}
-                      className={`p-4 rounded-lg border-2 transition-all ${
-                        transferMode === 'pyusd'
-                          ? 'border-blue-500 bg-blue-50 shadow-md'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
-                    >
-                      <div className='text-center'>
-                        <p className='text-2xl mb-1'>💵</p>
-                        <p className='font-semibold text-gray-900'>PYUSD</p>
-                        <p className='text-xs text-gray-500 mt-1'>
-                          Stablecoin ($)
-                        </p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Phone Number Input */}
-                <div>
-                  <label
-                    htmlFor='phone'
-                    className='block text-sm font-medium text-gray-700 mb-2'
-                  >
-                    📱 Recipient's Phone Number
-                  </label>
-                  <PhoneInput
-                    defaultCountry='co'
-                    value={phoneNumber}
-                    onChange={(phone) => {
-                      setPhoneNumber(phone);
-                      setHasLoadedPhone(false);
-                    }}
-                    disabled={isLoading}
-                    inputClassName='phone-input-field'
-                    countrySelectorStyleProps={{
-                      buttonClassName: 'phone-country-button',
-                    }}
-                    inputProps={{
-                      required: true,
-                      className:
-                        'w-full pl-14 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg',
-                    }}
-                  />
-                  {hasLoadedPhone && phoneNumber ? (
-                    <p className='mt-1 text-xs text-green-600 flex items-center'>
-                      <svg
-                        className='w-3 h-3 mr-1'
-                        fill='currentColor'
-                        viewBox='0 0 20 20'
-                      >
-                        <path
-                          fillRule='evenodd'
-                          d='M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z'
-                          clipRule='evenodd'
-                        />
-                      </svg>
-                      Loaded last used number
-                    </p>
-                  ) : (
-                    <p className='mt-1 text-xs text-gray-500'>
-                      Select country code and enter phone number
-                    </p>
-                  )}
-                </div>
-
-                {/* PYUSD Amount Input - Only show for PYUSD mode */}
-                {transferMode === 'pyusd' && (
-                  <div>
-                    <label
-                      htmlFor='pyusdAmount'
-                      className='block text-sm font-medium text-gray-700 mb-2'
-                    >
-                      💰 Amount (ETH to convert)
-                    </label>
-                    <div className='relative'>
-                      <input
-                        id='pyusdAmount'
-                        type='number'
-                        step='0.0001'
-                        min='0.0001'
-                        max='10'
-                        value={pyusdAmount}
-                        onChange={(e) => setPyusdAmount(e.target.value)}
-                        disabled={isLoading}
-                        className='w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg'
-                        placeholder='0.001'
-                      />
-                      <span className='absolute right-4 top-3.5 text-gray-500 font-medium'>
-                        ETH
-                      </span>
                     </div>
 
-                    {/* Quick Amount Buttons */}
-                    <div className='mt-3 flex gap-2'>
-                      {['0.0005', '0.001', '0.005', '0.01'].map((amount) => (
-                        <button
-                          key={amount}
-                          type='button'
-                          onClick={() => setPyusdAmount(amount)}
-                          disabled={isLoading}
-                          className={`flex-1 px-3 py-2 rounded-md border transition-all text-sm font-medium ${
-                            pyusdAmount === amount
-                              ? 'bg-blue-500 text-white border-blue-600'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
-                          }`}
-                        >
-                          {amount}
-                        </button>
-                      ))}
-                    </div>
-                    <div className='mt-2 space-y-1'>
-                      <p className='text-xs text-gray-500'>
-                        Amount of ETH to convert to PYUSD (~
-                        {(parseFloat(pyusdAmount) * 3758).toFixed(2)} PYUSD)
-                      </p>
-                      {isInitialized && parseFloat(pyusdAmount) > 0 && (
-                        <>
-                          {parseFloat(pyusdAmount) + 0.002 >
-                          parseFloat(totalEthBalance) ? (
-                            <p className='text-xs text-red-600 font-medium'>
-                              ⚠️ Insufficient balance. You need{' '}
-                              {(parseFloat(pyusdAmount) + 0.002).toFixed(4)} ETH
-                              but only have{' '}
-                              {parseFloat(totalEthBalance).toFixed(4)} ETH
+                    {/* SDK Status */}
+                    {!isInitialized && !isInitializing && (
+                      <div className='p-4 bg-gradient-to-r from-[#fef3c7] to-[#fde68a] border border-amber-300 rounded-xl shadow-sm'>
+                        <div className='flex items-center justify-between gap-3'>
+                          <div className='flex-1'>
+                            <p className='text-sm font-bold text-amber-900 mb-1'>
+                              🔐 Bridge Needs Initialization
                             </p>
-                          ) : (
-                            <p className='text-xs text-green-600'>
-                              ✓ Sufficient balance available
-                            </p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Refuel Amount Selection - Only show for Gas mode */}
-                {transferMode === 'gas' && (
-                  <div>
-                    <label className='block text-sm font-medium text-gray-700 mb-3'>
-                      ⚡ Gas Amount
-                    </label>
-                    <div className='grid grid-cols-2 gap-3'>
-                      {REFUEL_AMOUNTS.map((option) => (
-                        <button
-                          key={option.txCount}
-                          type='button'
-                          onClick={() => setSelectedRefuel(option)}
-                          disabled={isLoading}
-                          className={`p-4 rounded-lg border-2 transition-all ${
-                            selectedRefuel.txCount === option.txCount
-                              ? 'border-blue-500 bg-blue-50 shadow-md'
-                              : 'border-gray-200 bg-white hover:border-gray-300'
-                          }`}
-                        >
-                          <div className='text-center'>
-                            <p className='font-semibold text-gray-900'>
-                              {option.label}
-                            </p>
-                            <p className='text-xs text-gray-500 mt-1'>
-                              {option.amount} ETH
+                            <p className='text-xs text-amber-700'>
+                              Click to sign and enable cross-chain transfers
                             </p>
                           </div>
-                        </button>
-                      ))}
-                    </div>
-                    <p className='mt-2 text-xs text-gray-500'>
-                      💡 This covers gas for approximately{' '}
-                      {selectedRefuel.txCount} transfers on Arbitrum
-                    </p>
-                  </div>
-                )}
+                          <button
+                            onClick={() => initializeSDK()}
+                            className='px-4 py-2.5 bg-amber-600 text-white rounded-xl text-sm font-semibold hover:bg-amber-700 shadow-md hover:shadow-lg transition-all active:scale-95'
+                          >
+                            Initialize
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
-                {/* Current Step Display */}
-                {currentStep && (
-                  <div className='p-4 bg-blue-50 border border-blue-200 rounded-lg'>
-                    <p className='text-sm text-blue-700 text-center animate-pulse'>
-                      {currentStep}
-                    </p>
-                  </div>
-                )}
-
-                {/* Transaction Progress Steps */}
-                {showProgress && progressSteps.length > 0 && (
-                  <div className='p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg'>
-                    <h4 className='text-sm font-semibold text-blue-900 mb-3'>
-                      🔄 Transaction Progress
-                    </h4>
-                    <div className='space-y-2'>
-                      {progressSteps.map((step, index) => (
-                        <div
-                          key={step.typeID || index}
-                          className='flex items-center gap-3'
-                        >
-                          <div
-                            className={`w-3 h-3 rounded-full flex-shrink-0 ${
-                              step.done
-                                ? 'bg-green-500'
-                                : 'bg-blue-300 animate-pulse'
-                            }`}
-                          />
+                    {!isInitialized && isInitializing && (
+                      <div className='p-4 bg-gradient-to-r from-[#dbeafe] to-[#bfdbfe] border border-blue-300 rounded-xl shadow-sm'>
+                        <div className='flex items-center justify-between gap-3'>
                           <div className='flex-1'>
-                            <p
-                              className={`text-sm ${
-                                step.done
-                                  ? 'text-green-700 line-through'
-                                  : 'text-blue-900 font-medium'
-                              }`}
-                            >
-                              {formatStepName(step.type)}
+                            <p className='text-sm font-bold text-blue-900 mb-1'>
+                              {initializationStep === 'Waiting for signature...'
+                                ? '✍️ Signature Required'
+                                : '🔄 Initializing Bridge'}
                             </p>
-                            {step.chainName && (
-                              <p className='text-xs text-gray-500'>
-                                Chain: {step.chainName}
+                            <p className='text-xs text-blue-700'>
+                              {initializationStep ||
+                                'Setting up cross-chain connections'}
+                            </p>
+                            {initializationStep ===
+                              'Waiting for signature...' && (
+                              <p className='text-xs text-blue-600 mt-2 font-semibold'>
+                                📱 Please sign the message in your wallet
                               </p>
                             )}
                           </div>
-                          {step.done && (
-                            <span className='text-green-600 text-lg'>✓</span>
+                          <Loader2 className='w-6 h-6 text-blue-700 animate-spin' />
+                        </div>
+                      </div>
+                    )}
+
+                    {isInitialized && (
+                      <div className='p-4 bg-gradient-to-r from-[#d1fae5] to-[#a7f3d0] border border-[#bbf7d0] rounded-xl shadow-sm'>
+                        <p className='text-sm text-[#15803d] font-semibold flex items-center'>
+                          <CheckCircle2 className='w-5 h-5 mr-2' />
+                          Ready to bridge! Connected to {
+                            supportedChainsCount
+                          }{' '}
+                          chains
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Balance Display - Only show after SDK is initialized */}
+                  {isInitialized && (
+                    <>
+                      {isLoadingBalance ? (
+                        <div className='mb-6 p-4 bg-gradient-to-r from-[#dbeafe] to-[#bfdbfe] border border-blue-200 rounded-xl shadow-sm'>
+                          <p className='text-sm text-blue-800 flex items-center'>
+                            <Loader2 className='w-4 h-4 mr-2 animate-spin' />
+                            Loading your balance...
+                          </p>
+                        </div>
+                      ) : parseFloat(totalEthBalance) > 0 ? (
+                        <div className='mb-6 p-5 bg-gradient-to-br from-[#d1fae5] via-[#a7f3d0] to-[#6ee7b7] rounded-xl border border-[#bbf7d0] shadow-md'>
+                          <div className='flex justify-between items-center mb-2'>
+                            <span className='text-sm font-semibold text-[#15803d]'>
+                              💰 Available ETH (All Chains)
+                            </span>
+                            <span className='text-2xl font-black text-[#0f172a]'>
+                              {parseFloat(totalEthBalance).toFixed(6)}
+                            </span>
+                          </div>
+                          <p className='text-xs text-[#047857]'>
+                            Aggregated across {supportedChainsCount} supported
+                            chains
+                          </p>
+                        </div>
+                      ) : (
+                        <div className='mb-6 p-4 bg-gradient-to-r from-[#fef3c7] to-[#fde68a] border border-amber-300 rounded-xl shadow-sm'>
+                          <p className='text-sm text-amber-900 font-medium flex items-center'>
+                            <AlertCircle className='w-4 h-4 mr-2' />
+                            No ETH available. Please add funds to any supported
+                            chain.
+                          </p>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <form onSubmit={handleSubmit} className='space-y-6'>
+                    {/* Transfer Mode Selection */}
+                    <div>
+                      <label className='block text-base font-bold text-[#0f172a] mb-4'>
+                        💸 What would you like to send?
+                      </label>
+                      <div className='grid grid-cols-2 gap-4'>
+                        <button
+                          type='button'
+                          onClick={() => setTransferMode('gas')}
+                          disabled={isLoading}
+                          className={`p-5 rounded-xl border-2 transition-all duration-200 ${
+                            transferMode === 'gas'
+                              ? 'border-[#059669] bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] shadow-lg shadow-emerald-200/50'
+                              : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+                          }`}
+                        >
+                          <div className='text-center'>
+                            <p className='text-3xl mb-2'>⛽</p>
+                            <p className='font-bold text-[#0f172a] mb-1'>
+                              Gas (ETH)
+                            </p>
+                            <p className='text-xs text-gray-600'>
+                              For transactions
+                            </p>
+                          </div>
+                        </button>
+                        <button
+                          type='button'
+                          onClick={() => setTransferMode('pyusd')}
+                          disabled={isLoading}
+                          className={`p-5 rounded-xl border-2 transition-all duration-200 ${
+                            transferMode === 'pyusd'
+                              ? 'border-[#059669] bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] shadow-lg shadow-emerald-200/50'
+                              : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+                          }`}
+                        >
+                          <div className='text-center'>
+                            <p className='text-3xl mb-2'>💵</p>
+                            <p className='font-bold text-[#0f172a] mb-1'>
+                              PYUSD
+                            </p>
+                            <p className='text-xs text-gray-600'>
+                              Stablecoin ($)
+                            </p>
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Phone Number Input */}
+                    <div>
+                      <label
+                        htmlFor='phone'
+                        className='block text-base font-bold text-[#0f172a] mb-3'
+                      >
+                        📱 Recipient's Phone Number
+                      </label>
+                      <PhoneInput
+                        defaultCountry='co'
+                        value={phoneNumber}
+                        onChange={(phone) => {
+                          setPhoneNumber(phone);
+                          setHasLoadedPhone(false);
+                        }}
+                        disabled={isLoading}
+                        inputClassName='phone-input-field'
+                        countrySelectorStyleProps={{
+                          buttonClassName: 'phone-country-button',
+                        }}
+                        inputProps={{
+                          required: true,
+                          className:
+                            'w-full pl-14 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#059669] focus:border-[#059669] text-lg transition-all',
+                        }}
+                      />
+                      {hasLoadedPhone && phoneNumber ? (
+                        <p className='mt-2 text-xs text-[#059669] flex items-center font-medium'>
+                          <CheckCircle2 className='w-3.5 h-3.5 mr-1.5' />
+                          Loaded last used number
+                        </p>
+                      ) : (
+                        <p className='mt-2 text-xs text-gray-500'>
+                          Select country code and enter phone number
+                        </p>
+                      )}
+                    </div>
+
+                    {/* PYUSD Amount Input - Only show for PYUSD mode */}
+                    {transferMode === 'pyusd' && (
+                      <div>
+                        <label
+                          htmlFor='pyusdAmount'
+                          className='block text-base font-bold text-[#0f172a] mb-3'
+                        >
+                          💰 Amount (ETH to convert)
+                        </label>
+                        <div className='relative'>
+                          <input
+                            id='pyusdAmount'
+                            type='number'
+                            step='0.0001'
+                            min='0.0001'
+                            max='10'
+                            value={pyusdAmount}
+                            onChange={(e) => setPyusdAmount(e.target.value)}
+                            disabled={isLoading}
+                            className='w-full px-4 py-3 pr-16 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#059669] focus:border-[#059669] text-lg transition-all'
+                            placeholder='0.001'
+                          />
+                          <span className='absolute right-4 top-3.5 text-gray-500 font-bold'>
+                            ETH
+                          </span>
+                        </div>
+
+                        {/* Quick Amount Buttons */}
+                        <div className='mt-3 flex gap-2'>
+                          {['0.0005', '0.001', '0.005', '0.01'].map(
+                            (amount) => (
+                              <button
+                                key={amount}
+                                type='button'
+                                onClick={() => setPyusdAmount(amount)}
+                                disabled={isLoading}
+                                className={`flex-1 px-3 py-2.5 rounded-lg border-2 transition-all text-sm font-semibold ${
+                                  pyusdAmount === amount
+                                    ? 'bg-[#059669] text-white border-[#059669] shadow-md'
+                                    : 'bg-white text-gray-700 border-gray-200 hover:border-[#059669] hover:text-[#059669]'
+                                }`}
+                              >
+                                {amount}
+                              </button>
+                            )
                           )}
                         </div>
-                      ))}
+                        <div className='mt-3 space-y-1.5'>
+                          {ethPrice && parseFloat(pyusdAmount) > 0 ? (
+                            <div className='p-3 bg-gradient-to-r from-[#f0fdf4] to-[#dcfce7] rounded-lg border border-[#bbf7d0]'>
+                              <div className='flex items-center justify-between mb-1'>
+                                <span className='text-xs font-medium text-[#15803d]'>
+                                  Estimated Value:
+                                </span>
+                                <span className='text-sm font-bold text-[#0f172a]'>
+                                  ~$
+                                  {(parseFloat(pyusdAmount) * ethPrice).toFixed(
+                                    2
+                                  )}{' '}
+                                  USD
+                                </span>
+                              </div>
+                              <p className='text-xs text-gray-600'>
+                                ETH Price: ${ethPrice.toLocaleString()} • 1
+                                PYUSD = $1
+                              </p>
+                            </div>
+                          ) : isLoadingPrice ? (
+                            <p className='text-xs text-gray-500 flex items-center'>
+                              <Loader2 className='w-3 h-3 mr-1 animate-spin' />
+                              Loading price...
+                            </p>
+                          ) : null}
+                          {isInitialized && parseFloat(pyusdAmount) > 0 && (
+                            <>
+                              {parseFloat(pyusdAmount) + 0.002 >
+                              parseFloat(totalEthBalance) ? (
+                                <p className='text-xs text-red-600 font-semibold flex items-center'>
+                                  <AlertCircle className='w-3.5 h-3.5 mr-1.5' />
+                                  Insufficient balance. You need{' '}
+                                  {(parseFloat(pyusdAmount) + 0.002).toFixed(
+                                    4
+                                  )}{' '}
+                                  ETH but only have{' '}
+                                  {parseFloat(totalEthBalance).toFixed(4)} ETH
+                                </p>
+                              ) : (
+                                <p className='text-xs text-[#059669] font-semibold flex items-center'>
+                                  <CheckCircle2 className='w-3.5 h-3.5 mr-1.5' />
+                                  Sufficient balance available
+                                </p>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Refuel Amount Selection - Only show for Gas mode */}
+                    {transferMode === 'gas' && (
+                      <div>
+                        <label className='block text-base font-bold text-[#0f172a] mb-4'>
+                          ⚡ Gas Amount
+                        </label>
+                        <div className='grid grid-cols-2 gap-3'>
+                          {REFUEL_AMOUNTS.map((option) => (
+                            <button
+                              key={option.txCount}
+                              type='button'
+                              onClick={() => setSelectedRefuel(option)}
+                              disabled={isLoading}
+                              className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                                selectedRefuel.txCount === option.txCount
+                                  ? 'border-[#059669] bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] shadow-lg shadow-emerald-200/50'
+                                  : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+                              }`}
+                            >
+                              <div className='text-center'>
+                                <p className='font-bold text-[#0f172a] mb-1'>
+                                  {option.label}
+                                </p>
+                                <p className='text-xs text-gray-600'>
+                                  {option.amount} ETH
+                                </p>
+                                {ethPrice && (
+                                  <p className='text-xs text-[#059669] font-semibold mt-1'>
+                                    ~$
+                                    {(
+                                      parseFloat(option.amount) * ethPrice
+                                    ).toFixed(2)}
+                                  </p>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                        <div className='mt-3 space-y-1'>
+                          <p className='text-xs text-gray-600'>
+                            💡 Covers approximately {selectedRefuel.txCount}{' '}
+                            PYUSD transfers on Arbitrum
+                          </p>
+                          <p className='text-xs text-gray-500 italic'>
+                            * Estimate based on normal network conditions.
+                            During high congestion, actual cost may vary.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Current Step Display */}
+                    {currentStep && (
+                      <div className='p-4 bg-gradient-to-r from-[#dbeafe] to-[#bfdbfe] border border-blue-300 rounded-xl shadow-sm'>
+                        <p className='text-sm text-blue-900 text-center animate-pulse font-medium flex items-center justify-center'>
+                          <Loader2 className='w-4 h-4 mr-2 animate-spin' />
+                          {currentStep}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Transaction Progress Steps */}
+                    {showProgress && progressSteps.length > 0 && (
+                      <div className='p-5 bg-gradient-to-br from-[#dbeafe] via-[#bfdbfe] to-[#93c5fd] border border-blue-300 rounded-xl shadow-md'>
+                        <h4 className='text-sm font-bold text-blue-900 mb-4 flex items-center'>
+                          <Loader2 className='w-4 h-4 mr-2 animate-spin' />
+                          Transaction Progress
+                        </h4>
+                        <div className='space-y-3'>
+                          {progressSteps.map((step, index) => (
+                            <div
+                              key={step.typeID || index}
+                              className='flex items-center gap-3'
+                            >
+                              <div
+                                className={`w-3.5 h-3.5 rounded-full flex-shrink-0 ${
+                                  step.done
+                                    ? 'bg-[#059669]'
+                                    : 'bg-blue-400 animate-pulse'
+                                }`}
+                              />
+                              <div className='flex-1'>
+                                <p
+                                  className={`text-sm ${
+                                    step.done
+                                      ? 'text-[#047857] line-through'
+                                      : 'text-blue-900 font-semibold'
+                                  }`}
+                                >
+                                  {formatStepName(step.type)}
+                                </p>
+                                {step.chainName && (
+                                  <p className='text-xs text-blue-700'>
+                                    Chain: {step.chainName}
+                                  </p>
+                                )}
+                              </div>
+                              {step.done && (
+                                <CheckCircle2 className='w-5 h-5 text-[#059669]' />
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className='mt-4 pt-3 border-t border-blue-300'>
+                          <p className='text-xs text-blue-800 text-center font-semibold'>
+                            {progressSteps.filter((s) => s.done).length} /{' '}
+                            {progressSteps.length} steps completed
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Error Message */}
+                    {error && (
+                      <div className='p-4 bg-gradient-to-r from-red-50 to-rose-100 border border-red-300 rounded-xl shadow-sm'>
+                        <p className='text-sm text-red-700 font-medium flex items-center'>
+                          <AlertCircle className='w-4 h-4 mr-2 flex-shrink-0' />
+                          {error}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Success Message */}
+                    {success && (
+                      <div className='p-4 bg-gradient-to-r from-[#d1fae5] to-[#a7f3d0] border border-[#bbf7d0] rounded-xl shadow-md'>
+                        <p className='text-sm text-[#15803d] font-semibold flex items-center'>
+                          <CheckCircle2 className='w-4 h-4 mr-2 flex-shrink-0' />
+                          {success}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Submit Button for Gas Mode */}
+                    {transferMode === 'gas' && (
+                      <button
+                        type='submit'
+                        disabled={
+                          isLoading ||
+                          !isInitialized ||
+                          !phoneNumber ||
+                          parseFloat(totalEthBalance) === 0 ||
+                          parseFloat(selectedRefuel.amount) >
+                            parseFloat(totalEthBalance)
+                        }
+                        className='w-full bg-[#059669] text-white py-4 px-6 rounded-xl font-bold text-lg hover:bg-[#047857] disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98]'
+                      >
+                        {isLoading ? (
+                          <span className='flex items-center justify-center'>
+                            <Loader2 className='w-5 h-5 mr-3 animate-spin' />
+                            Processing...
+                          </span>
+                        ) : (
+                          `⚡ Send ${selectedRefuel.amount} ETH`
+                        )}
+                      </button>
+                    )}
+
+                    {/* Submit Button for PYUSD Mode */}
+                    {transferMode === 'pyusd' && (
+                      <>
+                        <button
+                          type='button'
+                          onClick={async () => {
+                            if (!isConnected || !phoneNumber || !nexusSdk) {
+                              setError(
+                                'Connect wallet, initialize bridge, and enter phone number first'
+                              );
+                              return;
+                            }
+
+                            try {
+                              setIsLoading(true);
+                              setError('');
+                              setSuccess('');
+                              setShowProgress(true);
+                              setProgressSteps([]);
+                              setCurrentStep('Resolving phone number...');
+
+                              // Resolve recipient
+                              const recipientAddr = await resolvePhone(
+                                phoneNumber
+                              );
+                              if (!recipientAddr) {
+                                throw new Error(
+                                  'Failed to resolve phone number'
+                                );
+                              }
+
+                              setResolvedAddress(recipientAddr);
+                              console.log(
+                                '📱 Resolved phone to:',
+                                recipientAddr
+                              );
+
+                              if (
+                                !pyusdAmount ||
+                                parseFloat(pyusdAmount) <= 0
+                              ) {
+                                throw new Error('Please enter a valid amount');
+                              }
+
+                              const swapAmount = parseFloat(pyusdAmount);
+                              const minRequired = swapAmount + 0.002; // + gas buffer
+
+                              // Check total available balance across all chains
+                              const totalAvailable =
+                                parseFloat(totalEthBalance);
+                              if (totalAvailable < minRequired) {
+                                throw new Error(
+                                  `Insufficient balance. You have ${totalAvailable.toFixed(
+                                    4
+                                  )} ETH but need at least ${minRequired.toFixed(
+                                    4
+                                  )} ETH (${swapAmount} for swap + 0.002 for gas)`
+                                );
+                              }
+
+                              // Check current balance on Arbitrum
+                              setCurrentStep('Checking Arbitrum balance...');
+                              const arbBalance = await checkArbitrumBalance();
+                              console.log(
+                                `💰 Current Arbitrum balance: ${arbBalance} ETH`
+                              );
+
+                              let skippedBridge = false;
+
+                              // Step 1: Bridge if needed
+                              if (arbBalance < minRequired) {
+                                const neededAmount = minRequired - arbBalance;
+                                const bridgeAmount = Math.max(
+                                  neededAmount,
+                                  0.001
+                                ).toFixed(4);
+
+                                setCurrentStep(
+                                  `Step 1/2: Bridging ${bridgeAmount} ETH to Arbitrum...`
+                                );
+                                console.log(
+                                  `🌉 Need to bridge ${bridgeAmount} ETH`
+                                );
+
+                                const bridgeResult = await bridgeEthToArbitrum(
+                                  nexusSdk,
+                                  {
+                                    fromChainId: 1, // Will auto-detect best source
+                                    toChainId: 42161,
+                                    token: 'ETH',
+                                    amount: bridgeAmount,
+                                  }
+                                );
+
+                                if (!bridgeResult.success) {
+                                  throw new Error(
+                                    bridgeResult.error || 'Bridge failed'
+                                  );
+                                }
+
+                                console.log('✅ Bridge completed');
+                                setCurrentStep(
+                                  'Waiting for funds on Arbitrum...'
+                                );
+
+                                // Wait for bridge to settle
+                                await new Promise((r) => setTimeout(r, 5000));
+
+                                // After bridge, we should already be on Arbitrum
+                                // Force switch to Arbitrum to be sure
+                                setCurrentStep(
+                                  'Confirming Arbitrum network...'
+                                );
+                                try {
+                                  await (window as any).ethereum.request({
+                                    method: 'wallet_switchEthereumChain',
+                                    params: [{ chainId: '0xa4b1' }],
+                                  });
+                                } catch (err) {
+                                  console.warn(
+                                    'Already on Arbitrum or switch not needed'
+                                  );
+                                }
+                                await new Promise((r) => setTimeout(r, 1000));
+                              } else {
+                                console.log(
+                                  '✅ Sufficient ETH already on Arbitrum, skipping bridge'
+                                );
+                                skippedBridge = true;
+                              }
+
+                              // Step 2: Swap ETH to PYUSD
+                              const stepLabel = skippedBridge
+                                ? 'Swapping'
+                                : 'Step 2/2: Swapping';
+                              setCurrentStep(`${stepLabel} ETH → PYUSD...`);
+
+                              const { ethers } = await import('ethers');
+                              const provider =
+                                new ethers.providers.Web3Provider(
+                                  (window as any).ethereum
+                                );
+
+                              // Verify we're on Arbitrum before swap
+                              const network = await provider.getNetwork();
+                              console.log('Current network:', network.chainId);
+
+                              if (network.chainId !== 42161) {
+                                throw new Error(
+                                  'Please switch to Arbitrum One to continue'
+                                );
+                              }
+
+                              const signer = provider.getSigner();
+
+                              const swapResult = await swapETHToPYUSD(signer, {
+                                amountInETH: swapAmount.toString(),
+                                recipient: recipientAddr,
+                                slippageBps: 250,
+                              });
+
+                              if (!swapResult.success) {
+                                throw new Error(
+                                  swapResult.error || 'Swap failed'
+                                );
+                              }
+
+                              console.log('✅ Swap completed:', swapResult);
+
+                              const successMsg = skippedBridge
+                                ? `✅ Swapped ${swapAmount} ETH → PYUSD and sent to ${phoneNumber}!`
+                                : `🎉 Bridged to Arbitrum, swapped ${swapAmount} ETH → PYUSD, and sent to ${phoneNumber}!`;
+
+                              setSuccess(
+                                `${successMsg}\n\nTx: ${swapResult.txHash?.slice(
+                                  0,
+                                  10
+                                )}...`
+                              );
+                              setShowProgress(false);
+                            } catch (err: any) {
+                              console.error('Full flow error:', err);
+                              setError(err?.message || 'Flow failed');
+                              setShowProgress(false);
+                            } finally {
+                              setIsLoading(false);
+                              setCurrentStep('');
+                            }
+                          }}
+                          disabled={
+                            isLoading ||
+                            !isInitialized ||
+                            !phoneNumber ||
+                            !pyusdAmount
+                          }
+                          className='w-full bg-[#059669] text-white py-4 px-6 rounded-xl font-bold text-lg hover:bg-[#047857] disabled:bg-gray-300 disabled:cursor-not-allowed transition-all duration-200 shadow-md hover:shadow-lg active:scale-[0.98]'
+                        >
+                          {isLoading ? (
+                            <span className='flex items-center justify-center'>
+                              <Loader2 className='w-5 h-5 mr-3 animate-spin' />
+                              {currentStep || 'Working...'}
+                            </span>
+                          ) : ethPrice ? (
+                            `🚀 Send ~$${(
+                              parseFloat(pyusdAmount || '0') * ethPrice
+                            ).toFixed(2)} PYUSD`
+                          ) : (
+                            `🚀 Send ${pyusdAmount} ETH as PYUSD`
+                          )}
+                        </button>
+                        <p className='text-xs text-gray-600 mt-3 text-center'>
+                          Checks Arbitrum balance first. Only bridges if needed.
+                          Automatically swaps ETH → PYUSD and sends to phone.
+                        </p>
+                      </>
+                    )}
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Info Section - Dynamic based on transfer mode */}
+          <div className='mt-10 max-w-2xl mx-auto animate-fade-in-up animation-delay-200'>
+            <div className='bg-white/90 backdrop-blur-xl rounded-2xl shadow-[0_18px_42px_rgba(15,23,42,0.08)] p-8 border border-gray-100'>
+              <h2 className='text-2xl font-black text-[#0f172a] mb-6'>
+                How it works
+              </h2>
+
+              {transferMode === 'gas' ? (
+                <>
+                  <ol className='space-y-3 text-[15px] text-gray-700 leading-relaxed mb-6'>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>1.</span>
+                      <span>🔌 Connect your wallet </span>
+                    </li>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>2.</span>
+                      <span>📱 Enter recipient's phone number</span>
+                    </li>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>3.</span>
+                      <span>⚡ Choose gas amount (number of transactions)</span>
+                    </li>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>4.</span>
+                      <span>✍️ Sign once in your wallet to authorize</span>
+                    </li>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>5.</span>
+                      <span>✨ We find your best chain automatically</span>
+                    </li>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>6.</span>
+                      <span>🔵 ETH arrives on Arbitrum in ~30 seconds</span>
+                    </li>
+                  </ol>
+                  <div className='space-y-3'>
+                    <div className='p-4 bg-gradient-to-br from-[#dbeafe] to-[#bfdbfe] rounded-xl border border-blue-200/60'>
+                      <p className='text-sm text-blue-900'>
+                        <strong>🚀 Smart Routing:</strong> We aggregate your ETH
+                        from Ethereum, Optimism, Base, Polygon & Arbitrum. No
+                        need to choose - we pick the best route for lowest fees!
+                      </p>
                     </div>
-                    <div className='mt-3 pt-3 border-t border-blue-200'>
-                      <p className='text-xs text-blue-600 text-center'>
-                        {progressSteps.filter((s) => s.done).length} /{' '}
-                        {progressSteps.length} steps completed
+                    <div className='p-4 bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] rounded-xl border border-[#bbf7d0]'>
+                      <p className='text-sm text-[#15803d]'>
+                        <strong>💡 Pro tip:</strong> Fund once, use multiple
+                        times. The recipient can make ~{selectedRefuel.txCount}{' '}
+                        PYUSD transfers with this gas.
+                      </p>
+                    </div>
+                    <div className='p-4 bg-gradient-to-br from-[#e9d5ff] to-[#d8b4fe] rounded-xl border border-purple-200'>
+                      <p className='text-sm text-purple-900'>
+                        <strong>🔐 About signatures:</strong> Your wallet will
+                        ask you to sign once to authorize sending{' '}
+                        {selectedRefuel.amount} ETH. This is how we keep your
+                        funds secure - only you can approve transactions.
                       </p>
                     </div>
                   </div>
-                )}
-
-                {/* Error Message */}
-                {error && (
-                  <div className='p-4 bg-red-50 border border-red-200 rounded-lg'>
-                    <p className='text-sm text-red-600'>{error}</p>
+                </>
+              ) : (
+                <>
+                  <ol className='space-y-3 text-[15px] text-gray-700 leading-relaxed mb-6'>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>1.</span>
+                      <span>🔌 Connect your wallet </span>
+                    </li>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>2.</span>
+                      <span>📱 Enter recipient's phone number</span>
+                    </li>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>3.</span>
+                      <span>💰 Choose amount in ETH to convert</span>
+                    </li>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>4.</span>
+                      <span>🌉 Auto-bridge to Arbitrum (if needed)</span>
+                    </li>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>5.</span>
+                      <span>🔄 Swap ETH → PYUSD on Uniswap</span>
+                    </li>
+                    <li className='flex items-start'>
+                      <span className='font-bold text-[#059669] mr-2'>6.</span>
+                      <span>💵 PYUSD sent directly to recipient</span>
+                    </li>
+                  </ol>
+                  <div className='space-y-3'>
+                    <div className='p-4 bg-gradient-to-br from-[#e9d5ff] to-[#d8b4fe] rounded-xl border border-purple-200'>
+                      <p className='text-sm text-purple-900'>
+                        <strong>✨ Smart Flow:</strong> We automatically check
+                        your Arbitrum balance. If you need more ETH, we bridge
+                        it first. Then we swap to PYUSD and send it - all in one
+                        flow!
+                      </p>
+                    </div>
+                    <div className='p-4 bg-gradient-to-br from-[#dbeafe] to-[#bfdbfe] rounded-xl border border-blue-200/60'>
+                      <p className='text-sm text-blue-900'>
+                        <strong>💱 Exchange Rate:</strong>{' '}
+                        {ethPrice
+                          ? `1 ETH ≈ $${ethPrice.toLocaleString()}`
+                          : '~1 ETH = $3,758'}
+                        . Your recipient gets a stable dollar-pegged PYUSD token
+                        they can use anywhere.
+                      </p>
+                    </div>
+                    <div className='p-4 bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] rounded-xl border border-[#bbf7d0]'>
+                      <p className='text-sm text-[#15803d]'>
+                        <strong>🔐 Signatures:</strong> You'll sign 1-2 times
+                        (bridge + swap). If you already have ETH on Arbitrum,
+                        only 1 signature is needed!
+                      </p>
+                    </div>
                   </div>
-                )}
-
-                {/* Success Message */}
-                {success && (
-                  <div className='p-4 bg-green-50 border border-green-200 rounded-lg'>
-                    <p className='text-sm text-green-600'>{success}</p>
-                  </div>
-                )}
-
-                {/* Submit Button for Gas Mode */}
-                {transferMode === 'gas' && (
-                  <button
-                    type='submit'
-                    disabled={
-                      isLoading ||
-                      !isInitialized ||
-                      !phoneNumber ||
-                      parseFloat(totalEthBalance) === 0 ||
-                      parseFloat(selectedRefuel.amount) >
-                        parseFloat(totalEthBalance)
-                    }
-                    className='w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-4 px-4 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl'
-                  >
-                    {isLoading ? (
-                      <span className='flex items-center justify-center'>
-                        <svg
-                          className='animate-spin -ml-1 mr-3 h-5 w-5 text-white'
-                          xmlns='http://www.w3.org/2000/svg'
-                          fill='none'
-                          viewBox='0 0 24 24'
-                        >
-                          <circle
-                            className='opacity-25'
-                            cx='12'
-                            cy='12'
-                            r='10'
-                            stroke='currentColor'
-                            strokeWidth='4'
-                          ></circle>
-                          <path
-                            className='opacity-75'
-                            fill='currentColor'
-                            d='M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z'
-                          ></path>
-                        </svg>
-                        Processing...
-                      </span>
-                    ) : (
-                      `⚡ Send ${selectedRefuel.amount} ETH`
-                    )}
-                  </button>
-                )}
-
-                {/* Submit Button for PYUSD Mode */}
-                {transferMode === 'pyusd' && (
-                  <>
-                    <button
-                      type='button'
-                      onClick={async () => {
-                        if (!isConnected || !phoneNumber || !nexusSdk) {
-                          setError(
-                            'Connect wallet, initialize bridge, and enter phone number first'
-                          );
-                          return;
-                        }
-
-                        try {
-                          setIsLoading(true);
-                          setError('');
-                          setSuccess('');
-                          setShowProgress(true);
-                          setProgressSteps([]);
-                          setCurrentStep('Resolving phone number...');
-
-                          // Resolve recipient
-                          const recipientAddr = await resolvePhone(phoneNumber);
-                          if (!recipientAddr) {
-                            throw new Error('Failed to resolve phone number');
-                          }
-
-                          setResolvedAddress(recipientAddr);
-                          console.log('📱 Resolved phone to:', recipientAddr);
-
-                          if (!pyusdAmount || parseFloat(pyusdAmount) <= 0) {
-                            throw new Error('Please enter a valid amount');
-                          }
-
-                          const swapAmount = parseFloat(pyusdAmount);
-                          const minRequired = swapAmount + 0.002; // + gas buffer
-
-                          // Check total available balance across all chains
-                          const totalAvailable = parseFloat(totalEthBalance);
-                          if (totalAvailable < minRequired) {
-                            throw new Error(
-                              `Insufficient balance. You have ${totalAvailable.toFixed(
-                                4
-                              )} ETH but need at least ${minRequired.toFixed(
-                                4
-                              )} ETH (${swapAmount} for swap + 0.002 for gas)`
-                            );
-                          }
-
-                          // Check current balance on Arbitrum
-                          setCurrentStep('Checking Arbitrum balance...');
-                          const arbBalance = await checkArbitrumBalance();
-                          console.log(
-                            `💰 Current Arbitrum balance: ${arbBalance} ETH`
-                          );
-
-                          let skippedBridge = false;
-
-                          // Step 1: Bridge if needed
-                          if (arbBalance < minRequired) {
-                            const neededAmount = minRequired - arbBalance;
-                            const bridgeAmount = Math.max(
-                              neededAmount,
-                              0.001
-                            ).toFixed(4);
-
-                            setCurrentStep(
-                              `Step 1/2: Bridging ${bridgeAmount} ETH to Arbitrum...`
-                            );
-                            console.log(
-                              `🌉 Need to bridge ${bridgeAmount} ETH`
-                            );
-
-                            const bridgeResult = await bridgeEthToArbitrum(
-                              nexusSdk,
-                              {
-                                fromChainId: 1, // Will auto-detect best source
-                                toChainId: 42161,
-                                token: 'ETH',
-                                amount: bridgeAmount,
-                              }
-                            );
-
-                            if (!bridgeResult.success) {
-                              throw new Error(
-                                bridgeResult.error || 'Bridge failed'
-                              );
-                            }
-
-                            console.log('✅ Bridge completed');
-                            setCurrentStep('Waiting for funds on Arbitrum...');
-
-                            // Wait for bridge to settle
-                            await new Promise((r) => setTimeout(r, 5000));
-
-                            // After bridge, we should already be on Arbitrum
-                            // Force switch to Arbitrum to be sure
-                            setCurrentStep('Confirming Arbitrum network...');
-                            try {
-                              await (window as any).ethereum.request({
-                                method: 'wallet_switchEthereumChain',
-                                params: [{ chainId: '0xa4b1' }],
-                              });
-                            } catch (err) {
-                              console.warn(
-                                'Already on Arbitrum or switch not needed'
-                              );
-                            }
-                            await new Promise((r) => setTimeout(r, 1000));
-                          } else {
-                            console.log(
-                              '✅ Sufficient ETH already on Arbitrum, skipping bridge'
-                            );
-                            skippedBridge = true;
-                          }
-
-                          // Step 2: Swap ETH to PYUSD
-                          const stepLabel = skippedBridge
-                            ? 'Swapping'
-                            : 'Step 2/2: Swapping';
-                          setCurrentStep(`${stepLabel} ETH → PYUSD...`);
-
-                          const { ethers } = await import('ethers');
-                          const provider = new ethers.providers.Web3Provider(
-                            (window as any).ethereum
-                          );
-
-                          // Verify we're on Arbitrum before swap
-                          const network = await provider.getNetwork();
-                          console.log('Current network:', network.chainId);
-
-                          if (network.chainId !== 42161) {
-                            throw new Error(
-                              'Please switch to Arbitrum One to continue'
-                            );
-                          }
-
-                          const signer = provider.getSigner();
-
-                          const swapResult = await swapETHToPYUSD(signer, {
-                            amountInETH: swapAmount.toString(),
-                            recipient: recipientAddr,
-                            slippageBps: 250,
-                          });
-
-                          if (!swapResult.success) {
-                            throw new Error(swapResult.error || 'Swap failed');
-                          }
-
-                          console.log('✅ Swap completed:', swapResult);
-
-                          const successMsg = skippedBridge
-                            ? `✅ Swapped ${swapAmount} ETH → PYUSD and sent to ${phoneNumber}!`
-                            : `🎉 Bridged to Arbitrum, swapped ${swapAmount} ETH → PYUSD, and sent to ${phoneNumber}!`;
-
-                          setSuccess(
-                            `${successMsg}\n\nTx: ${swapResult.txHash?.slice(
-                              0,
-                              10
-                            )}...`
-                          );
-                          setShowProgress(false);
-                        } catch (err: any) {
-                          console.error('Full flow error:', err);
-                          setError(err?.message || 'Flow failed');
-                          setShowProgress(false);
-                        } finally {
-                          setIsLoading(false);
-                          setCurrentStep('');
-                        }
-                      }}
-                      disabled={
-                        isLoading ||
-                        !isInitialized ||
-                        !phoneNumber ||
-                        !pyusdAmount
-                      }
-                      className='w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-4 rounded-lg text-sm font-semibold hover:from-purple-700 hover:to-pink-700 disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg'
-                    >
-                      {isLoading
-                        ? currentStep || 'Working...'
-                        : `🚀 Send ${pyusdAmount} ETH as PYUSD (Smart Flow)`}
-                    </button>
-                    <p className='text-xs text-gray-400 mt-2 text-center'>
-                      Checks Arbitrum balance first. Only bridges if needed.
-                      Automatically swaps ETH → PYUSD and sends to phone.
-                    </p>
-                  </>
-                )}
-              </form>
-            </>
-          )}
+                </>
+              )}
+            </div>
+          </div>
         </div>
-
-        {/* Info Section - Dynamic based on transfer mode */}
-        <div className='mt-8 bg-white rounded-lg shadow p-6'>
-          <h2 className='text-lg font-semibold text-gray-900 mb-3'>
-            How it works
-          </h2>
-
-          {transferMode === 'gas' ? (
-            <>
-              <ol className='space-y-2 text-sm text-gray-600'>
-                <li>1. 🔌 Connect your wallet (any supported chain)</li>
-                <li>2. 📱 Enter recipient's phone number</li>
-                <li>3. ⚡ Choose gas amount (number of transactions)</li>
-                <li>4. ✍️ Sign once in your wallet to authorize</li>
-                <li>5. ✨ We find your best chain automatically</li>
-                <li>6. 🔵 ETH arrives on Arbitrum in ~30 seconds</li>
-              </ol>
-              <div className='mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100'>
-                <p className='text-xs text-blue-800'>
-                  <strong>🚀 Smart Routing:</strong> We aggregate your ETH from
-                  Ethereum, Optimism, Base, Polygon & Arbitrum. No need to
-                  choose - we pick the best route for lowest fees!
-                </p>
-              </div>
-              <div className='mt-3 p-3 bg-green-50 rounded-lg border border-green-100'>
-                <p className='text-xs text-green-800'>
-                  <strong>💡 Pro tip:</strong> Fund once, use multiple times.
-                  The recipient can make ~{selectedRefuel.txCount} PYUSD
-                  transfers with this gas.
-                </p>
-              </div>
-              <div className='mt-3 p-3 bg-purple-50 rounded-lg border border-purple-100'>
-                <p className='text-xs text-purple-800'>
-                  <strong>🔐 About signatures:</strong> Your wallet will ask you
-                  to sign once to authorize sending {selectedRefuel.amount} ETH.
-                  This is how we keep your funds secure - only you can approve
-                  transactions. We never have access to your private keys.
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <ol className='space-y-2 text-sm text-gray-600'>
-                <li>1. 🔌 Connect your wallet (any supported chain)</li>
-                <li>2. 📱 Enter recipient's phone number</li>
-                <li>3. 💰 Choose amount in ETH to convert</li>
-                <li>4. 🌉 Auto-bridge to Arbitrum (if needed)</li>
-                <li>5. 🔄 Swap ETH → PYUSD on Uniswap</li>
-                <li>6. 💵 PYUSD sent directly to recipient</li>
-              </ol>
-              <div className='mt-4 p-3 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100'>
-                <p className='text-xs text-purple-800'>
-                  <strong>✨ Smart Flow:</strong> We automatically check your
-                  Arbitrum balance. If you need more ETH, we bridge it first.
-                  Then we swap to PYUSD and send it - all in one flow!
-                </p>
-              </div>
-              <div className='mt-3 p-3 bg-blue-50 rounded-lg border border-blue-100'>
-                <p className='text-xs text-blue-800'>
-                  <strong>💱 Exchange Rate:</strong> ~1 ETH = 3,758 PYUSD. Your
-                  recipient gets a stable dollar-pegged token they can use
-                  anywhere.
-                </p>
-              </div>
-              <div className='mt-3 p-3 bg-green-50 rounded-lg border border-green-100'>
-                <p className='text-xs text-green-800'>
-                  <strong>🔐 Signatures:</strong> You'll sign 1-2 times (bridge
-                  + swap). If you already have ETH on Arbitrum, only 1 signature
-                  is needed!
-                </p>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+      </section>
 
       {/* Auto-handle Allowance Modal */}
       {allowanceModal && (
         <div
-          className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'
+          className='fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50'
           onClick={(e) => {
             // Prevent closing when clicking outside
             e.stopPropagation();
           }}
         >
           <div
-            className='bg-white rounded-lg p-6 max-w-md mx-4'
+            className='bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 border border-gray-100'
             onClick={(e) => {
               // Prevent event from bubbling to parent
               e.stopPropagation();
             }}
           >
-            <h3 className='text-lg font-bold mb-4'>
-              🔐 Token Approval Required
+            <div className='w-16 h-16 bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] rounded-full mx-auto mb-4 flex items-center justify-center'>
+              <CheckCircle2 className='w-8 h-8 text-[#059669]' />
+            </div>
+            <h3 className='text-2xl font-bold text-[#0f172a] mb-3 text-center'>
+              Token Approval Required
             </h3>
-            <p className='text-sm text-gray-600 mb-4'>
+            <p className='text-sm text-gray-600 mb-4 text-center leading-relaxed'>
               Approve the bridge contract to spend your tokens. This is a
               one-time approval.
             </p>
             {allowanceModal.sources && allowanceModal.sources.length > 0 && (
-              <div className='text-xs text-gray-500 mb-4'>
+              <div className='text-xs text-gray-500 mb-6 text-center p-3 bg-gray-50 rounded-lg'>
                 Tokens to approve:{' '}
-                {allowanceModal.sources
-                  .map((s: any) => s.token?.symbol || 'Token')
-                  .join(', ')}
+                <span className='font-semibold'>
+                  {allowanceModal.sources
+                    .map((s: any) => s.token?.symbol || 'Token')
+                    .join(', ')}
+                </span>
               </div>
             )}
             <div className='flex gap-3'>
@@ -1144,7 +1322,7 @@ export default function FundPage() {
                     setIsLoading(false);
                   }
                 }}
-                className='flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700'
+                className='flex-1 bg-[#059669] text-white py-3 px-6 rounded-xl font-semibold hover:bg-[#047857] transition-all shadow-md hover:shadow-lg active:scale-95'
               >
                 Approve
               </button>
@@ -1155,7 +1333,7 @@ export default function FundPage() {
                   setAllowanceModal(null);
                   setIsLoading(false);
                 }}
-                className='flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300'
+                className='flex-1 bg-gray-200 text-gray-800 py-3 px-6 rounded-xl font-semibold hover:bg-gray-300 transition-all active:scale-95'
               >
                 Cancel
               </button>
@@ -1166,30 +1344,44 @@ export default function FundPage() {
 
       {/* Auto-handle Intent Modal */}
       {intentModal && (
-        <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'>
-          <div className='bg-white rounded-lg p-6 max-w-md mx-4'>
-            <h3 className='text-lg font-bold mb-4'>🔵 Confirm Transfer</h3>
-            <p className='text-sm text-gray-600 mb-4'>
+        <div className='fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50'>
+          <div className='bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 border border-gray-100'>
+            <div className='w-16 h-16 bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] rounded-full mx-auto mb-4 flex items-center justify-center'>
+              <CheckCircle2 className='w-8 h-8 text-[#059669]' />
+            </div>
+            <h3 className='text-2xl font-bold text-[#0f172a] mb-3 text-center'>
+              Confirm Transfer
+            </h3>
+            <p className='text-sm text-gray-600 mb-6 text-center leading-relaxed'>
               Transfer {selectedRefuel.amount} ETH to {phoneNumber} on Arbitrum
             </p>
-            <div className='text-xs text-gray-500 mb-4'>
-              <p>
-                <strong>📍 Destination:</strong>{' '}
-                {resolvedAddress
-                  ? `${resolvedAddress.slice(0, 10)}...${resolvedAddress.slice(
-                      -8
-                    )}`
-                  : 'Resolving...'}
-              </p>
-              <p>
-                <strong>⛓️ Chain:</strong> Arbitrum (42161)
-              </p>
-              <p>
-                <strong>⏱️ Estimated time:</strong> ~30 seconds
-              </p>
-              <p>
-                <strong>⛽ Gas:</strong> Will be deducted from your wallet
-              </p>
+            <div className='space-y-2 mb-6 p-4 bg-gray-50 rounded-xl'>
+              <div className='flex justify-between text-sm'>
+                <span className='text-gray-600'>📍 Destination:</span>
+                <span className='font-mono text-gray-900 text-xs'>
+                  {resolvedAddress
+                    ? `${resolvedAddress.slice(0, 8)}...${resolvedAddress.slice(
+                        -6
+                      )}`
+                    : 'Resolving...'}
+                </span>
+              </div>
+              <div className='flex justify-between text-sm'>
+                <span className='text-gray-600'>⛓️ Chain:</span>
+                <span className='font-semibold text-gray-900'>
+                  Arbitrum One
+                </span>
+              </div>
+              <div className='flex justify-between text-sm'>
+                <span className='text-gray-600'>⏱️ Est. time:</span>
+                <span className='font-semibold text-gray-900'>~30 seconds</span>
+              </div>
+              <div className='flex justify-between text-sm'>
+                <span className='text-gray-600'>⛽ Gas:</span>
+                <span className='font-semibold text-gray-900'>
+                  From your wallet
+                </span>
+              </div>
             </div>
             <div className='flex gap-3'>
               <button
@@ -1198,7 +1390,7 @@ export default function FundPage() {
                   intentModal.allow(); // Use allow() to confirm the transaction
                   setIntentModal(null);
                 }}
-                className='flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700'
+                className='flex-1 bg-[#059669] text-white py-3 px-6 rounded-xl font-semibold hover:bg-[#047857] transition-all shadow-md hover:shadow-lg active:scale-95'
               >
                 Confirm & Sign
               </button>
@@ -1210,7 +1402,7 @@ export default function FundPage() {
                   setIsLoading(false);
                   setCurrentStep('');
                 }}
-                className='flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300'
+                className='flex-1 bg-gray-200 text-gray-800 py-3 px-6 rounded-xl font-semibold hover:bg-gray-300 transition-all active:scale-95'
               >
                 Cancel
               </button>

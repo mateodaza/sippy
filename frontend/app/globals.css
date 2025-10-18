@@ -1,46 +1,162 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer utilities {
-  .animate-blob {
-    animation: blob 7s infinite;
+  /* Elegant fade-in animation */
+  .animate-fade-in-up {
+    animation: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
   }
 
-  .animation-delay-2000 {
-    animation-delay: 2s;
+  .animation-delay-100 {
+    animation-delay: 0.1s;
   }
 
-  .animation-delay-4000 {
-    animation-delay: 4s;
+  .animation-delay-200 {
+    animation-delay: 0.2s;
   }
 
-  .animate-gradient-x {
-    animation: gradient-x 3s ease infinite;
+  .animation-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 0.4s;
+  }
+
+  .animation-delay-500 {
+    animation-delay: 0.5s;
+  }
+
+  .animation-delay-600 {
+    animation-delay: 0.6s;
+  }
+
+  /* Gradient text effect */
+  .gradient-text {
+    background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
     background-size: 200% 200%;
+    animation: gradient-shift 4s ease infinite;
   }
 
-  .animate-fade-in {
-    animation: fade-in 1s ease-out;
+  /* Animated gradient background */
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient-shift 8s ease infinite;
+  }
+
+  /* Premium shadows */
+  .shadow-card {
+    box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.06),
+      0 2px 8px -2px rgba(0, 0, 0, 0.04);
+  }
+
+  .shadow-card-hover {
+    box-shadow: 0 12px 48px -8px rgba(0, 0, 0, 0.12),
+      0 4px 16px -4px rgba(0, 0, 0, 0.08);
+  }
+
+  .shadow-chat {
+    box-shadow: 0 20px 60px -12px rgba(0, 0, 0, 0.12),
+      0 8px 24px -8px rgba(0, 0, 0, 0.08);
+  }
+
+  .shadow-glow-emerald {
+    box-shadow: 0 8px 32px -8px rgba(16, 185, 129, 0.3);
+  }
+
+  .shadow-glow-emerald-lg {
+    box-shadow: 0 12px 48px -8px rgba(16, 185, 129, 0.4),
+      0 0 24px -8px rgba(16, 185, 129, 0.2);
+  }
+
+  /* Glassmorphism */
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .glass-dark {
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  /* Smooth transitions */
+  .transition-smooth {
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .transition-spring {
+    transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Hover lift effect */
+  .hover-lift {
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-4px);
+  }
+
+  /* Icon animations */
+  .icon-hover {
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .group:hover .icon-hover {
+    transform: scale(1.1) rotate(3deg);
+  }
+
+  /* Pulse glow animation */
+  .animate-pulse-glow {
+    animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Floating animation */
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animate-float-delay {
+    animation: float 6s ease-in-out infinite;
+    animation-delay: 1s;
+  }
+
+  /* Shimmer effect */
+  .animate-shimmer {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.4) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s ease-in-out infinite;
   }
 }
 
-@keyframes blob {
-  0% {
-    transform: translate(0px, 0px) scale(1);
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
   }
-  33% {
-    transform: translate(30px, -50px) scale(1.1);
-  }
-  66% {
-    transform: translate(-20px, 20px) scale(0.9);
-  }
-  100% {
-    transform: translate(0px, 0px) scale(1);
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@keyframes gradient-x {
+@keyframes gradient-shift {
   0%,
   100% {
     background-position: 0% 50%;
@@ -50,14 +166,32 @@
   }
 }
 
-@keyframes fade-in {
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 32px rgba(16, 185, 129, 0.5);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes shimmer {
   0% {
-    opacity: 0;
-    transform: translateY(20px);
+    background-position: -200% 0;
   }
   100% {
-    opacity: 1;
-    transform: translateY(0);
+    background-position: 200% 0;
   }
 }
 
@@ -72,18 +206,18 @@
   padding-right: 1rem;
   padding-top: 0.75rem;
   padding-bottom: 0.75rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 0.75rem;
   font-size: 1.125rem;
   line-height: 1.75rem;
+  transition: all 0.2s;
 }
 
 .react-international-phone-input-container
   .react-international-phone-input:focus {
   outline: none;
-  ring: 2px;
-  ring-color: #3b82f6;
-  border-color: transparent;
+  border-color: #059669;
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.1);
 }
 
 .react-international-phone-country-selector-button {
