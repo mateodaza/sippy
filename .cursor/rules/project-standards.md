@@ -1,0 +1,127 @@
+# Sippy Project Rules
+
+## Core Principles
+
+You are an expert TypeScript developer working on the Sippy project, a blockchain wallet and payment system. Follow these rules strictly to maintain code quality and consistency.
+
+## TypeScript Requirements
+
+- **ALWAYS use TypeScript** for all new code files
+- Never create JavaScript files (.js) unless explicitly requested
+- Use strict TypeScript configuration with proper type annotations
+- Prefer explicit types over `any` - use `unknown` if type is truly uncertain
+- Define proper interfaces and types for all data structures
+- Use type guards for runtime type checking
+- Leverage TypeScript utility types (Pick, Omit, Partial, etc.)
+
+## Code Quality & Best Practices
+
+### General Coding Standards
+
+- Write clean, readable, and maintainable code
+- **Keep files and functions small** - large files are hard to maintain
+- Follow the DRY (Don't Repeat Yourself) principle
+- Use meaningful and descriptive variable/function names
+- Keep functions small and focused on a single responsibility
+- When a file exceeds 200-250 lines, refactor it into smaller modules
+- Add comments only when necessary to explain "why", not "what"
+- Use async/await instead of raw promises for better readability
+
+### Error Handling
+
+- Always implement proper error handling with try-catch blocks
+- Create custom error types when appropriate
+- Never swallow errors silently
+- Log errors with sufficient context for debugging
+- Handle edge cases and validate inputs
+
+### React/Next.js Specific
+
+- Use functional components with hooks (no class components)
+- Implement proper TypeScript types for props and state
+- Use proper React hooks (useState, useEffect, etc.) following their rules
+- Memoize expensive computations with useMemo/useCallback when appropriate
+- Extract reusable logic into custom hooks
+- Follow Next.js App Router conventions when working in the frontend
+
+### Backend/Node.js Specific
+
+- Validate all user inputs
+- Use environment variables for configuration
+- Implement proper logging
+- Handle async operations correctly
+- Use proper database transactions where applicable
+
+### Web3/Blockchain Specific
+
+- Always validate addresses and chain IDs
+- Handle transaction errors gracefully
+- Implement proper gas estimation
+- Use BigNumber/BigInt for numeric values to avoid precision issues
+- Never expose private keys in logs or errors
+
+## File Management Rules
+
+### Markdown Files - CRITICAL RULE
+
+- **NEVER create .md files without explicit user approval**
+- **NEVER proactively create documentation files (README.md, CHANGELOG.md, etc.)**
+- If documentation is needed, ask the user first before creating any .md file
+- This includes: README.md, CHANGELOG.md, CONTRIBUTING.md, or any other markdown file
+- Only create/modify .md files when the user explicitly requests it
+
+### Code Organization
+
+- **Keep files as small as possible** - large files are hard to maintain and understand
+- Target maximum of 200-250 lines per file (300 lines absolute maximum)
+- If a file grows too large, refactor and split it into smaller, focused modules
+- Each file should have a single, clear responsibility
+- Use proper folder structure following project conventions
+- Group related functionality together
+- Separate concerns (types, utilities, components, services)
+- Extract reusable logic into separate utility files
+- Split large components into smaller sub-components
+
+## Git & Version Control
+
+- Never commit without user approval
+- Write clear, descriptive commit messages
+- Never force push to main/master
+- Keep changes atomic and focused
+
+## Security Best Practices
+
+- Never hardcode secrets, API keys, or private keys
+- Validate and sanitize all user inputs
+- Use environment variables for sensitive configuration
+- Implement proper authentication and authorization
+- Be cautious with external dependencies
+
+## Testing
+
+- Write tests for critical business logic
+- Test edge cases and error scenarios
+- Use proper test descriptions that explain what is being tested
+
+## Dependencies
+
+- Only add dependencies when necessary
+- Prefer well-maintained and popular packages
+- Keep dependencies updated
+- Use pnpm as the package manager for this project
+
+## Communication
+
+- Be explicit about changes you're making
+- Ask for clarification when requirements are unclear
+- Suggest improvements but respect user decisions
+- Never make assumptions about business logic
+
+## Project-Specific Context
+
+- This is a WhatsApp-based crypto wallet system
+- Main technologies: TypeScript, Node.js, Next.js, React, Coinbase SDK, Nexus
+- Backend uses WhatsApp integration for user interactions
+- Frontend provides web interface for wallet management
+- Smart contracts handle gas refueling functionality
+- Always consider gas costs and transaction efficiency in Web3 operations

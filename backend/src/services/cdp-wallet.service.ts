@@ -1,14 +1,14 @@
 /**
- * CDP Server Wallet Service v2
+ * CDP Server Wallet Service v2 (PostgreSQL)
  *
  * Handles wallet creation, transfers, and balance queries using Coinbase CDP SDK v2
+ * with PostgreSQL storage
  */
 
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { ethers } from 'ethers';
 import { UserWallet, SecurityLimits, TransferResult } from '../types/index.js';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { query } from './db.js';
 
 // PYUSD contract on Arbitrum (verified via successful transactions)
 const PYUSD_CONTRACT = '0x46850ad61c2b7d64d08c9c754f45254596696984';
@@ -33,86 +33,12 @@ const SECURITY_LIMITS: SecurityLimits = {
   sessionDurationHours: 24, // 24 hour sessions
 };
 
-// Persistent storage for wallets (JSON file for MVP - use database in production)
-const WALLET_STORAGE_PATH = path.join(process.cwd(), 'wallets.json');
-const userWallets = new Map<string, UserWallet>();
-
-// Load wallets from persistent storage on startup
-async function loadWallets(): Promise<void> {
-  try {
-    const data = await fs.readFile(WALLET_STORAGE_PATH, 'utf8');
-    const walletsData = JSON.parse(data);
-
-    for (const [phoneNumber, walletData] of Object.entries(walletsData)) {
-      userWallets.set(phoneNumber, walletData as UserWallet);
-    }
-
-    console.log(`✅ Loaded ${userWallets.size} wallets from storage`);
-  } catch (error: any) {
-    // CRITICAL: Only swallow file-not-found errors
-    if (error.code === 'ENOENT') {
-      console.log('📂 No existing wallet storage found - starting fresh');
-      return;
-    }
-
-    // Critical error - don't start service with corrupted/unreadable wallet data
-    console.error('💥 CRITICAL: Failed to load wallet storage!');
-    console.error('💥 Error:', error.message);
-    console.error(
-      '💥 This could indicate corrupted wallets.json or permission issues'
-    );
-    console.error('💥 Service startup aborted to prevent data loss');
-    throw error;
-  }
-}
-
-// Save wallets to persistent storage
-async function saveWallets(): Promise<void> {
-  try {
-    const walletsData = Object.fromEntries(userWallets.entries());
-    await fs.writeFile(
-      WALLET_STORAGE_PATH,
-      JSON.stringify(walletsData, null, 2)
-    );
-    console.log(`💾 Saved ${userWallets.size} wallets to storage`);
-  } catch (error) {
-    console.error('❌ Failed to save wallets:', error);
-  }
-}
-
-// Initialize wallet storage - MUST complete before serving requests
-let walletsReady = false;
-let walletInitPromise: Promise<void>;
-
-async function initializeWalletStorage(): Promise<void> {
-  if (walletsReady) return;
-
-  try {
-    await loadWallets();
-    walletsReady = true;
-    console.log('🔥 Wallet service ready - safe to handle requests');
-  } catch (error) {
-    console.error('💥 Failed to initialize wallet storage:', error);
-    throw error;
-  }
-}
-
-// Start initialization immediately
-walletInitPromise = initializeWalletStorage();
-
-// Export function to ensure wallets are ready before operations
-export async function ensureWalletsReady(): Promise<void> {
-  await walletInitPromise;
-}
-
 /**
  * Create a new wallet for a user
  */
 export async function createUserWallet(
   phoneNumber: string
 ): Promise<UserWallet> {
-  await ensureWalletsReady();
-
   try {
     console.log(`\n🏦 Creating CDP wallet for +${phoneNumber}...`);
 
@@ -130,7 +56,7 @@ export async function createUserWallet(
     // Create user wallet record
     const userWallet: UserWallet = {
       phoneNumber,
-      cdpWalletId: accountName, // Store account name instead of wallet ID for v2
+      cdpWalletId: accountName,
       walletAddress,
       createdAt: Date.now(),
       lastActivity: Date.now(),
@@ -138,11 +64,28 @@ export async function createUserWallet(
       lastResetDate: new Date().toDateString(),
     };
 
-    // Store in memory and persist to file
-    userWallets.set(phoneNumber, userWallet);
-    await saveWallets();
+    // Store in database
+    await query(
+      `INSERT INTO phone_registry 
+       (phone_number, cdp_wallet_name, wallet_address, created_at, last_activity, daily_spent, last_reset_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (phone_number) 
+       DO UPDATE SET 
+         cdp_wallet_name = EXCLUDED.cdp_wallet_name,
+         wallet_address = EXCLUDED.wallet_address,
+         last_activity = EXCLUDED.last_activity`,
+      [
+        phoneNumber,
+        accountName,
+        walletAddress,
+        userWallet.createdAt,
+        userWallet.lastActivity,
+        userWallet.dailySpent,
+        userWallet.lastResetDate,
+      ]
+    );
 
-    console.log(`✅ User wallet registered and saved for +${phoneNumber}`);
+    console.log(`✅ User wallet registered in database for +${phoneNumber}`);
     return userWallet;
   } catch (error) {
     console.error(`❌ Failed to create wallet for +${phoneNumber}:`, error);
@@ -156,8 +99,35 @@ export async function createUserWallet(
 export async function getUserWallet(
   phoneNumber: string
 ): Promise<UserWallet | null> {
-  await ensureWalletsReady();
-  return userWallets.get(phoneNumber) || null;
+  try {
+    const result = await query<{
+      phone_number: string;
+      cdp_wallet_name: string;
+      wallet_address: string;
+      created_at: string;
+      last_activity: string;
+      daily_spent: string;
+      last_reset_date: string;
+    }>('SELECT * FROM phone_registry WHERE phone_number = $1', [phoneNumber]);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0];
+    return {
+      phoneNumber: row.phone_number,
+      cdpWalletId: row.cdp_wallet_name,
+      walletAddress: row.wallet_address,
+      createdAt: parseInt(row.created_at),
+      lastActivity: parseInt(row.last_activity),
+      dailySpent: parseFloat(row.daily_spent),
+      lastResetDate: row.last_reset_date,
+    };
+  } catch (error) {
+    console.error(`❌ Failed to get wallet for +${phoneNumber}:`, error);
+    throw error;
+  }
 }
 
 /**
@@ -166,31 +136,39 @@ export async function getUserWallet(
 export async function updateLastActivity(
   phoneNumber: string
 ): Promise<boolean> {
-  await ensureWalletsReady();
-  const userWallet = userWallets.get(phoneNumber);
-  if (!userWallet) return false;
+  try {
+    const userWallet = await getUserWallet(phoneNumber);
+    if (!userWallet) return false;
 
-  userWallet.lastActivity = Date.now();
+    const now = Date.now();
+    const today = new Date().toDateString();
 
-  // Reset daily spending if it's a new day
-  const today = new Date().toDateString();
-  if (userWallet.lastResetDate !== today) {
-    userWallet.dailySpent = 0;
-    userWallet.lastResetDate = today;
-    console.log(`📅 Daily spending reset for +${phoneNumber}`);
+    // Reset daily spending if it's a new day
+    let dailySpent = userWallet.dailySpent;
+    if (userWallet.lastResetDate !== today) {
+      dailySpent = 0;
+      console.log(`📅 Daily spending reset for +${phoneNumber}`);
+    }
+
+    await query(
+      `UPDATE phone_registry 
+       SET last_activity = $1, daily_spent = $2, last_reset_date = $3
+       WHERE phone_number = $4`,
+      [now, dailySpent, today, phoneNumber]
+    );
+
+    return true;
+  } catch (error) {
+    console.error(`❌ Failed to update activity for +${phoneNumber}:`, error);
+    return false;
   }
-
-  // Persist changes
-  await saveWallets();
-  return true;
 }
 
 /**
  * Check if user session is still valid
  */
 export async function isSessionValid(phoneNumber: string): Promise<boolean> {
-  await ensureWalletsReady();
-  const userWallet = userWallets.get(phoneNumber);
+  const userWallet = await getUserWallet(phoneNumber);
   if (!userWallet) return false;
 
   const sessionAge = Date.now() - userWallet.lastActivity;
@@ -206,8 +184,7 @@ export async function checkSecurityLimits(
   phoneNumber: string,
   amount: number
 ): Promise<{ allowed: boolean; reason?: string }> {
-  await ensureWalletsReady();
-  const userWallet = userWallets.get(phoneNumber);
+  const userWallet = await getUserWallet(phoneNumber);
   if (!userWallet) {
     return { allowed: false, reason: 'User wallet not found' };
   }
@@ -236,9 +213,7 @@ export async function checkSecurityLimits(
  * Get PYUSD balance for user using ethers.js
  */
 export async function getUserBalance(phoneNumber: string): Promise<number> {
-  await ensureWalletsReady();
-
-  const userWallet = userWallets.get(phoneNumber);
+  const userWallet = await getUserWallet(phoneNumber);
   if (!userWallet) {
     throw new Error('User wallet not found');
   }
@@ -277,9 +252,7 @@ export async function sendPYUSD(
   toAddress: string,
   amount: number
 ): Promise<TransferResult> {
-  await ensureWalletsReady();
-
-  const userWallet = userWallets.get(fromPhoneNumber);
+  const userWallet = await getUserWallet(fromPhoneNumber);
   if (!userWallet) {
     throw new Error('Sender wallet not found');
   }
@@ -292,7 +265,7 @@ export async function sendPYUSD(
     const cdp = getCDPClient();
 
     // Get account by name
-    const accountName = userWallet.cdpWalletId; // This is the account name
+    const accountName = userWallet.cdpWalletId;
     const account = await cdp.evm.getOrCreateAccount({ name: accountName });
 
     console.log(`✅ Account loaded: ${account.address}`);
@@ -300,7 +273,7 @@ export async function sendPYUSD(
     // Prepare PYUSD transfer call data
     console.log(`📝 Preparing PYUSD transfer...`);
 
-    // Use ethers.utils.parseUnits for precise decimal handling (avoids float precision issues)
+    // Use ethers.utils.parseUnits for precise decimal handling
     const amountBigNumber = ethers.utils.parseUnits(
       amount.toString(),
       PYUSD_DECIMALS
@@ -330,9 +303,12 @@ export async function sendPYUSD(
 
     console.log(`✅ Transfer successful! Hash: ${result.transactionHash}`);
 
-    // Update daily spending and persist
-    userWallet.dailySpent += amount;
-    await updateLastActivity(fromPhoneNumber);
+    // Update daily spending in database
+    const newDailySpent = userWallet.dailySpent + amount;
+    await query(
+      'UPDATE phone_registry SET daily_spent = $1, last_activity = $2 WHERE phone_number = $3',
+      [newDailySpent, Date.now(), fromPhoneNumber]
+    );
 
     return {
       transactionHash: result.transactionHash,
@@ -354,9 +330,7 @@ export async function sendPYUSDToUser(
   toPhoneNumber: string,
   amount: number
 ): Promise<TransferResult> {
-  await ensureWalletsReady();
-
-  const toUserWallet = userWallets.get(toPhoneNumber);
+  const toUserWallet = await getUserWallet(toPhoneNumber);
   if (!toUserWallet) {
     throw new Error('Recipient not registered with SIPPY');
   }
@@ -374,12 +348,24 @@ export async function getAllWallets(): Promise<
     address: string;
   }>
 > {
-  await ensureWalletsReady();
-  return Array.from(userWallets.entries()).map(([phone, wallet]) => ({
-    phone: `+${phone}`,
-    wallet: wallet.cdpWalletId,
-    address: wallet.walletAddress,
-  }));
+  try {
+    const result = await query<{
+      phone_number: string;
+      cdp_wallet_name: string;
+      wallet_address: string;
+    }>(
+      'SELECT phone_number, cdp_wallet_name, wallet_address FROM phone_registry ORDER BY phone_number'
+    );
+
+    return result.rows.map((row) => ({
+      phone: `+${row.phone_number}`,
+      wallet: row.cdp_wallet_name,
+      address: row.wallet_address,
+    }));
+  } catch (error) {
+    console.error('❌ Failed to get all wallets:', error);
+    return [];
+  }
 }
 
 /**

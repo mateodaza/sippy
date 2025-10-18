@@ -20,6 +20,10 @@ ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
 REFUEL_CONTRACT_ADDRESS=0xYourGasRefuelContractAddress
 REFUEL_ADMIN_PRIVATE_KEY=0xYourPrivateKeyWithFunds
 
+# Database (Railway PostgreSQL)
+# Get this from Railway dashboard → Postgres service → Variables tab
+DATABASE_URL=postgresql://postgres:password@region.railway.app:port/railway
+
 # Server Configuration
 PORT=3001
 NODE_ENV=production

@@ -19,8 +19,32 @@ cp ENV-TEMPLATE.txt .env
 - `WHATSAPP_PHONE_NUMBER_ID` → Meta Developers
 - `WHATSAPP_ACCESS_TOKEN` → Meta Developers (Permanent Token)
 - `CDP_API_KEY_ID` + `CDP_API_KEY_SECRET` + `CDP_WALLET_SECRET` → Coinbase CDP
+- `DATABASE_URL` → Railway PostgreSQL (see step 2.5 below)
 
-### 2️⃣ Verificar Configuración (1 min)
+### 2️⃣ Setup Railway PostgreSQL (3 min)
+
+1. Go to [Railway](https://railway.app) and create/login to your account
+2. Create a new project or open existing one
+3. Click **New** → **Database** → **PostgreSQL**
+4. Once created, click on the Postgres service → **Variables** tab
+5. Copy the `DATABASE_URL` value
+6. Add it to your `.env` file
+
+```bash
+DATABASE_URL=postgresql://postgres:...@....railway.app:6543/railway
+```
+
+### 2.5️⃣ Import Existing Wallets (Optional - 1 min)
+
+If you have existing wallets in `wallets.json`:
+
+```bash
+tsx src/commands/import-wallets.ts
+```
+
+This will migrate all wallets to PostgreSQL. You can delete `wallets.json` after.
+
+### 3️⃣ Verificar Configuración (1 min)
 
 ```bash
 npm run verify-config
@@ -28,7 +52,7 @@ npm run verify-config
 
 ✅ Si todo está bien, continúa. Si hay errores, revisa tu `.env`.
 
-### 3️⃣ Deploy a Railway/Render (10 min)
+### 4️⃣ Deploy a Railway/Render (10 min)
 
 **Railway (más fácil)**:
 
@@ -39,7 +63,7 @@ railway init
 railway up
 ```
 
-Agrega las variables de entorno en Railway dashboard.
+Agrega las variables de entorno en Railway dashboard. **Important**: `DATABASE_URL` will be automatically available if your backend service is in the same Railway project as your Postgres database.
 
 **Render**:
 
@@ -49,7 +73,7 @@ Agrega las variables de entorno en Railway dashboard.
 4. Start: `cd backend && node dist/server.js`
 5. Agrega variables de `.env` en "Environment"
 
-### 4️⃣ Configurar Webhook en Meta (3 min)
+### 5️⃣ Configurar Webhook en Meta (3 min)
 
 1. Ve a [Meta Developers](https://developers.facebook.com/) → Tu app → **WhatsApp** → **Configuration**
 2. Webhook:
@@ -58,7 +82,7 @@ Agrega las variables de entorno en Railway dashboard.
 3. Suscríbete a **messages**
 4. Click **Verify and Save**
 
-### 5️⃣ Personalizar Perfil (5 min)
+### 6️⃣ Personalizar Perfil (5 min)
 
 1. **WhatsApp** → **Phone Numbers** → Tu número → **Settings**
 2. Sube:

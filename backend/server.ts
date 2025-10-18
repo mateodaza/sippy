@@ -16,10 +16,10 @@ import {
 } from './src/services/whatsapp.service.js';
 import {
   getAllWallets,
-  ensureWalletsReady,
   getUserWallet,
   createUserWallet,
 } from './src/services/cdp-wallet.service.js';
+import { initDb } from './src/services/db.js';
 import { ParsedCommand, WebhookPayload } from './src/types/index.js';
 
 const app = express();
@@ -100,14 +100,6 @@ app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
 
   // Always respond 200 immediately
   res.sendStatus(200);
-
-  // CRITICAL: Ensure wallets are loaded before processing any commands
-  try {
-    await ensureWalletsReady();
-  } catch (error) {
-    console.error('💥 Wallet service not ready, skipping webhook processing');
-    return;
-  }
 
   try {
     const payload: WebhookPayload = req.body;
@@ -281,19 +273,31 @@ app.get('/api/health', async (req: Request, res: Response) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log('\n╔════════════════════════════════════════════════╗');
-  console.log('║   🚀 SIPPY Backend Server Started             ║');
-  console.log('╚════════════════════════════════════════════════╝\n');
-  console.log(`📡 Server: http://localhost:${PORT}`);
-  console.log(`🔐 Verify Token: ${VERIFY_TOKEN}`);
-  console.log('\n📋 Endpoints:');
-  console.log(`  GET  / - Health check`);
-  console.log(`  GET  /debug/wallets - See registered wallets`);
-  console.log(`  GET  /resolve-phone - Resolve phone to wallet address`);
-  console.log(`  GET  /webhook/whatsapp - Webhook verification`);
-  console.log(`  POST /webhook/whatsapp - Webhook events`);
-  console.log(`  POST /api/register - Register wallet`);
-  console.log('\n🎯 Waiting for webhook events...\n');
-});
+// Start server with database initialization
+async function startServer() {
+  try {
+    // Initialize database schema
+    await initDb();
+
+    app.listen(PORT, () => {
+      console.log('\n╔════════════════════════════════════════════════╗');
+      console.log('║   🚀 SIPPY Backend Server Started             ║');
+      console.log('╚════════════════════════════════════════════════╝\n');
+      console.log(`📡 Server: http://localhost:${PORT}`);
+      console.log(`🔐 Verify Token: ${VERIFY_TOKEN}`);
+      console.log('\n📋 Endpoints:');
+      console.log(`  GET  / - Health check`);
+      console.log(`  GET  /debug/wallets - See registered wallets`);
+      console.log(`  GET  /resolve-phone - Resolve phone to wallet address`);
+      console.log(`  GET  /webhook/whatsapp - Webhook verification`);
+      console.log(`  POST /webhook/whatsapp - Webhook events`);
+      console.log(`  POST /api/register - Register wallet`);
+      console.log('\n🎯 Waiting for webhook events...\n');
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
