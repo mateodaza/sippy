@@ -12,7 +12,7 @@ import {
 } from './src/services/cdp-wallet.service';
 
 async function testE2E() {
-  console.log('🧪 End-to-End Test - SIPPY WhatsApp Bot\n');
+  console.log('🧪 End-to-End Test - Sippy WhatsApp Bot\n');
   console.log('═'.repeat(50));
 
   try {

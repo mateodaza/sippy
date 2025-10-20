@@ -143,6 +143,15 @@
     background-size: 200% 100%;
     animation: shimmer 2s ease-in-out infinite;
   }
+
+  /* Marquee animations */
+  .animate-marquee {
+    animation: marquee var(--duration) linear infinite;
+  }
+
+  .animate-marquee-vertical {
+    animation: marquee-vertical var(--duration) linear infinite;
+  }
 }
 
 @keyframes fade-in-up {
@@ -192,6 +201,44 @@
   }
   100% {
     background-position: 200% 0;
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap)));
+  }
+}
+
+@keyframes marquee-vertical {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(-100% - var(--gap)));
+  }
+}
+
+@keyframes border-beam {
+  to {
+    offset-distance: 100%;
+  }
+}
+
+/* Border Beam Support */
+@supports (offset-path: rect(0 auto auto 0)) {
+  .after\:animate-border-beam::after {
+    animation: border-beam calc(var(--duration) * 1s) infinite linear;
+  }
+}
+
+/* Fallback for browsers without offset-path support */
+@supports not (offset-path: rect(0 auto auto 0)) {
+  .after\:animate-border-beam::after {
+    animation: spin 10s linear infinite;
   }
 }
 

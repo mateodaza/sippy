@@ -87,7 +87,7 @@ Agrega las variables de entorno en Railway dashboard. **Important**: `DATABASE_U
 1. **WhatsApp** → **Phone Numbers** → Tu número → **Settings**
 2. Sube:
    - **Foto de perfil** (640x640px)
-   - **Display Name**: "SIPPY"
+   - **Display Name**: "Sippy"
    - **About**: "Envía PYUSD a cualquier número de WhatsApp 💸"
    - **Category**: Financial Services
 
@@ -106,7 +106,7 @@ Respuesta esperada:
 ```json
 {
   "status": "running",
-  "message": "SIPPY Webhook Server",
+  "message": "Sippy Webhook Server",
   "registeredWallets": 0
 }
 ```
@@ -122,7 +122,7 @@ start
 Respuesta esperada:
 
 ```
-🎉 Welcome to SIPPY!
+🎉 Welcome to Sippy!
 
 Your wallet has been created:
 0xYourWalletAddress...

@@ -1,5 +1,5 @@
 /**
- * Type definitions for SIPPY backend
+ * Type definitions for Sippy backend
  */
 
 export interface Session {

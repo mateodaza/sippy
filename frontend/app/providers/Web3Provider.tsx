@@ -22,7 +22,7 @@ const config = createConfig(
       process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
 
     // App info
-    appName: 'SIPPY - Fund My Phone',
+    appName: 'Sippy - Fund My Phone',
     appDescription: 'Send ETH to phone numbers via cross-chain bridge',
     appUrl: 'https://sippy.app',
     appIcon: 'https://sippy.app/icon.png',

@@ -1,6 +1,6 @@
-# Project Status - SIPPY
+# Project Status - Sippy
 
-**Last Updated**: October 18, 2025  
+**Last Updated**: October 20, 2025  
 **Status**: ✅ **DEPLOYED TO PRODUCTION**
 
 ---
@@ -27,6 +27,15 @@
 - Smart contract live on Arbitrum
 - Backend integration complete
 - Automatic gas coverage for users
+
+### ✅ NEW: Blockscout Integration & Transaction Explorer
+
+- Full Blockscout API v2 integration
+- Profile pages showing wallet balances and transaction history
+- Beautiful transaction receipt pages with shareable links
+- Phone number system with 150+ country flags
+- Smart address/phone display components
+- Real-time balance and activity tracking
 
 ---
 
@@ -132,7 +141,68 @@ Result:
 ✅ Can spend via WhatsApp bot
 ```
 
-### 3. Configuration & Validation
+### 3. Blockscout Integration (`frontend/`)
+
+#### Transaction Explorer
+
+```
+✅ Blockscout API v2 client
+✅ Real-time balance queries (ETH + PYUSD)
+✅ Transaction history with pagination
+✅ Token transfer tracking
+✅ Retry logic & error handling
+✅ Rate limit handling
+```
+
+#### Profile Pages (`/profile/[phone]`)
+
+```typescript
+// frontend/app/profile/[phone]/page.tsx
+✅ Phone-to-address resolution
+✅ Balance display (ETH + PYUSD)
+✅ Recent activity (last 10 transactions)
+✅ Direction indicators (sent/received)
+✅ Country flag display (150+ countries)
+✅ Click-through to receipt pages
+✅ WhatsApp bot integration link
+```
+
+#### Receipt Pages (`/receipt/[txHash]`)
+
+```typescript
+// frontend/app/receipt/[txHash]/page.tsx
+✅ Beautiful transaction receipts
+✅ Status indicators (success/pending/failed)
+✅ From/To with phone/address display
+✅ Token amount and type (ETH/PYUSD)
+✅ Timestamp and network info
+✅ Shareable receipt links
+✅ Direct Blockscout explorer links
+```
+
+#### Phone Number System
+
+```typescript
+// frontend/lib/phone.ts
+✅ Phone parsing (150+ countries)
+✅ Country code extraction
+✅ Flag display integration
+✅ Phone formatting
+✅ Reverse lookup (address → phone)
+⚠️ Privacy concerns (see Security section)
+```
+
+#### Smart Components
+
+```
+✅ AddressOrPhone: Auto-fetches phone or shows address
+✅ PhoneDisplay: Shows phone with country flag
+✅ ProfileHeader: Balance card with animations
+✅ ActivityList: Transaction list with filters
+✅ ReceiptCard: Shareable payment receipts
+```
+
+### 4. Configuration & Validation
 
 #### Environment Variables (Corrected)
 
@@ -168,7 +238,7 @@ REFUEL_ADMIN_PRIVATE_KEY=0xb00bb3... ✅
 ✅ Clear error messages
 ```
 
-### 4. Documentation
+### 5. Documentation
 
 #### Active Docs
 
@@ -178,6 +248,8 @@ REFUEL_ADMIN_PRIVATE_KEY=0xb00bb3... ✅
 ✅ QUICK-START.md (deployment guide)
 ✅ ENV-TEMPLATE.txt (configuration template)
 ✅ REFUEL_SETUP.md (gas refuel docs)
+✅ frontend/lib/blockscout.ts (Blockscout API client)
+✅ frontend/lib/phone.ts (Phone parsing utilities)
 ```
 
 #### Code Quality
@@ -192,36 +264,57 @@ REFUEL_ADMIN_PRIVATE_KEY=0xb00bb3... ✅
 
 ---
 
-## ✅ **Recent Updates (October 18, 2025)**
+## ✅ **Recent Updates**
 
-### 1. PostgreSQL Integration ✅ COMPLETE
+### October 20, 2025: Blockscout Integration & Transaction Explorer ✅ COMPLETE
+
+#### 1. Blockscout API Integration
+
+- Full Blockscout API v2 client implementation
+- Real-time balance queries (ETH + PYUSD)
+- Transaction history with direction tracking
+- Token transfer detection and parsing
+- Retry logic and rate limit handling
+
+#### 2. Profile Pages (`/profile/[phone]`)
+
+- Phone-to-address resolution
+- Beautiful balance display with animations
+- Recent activity (last 10 transactions)
+- Country flag display (150+ countries supported)
+- Click-through to receipt pages
+- WhatsApp bot integration link
+
+#### 3. Receipt Pages (`/receipt/[txHash]`)
+
+- Professional transaction receipt UI
+- Status indicators (success/pending/failed)
+- From/To with smart phone/address display
+- Amount, token, timestamp, network info
+- Shareable receipt links
+- Direct Blockscout explorer links
+
+#### 4. Phone Number System
+
+- Phone parsing for 150+ countries
+- Country code extraction and flag display
+- Smart AddressOrPhone component
+- Session-based caching
+- ⚠️ Privacy concern: Public reverse lookup (see Security section)
+
+#### 5. New Dependencies
+
+- `@blockscout/app-sdk` for notifications
+- `react-international-phone` for country flags
+- Enhanced UI components with animations
+
+### October 18, 2025: PostgreSQL Integration ✅ COMPLETE
 
 - Migrated from `wallets.json` to Railway PostgreSQL
 - All 4 wallets successfully imported
 - Production-ready database with ACID compliance
 - Automatic connection pooling and SSL
-- Tested locally and in production
-
-### 2. Backend Deployed to Railway ✅ COMPLETE
-
-- Project: thriving-endurance
-- Environment: production
-- PostgreSQL database linked
-- All endpoints operational
-
-### 3. Next Steps (5 min)
-
-```
-1. Configure WhatsApp Webhook in Meta Developers:
-   - Webhook URL: https://YOUR-BACKEND.railway.app/webhook/whatsapp
-   - Verify Token: sippy_hackathon_2025
-   - Subscribe: messages
-
-2. Test complete flow:
-   - Send "start" via WhatsApp
-   - Use frontend to send PYUSD
-   - Check balance via WhatsApp
-```
+- Backend deployed to Railway
 
 ---
 
@@ -278,7 +371,7 @@ REFUEL_ADMIN_PRIVATE_KEY=0xb00bb3... ✅
          │ webhook
          ↓
 ┌─────────────────┐      ┌─────────────────┐
-│  SIPPY Backend  │─────→│  CDP SDK v2     │
+│  Sippy Backend  │─────→│  CDP SDK v2     │
 │  (Railway)      │      │  (Coinbase)     │
 └────────┬────────┘      └─────────────────┘
          │                        │
@@ -361,7 +454,8 @@ REFUEL_ADMIN_PRIVATE_KEY=0xb00bb3... ✅
 ✅ Daily spending limits ($500/day)
 ✅ Transaction limits ($100/tx)
 ✅ Activity logging
-✅ Persistent storage
+✅ Persistent storage (PostgreSQL)
+✅ Session-based caching for phone lookups
 ```
 
 ### Future Enhancements
@@ -370,8 +464,41 @@ REFUEL_ADMIN_PRIVATE_KEY=0xb00bb3... ✅
 ⏳ Rate limiting
 ⏳ IP whitelisting
 ⏳ 2FA for large transfers
-⏳ Database instead of JSON
 ⏳ Backup/recovery system
+```
+
+### ⚠️ Privacy Concerns (Post-Hackathon Fix Required)
+
+```
+⚠️ Reverse Phone Lookup Privacy Issue
+   → Current: /api/resolve-address allows anyone to query address → phone
+   → Risk: Public address lookups expose user phone numbers
+   → Impact: Privacy violation - anyone can discover phone numbers
+
+   Proposed Solutions (Priority for Post-Hackathon):
+
+   1. Authentication Required
+      ✓ Require user authentication to perform reverse lookups
+      ✓ Only allow users to see their own phone number
+      ✓ Rate limit authenticated lookups
+
+   2. Opt-in Privacy Settings
+      ✓ Add user privacy preferences in database
+      ✓ Allow users to hide phone from public display
+      ✓ Default to hidden, opt-in to show phone
+
+   3. Access Control Lists
+      ✓ Only show phone to recent transaction counterparties
+      ✓ Time-limited visibility (e.g., 30 days after transaction)
+      ✓ User can manage their visibility list
+
+   4. Frontend-Only Display
+      ✓ Remove /api/resolve-address endpoint entirely
+      ✓ Only show phone numbers in backend-generated contexts
+      ✓ Profile pages only accessible via direct backend auth
+
+   Recommended: Combination of #1, #2, and #3
+   Timeline: Implement before public launch
 ```
 
 ---
@@ -395,6 +522,9 @@ React 19
 Wagmi + ConnectKit (web3)
 Nexus SDK (bridging)
 Uniswap Universal Router (swaps)
+Blockscout App SDK (notifications & popups)
+Blockscout API v2 (transaction data)
+react-international-phone (country flags)
 TailwindCSS (styling)
 ```
 
@@ -435,12 +565,35 @@ sippy/
 │   ├── app/
 │   │   ├── fund/
 │   │   │   └── page.tsx              ✅ Main PYUSD flow
+│   │   ├── profile/
+│   │   │   └── [phone]/
+│   │   │       └── page.tsx          ✅ Phone profile pages
+│   │   ├── receipt/
+│   │   │   └── [txHash]/
+│   │   │       └── page.tsx          ✅ Transaction receipts
+│   │   ├── api/
+│   │   │   └── resolve-address/
+│   │   │       └── route.ts          ✅ Address → phone API
 │   │   └── providers/
 │   │       ├── NexusProvider.tsx     ✅ Nexus SDK
-│   │       └── Web3Provider.tsx      ✅ Wagmi config
+│   │       ├── Web3Provider.tsx      ✅ Wagmi config
+│   │       └── BlockscoutProvider.tsx ✅ Blockscout SDK
+│   ├── components/
+│   │   ├── activity/
+│   │   │   └── ActivityList.tsx      ✅ Transaction list
+│   │   ├── profile/
+│   │   │   └── ProfileHeader.tsx     ✅ Balance display
+│   │   ├── receipt/
+│   │   │   └── ReceiptCard.tsx       ✅ Receipt UI
+│   │   └── shared/
+│   │       ├── AddressOrPhone.tsx    ✅ Smart address display
+│   │       └── PhoneDisplay.tsx      ✅ Phone with flag
 │   ├── lib/
 │   │   ├── uniswapSwap.ts            ✅ Universal Router
-│   │   └── nexus.ts                  ✅ Bridge helpers
+│   │   ├── nexus.ts                  ✅ Bridge helpers
+│   │   ├── blockscout.ts             ✅ Blockscout API client
+│   │   ├── phone.ts                  ✅ Phone parsing (150+ countries)
+│   │   └── constants.ts              ✅ App constants
 │   └── package.json
 │
 ├── contracts/
@@ -462,13 +615,15 @@ sippy/
 ### Features (Post-Hackathon)
 
 ```
-❌ Transaction history viewing
+✅ Transaction history viewing (NOW AVAILABLE via profile pages)
 ❌ Group payments / split bills
 ❌ Payment requests (request PYUSD from someone)
 ❌ Multi-currency support (only PYUSD now)
 ❌ Recurring/scheduled payments
 ❌ QR codes for receiving
 ❌ Multi-language (only Spanish/English)
+❌ User authentication & session management
+❌ Privacy settings for phone number visibility
 ```
 
 ### Infrastructure (Production Enhancements)
@@ -504,13 +659,20 @@ sippy/
    → Contract needs periodic ETH top-ups
    → Could automate with Gelato/Chainlink
 
-⚠️ No transaction history in WhatsApp
-   → Users can check on Arbiscan
-   → Could add history command
+✅ Transaction history now available
+   → Profile pages: /profile/[phone]
+   → Receipt pages: /receipt/[txHash]
+   → Activity tracking via Blockscout API
+   → ⚠️ No authentication required (privacy issue)
 
 ⚠️ Daily/transaction limits hardcoded
    → $500/day, $100/tx for security
    → Could make configurable per user
+
+⚠️ Public phone number lookups
+   → Anyone can query address → phone
+   → Privacy issue - needs authentication
+   → See Security section for detailed proposals
 ```
 
 ### Security Considerations
@@ -550,6 +712,11 @@ sippy/
 6. Phone user receives WhatsApp notification
 7. User texts "balance" → sees PYUSD
 8. User texts "send 1 to +57..." → sends PYUSD
+9. Anyone can view profile: /profile/+57311661xxxx
+   → Shows balance, transaction history, country flag
+10. Click on any transaction → Beautiful receipt page
+    → Shareable receipt link
+    → Direct Blockscout explorer link
 ```
 
 ### ✅ What Judges Will See
@@ -560,8 +727,13 @@ sippy/
 ✓ Cross-chain funding (ETH anywhere → PYUSD Arbitrum)
 ✓ Peer-to-peer transfers via phone number
 ✓ Real transactions on Arbitrum mainnet
+✓ Beautiful profile pages with transaction history
+✓ Shareable transaction receipts
+✓ Country flag display (150+ countries)
+✓ Blockscout integration for real-time data
 ✓ Clean, working code
 ✓ Complete documentation
+✓ Professional UX with animations and responsive design
 ```
 
 ---

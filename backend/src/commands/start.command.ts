@@ -32,7 +32,7 @@ export async function handleStartCommand(phoneNumber: string): Promise<void> {
 
         await sendTextMessage(
           phoneNumber,
-          `✅ Welcome back to SIPPY!\n\n` +
+          `✅ Welcome back to Sippy!\n\n` +
             `Your wallet: ${userWallet.walletAddress.substring(
               0,
               6
@@ -50,7 +50,7 @@ export async function handleStartCommand(phoneNumber: string): Promise<void> {
         await sendTextMessage(
           phoneNumber,
           `🔄 Session renewed!\n\n` +
-            `Your SIPPY wallet is ready to use again.\n\n` +
+            `Your Sippy wallet is ready to use again.\n\n` +
             `Wallet: ${userWallet.walletAddress.substring(
               0,
               6
@@ -70,7 +70,7 @@ export async function handleStartCommand(phoneNumber: string): Promise<void> {
 
     // Send success message
     const message =
-      `🎉 Welcome to SIPPY!\n\n` +
+      `🎉 Welcome to Sippy!\n\n` +
       `Your wallet has been created instantly!\n\n` +
       `💰 Wallet Address:\n${userWallet.walletAddress}\n\n` +
       `🚀 You can now:\n` +

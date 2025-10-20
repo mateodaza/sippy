@@ -2,7 +2,7 @@
   "name": "sippy-backend",
   "version": "1.0.0",
   "type": "module",
-  "description": "SIPPY WhatsApp payment backend",
+  "description": "Sippy WhatsApp payment backend",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",

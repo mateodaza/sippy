@@ -1,4 +1,4 @@
-# SIPPY - WhatsApp Payments with PYUSD
+# Sippy - WhatsApp Payments with PYUSD
 
 **Gasless crypto payments via WhatsApp using Coinbase CDP Server Wallets and PYUSD on Arbitrum**
 
@@ -6,7 +6,7 @@
 
 ## 🎯 Vision
 
-SIPPY enables **anyone with a phone number** to send and receive PYUSD (PayPal USD stablecoin) without:
+Sippy enables **anyone with a phone number** to send and receive PYUSD (PayPal USD stablecoin) without:
 
 - Installing wallets
 - Buying ETH for gas

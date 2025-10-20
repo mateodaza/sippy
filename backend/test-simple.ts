@@ -10,7 +10,7 @@ import {
 } from './src/services/cdp-wallet.service';
 
 async function test() {
-  console.log('🧪 SIPPY - Quick Test\n');
+  console.log('🧪 Sippy - Quick Test\n');
 
   const PHONE = '573116613414';
 

@@ -45,7 +45,7 @@ export async function handleSendCommand(
       await sendTextMessage(
         fromPhoneNumber,
         `❌ No wallet found!\n\n` +
-          `Send "start" to create your SIPPY wallet first.`
+          `Send "start" to create your Sippy wallet first.`
       );
       return;
     }
@@ -66,7 +66,7 @@ export async function handleSendCommand(
       await sendTextMessage(
         fromPhoneNumber,
         `❌ Recipient not found!\n\n` +
-          `+${toPhoneNumber} is not registered with SIPPY.\n\n` +
+          `+${toPhoneNumber} is not registered with Sippy.\n\n` +
           `Ask them to send "start" to this number to create their wallet.`
       );
       return;
@@ -159,7 +159,7 @@ export async function handleSendCommand(
 
     // Only show gas covered message if refuel was successful
     if (refuelTxHash) {
-      successMessage += `• Gas: Cubierto por SIPPY\n`;
+      successMessage += `• Gas: Cubierto por Sippy\n`;
     }
 
     successMessage += `\nBalance: "balance"`;

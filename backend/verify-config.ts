@@ -78,7 +78,7 @@ const checks: ConfigCheck[] = [
 ];
 
 console.log('\n╔════════════════════════════════════════════════╗');
-console.log('║   🔍 SIPPY Configuration Verification          ║');
+console.log('║   🔍 Sippy Configuration Verification          ║');
 console.log('╚════════════════════════════════════════════════╝\n');
 
 let hasErrors = false;

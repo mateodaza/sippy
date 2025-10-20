@@ -13,7 +13,7 @@
   "keywords": [],
   "author": "",
   "license": "MIT",
-  "description": "GasRefuel contract for SIPPY - Auto gas top-up on Arbitrum",
+  "description": "GasRefuel contract for Sippy - Auto gas top-up on Arbitrum",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@nomicfoundation/hardhat-verify": "^2.0.0",

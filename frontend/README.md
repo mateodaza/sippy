@@ -1,6 +1,6 @@
-# SIPPY Frontend
+# Sippy Frontend
 
-Professional landing page for SIPPY - WhatsApp Payments.
+Professional landing page for Sippy - WhatsApp Payments.
 
 ## Quick Start
 
@@ -54,4 +54,3 @@ This landing page is designed for Meta Business verification:
 - TypeScript
 - Tailwind CSS
 - React
-

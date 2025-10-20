@@ -1,5 +1,5 @@
 /**
- * SIPPY Backend Server
+ * Sippy Backend Server
  *
  * Main webhook server with command handling
  */
@@ -19,7 +19,7 @@ import {
   getUserWallet,
   createUserWallet,
 } from './src/services/cdp-wallet.service.js';
-import { initDb } from './src/services/db.js';
+import { initDb, query } from './src/services/db.js';
 import { ParsedCommand, WebhookPayload } from './src/types/index.js';
 
 const app = express();
@@ -38,7 +38,7 @@ app.get('/', async (req: Request, res: Response) => {
     const wallets = await getAllWallets();
     res.json({
       status: 'running',
-      message: 'SIPPY Webhook Server',
+      message: 'Sippy Webhook Server',
       timestamp: new Date().toISOString(),
       registeredWallets: wallets.length,
     });
@@ -252,6 +252,55 @@ app.get('/resolve-phone', async (req: Request, res: Response) => {
 });
 
 /**
+ * Reverse lookup: wallet address to phone number
+ * GET /resolve-address?address=0x5Aa5B05d77C45E00C023ff90a7dB2c9FBD9bcde4
+ */
+app.get('/resolve-address', async (req: Request, res: Response) => {
+  try {
+    const address = req.query.address as string;
+
+    if (!address) {
+      return res.status(400).json({
+        error: 'Wallet address is required',
+      });
+    }
+
+    console.log(`\n🔍 Reverse lookup for address: ${address}`);
+
+    // Query database for phone number by wallet address
+    const result = await query<{
+      phone_number: string;
+      wallet_address: string;
+    }>(
+      'SELECT phone_number, wallet_address FROM phone_registry WHERE LOWER(wallet_address) = LOWER($1)',
+      [address]
+    );
+
+    if (result.rows.length === 0) {
+      console.log(`  ℹ️  No phone number found for address: ${address}`);
+      return res.json({
+        address,
+        phone: null,
+      });
+    }
+
+    const phone = `+${result.rows[0].phone_number}`;
+    console.log(`  ✅ Found phone: ${phone}`);
+
+    res.json({
+      address,
+      phone,
+    });
+  } catch (error) {
+    console.error('❌ Error resolving address:', error);
+    res.status(500).json({
+      error: 'Failed to resolve address',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
  * Health check endpoint for CDP wallet service
  */
 app.get('/api/health', async (req: Request, res: Response) => {
@@ -259,14 +308,14 @@ app.get('/api/health', async (req: Request, res: Response) => {
     const wallets = await getAllWallets();
     res.json({
       status: 'ok',
-      service: 'SIPPY CDP Server Wallet',
+      service: 'Sippy CDP Server Wallet',
       timestamp: new Date().toISOString(),
       wallets: wallets.length,
     });
   } catch (error) {
     res.status(503).json({
       status: 'initializing',
-      service: 'SIPPY CDP Server Wallet',
+      service: 'Sippy CDP Server Wallet',
       timestamp: new Date().toISOString(),
       message: 'Wallet service starting up...',
     });
@@ -281,7 +330,7 @@ async function startServer() {
 
     app.listen(PORT, () => {
       console.log('\n╔════════════════════════════════════════════════╗');
-      console.log('║   🚀 SIPPY Backend Server Started             ║');
+      console.log('║   🚀 Sippy Backend Server Started             ║');
       console.log('╚════════════════════════════════════════════════╝\n');
       console.log(`📡 Server: http://localhost:${PORT}`);
       console.log(`🔐 Verify Token: ${VERIFY_TOKEN}`);

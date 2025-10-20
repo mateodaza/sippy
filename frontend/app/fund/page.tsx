@@ -19,6 +19,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
+import { useTransactionPopup } from '@blockscout/app-sdk';
 
 const phoneSchema = z
   .string()
@@ -59,6 +60,7 @@ export default function FundPage() {
     setIntentModal,
     initializeSDK,
   } = useNexus();
+  const { openPopup } = useTransactionPopup();
 
   const [phoneNumber, setPhoneNumber] = useState(() => {
     // Load last used phone number from localStorage
@@ -336,7 +338,7 @@ export default function FundPage() {
         setShowProgress(false);
         setProgressSteps([]);
         setSuccess(
-          `✅ Successfully funded ${phoneNumber} with gas for ~${selectedRefuel.txCount} transactions!`
+          `✅ Successfully funded ${phoneNumber} with gas for ~${selectedRefuel.txCount} transfers!`
         );
         setPhoneNumber('');
 
@@ -880,11 +882,40 @@ export default function FundPage() {
 
                     {/* Success Message */}
                     {success && (
-                      <div className='p-4 bg-gradient-to-r from-[#d1fae5] to-[#a7f3d0] border border-[#bbf7d0] rounded-xl shadow-md'>
-                        <p className='text-sm text-[#15803d] font-semibold flex items-center'>
-                          <CheckCircle2 className='w-4 h-4 mr-2 flex-shrink-0' />
-                          {success}
-                        </p>
+                      <div className='space-y-3'>
+                        <div className='p-4 bg-gradient-to-r from-[#d1fae5] to-[#a7f3d0] border border-[#bbf7d0] rounded-xl shadow-md'>
+                          <p className='text-sm text-[#15803d] font-semibold flex items-center'>
+                            <CheckCircle2 className='w-4 h-4 mr-2 flex-shrink-0' />
+                            {success}
+                          </p>
+                        </div>
+                        {resolvedAddress && (
+                          <button
+                            type='button'
+                            onClick={() =>
+                              openPopup({
+                                chainId: '42161',
+                                address: resolvedAddress,
+                              })
+                            }
+                            className='w-full px-4 py-3 bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-xl text-sm font-medium text-gray-700 transition-all duration-200 shadow-sm hover:shadow-md flex items-center justify-center gap-2'
+                          >
+                            <svg
+                              className='w-4 h-4'
+                              fill='none'
+                              stroke='currentColor'
+                              viewBox='0 0 24 24'
+                            >
+                              <path
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
+                                strokeWidth={2}
+                                d='M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'
+                              />
+                            </svg>
+                            View Full Transaction History
+                          </button>
+                        )}
                       </div>
                     )}
 

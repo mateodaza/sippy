@@ -12,7 +12,7 @@ import {
 
 async function testFullE2E() {
   console.log('\n╔════════════════════════════════════════════════╗');
-  console.log('║   🧪 SIPPY E2E Test - Usuario Existente       ║');
+  console.log('║   🧪 Sippy E2E Test - Usuario Existente       ║');
   console.log('╚════════════════════════════════════════════════╝\n');
 
   const PHONE = '573116613414';

@@ -43,7 +43,12 @@ export async function createUserWallet(
     console.log(`\n🏦 Creating CDP wallet for +${phoneNumber}...`);
 
     const cdp = getCDPClient();
-    const accountName = `wallet-${phoneNumber}`;
+
+    // Sanitize phone number for CDP wallet name (alphanumeric and hyphens only, 2-36 chars)
+    const sanitizedPhone = phoneNumber.replace(/[^0-9]/g, '');
+    const accountName = `wallet-${sanitizedPhone}`;
+
+    console.log(`   Sanitized account name: ${accountName}`);
 
     // Create new account using CDP v2
     const account = await cdp.evm.createAccount({ name: accountName });
@@ -332,7 +337,7 @@ export async function sendPYUSDToUser(
 ): Promise<TransferResult> {
   const toUserWallet = await getUserWallet(toPhoneNumber);
   if (!toUserWallet) {
-    throw new Error('Recipient not registered with SIPPY');
+    throw new Error('Recipient not registered with Sippy');
   }
 
   return await sendPYUSD(fromPhoneNumber, toUserWallet.walletAddress, amount);

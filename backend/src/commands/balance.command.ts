@@ -26,7 +26,7 @@ export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
       await sendTextMessage(
         phoneNumber,
         `❌ No wallet found!\n\n` +
-          `Send "start" to create your SIPPY wallet first.`
+          `Send "start" to create your Sippy wallet first.`
       );
       return;
     }
@@ -54,7 +54,7 @@ export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
     const dailyRemaining = limits.dailyLimit - dailySpent;
 
     const message =
-      `💰 SIPPY Balance\n\n` +
+      `💰 Sippy Balance\n\n` +
       `🏦 PYUSD Balance: ${balance.toFixed(2)} PYUSD\n` +
       `📍 Wallet: ${userWallet.walletAddress.substring(
         0,
