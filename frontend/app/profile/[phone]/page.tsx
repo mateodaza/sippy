@@ -23,10 +23,10 @@ export async function generateMetadata({
 
 async function resolvePhoneToAddress(phone: string): Promise<string | null> {
   try {
-    // Call backend directly from server component
-    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3001';
+    // Use Next.js API route instead of calling backend directly
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const response = await fetch(
-      `${backendUrl}/resolve-phone?phone=${encodeURIComponent(phone)}`,
+      `${baseUrl}/api/resolve-phone?phone=${encodeURIComponent(phone)}`,
       { cache: 'no-store' }
     );
 
