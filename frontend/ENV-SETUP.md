@@ -16,7 +16,7 @@ AVAIL_NETWORK=mainnet
 
 # Backend API Connection (for phone resolution, etc.)
 BACKEND_URL=http://localhost:3001
-# In production: BACKEND_URL=https://your-backend-service.com
+# In production: BACKEND_URL=https://backend.sippy.lat
 
 # Production Base URL (for API routes in server components)
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
@@ -52,11 +52,19 @@ When deploying to production (Vercel, Netlify, etc.), make sure to set these env
 
 ### Required for Production:
 
-- `BACKEND_URL` - Your backend service URL (e.g., `https://your-backend.railway.app`)
-- `NEXT_PUBLIC_BASE_URL` - Your frontend URL (e.g., `https://www.sippy.lat`)
+- `BACKEND_URL` - Your backend service URL: `https://backend.sippy.lat`
+- `NEXT_PUBLIC_BASE_URL` - Your frontend URL: `https://www.sippy.lat`
 - `REFUEL_ADMIN_PRIVATE_KEY` - Same admin wallet as backend
 - `BASE_RPC_URL` - RPC endpoint for Base network
 - `AVAIL_NETWORK` - Set to `mainnet` for production
+
+### How to Set in Vercel:
+
+1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+2. Select your project → **Settings** → **Environment Variables**
+3. Add `BACKEND_URL` with value `https://backend.sippy.lat`
+4. Add `NEXT_PUBLIC_BASE_URL` with value `https://www.sippy.lat`
+5. **Redeploy** your project (Deployments tab → click ⋯ → Redeploy)
 
 ### How to Test:
 
