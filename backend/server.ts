@@ -24,11 +24,7 @@ import {
   createUserWallet,
 } from './src/services/cdp-wallet.service.js';
 import { initDb, query } from './src/services/db.js';
-import {
-  checkLLMHealth,
-  isLLMEnabled,
-  generateNaturalResponse,
-} from './src/services/llm.service.js';
+import { checkLLMHealth, isLLMEnabled } from './src/services/llm.service.js';
 import { ParsedCommand, WebhookPayload } from './src/types/index.js';
 
 const app = express();
@@ -286,29 +282,26 @@ async function handleCommand(
         break;
 
       case 'unknown':
-        // Only try natural response if LLM wasn't already attempted
-        // (to avoid double LLM calls that waste rate limit)
-        if (!command.usedLLM) {
-          const naturalResponse = await generateNaturalResponse(
-            command.originalText || ''
+        // Check if LLM provided a helpful conversational message
+        if (command.helpfulMessage) {
+          // LLM included a natural, conversational response
+          await sendTextMessage(phoneNumber, command.helpfulMessage);
+        } else {
+          // Check if rate-limited (user should know why natural language failed)
+          const rateLimitNote =
+            command.llmStatus === 'rate-limited'
+              ? `\n⏱️ Natural language is temporarily limited. Please use exact commands.\n\n`
+              : '';
+
+          // Fallback to standard command list
+          await sendTextMessage(
+            phoneNumber,
+            `❓ I didn't understand: "${command.originalText}"\n` +
+              rateLimitNote +
+              `\nHere are the available commands:\n\n` +
+              getHelpText()
           );
-
-          if (naturalResponse) {
-            // LLM generated a natural response in user's language
-            await sendTextMessage(phoneNumber, naturalResponse);
-            break;
-          }
         }
-
-        // Fallback to standard message
-        // Note: If LLM was attempted but failed (low-confidence, etc.),
-        // we skip the second LLM call and go straight to helpful fallback
-        await sendTextMessage(
-          phoneNumber,
-          `❓ I didn't understand: "${command.originalText}"\n\n` +
-            `Here are the available commands:\n\n` +
-            getHelpText()
-        );
         break;
 
       default:

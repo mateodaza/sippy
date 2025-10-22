@@ -33,6 +33,7 @@ export interface ParsedCommand {
   amount?: number;
   recipient?: string;
   originalText?: string;
+  helpfulMessage?: string; // Natural, conversational response for unknown commands
   usedLLM?: boolean; // Track if LLM was used for parsing
   llmStatus?:
     | 'success'
