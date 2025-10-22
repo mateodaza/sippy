@@ -1,15 +1,25 @@
 /**
  * Message Parser
  *
- * Parse incoming WhatsApp messages and extract commands
+ * Hybrid parser with LLM (natural language) + Regex (fallback)
+ * Supports English and Spanish with intelligent command extraction
  */
 
 import { ParsedCommand } from '../types/index.js';
+import {
+  isLLMEnabled,
+  isRateLimited,
+  parseMessageWithLLM,
+} from '../services/llm.service.js';
+import { normalizePhoneNumber, verifySendAgreement } from './phone.js';
+
+export { normalizePhoneNumber, verifySendAgreement } from './phone.js';
 
 /**
- * Parse a message and determine command type
+ * Parse message with regex (exact matching)
+ * This is our reliable fallback method
  */
-export function parseMessage(text: string): ParsedCommand {
+export function parseMessageWithRegex(text: string): ParsedCommand {
   const normalizedText = text.trim().toLowerCase();
 
   // START command
@@ -46,30 +56,30 @@ export function parseMessage(text: string): ParsedCommand {
   }
 
   // SEND command: "send 10 to +573001234567" or "send $10 to 3001234567"
-  const sendPattern = /^send\s+\$?(\d+(?:\.\d+)?)\s+to\s+\+?(\d+)$/i;
+  // Phone must be at least 10 digits
+  const sendPattern = /^send\s+\$?(\d+(?:\.\d+)?)\s+to\s+\+?(\d{10,})$/i;
   const sendMatch = text.trim().match(sendPattern);
 
   if (sendMatch) {
+    const amount = parseFloat(sendMatch[1]);
+
+    // Validate amount range (consistent with LLM validation)
+    if (amount <= 0 || amount > 100000) {
+      return {
+        command: 'unknown',
+        originalText: text,
+      };
+    }
+
     // Parse and normalize phone number
     const rawPhone = sendMatch[2];
-    let normalizedPhone = rawPhone;
-
-    // If it starts with +57, remove +57 and add 57
-    if (text.includes('+57')) {
-      normalizedPhone = rawPhone.startsWith('57') ? rawPhone : '57' + rawPhone;
-    }
-    // If it's a 10-digit Colombian number, add country code
-    else if (rawPhone.length === 10) {
-      normalizedPhone = '57' + rawPhone;
-    }
-    // If it already has country code (57XXXXXXXXX)
-    else if (rawPhone.startsWith('57') && rawPhone.length === 12) {
-      normalizedPhone = rawPhone;
-    }
+    const normalizedCandidate = normalizePhoneNumber(rawPhone, text);
+    const normalizedPhone =
+      normalizedCandidate !== null ? normalizedCandidate : rawPhone;
 
     return {
       command: 'send',
-      amount: parseFloat(sendMatch[1]),
+      amount,
       recipient: normalizedPhone,
     };
   }
@@ -86,6 +96,80 @@ export function parseMessage(text: string): ParsedCommand {
     command: 'unknown',
     originalText: text,
   };
+}
+
+/**
+ * Hybrid message parser: LLM with regex fallback
+ * This is the main entry point for message parsing
+ */
+export async function parseMessage(text: string): Promise<ParsedCommand> {
+  // Layer 0: Check feature flag (instant kill switch)
+  if (!isLLMEnabled()) {
+    return parseMessageWithRegex(text);
+  }
+
+  try {
+    // Layer 1: Try LLM (if available and not rate limited)
+    if (!isRateLimited()) {
+      const llmResult = await parseMessageWithLLM(text);
+
+      if (llmResult) {
+        // Critical command: Validate send with simple format checks
+        if (llmResult.command === 'send') {
+          const regexVerification = parseMessageWithRegex(text);
+
+          // Validate LLM result has valid format
+          const verification = verifySendAgreement(
+            llmResult,
+            regexVerification,
+            text
+          );
+
+          if (verification.match) {
+            console.log('✅ LLM parse (validated)');
+            // Normalize the phone number before returning
+            const normalizedRecipient = normalizePhoneNumber(
+              llmResult.recipient!,
+              text
+            );
+
+            // CRITICAL: Must always have a normalized phone (no + prefix)
+            // If normalization fails, strip + manually as last resort
+            const finalRecipient =
+              normalizedRecipient ||
+              llmResult.recipient!.replace(/^\+/, '').replace(/\D/g, '');
+
+            return {
+              ...llmResult,
+              recipient: finalRecipient,
+            };
+          }
+
+          // If LLM validation failed, explain why and fall back
+          if (verification.mismatchReason === 'amount') {
+            console.log('⚠️  LLM amount invalid, using regex fallback');
+          } else if (verification.mismatchReason === 'recipient') {
+            console.log('⚠️  LLM phone format invalid, using regex fallback');
+          } else {
+            console.log('⚠️  LLM send payload invalid, using regex fallback');
+          }
+        } else {
+          // Non-critical commands: trust LLM
+          console.log('✅ LLM parse');
+          // Always include originalText for error messages
+          return {
+            ...llmResult,
+            originalText: text,
+          };
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️  LLM parsing failed, using fallback');
+  }
+
+  // Layer 2: Regex fallback (always works)
+  return parseMessageWithRegex(text);
 }
 
 /**

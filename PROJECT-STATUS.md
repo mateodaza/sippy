@@ -1,7 +1,7 @@
 # Project Status - Sippy
 
 **Last Updated**: October 22, 2025  
-**Status**: ✅ **DEPLOYED TO PRODUCTION**
+**Status**: ✅ **READY FOR DEPLOYMENT**
 
 > **⚠️ Post-Hackathon TODO**: Implement security and reliability improvements:
 >
@@ -80,8 +80,8 @@
 ✅ CdpClient initialized
 ✅ Account creation working
 ✅ Balance queries (ethers.js)
-✅ PYUSD transfers (CDP SDK)
-✅ Persistent storage (wallets.json)
+✅ PYUSD transfers (CDP SDK v2)
+✅ Persistent storage (PostgreSQL)
 ✅ 4 active users
 ```
 
@@ -92,6 +92,8 @@
 | `start`            | ✅     | Creates wallet, returns address  |
 | `balance`          | ✅     | Checks PYUSD balance on Arbitrum |
 | `send X to +57...` | ✅     | Transfers PYUSD peer-to-peer     |
+| `history`          | ✅     | Shows profile page link with txs |
+| `about`            | ✅     | Explains what Sippy is           |
 | `help`             | ✅     | Shows all commands               |
 
 #### Gas Refuel Service
@@ -101,6 +103,17 @@
 ✅ Backend integration complete
 ✅ Auto-refuel before transfers
 ✅ Admin key configured
+```
+
+#### Backend API Endpoints
+
+```
+✅ GET  / - Health check with wallet count
+✅ GET  /debug/wallets - List all registered wallets
+✅ GET  /resolve-phone - Phone → Address (creates if new)
+✅ GET  /resolve-address - Address → Phone (reverse lookup)
+✅ GET  /webhook/whatsapp - Webhook verification
+✅ POST /webhook/whatsapp - Webhook events handler
 ```
 
 ### 2. Frontend (`frontend/`) - PYUSD Flow
@@ -114,6 +127,10 @@
 ✅ ETH multi-chain balance (unified)
 ✅ Manual SDK initialization (UX improvement)
 ✅ Transaction progress tracking
+✅ Dual mode support:
+   - PYUSD mode: Swap ETH → PYUSD and send
+   - Gas mode: Send ETH for gas refuel only
+✅ Preset refuel amounts (~150 to ~3,000 transfers)
 ```
 
 #### PYUSD Swap (Uniswap Universal Router)
@@ -212,7 +229,21 @@ Result:
 ✅ ReceiptCard: Shareable payment receipts
 ```
 
-### 4. Configuration & Validation
+### 4. Testing & Validation
+
+#### Test Scripts
+
+```
+✅ test-full-e2e.ts - Complete end-to-end flow test
+✅ test-e2e.ts - E2E wallet and transfer test
+✅ test-commands.ts - Command parsing tests
+✅ test-messages.ts - Message handling tests
+✅ test-simple.ts - Basic functionality tests
+✅ test-create-wallet.ts - Wallet creation test
+✅ verify-config.ts - Environment validation
+```
+
+### 5. Configuration & Validation
 
 #### Environment Variables (Corrected)
 
@@ -248,7 +279,7 @@ REFUEL_ADMIN_PRIVATE_KEY=0xb00bb3... ✅
 ✅ Clear error messages
 ```
 
-### 5. Documentation
+### 6. Documentation
 
 #### Active Docs
 
@@ -258,8 +289,18 @@ REFUEL_ADMIN_PRIVATE_KEY=0xb00bb3... ✅
 ✅ QUICK-START.md (deployment guide)
 ✅ ENV-TEMPLATE.txt (configuration template)
 ✅ REFUEL_SETUP.md (gas refuel docs)
+✅ frontend/ENV-SETUP.md (frontend environment setup)
 ✅ frontend/lib/blockscout.ts (Blockscout API client)
 ✅ frontend/lib/phone.ts (Phone parsing utilities)
+```
+
+#### Known Documentation Issues
+
+```
+⚠️ Empty API directories (cleanup needed)
+   → frontend/app/api/pyusd-swap/ - No files
+   → frontend/app/api/refuel/ - No files
+   → Consider removing or documenting as planned
 ```
 
 #### Code Quality
@@ -520,20 +561,21 @@ REFUEL_ADMIN_PRIVATE_KEY=0xb00bb3... ✅
 ```
 Node.js + TypeScript
 Express.js (webhooks)
-CDP SDK v2 (wallets)
+CDP SDK v2 (wallets - npm: @coinbase/cdp-sdk@1.38.4)
 ethers.js v5 (blockchain)
+PostgreSQL (Railway)
 ```
 
 ### Frontend
 
 ```
 Next.js 15
-React 19
+React 18
 Wagmi + ConnectKit (web3)
 Nexus SDK (bridging)
 Uniswap Universal Router (swaps)
 Blockscout App SDK (notifications & popups)
-Blockscout API v2 (transaction data)
+Blockscout API (transaction data)
 react-international-phone (country flags)
 TailwindCSS (styling)
 ```
@@ -561,15 +603,16 @@ sippy/
 │   │   ├── services/
 │   │   │   ├── cdp-wallet.service.ts  ✅ CDP SDK v2
 │   │   │   ├── whatsapp.service.ts    ✅ WhatsApp API
-│   │   │   └── refuel.service.ts      ✅ Gas refuel
+│   │   │   ├── refuel.service.ts      ✅ Gas refuel
+│   │   │   └── db.ts                  ✅ PostgreSQL client
 │   │   └── utils/
 │   │       └── messageParser.ts       ✅ NLP parsing
 │   ├── server.ts                      ✅ Express server
 │   ├── verify-config.ts               ✅ Validation script
-│   ├── test-full-e2e.ts              ✅ E2E tests
-│   ├── wallets.json                   ✅ Storage (4 users)
+│   ├── test-*.ts                      ✅ Test scripts (6 files)
 │   ├── QUICK-START.md                 ✅ Deploy guide
 │   └── ENV-TEMPLATE.txt               ✅ Config template
+│   └── REFUEL_SETUP.md                ✅ Gas refuel guide
 │
 ├── frontend/
 │   ├── app/
@@ -582,6 +625,8 @@ sippy/
 │   │   │   └── [txHash]/
 │   │   │       └── page.tsx          ✅ Transaction receipts
 │   │   ├── api/
+│   │   │   ├── resolve-phone/
+│   │   │   │   └── route.ts          ✅ Phone → address API
 │   │   │   └── resolve-address/
 │   │   │       └── route.ts          ✅ Address → phone API
 │   │   └── providers/
@@ -712,7 +757,7 @@ sippy/
 ### ✅ Demo Flow (Works Now)
 
 ```
-1. User opens https://sippy.app/fund
+1. User opens https://sippy.lat/fund
 2. Connects MetaMask
 3. Enters phone number: +57 311 661 3414
 4. Selects amount: 0.001 ETH

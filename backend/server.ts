@@ -24,6 +24,7 @@ import {
   createUserWallet,
 } from './src/services/cdp-wallet.service.js';
 import { initDb, query } from './src/services/db.js';
+import { checkLLMHealth, isLLMEnabled } from './src/services/llm.service.js';
 import { ParsedCommand, WebhookPayload } from './src/types/index.js';
 
 const app = express();
@@ -154,7 +155,7 @@ app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
     await markAsRead(messageId);
 
     // Parse command
-    const command = parseMessage(text);
+    const command = await parseMessage(text);
     console.log(`\n🎯 Command parsed:`, command);
 
     // Handle commands
@@ -362,6 +363,19 @@ async function startServer() {
   try {
     // Initialize database schema
     await initDb();
+
+    // Check LLM feature flag and availability (non-blocking)
+    if (!isLLMEnabled()) {
+      console.log('🔒 LLM: DISABLED via USE_LLM flag (regex-only mode)');
+    } else {
+      const llmStatus = await checkLLMHealth();
+      if (llmStatus.available) {
+        console.log('✅ LLM: ENABLED & Available (enhanced natural language)');
+      } else {
+        console.log('⚠️  LLM: ENABLED but Unavailable (using regex fallback)');
+        console.log(`   Reason: ${llmStatus.reason}`);
+      }
+    }
 
     app.listen(PORT, () => {
       console.log('\n╔════════════════════════════════════════════════╗');

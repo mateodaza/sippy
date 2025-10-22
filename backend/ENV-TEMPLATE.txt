@@ -12,6 +12,15 @@ CDP_API_KEY_ID=your_api_key_id
 CDP_API_KEY_SECRET=your_api_key_secret
 CDP_WALLET_SECRET=your_wallet_secret_ec_private_key
 
+# LLM Natural Language Processing (Optional - FREE tier)
+# Set to 'false' to disable LLM and use regex-only parsing
+USE_LLM=true
+
+# Groq API (FREE tier - only needed if USE_LLM=true)
+# Get free API key from: https://console.groq.com
+# Note: Bot works perfectly without this (falls back to exact command matching)
+GROQ_API_KEY=your_groq_api_key_here
+
 # Arbitrum Network RPC
 ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
 

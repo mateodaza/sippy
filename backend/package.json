@@ -10,6 +10,7 @@
     "dev": "tsx server.ts",
     "dev:watch": "nodemon --exec tsx server.ts",
     "test-webhook": "tsx webhook-test.ts",
+    "test-llm": "tsx test-llm-parser.ts",
     "verify-config": "tsx verify-config.ts",
     "import-wallets": "tsx src/commands/import-wallets.ts"
   },
@@ -19,6 +20,7 @@
     "dotenv": "^16.3.1",
     "ethers": "^5.7.2",
     "express": "^4.18.2",
+    "groq-sdk": "^0.34.0",
     "pg": "^8.16.3"
   },
   "devDependencies": {
