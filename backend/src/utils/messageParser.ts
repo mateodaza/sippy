@@ -113,17 +113,16 @@ export function getHelpText(): string {
 export function getAboutText(): string {
   return (
     `💧 What is Sippy?\n\n` +
-    `Sippy is a WhatsApp crypto wallet that makes sending PYUSD as easy as sending a text message!\n\n` +
-    `✨ Key Features:\n\n` +
-    `⛽ Auto Gas Refuel\n` +
-    `We cover your gas fees daily! No need to worry about ETH for transactions. Just send PYUSD and we handle the rest.\n\n` +
-    `📱 Phone-to-Phone Transfers\n` +
-    `Send money to any phone number. No wallet addresses needed!\n\n` +
-    `🔒 Secure & Simple\n` +
-    `Powered by Coinbase CDP wallets on Arbitrum. Your funds are safe and transactions are fast.\n\n` +
-    `💵 PYUSD Stablecoin\n` +
-    `Always $1 = 1 PYUSD. No volatility, just stable value.\n\n` +
-    `🆓 Daily gas refills mean you can send money without worrying about transaction fees!\n\n` +
+    `Sippy is a WhatsApp wallet that makes sending money as easy as sending a text message!\n\n` +
+    `✨ How it works:\n\n` +
+    `📱 Send to Phone Numbers\n` +
+    `Just send money using a phone number. No extra apps, no complex codes or random numbers to remember!\n\n` +
+    `💵 Always $1 = $1\n` +
+    `Your balance uses PYUSD, a digital dollar backed by PayPal. Always stable, always $1.\n\n` +
+    `🔒 Safe & Fast\n` +
+    `Powered by Coinbase on Arbitrum network. Your money is secure and transfers happen in seconds.\n\n` +
+    `🆓 No Transaction Fees\n` +
+    `We cover the cost of your transfers daily. Just send money - we handle the rest!\n\n` +
     `Send "help" to see all commands.`
   );
 }

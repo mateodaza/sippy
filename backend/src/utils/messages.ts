@@ -62,17 +62,22 @@ export function formatBalanceMessage(params: {
   balance: number;
   wallet: string;
   ethBalance?: string;
+  phoneNumber?: string;
 }): string {
   let message = `💰 Balance\n\n`;
 
   if (params.ethBalance) {
-    message += `ETH (Gas): ${params.ethBalance} ETH\n`;
+    message += `Transfer credit: ${params.ethBalance} ETH\n`;
   }
 
   message +=
     `PYUSD: ${formatCurrencyUSD(params.balance)}\n` +
     `Wallet: ${maskAddress(params.wallet)}\n\n` +
     `Add funds: ${FUND_URL}`;
+
+  if (params.phoneNumber) {
+    message += `\n📊 View activity: https://www.sippy.lat/profile/+${params.phoneNumber}`;
+  }
 
   return message;
 }
@@ -87,7 +92,7 @@ export function formatSendProcessingMessage(params: {
   return (
     `⏳ Sending ${formatCurrencyUSD(params.amount)} PYUSD to +${
       params.toPhone
-    }...\n\n` + `This may take up to ~1 minute.`
+    }...\n\n` + `Usually instant, may take up to 30 seconds.`
   );
 }
 
@@ -172,7 +177,7 @@ export function formatWelcomeMessage(params: {
       `1️⃣ Add funds: ${FUND_URL}\n` +
       `2️⃣ Check balance: send "balance"\n` +
       `3️⃣ Send money: send 1 to +57...\n\n` +
-      `⛽ Gas fees? We cover them daily!\n\n` +
+      `🆓 No transaction fees - we cover them daily!\n\n` +
       `📞 Commands: send "help"\n` +
       `ℹ️  Learn more: send "about"`
     );
