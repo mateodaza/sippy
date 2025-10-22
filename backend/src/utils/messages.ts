@@ -61,13 +61,20 @@ export function formatHelpMessage(): string {
 export function formatBalanceMessage(params: {
   balance: number;
   wallet: string;
+  ethBalance?: string;
 }): string {
-  return (
-    `💰 Balance\n\n` +
+  let message = `💰 Balance\n\n`;
+
+  if (params.ethBalance) {
+    message += `ETH (Gas): ${params.ethBalance} ETH\n`;
+  }
+
+  message +=
     `PYUSD: ${formatCurrencyUSD(params.balance)}\n` +
     `Wallet: ${maskAddress(params.wallet)}\n\n` +
-    `Add funds: ${FUND_URL}`
-  );
+    `Add funds: ${FUND_URL}`;
+
+  return message;
 }
 
 /**

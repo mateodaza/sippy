@@ -20,6 +20,7 @@ import {
   formatSessionExpiredMessage,
 } from '../utils/messages.js';
 import { toUserErrorMessage } from '../utils/errors.js';
+import { getRefuelService } from '../services/refuel.service.js';
 
 /**
  * Handle "balance" command
@@ -48,9 +49,25 @@ export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
     console.log(`📊 Fetching balance for +${phoneNumber}...`);
     const balance = await getUserBalance(phoneNumber);
 
+    // Get ETH (gas) balance
+    let ethBalance: string | undefined;
+    try {
+      const refuelService = getRefuelService();
+      if (refuelService.isAvailable()) {
+        ethBalance = await refuelService.getUserBalance(
+          userWallet.walletAddress
+        );
+        console.log(`⛽ ETH balance: ${ethBalance} ETH`);
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to get ETH balance:', error);
+      // Continue without ETH balance
+    }
+
     const message = formatBalanceMessage({
       balance,
       wallet: userWallet.walletAddress,
+      ethBalance,
     });
 
     await sendTextMessage(phoneNumber, message);

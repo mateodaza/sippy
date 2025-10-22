@@ -60,8 +60,19 @@ console.log('\n\n📖 Test 5: Help Message');
 console.log('─'.repeat(60));
 console.log(formatHelpMessage());
 
-// Test 6: Balance Message
-console.log('\n\n💰 Test 6: Balance Message');
+// Test 6: Balance Message (with ETH)
+console.log('\n\n💰 Test 6: Balance Message (with ETH)');
+console.log('─'.repeat(60));
+console.log(
+  formatBalanceMessage({
+    balance: 6.52,
+    wallet: testAddress,
+    ethBalance: '0.0015',
+  })
+);
+
+// Test 6b: Balance Message (without ETH)
+console.log('\n\n💰 Test 6b: Balance Message (without ETH)');
 console.log('─'.repeat(60));
 console.log(
   formatBalanceMessage({
