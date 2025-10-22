@@ -8,12 +8,25 @@ import {
   getUserWallet,
   isSessionValid,
   updateLastActivity,
-  checkSecurityLimits,
   sendPYUSDToUser,
   getUserBalance,
 } from '../services/cdp-wallet.service.js';
-import { sendTextMessage } from '../services/whatsapp.service.js';
+import {
+  sendTextMessage,
+  sendButtonMessage,
+} from '../services/whatsapp.service.js';
 import { getRefuelService } from '../services/refuel.service.js';
+import {
+  formatSendProcessingMessage,
+  formatSendSuccessMessage,
+  formatSendRecipientMessage,
+  formatInsufficientBalanceMessage,
+  formatNoWalletMessage,
+  formatSessionExpiredMessage,
+  formatRecipientNotFoundMessage,
+  formatInvalidAmountMessage,
+} from '../utils/messages.js';
+import { toUserErrorMessage } from '../utils/errors.js';
 
 /**
  * Handle "send X to +57XXX" command
@@ -29,34 +42,21 @@ export async function handleSendCommand(
 
   try {
     // Validate amount
-    if (amount <= 0) {
-      await sendTextMessage(
-        fromPhoneNumber,
-        `❌ Invalid amount: ${amount}\n\n` +
-          `Please send a positive amount.\n` +
-          `Example: "send 5 to +573001234567"`
-      );
+    if (amount <= 0 || isNaN(amount)) {
+      await sendTextMessage(fromPhoneNumber, formatInvalidAmountMessage());
       return;
     }
 
     // Check if sender has wallet
     const senderWallet = await getUserWallet(fromPhoneNumber);
     if (!senderWallet) {
-      await sendTextMessage(
-        fromPhoneNumber,
-        `❌ No wallet found!\n\n` +
-          `Send "start" to create your Sippy wallet first.`
-      );
+      await sendTextMessage(fromPhoneNumber, formatNoWalletMessage());
       return;
     }
 
     // Check sender session
     if (!(await isSessionValid(fromPhoneNumber))) {
-      await sendTextMessage(
-        fromPhoneNumber,
-        `⏰ Session expired!\n\n` +
-          `Send "start" to renew your session and try again.`
-      );
+      await sendTextMessage(fromPhoneNumber, formatSessionExpiredMessage());
       return;
     }
 
@@ -65,21 +65,7 @@ export async function handleSendCommand(
     if (!recipientWallet) {
       await sendTextMessage(
         fromPhoneNumber,
-        `❌ Recipient not found!\n\n` +
-          `+${toPhoneNumber} is not registered with Sippy.\n\n` +
-          `Ask them to send "start" to this number to create their wallet.`
-      );
-      return;
-    }
-
-    // Check security limits
-    const securityCheck = await checkSecurityLimits(fromPhoneNumber, amount);
-    if (!securityCheck.allowed) {
-      await sendTextMessage(
-        fromPhoneNumber,
-        `🚫 Transaction blocked\n\n` +
-          `${securityCheck.reason}\n\n` +
-          `Check your limits with "balance" command.`
+        formatRecipientNotFoundMessage(toPhoneNumber)
       );
       return;
     }
@@ -89,10 +75,10 @@ export async function handleSendCommand(
     if (senderBalance < amount) {
       await sendTextMessage(
         fromPhoneNumber,
-        `💸 Insufficient balance\n\n` +
-          `Balance: ${senderBalance.toFixed(2)} PYUSD\n` +
-          `Needed: ${amount.toFixed(2)} PYUSD\n\n` +
-          `Please add more PYUSD to your wallet:\n${senderWallet.walletAddress}`
+        formatInsufficientBalanceMessage({
+          balance: senderBalance,
+          needed: amount,
+        })
       );
       return;
     }
@@ -106,8 +92,10 @@ export async function handleSendCommand(
     // Send confirmation to sender
     await sendTextMessage(
       fromPhoneNumber,
-      `⏳ Sending ${amount} PYUSD to +${toPhoneNumber}...\n\n` +
-        `Please wait while we process your transaction.`
+      formatSendProcessingMessage({
+        amount,
+        toPhone: toPhoneNumber,
+      })
     );
 
     // Check and refuel gas if needed using the GasRefuel smart contract
@@ -148,61 +136,39 @@ export async function handleSendCommand(
     );
 
     // Send success confirmation to sender
-    let successMessage =
-      `✅ Enviado exitosamente\n` +
-      `• Monto: ${amount} PYUSD\n` +
-      `• Para: +${toPhoneNumber}\n` +
-      `• TX: ${result.transactionHash.substring(
-        0,
-        10
-      )}...${result.transactionHash.substring(54)}\n`;
-
-    // Only show gas covered message if refuel was successful
-    if (refuelTxHash) {
-      successMessage += `• Gas: Cubierto por Sippy\n`;
-    }
-
-    successMessage += `\nBalance: "balance"`;
+    const successMessage = formatSendSuccessMessage({
+      amount,
+      toPhone: toPhoneNumber,
+      txHash: result.transactionHash,
+      gasCovered: !!refuelTxHash,
+    });
 
     await sendTextMessage(fromPhoneNumber, successMessage);
 
     // Notify recipient
-    await sendTextMessage(
-      toPhoneNumber,
-      `💰 Money received!\n\n` +
-        `You received ${amount} PYUSD from +${fromPhoneNumber}!\n\n` +
-        `🔗 Transaction: ${result.transactionHash.substring(
-          0,
-          10
-        )}...${result.transactionHash.substring(54)}\n` +
-        `⏰ ${new Date(result.timestamp).toLocaleString()}\n\n` +
-        `💸 Send money: "send X to +57..."\n` +
-        `💰 Check balance: "balance"\n` +
-        `📞 Get help: "help"`
-    );
+    const recipientMessage = formatSendRecipientMessage({
+      amount,
+      fromPhone: fromPhoneNumber,
+      txHash: result.transactionHash,
+    });
+
+    await sendTextMessage(toPhoneNumber, recipientMessage);
+
+    // Optional: send quick action buttons
+    await sendButtonMessage(fromPhoneNumber, 'Need anything else?', [
+      { title: 'Balance' },
+      { title: 'Help' },
+    ]);
 
     console.log(`✅ Transfer completed! Hash: ${result.transactionHash}`);
   } catch (error) {
     console.error(`❌ Failed to send PYUSD:`, error);
 
-    // Determine error type and send appropriate message
-    let errorMessage = `❌ Transfer failed\n\n`;
-
-    if (error instanceof Error) {
-      if (error.message.includes('insufficient')) {
-        errorMessage += `Insufficient balance or network fees.\n\n`;
-      } else if (error.message.includes('network')) {
-        errorMessage += `Network error. Please try again.\n\n`;
-      } else {
-        errorMessage += `${error.message}\n\n`;
-      }
-    }
-
-    errorMessage +=
-      `Please try again or contact support if the problem persists.\n\n` +
-      `Check your balance: "balance"`;
-
-    await sendTextMessage(fromPhoneNumber, errorMessage);
+    const errorMessage = toUserErrorMessage(error);
+    await sendTextMessage(
+      fromPhoneNumber,
+      `❌ Transfer failed\n\n${errorMessage}`
+    );
   }
 }
 

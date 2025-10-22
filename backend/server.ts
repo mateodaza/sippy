@@ -32,6 +32,20 @@ const PORT = process.env.PORT || 3001;
 const VERIFY_TOKEN =
   process.env.WHATSAPP_VERIFY_TOKEN || 'sippy_hackathon_2025';
 
+// Message deduplication cache (message.id -> timestamp)
+const processedMessages = new Map<string, number>();
+const MESSAGE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
+// Cleanup old message IDs periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, timestamp] of processedMessages.entries()) {
+    if (now - timestamp > MESSAGE_CACHE_TTL) {
+      processedMessages.delete(id);
+    }
+  }
+}, 60 * 1000); // Clean every minute
+
 // Health check endpoint
 app.get('/', async (req: Request, res: Response) => {
   try {
@@ -119,6 +133,12 @@ app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
     const text = message.text?.body || '';
     const timestamp = message.timestamp;
 
+    // Idempotency: check if we've already processed this message
+    if (processedMessages.has(messageId)) {
+      console.log(`⚠️  Duplicate message ${messageId}, skipping`);
+      return;
+    }
+
     console.log('\n📱 Message Details:');
     console.log(`  From: +${from}`);
     console.log(`  Text: "${text}"`);
@@ -135,8 +155,13 @@ app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
 
     // Handle commands
     await handleCommand(from, command);
+
+    // Only mark as processed if we successfully handled the command
+    processedMessages.set(messageId, Date.now());
+    console.log(`✅ Message ${messageId} processed successfully`);
   } catch (error) {
     console.error('❌ Error processing webhook:', error);
+    // Don't mark as processed - allow Meta to retry
   }
 });
 
@@ -181,8 +206,8 @@ async function handleCommand(
       case 'history':
         await sendTextMessage(
           phoneNumber,
-          `⚠️ History command coming soon!\n\n` +
-            `This will show your transaction history once we integrate Blockscout (Day 7)!`
+          `📊 Transaction history\n\n` +
+            `View your activity at:\nhttps://www.sippy.lat/profile/${phoneNumber}`
         );
         break;
 
@@ -190,7 +215,7 @@ async function handleCommand(
         await sendTextMessage(
           phoneNumber,
           `❓ I didn't understand that command.\n\n` +
-            `Type "help" to see available commands.`
+            `Send "help" to see available commands.`
         );
         break;
 

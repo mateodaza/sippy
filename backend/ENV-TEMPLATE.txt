@@ -28,3 +28,11 @@ DATABASE_URL=postgresql://postgres:password@region.railway.app:port/railway
 PORT=3001
 NODE_ENV=production
 
+# Frontend URLs (for bot messages)
+RECEIPT_BASE_URL=https://www.sippy.lat/receipt/
+FUND_URL=https://www.sippy.lat/fund
+
+# Optional: Demo Features
+WHATSAPP_BUTTONS=true
+DEMO_SHOW_REFUEL=true
+

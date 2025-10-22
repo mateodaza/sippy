@@ -1,7 +1,17 @@
 # Project Status - Sippy
 
-**Last Updated**: October 20, 2025  
+**Last Updated**: October 22, 2025  
 **Status**: ✅ **DEPLOYED TO PRODUCTION**
+
+> **⚠️ Post-Hackathon TODO**: Implement security and reliability improvements:
+>
+> - Rate limiting per user/IP
+> - User authentication for sensitive operations
+> - Privacy controls for phone number visibility
+> - Enhanced error monitoring and alerting
+> - Backup/recovery system for wallets
+> - 2FA for large transfers
+> - IP whitelisting for admin operations
 
 ---
 

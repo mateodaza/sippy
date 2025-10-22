@@ -17,64 +17,105 @@ interface Button {
 }
 
 /**
- * Send a text message to a WhatsApp number
+ * Send a text message to a WhatsApp number with retry logic
  */
 export async function sendTextMessage(
   to: string,
-  text: string
+  text: string,
+  retries = 2
 ): Promise<WhatsAppAPIResponse> {
   console.log(`\n📤 Sending message to +${to}:`);
   console.log(`   "${text}"`);
 
-  try {
-    const response = await fetch(
-      `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: to,
-          type: 'text',
-          text: {
-            body: text,
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(
+        `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
           },
-        }),
-      }
-    );
-
-    const data = (await response.json()) as WhatsAppAPIResponse &
-      WhatsAppAPIError;
-
-    if (!response.ok) {
-      console.error('❌ Failed to send message:', data);
-      throw new Error(
-        `WhatsApp API error: ${data.error?.message || 'Unknown error'}`
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: to,
+            type: 'text',
+            text: {
+              body: text,
+            },
+          }),
+        }
       );
-    }
 
-    console.log('✅ Message sent successfully!');
-    if (data.messages && data.messages.length > 0) {
-      console.log('   Message ID:', data.messages[0].id);
+      const data = (await response.json()) as WhatsAppAPIResponse &
+        WhatsAppAPIError;
+
+      if (!response.ok) {
+        // Retry on 5xx errors
+        if (response.status >= 500 && attempt < retries) {
+          console.warn(
+            `⚠️  WhatsApp API error (${response.status}), retrying... (${
+              attempt + 1
+            }/${retries})`
+          );
+          await sleep(500 * (attempt + 1)); // Exponential backoff
+          continue;
+        }
+
+        console.error('❌ Failed to send message:', data);
+        throw new Error(
+          `WhatsApp API error: ${data.error?.message || 'Unknown error'}`
+        );
+      }
+
+      console.log('✅ Message sent successfully!');
+      if (data.messages && data.messages.length > 0) {
+        console.log('   Message ID:', data.messages[0].id);
+      }
+      return data;
+    } catch (error) {
+      // Retry on network errors
+      if (
+        attempt < retries &&
+        (error instanceof TypeError || (error as any).code === 'ECONNRESET')
+      ) {
+        console.warn(
+          `⚠️  Network error, retrying... (${attempt + 1}/${retries})`
+        );
+        await sleep(500 * (attempt + 1));
+        continue;
+      }
+
+      console.error('❌ Error sending message:', (error as Error).message);
+      throw error;
     }
-    return data;
-  } catch (error) {
-    console.error('❌ Error sending message:', (error as Error).message);
-    throw error;
   }
+
+  throw new Error('Failed to send message after retries');
+}
+
+/**
+ * Sleep helper for retry backoff
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
  * Send a message with buttons (interactive message)
+ * Best-effort: failures are logged but don't throw
  */
 export async function sendButtonMessage(
   to: string,
   bodyText: string,
   buttons: Button[]
-): Promise<WhatsAppAPIResponse> {
+): Promise<WhatsAppAPIResponse | null> {
+  // Guard: only send if enabled
+  if (process.env.WHATSAPP_BUTTONS !== 'true') {
+    return null;
+  }
+
   console.log(`\n📤 Sending button message to +${to}:`);
 
   try {
@@ -113,17 +154,15 @@ export async function sendButtonMessage(
       WhatsAppAPIError;
 
     if (!response.ok) {
-      console.error('❌ Failed to send button message:', data);
-      throw new Error(
-        `WhatsApp API error: ${data.error?.message || 'Unknown error'}`
-      );
+      console.warn('⚠️  Failed to send button message:', data.error?.message);
+      return null;
     }
 
     console.log('✅ Button message sent successfully!');
     return data;
   } catch (error) {
-    console.error('❌ Error sending button message:', (error as Error).message);
-    throw error;
+    console.warn('⚠️  Error sending button message:', (error as Error).message);
+    return null;
   }
 }
 

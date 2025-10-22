@@ -9,7 +9,7 @@ import {
   getUserWallet,
   getUserBalance,
   sendPYUSD,
-} from './src/services/cdp-wallet.service';
+} from './src/services/cdp-wallet.service.js';
 
 async function testE2E() {
   console.log('🧪 End-to-End Test - Sippy WhatsApp Bot\n');

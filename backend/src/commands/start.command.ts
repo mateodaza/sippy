@@ -14,6 +14,8 @@ import {
   updateLastActivity,
 } from '../services/cdp-wallet.service.js';
 import { sendTextMessage } from '../services/whatsapp.service.js';
+import { formatWelcomeMessage } from '../utils/messages.js';
+import { toUserErrorMessage } from '../utils/errors.js';
 
 /**
  * Handle "start" command with CDP Server Wallet
@@ -30,36 +32,21 @@ export async function handleStartCommand(phoneNumber: string): Promise<void> {
       if (await isSessionValid(phoneNumber)) {
         await updateLastActivity(phoneNumber);
 
-        await sendTextMessage(
-          phoneNumber,
-          `✅ Welcome back to Sippy!\n\n` +
-            `Your wallet: ${userWallet.walletAddress.substring(
-              0,
-              6
-            )}...${userWallet.walletAddress.substring(38)}\n\n` +
-            `Available commands:\n` +
-            `• "balance" - Check your PYUSD balance\n` +
-            `• "send 10 to +57XXX" - Send money\n` +
-            `• "help" - Show all commands\n\n` +
-            `💡 Your session is active for 24 hours from last activity.`
-        );
+        const message = formatWelcomeMessage({
+          wallet: userWallet.walletAddress,
+          isNew: false,
+        });
+        await sendTextMessage(phoneNumber, message);
         return;
       } else {
         // Session expired, reactivate
         await updateLastActivity(phoneNumber);
-        await sendTextMessage(
-          phoneNumber,
-          `🔄 Session renewed!\n\n` +
-            `Your Sippy wallet is ready to use again.\n\n` +
-            `Wallet: ${userWallet.walletAddress.substring(
-              0,
-              6
-            )}...${userWallet.walletAddress.substring(38)}\n\n` +
-            `Available commands:\n` +
-            `• "balance" - Check your balance\n` +
-            `• "send X to +57..." - Send money\n` +
-            `• "help" - Show help`
-        );
+
+        const message = formatWelcomeMessage({
+          wallet: userWallet.walletAddress,
+          isNew: false,
+        });
+        await sendTextMessage(phoneNumber, `🔄 Session renewed!\n\n${message}`);
         return;
       }
     }
@@ -69,21 +56,10 @@ export async function handleStartCommand(phoneNumber: string): Promise<void> {
     userWallet = await createUserWallet(phoneNumber);
 
     // Send success message
-    const message =
-      `🎉 Welcome to Sippy!\n\n` +
-      `Your wallet has been created instantly!\n\n` +
-      `💰 Wallet Address:\n${userWallet.walletAddress}\n\n` +
-      `🚀 You can now:\n` +
-      `• Receive PYUSD at this address\n` +
-      `• Send money via: "send 5 to +57XXX"\n` +
-      `• Check balance via: "balance"\n` +
-      `• Get help via: "help"\n\n` +
-      `🔒 Security:\n` +
-      `• Your wallet is secured by Coinbase infrastructure\n` +
-      `• Sessions last 24 hours\n` +
-      `• Daily limit: $500 PYUSD\n` +
-      `• Transaction limit: $100 PYUSD\n\n` +
-      `Ready to send and receive money via WhatsApp! 💸`;
+    const message = formatWelcomeMessage({
+      wallet: userWallet.walletAddress,
+      isNew: true,
+    });
 
     await sendTextMessage(phoneNumber, message);
 
@@ -91,11 +67,10 @@ export async function handleStartCommand(phoneNumber: string): Promise<void> {
   } catch (error) {
     console.error(`❌ Failed to handle start command:`, error);
 
+    const errorMessage = toUserErrorMessage(error);
     await sendTextMessage(
       phoneNumber,
-      `❌ Sorry, there was an error creating your wallet.\n\n` +
-        `Please try again with "start" or contact support if the problem persists.\n\n` +
-        `Error: ${(error as Error).message}`
+      `❌ Sorry, there was an error.\n\n${errorMessage}`
     );
   }
 }

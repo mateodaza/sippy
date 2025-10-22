@@ -33,8 +33,8 @@ export function parseMessage(text: string): ParsedCommand {
     };
   }
 
-  // SEND command: "send 10 to +573001234567" or "send 10 to 3001234567"
-  const sendPattern = /^send\s+(\d+(?:\.\d+)?)\s+to\s+\+?(\d+)$/i;
+  // SEND command: "send 10 to +573001234567" or "send $10 to 3001234567"
+  const sendPattern = /^send\s+\$?(\d+(?:\.\d+)?)\s+to\s+\+?(\d+)$/i;
   const sendMatch = text.trim().match(sendPattern);
 
   if (sendMatch) {
@@ -80,14 +80,14 @@ export function parseMessage(text: string): ParsedCommand {
  * Get help text for available commands
  */
 export function getHelpText(): string {
+  const fundUrl = process.env.FUND_URL || 'https://www.sippy.lat/fund';
   return (
-    `📖 Available commands:\n\n` +
-    `• *start* - Create your wallet\n` +
-    `• *balance* - Check your PYUSD balance\n` +
-    `• *send 10 to +57XXX* - Send money\n` +
-    `• *history* - View your transactions\n` +
-    `• *help* - Show this help\n\n` +
-    `Example:\n` +
-    `send 5 to +573001234567`
+    `🤖 Sippy Bot Commands\n\n` +
+    `💰 balance - Check your PYUSD balance\n` +
+    `💸 send <amount> to <phone> - Send PYUSD\n` +
+    `   Example: send 5 to +573001234567\n` +
+    `   Or: send $10 to +573001234567\n\n` +
+    `📞 help - Show this message\n\n` +
+    `💡 Need funds? ${fundUrl}`
   );
 }
