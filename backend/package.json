@@ -9,8 +9,11 @@
     "start": "npm run build && node dist/server.js",
     "dev": "tsx server.ts",
     "dev:watch": "nodemon --exec tsx server.ts",
-    "test-webhook": "tsx webhook-test.ts",
-    "test-llm": "tsx test-llm-parser.ts",
+    "test": "tsx tests/run-all.ts",
+    "test:unit": "tsx tests/unit/message-parser.test.ts && tsx tests/unit/phone-validation.test.ts",
+    "test:llm": "tsx tests/llm/natural-language.test.ts && tsx tests/llm/edge-cases.test.ts",
+    "test:integration": "tsx tests/integration/wallet-operations.test.ts",
+    "test:e2e": "tsx tests/e2e/full-flow.test.ts",
     "verify-config": "tsx verify-config.ts",
     "import-wallets": "tsx src/commands/import-wallets.ts"
   },

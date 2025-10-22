@@ -582,26 +582,6 @@ export default function FundPage() {
                       <div className='grid grid-cols-2 gap-4'>
                         <button
                           type='button'
-                          onClick={() => setTransferMode('gas')}
-                          disabled={isLoading}
-                          className={`p-5 rounded-xl border-2 transition-all duration-200 ${
-                            transferMode === 'gas'
-                              ? 'border-[#059669] bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] shadow-lg shadow-emerald-200/50'
-                              : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
-                          }`}
-                        >
-                          <div className='text-center'>
-                            <p className='text-3xl mb-2'>⛽</p>
-                            <p className='font-bold text-[#0f172a] mb-1'>
-                              Gas (ETH)
-                            </p>
-                            <p className='text-xs text-gray-600'>
-                              For transactions
-                            </p>
-                          </div>
-                        </button>
-                        <button
-                          type='button'
                           onClick={() => setTransferMode('pyusd')}
                           disabled={isLoading}
                           className={`p-5 rounded-xl border-2 transition-all duration-200 ${
@@ -617,6 +597,26 @@ export default function FundPage() {
                             </p>
                             <p className='text-xs text-gray-600'>
                               Stablecoin ($)
+                            </p>
+                          </div>
+                        </button>
+                        <button
+                          type='button'
+                          onClick={() => setTransferMode('gas')}
+                          disabled={isLoading}
+                          className={`p-5 rounded-xl border-2 transition-all duration-200 ${
+                            transferMode === 'gas'
+                              ? 'border-[#059669] bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] shadow-lg shadow-emerald-200/50'
+                              : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'
+                          }`}
+                        >
+                          <div className='text-center'>
+                            <p className='text-3xl mb-2'>⛽</p>
+                            <p className='font-bold text-[#0f172a] mb-1'>
+                              Gas (ETH)
+                            </p>
+                            <p className='text-xs text-gray-600'>
+                              For transactions
                             </p>
                           </div>
                         </button>

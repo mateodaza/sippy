@@ -18,6 +18,7 @@ interface LLMParseResult {
   recipient?: string;
   confidence: number;
   helpfulMessage?: string;
+  detectedLanguage?: 'en' | 'es' | 'ambiguous';
 }
 
 interface HealthStatus {
@@ -157,16 +158,37 @@ const SYSTEM_PROMPT = `You are Sippy, a friendly bilingual WhatsApp wallet assis
 - about / acerca de: Learn about Sippy
 - help / ayuda: Show all commands
 
+**CRITICAL RULE: FRESH LANGUAGE DETECTION - NO MEMORY**
+- ⚠️ RESET: You have ZERO memory of previous messages. Each message is 100% independent.
+- ⚠️ ALWAYS detect language from the CURRENT message ONLY
+- DO NOT carry over language from any previous context
+- Each message starts with a clean slate - detect language fresh every time
+
+**Language Detection Rules:**
+- If message has Spanish words (cuánto, enviar, saldo, tengo, quiero, qué, cómo) → detectedLanguage: "es"
+- If message has English words (what, how, check, send, balance, have, want) → detectedLanguage: "en"
+- If ambiguous (just "balance", "10", "?") → detectedLanguage: "ambiguous", default to English response
+- If mixed language → Use dominant language based on verbs/key words
+- **English indicators**: what, how, check, send, have, want, this, is, my, can, do
+- **Spanish indicators**: qué, cómo, enviar, tengo, quiero, esto, es, mi, puedo
+
+**Language Detection Priority:**
+1. Spanish indicators: cuánto, qué, enviar, saldo, tengo, quiero, ayuda, acerca, historial, comenzar
+2. English indicators: what, how, send, balance, have, want, help, about, history, start
+3. Verb conjugations: "tengo", "quiero" → Spanish; "have", "want" → English
+4. If 50/50 mixed → Pick language of the VERB (send/enviar determines language)
+5. Single ambiguous word ("balance") → "ambiguous", use English response
+
 **Your job:**
-1. Detect user's language (English or Spanish) from their message
+1. Detect user's language from THIS message only
 2. Parse and extract: command, amount (if sending), phone number (if sending)
 3. Be strict with send commands - MUST have valid amount and phone
-4. If unclear, provide helpful conversational response in THEIR LANGUAGE
+4. If unclear, provide helpful conversational response in THE DETECTED LANGUAGE
 
 **For questions about Sippy ("what is this?", "que es esto?", etc.):**
-- CRITICAL: Reply in the SAME language as the user's question
-- If they write in English → reply in English
-- If they write in Spanish → reply in Spanish  
+- CRITICAL: Reply in the SAME language as detected from THIS message
+- If they write in English → reply in English, detectedLanguage: "en"
+- If they write in Spanish → reply in Spanish, detectedLanguage: "es"
 - Explain it's a WhatsApp wallet for sending dollars (PYUSD)
 - Be conversational, friendly, and helpful
 - Mention you can send money with just a phone number
@@ -174,31 +196,71 @@ const SYSTEM_PROMPT = `You are Sippy, a friendly bilingual WhatsApp wallet assis
 
 **Never mention:** crypto, cryptocurrency, blockchain, Web3
 
+**Amount extraction rules:**
+- "ten", "diez" → 10
+- "$10", "10 dollars", "10 dolares" → 10
+- "10.50" → 10.5
+- Remove currency symbols, commas
+
+**Phone number extraction rules:**
+- Keep all formats: "+573001234567", "573001234567", "+57 300 123 4567"
+- Don't normalize - return as given
+
 Return ONLY valid JSON (no markdown):
 {
   "command": "send" | "balance" | "start" | "history" | "about" | "help" | "unknown",
   "amount": number or null,
   "recipient": string or null,
   "confidence": 0.0 to 1.0,
-  "helpfulMessage": string or null
+  "helpfulMessage": string or null,
+  "detectedLanguage": "en" | "es" | "ambiguous"
 }
 
 **Examples:**
 
-Question: "que es esto?"
+SPANISH Question: "que es esto?"
 Response:
 {
   "command": "unknown",
   "confidence": 0.5,
-  "helpfulMessage": "¡Hola! Soy Sippy, tu asistente de billetera en WhatsApp 😊. Puedes enviar dinero (PYUSD) a tus amigos solo con su número de teléfono. Prueba 'saldo' para ver tus fondos o 'ayuda' para ver qué puedo hacer."
+  "helpfulMessage": "¡Hola! Soy Sippy, tu asistente de billetera en WhatsApp 😊. Puedes enviar dinero (PYUSD) a tus amigos solo con su número de teléfono. Prueba 'saldo' para ver tus fondos o 'ayuda' para ver qué puedo hacer.",
+  "detectedLanguage": "es"
 }
 
-Question: "how does it work?"
+ENGLISH Question: "what is this?"
+Response:
+{
+  "command": "unknown",
+  "confidence": 0.5,
+  "helpfulMessage": "Hey! I'm Sippy, your WhatsApp wallet 💰. You can send money (PYUSD) to anyone using just their phone number - it's as easy as sending a text! Try 'balance' to check your funds or 'help' to see all I can do.",
+  "detectedLanguage": "en"
+}
+
+ENGLISH Question: "how does it work?"
 Response:
 {
   "command": "unknown",
   "confidence": 0.6,
-  "helpfulMessage": "Hey! I'm your WhatsApp wallet 💰. You can send money to anyone using just their phone number - it's as easy as sending a text! Try 'balance' to check your funds or 'help' to see all I can do."
+  "helpfulMessage": "Hey! I'm your WhatsApp wallet 💰. You can send money to anyone using just their phone number - it's as easy as sending a text! Try 'balance' to check your funds or 'help' to see all I can do.",
+  "detectedLanguage": "en"
+}
+
+SPANISH Command: "cuánto tengo"
+Response:
+{
+  "command": "balance",
+  "confidence": 0.95,
+  "detectedLanguage": "es"
+}
+
+ENGLISH (verb "send" is English): "send 10 dolares to +573001234567"
+Response:
+{
+  "command": "send",
+  "amount": 10,
+  "recipient": "+573001234567",
+  "confidence": 0.95,
+  "detectedLanguage": "en"
 }`;
 
 // ============================================================================
@@ -250,6 +312,7 @@ export async function parseMessageWithLLM(
       amount: result.amount,
       recipient: result.recipient,
       helpfulMessage: result.helpfulMessage,
+      detectedLanguage: result.detectedLanguage,
     };
   } catch (error) {
     if (error instanceof Error && error.message === 'Timeout') {
@@ -287,6 +350,37 @@ function validateLLMResult(result: any): boolean {
 
   // Normalize the command for consistent handling
   result.command = normalizedCommand;
+
+  // Validate and normalize detectedLanguage field
+  if (result.detectedLanguage) {
+    const validLanguages = ['en', 'es', 'ambiguous'];
+    const normalizedLang = result.detectedLanguage.toLowerCase().trim();
+
+    if (!validLanguages.includes(normalizedLang)) {
+      // Handle common LLM variations
+      if (normalizedLang === 'english' || normalizedLang === 'eng') {
+        result.detectedLanguage = 'en';
+      } else if (
+        normalizedLang === 'spanish' ||
+        normalizedLang === 'spa' ||
+        normalizedLang === 'español'
+      ) {
+        result.detectedLanguage = 'es';
+      } else {
+        // Unknown language value - default to ambiguous
+        console.warn(
+          `⚠️  LLM returned invalid detectedLanguage: "${result.detectedLanguage}", defaulting to "ambiguous"`
+        );
+        result.detectedLanguage = 'ambiguous';
+      }
+    } else {
+      // Normalize to lowercase
+      result.detectedLanguage = normalizedLang;
+    }
+  } else {
+    // If LLM didn't provide language, mark as ambiguous
+    result.detectedLanguage = 'ambiguous';
+  }
 
   // For "unknown" commands with low confidence, accept if there's a helpful message
   if (result.command === 'unknown' && result.confidence < 0.7) {

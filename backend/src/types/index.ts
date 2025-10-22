@@ -34,6 +34,7 @@ export interface ParsedCommand {
   recipient?: string;
   originalText?: string;
   helpfulMessage?: string; // Natural, conversational response for unknown commands
+  detectedLanguage?: 'en' | 'es' | 'ambiguous'; // Language detected from current message
   usedLLM?: boolean; // Track if LLM was used for parsing
   llmStatus?:
     | 'success'
