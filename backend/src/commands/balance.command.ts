@@ -64,11 +64,17 @@ export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
       // Continue without ETH balance
     }
 
-    const message = formatBalanceMessage({
+    let message = formatBalanceMessage({
       balance,
       wallet: userWallet.walletAddress,
       ethBalance,
     });
+
+    // Add gas warning if ETH balance is critically low (below refuel threshold)
+    // Contract refuels when balance drops below 0.00001 ETH
+    if (ethBalance && parseFloat(ethBalance) < 0.00001) {
+      message += `\n\n⚠️ Low gas balance!\nDon't worry - we refill your gas daily automatically. If you need urgent gas, add ETH to your wallet.`;
+    }
 
     await sendTextMessage(phoneNumber, message);
 

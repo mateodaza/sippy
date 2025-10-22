@@ -26,6 +26,18 @@ export function parseMessage(text: string): ParsedCommand {
     };
   }
 
+  // ABOUT command
+  if (
+    normalizedText === 'about' ||
+    normalizedText === 'what is sippy' ||
+    normalizedText === 'whats sippy' ||
+    normalizedText === "what's sippy"
+  ) {
+    return {
+      command: 'about',
+    };
+  }
+
   // BALANCE command
   if (normalizedText === 'balance') {
     return {
@@ -83,11 +95,35 @@ export function getHelpText(): string {
   const fundUrl = process.env.FUND_URL || 'https://www.sippy.lat/fund';
   return (
     `🤖 Sippy Bot Commands\n\n` +
+    `🚀 start - Create your wallet\n` +
     `💰 balance - Check your PYUSD balance\n` +
     `💸 send <amount> to <phone> - Send PYUSD\n` +
     `   Example: send 5 to +573001234567\n` +
-    `   Or: send $10 to +573001234567\n\n` +
+    `   Or: send $10 to +573001234567\n` +
+    `📊 history - View your transactions\n` +
+    `ℹ️  about - What is Sippy?\n` +
     `📞 help - Show this message\n\n` +
     `💡 Need funds? ${fundUrl}`
+  );
+}
+
+/**
+ * Get about text explaining Sippy
+ */
+export function getAboutText(): string {
+  return (
+    `💧 What is Sippy?\n\n` +
+    `Sippy is a WhatsApp crypto wallet that makes sending PYUSD as easy as sending a text message!\n\n` +
+    `✨ Key Features:\n\n` +
+    `⛽ Auto Gas Refuel\n` +
+    `We cover your gas fees daily! No need to worry about ETH for transactions. Just send PYUSD and we handle the rest.\n\n` +
+    `📱 Phone-to-Phone Transfers\n` +
+    `Send money to any phone number. No wallet addresses needed!\n\n` +
+    `🔒 Secure & Simple\n` +
+    `Powered by Coinbase CDP wallets on Arbitrum. Your funds are safe and transactions are fast.\n\n` +
+    `💵 PYUSD Stablecoin\n` +
+    `Always $1 = 1 PYUSD. No volatility, just stable value.\n\n` +
+    `🆓 Daily gas refills mean you can send money without worrying about transaction fees!\n\n` +
+    `Send "help" to see all commands.`
   );
 }

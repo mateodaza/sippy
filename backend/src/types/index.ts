@@ -22,7 +22,7 @@ export interface UserWallet {
 }
 
 export interface ParsedCommand {
-  command: 'start' | 'help' | 'balance' | 'send' | 'history' | 'unknown';
+  command: 'start' | 'help' | 'about' | 'balance' | 'send' | 'history' | 'unknown';
   amount?: number;
   recipient?: string;
   originalText?: string;

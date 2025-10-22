@@ -168,11 +168,13 @@ export function formatWelcomeMessage(params: {
       `🎉 Welcome to Sippy!\n\n` +
       `Your wallet is ready:\n` +
       `${maskAddress(params.wallet)}\n\n` +
-      `💡 Get started:\n` +
-      `• Add funds: ${FUND_URL}\n` +
-      `• Check balance: "balance"\n` +
-      `• Send PYUSD: "send 5 to +57..."\n` +
-      `• Get help: "help"`
+      `✨ Get started in 3 steps:\n` +
+      `1️⃣ Add funds: ${FUND_URL}\n` +
+      `2️⃣ Check balance: send "balance"\n` +
+      `3️⃣ Send money: send 1 to +57...\n\n` +
+      `⛽ Gas fees? We cover them daily!\n\n` +
+      `📞 Commands: send "help"\n` +
+      `ℹ️  Learn more: send "about"`
     );
   } else {
     return (

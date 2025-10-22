@@ -6,7 +6,11 @@
 
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
-import { parseMessage, getHelpText } from './src/utils/messageParser.js';
+import {
+  parseMessage,
+  getHelpText,
+  getAboutText,
+} from './src/utils/messageParser.js';
 import { handleStartCommand } from './src/commands/start.command.js';
 import { handleBalanceCommand } from './src/commands/balance.command.js';
 import { handleSendCommand } from './src/commands/send.command.js';
@@ -182,6 +186,10 @@ async function handleCommand(
         await sendTextMessage(phoneNumber, getHelpText());
         break;
 
+      case 'about':
+        await sendTextMessage(phoneNumber, getAboutText());
+        break;
+
       case 'balance':
         await handleBalanceCommand(phoneNumber);
         break;
@@ -207,15 +215,17 @@ async function handleCommand(
         await sendTextMessage(
           phoneNumber,
           `📊 Transaction history\n\n` +
-            `View your activity at:\nhttps://www.sippy.lat/profile/${phoneNumber}`
+            `View your activity at:\nhttps://www.sippy.lat/profile/+${phoneNumber}`
         );
         break;
 
       case 'unknown':
+        // Fall back to help message for unknown commands
         await sendTextMessage(
           phoneNumber,
-          `❓ I didn't understand that command.\n\n` +
-            `Send "help" to see available commands.`
+          `❓ I didn't understand: "${command.originalText}"\n\n` +
+            `Here are the available commands:\n\n` +
+            getHelpText()
         );
         break;
 
