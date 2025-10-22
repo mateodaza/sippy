@@ -302,6 +302,68 @@ export async function checkLLMHealth(): Promise<HealthStatus> {
 }
 
 // ============================================================================
+// Natural Response Generator
+// ============================================================================
+
+/**
+ * Generate a natural, helpful response for unknown commands
+ * Detects language and responds appropriately
+ */
+export async function generateNaturalResponse(
+  userMessage: string
+): Promise<string | null> {
+  const client = getGroqClient();
+  if (!client || !isLLMEnabled() || isRateLimited()) return null;
+
+  try {
+    rateLimiter.recordRequest();
+
+    const completion = await Promise.race([
+      client.chat.completions.create({
+        messages: [
+          {
+            role: 'system',
+            content: `You are Sippy, a friendly bilingual WhatsApp crypto wallet assistant.
+
+Available commands:
+- balance / saldo: Check PYUSD balance
+- send [amount] to [phone]: Send money
+- history / historial: View transactions
+- help / ayuda: Show commands
+
+When user sends something you don't understand:
+1. Detect their language (English or Spanish)
+2. Respond naturally in THEIR language
+3. Be helpful and friendly (not robotic)
+4. Suggest what they might have meant
+5. Keep it short (2-3 sentences max)
+
+Examples:
+User: "show me stuff" → "I'm not sure what you're looking for! Try 'balance' to check your funds or 'help' to see all commands. 😊"
+User: "quiero ver cosas" → "¡No estoy seguro de lo que buscas! Prueba 'saldo' para ver tus fondos o 'ayuda' para ver todos los comandos. 😊"`,
+          },
+          {
+            role: 'user',
+            content: `User said: "${userMessage}". Generate a helpful response.`,
+          },
+        ],
+        model: 'llama-3.1-8b-instant',
+        temperature: 0.7, // More creative for natural responses
+        max_tokens: 150,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout')), 3000)
+      ),
+    ]);
+
+    const response = completion.choices[0]?.message?.content;
+    return response || null;
+  } catch (error) {
+    return null; // Fallback to default message
+  }
+}
+
+// ============================================================================
 // Utilities
 // ============================================================================
 

@@ -24,7 +24,11 @@ import {
   createUserWallet,
 } from './src/services/cdp-wallet.service.js';
 import { initDb, query } from './src/services/db.js';
-import { checkLLMHealth, isLLMEnabled } from './src/services/llm.service.js';
+import {
+  checkLLMHealth,
+  isLLMEnabled,
+  generateNaturalResponse,
+} from './src/services/llm.service.js';
 import { ParsedCommand, WebhookPayload } from './src/types/index.js';
 
 const app = express();
@@ -41,12 +45,29 @@ const VERIFY_TOKEN =
 const processedMessages = new Map<string, number>();
 const MESSAGE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
-// Cleanup old message IDs periodically
+// Spam protection: Track message frequency per user
+const userMessageCount = new Map<
+  string,
+  { count: number; resetTime: number }
+>();
+const SPAM_WINDOW = 60 * 1000; // 1 minute window
+const SPAM_THRESHOLD = 10; // Max messages per minute
+
+// Cleanup old message IDs and spam counters periodically
 setInterval(() => {
   const now = Date.now();
+
+  // Clean processed messages
   for (const [id, timestamp] of processedMessages.entries()) {
     if (now - timestamp > MESSAGE_CACHE_TTL) {
       processedMessages.delete(id);
+    }
+  }
+
+  // Clean spam counters
+  for (const [phone, data] of userMessageCount.entries()) {
+    if (now > data.resetTime) {
+      userMessageCount.delete(phone);
     }
   }
 }, 60 * 1000); // Clean every minute
@@ -144,6 +165,35 @@ app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
       return;
     }
 
+    // Spam protection: Check message frequency
+    const now = Date.now();
+    const userData = userMessageCount.get(from);
+
+    if (userData) {
+      if (now < userData.resetTime) {
+        // Within spam window
+        userData.count++;
+        if (userData.count > SPAM_THRESHOLD) {
+          console.log(
+            `🚫 Spam detected from +${from} (${userData.count} msgs/min)`
+          );
+          // Don't respond to spammer, just ignore
+          processedMessages.set(messageId, now);
+          return;
+        }
+      } else {
+        // Window expired, reset
+        userData.count = 1;
+        userData.resetTime = now + SPAM_WINDOW;
+      }
+    } else {
+      // First message in window
+      userMessageCount.set(from, {
+        count: 1,
+        resetTime: now + SPAM_WINDOW,
+      });
+    }
+
     console.log('\n📱 Message Details:');
     console.log(`  From: +${from}`);
     console.log(`  Text: "${text}"`);
@@ -157,6 +207,21 @@ app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
     // Parse command
     const command = await parseMessage(text);
     console.log(`\n🎯 Command parsed:`, command);
+
+    // Log LLM status for observability
+    if (command.llmStatus) {
+      const statusEmoji =
+        {
+          success: '✅',
+          disabled: '🔒',
+          'rate-limited': '⏱️',
+          timeout: '⏰',
+          error: '❌',
+          'low-confidence': '🤔',
+          'validation-failed': '⚠️',
+        }[command.llmStatus] || 'ℹ️';
+      console.log(`${statusEmoji} LLM Status: ${command.llmStatus}`);
+    }
 
     // Handle commands
     await handleCommand(from, command);
@@ -221,7 +286,21 @@ async function handleCommand(
         break;
 
       case 'unknown':
-        // Fall back to help message for unknown commands
+        // Only try natural response if LLM wasn't already used for parsing
+        // (Avoid double LLM calls that waste rate limit)
+        if (!command.usedLLM) {
+          const naturalResponse = await generateNaturalResponse(
+            command.originalText || ''
+          );
+
+          if (naturalResponse) {
+            // LLM generated a natural response in user's language
+            await sendTextMessage(phoneNumber, naturalResponse);
+            break;
+          }
+        }
+
+        // Fallback to standard message
         await sendTextMessage(
           phoneNumber,
           `❓ I didn't understand: "${command.originalText}"\n\n` +

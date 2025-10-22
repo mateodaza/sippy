@@ -103,73 +103,107 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
  * This is the main entry point for message parsing
  */
 export async function parseMessage(text: string): Promise<ParsedCommand> {
+  // Track if we attempted LLM (to avoid double-calling for natural responses)
+  let attemptedLLM = false;
+  let llmStatus: ParsedCommand['llmStatus'] | undefined;
+
   // Layer 0: Check feature flag (instant kill switch)
   if (!isLLMEnabled()) {
-    return parseMessageWithRegex(text);
+    console.log('ℹ️  LLM disabled via USE_LLM flag');
+    return { ...parseMessageWithRegex(text), llmStatus: 'disabled' };
+  }
+
+  // Check rate limits before attempting
+  if (isRateLimited()) {
+    console.log('⚠️  LLM rate limit reached, using regex');
+    return {
+      ...parseMessageWithRegex(text),
+      usedLLM: true,
+      llmStatus: 'rate-limited',
+    };
   }
 
   try {
-    // Layer 1: Try LLM (if available and not rate limited)
-    if (!isRateLimited()) {
-      const llmResult = await parseMessageWithLLM(text);
+    // Layer 1: Try LLM
+    attemptedLLM = true;
+    const llmResult = await parseMessageWithLLM(text);
 
-      if (llmResult) {
-        // Critical command: Validate send with simple format checks
-        if (llmResult.command === 'send') {
-          const regexVerification = parseMessageWithRegex(text);
+    if (llmResult) {
+      // Critical command: Validate send with simple format checks
+      if (llmResult.command === 'send') {
+        const regexVerification = parseMessageWithRegex(text);
 
-          // Validate LLM result has valid format
-          const verification = verifySendAgreement(
-            llmResult,
-            regexVerification,
+        // Validate LLM result has valid format
+        const verification = verifySendAgreement(
+          llmResult,
+          regexVerification,
+          text
+        );
+
+        if (verification.match) {
+          console.log('✅ LLM parse (validated)');
+          // Normalize the phone number before returning
+          const normalizedRecipient = normalizePhoneNumber(
+            llmResult.recipient!,
             text
           );
 
-          if (verification.match) {
-            console.log('✅ LLM parse (validated)');
-            // Normalize the phone number before returning
-            const normalizedRecipient = normalizePhoneNumber(
-              llmResult.recipient!,
-              text
-            );
+          // CRITICAL: Must always have a normalized phone (no + prefix)
+          // If normalization fails, strip + manually as last resort
+          const finalRecipient =
+            normalizedRecipient ||
+            llmResult.recipient!.replace(/^\+/, '').replace(/\D/g, '');
 
-            // CRITICAL: Must always have a normalized phone (no + prefix)
-            // If normalization fails, strip + manually as last resort
-            const finalRecipient =
-              normalizedRecipient ||
-              llmResult.recipient!.replace(/^\+/, '').replace(/\D/g, '');
-
-            return {
-              ...llmResult,
-              recipient: finalRecipient,
-            };
-          }
-
-          // If LLM validation failed, explain why and fall back
-          if (verification.mismatchReason === 'amount') {
-            console.log('⚠️  LLM amount invalid, using regex fallback');
-          } else if (verification.mismatchReason === 'recipient') {
-            console.log('⚠️  LLM phone format invalid, using regex fallback');
-          } else {
-            console.log('⚠️  LLM send payload invalid, using regex fallback');
-          }
-        } else {
-          // Non-critical commands: trust LLM
-          console.log('✅ LLM parse');
-          // Always include originalText for error messages
           return {
             ...llmResult,
-            originalText: text,
+            recipient: finalRecipient,
+            usedLLM: true,
+            llmStatus: 'success',
           };
         }
+
+        // If LLM validation failed, explain why and fall back
+        llmStatus = 'validation-failed';
+        if (verification.mismatchReason === 'amount') {
+          console.log('⚠️  LLM amount invalid, using regex fallback');
+        } else if (verification.mismatchReason === 'recipient') {
+          console.log('⚠️  LLM phone format invalid, using regex fallback');
+        } else {
+          console.log('⚠️  LLM send payload invalid, using regex fallback');
+        }
+      } else {
+        // Non-critical commands: trust LLM
+        console.log('✅ LLM parse');
+        // Always include originalText for error messages
+        return {
+          ...llmResult,
+          originalText: text,
+          usedLLM: true,
+          llmStatus: 'success',
+        };
       }
+    } else {
+      // LLM returned null (low confidence, timeout, or other issue)
+      llmStatus = 'low-confidence';
+      console.log('⚠️  LLM returned no result, using regex');
     }
   } catch (error) {
-    console.warn('⚠️  LLM parsing failed, using fallback');
+    console.warn('⚠️  LLM parsing failed, using fallback:', error);
+    attemptedLLM = true;
+    llmStatus =
+      error instanceof Error && error.message === 'Timeout'
+        ? 'timeout'
+        : 'error';
   }
 
   // Layer 2: Regex fallback (always works)
-  return parseMessageWithRegex(text);
+  // Include usedLLM flag if we attempted LLM (to prevent double-calling)
+  const regexResult = parseMessageWithRegex(text);
+  return {
+    ...regexResult,
+    usedLLM: attemptedLLM,
+    llmStatus: llmStatus,
+  };
 }
 
 /**

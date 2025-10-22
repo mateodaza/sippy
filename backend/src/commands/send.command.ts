@@ -154,7 +154,7 @@ export async function handleSendCommand(
 
     await sendTextMessage(toPhoneNumber, recipientMessage);
 
-    // Optional: send quick action buttons
+    // Quick action buttons after send
     await sendButtonMessage(fromPhoneNumber, 'Need anything else?', [
       { title: 'Balance' },
       { title: 'Help' },

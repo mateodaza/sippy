@@ -79,12 +79,6 @@ export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
 
     await sendTextMessage(phoneNumber, message);
 
-    // Optional: send quick action buttons
-    await sendButtonMessage(phoneNumber, 'Quick actions:', [
-      { title: 'Send' },
-      { title: 'Help' },
-    ]);
-
     console.log(`✅ Balance sent to +${phoneNumber}: ${balance} PYUSD`);
   } catch (error) {
     console.error(`❌ Failed to get balance for +${phoneNumber}:`, error);

@@ -22,10 +22,26 @@ export interface UserWallet {
 }
 
 export interface ParsedCommand {
-  command: 'start' | 'help' | 'about' | 'balance' | 'send' | 'history' | 'unknown';
+  command:
+    | 'start'
+    | 'help'
+    | 'about'
+    | 'balance'
+    | 'send'
+    | 'history'
+    | 'unknown';
   amount?: number;
   recipient?: string;
   originalText?: string;
+  usedLLM?: boolean; // Track if LLM was used for parsing
+  llmStatus?:
+    | 'success'
+    | 'disabled'
+    | 'rate-limited'
+    | 'timeout'
+    | 'error'
+    | 'low-confidence'
+    | 'validation-failed'; // Why LLM wasn't used
 }
 
 export interface WalletInfo {
