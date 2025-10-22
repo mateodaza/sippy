@@ -286,8 +286,8 @@ async function handleCommand(
         break;
 
       case 'unknown':
-        // Only try natural response if LLM wasn't already used for parsing
-        // (Avoid double LLM calls that waste rate limit)
+        // Only try natural response if LLM wasn't already attempted
+        // (to avoid double LLM calls that waste rate limit)
         if (!command.usedLLM) {
           const naturalResponse = await generateNaturalResponse(
             command.originalText || ''
@@ -301,6 +301,8 @@ async function handleCommand(
         }
 
         // Fallback to standard message
+        // Note: If LLM was attempted but failed (low-confidence, etc.),
+        // we skip the second LLM call and go straight to helpful fallback
         await sendTextMessage(
           phoneNumber,
           `❓ I didn't understand: "${command.originalText}"\n\n` +
