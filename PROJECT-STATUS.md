@@ -1,6 +1,6 @@
 # Project Status - Sippy
 
-**Last Updated**: October 22, 2025
+**Last Updated**: October 23, 2025
 **Status**: ✅ **READY FOR DEPLOYMENT** (with noted improvements)
 
 > **⚠️ Post-Hackathon TODO**: Implement security and reliability improvements:
@@ -12,6 +12,7 @@
 > - Backup/recovery system for wallets
 > - 2FA for large transfers
 > - IP whitelisting for admin operations
+> - **WhatsApp 24-hour messaging window fix for receiver notifications**
 
 ---
 
@@ -1045,6 +1046,17 @@ sippy/
    → Anyone can query address → phone
    → Privacy issue - needs authentication
    → See Security section for detailed proposals
+
+⚠️ WhatsApp 24-hour messaging window limitation
+   → Receiver notifications fail if recipient hasn't messaged bot in 24h
+   → WhatsApp API accepts message but doesn't deliver it
+   → Affects: Money received notifications to inactive users
+   → Solutions:
+     1. Use WhatsApp Template Messages (requires Meta approval)
+     2. Add webhook delivery status tracking
+     3. Check recipient's last interaction before sending
+   → Impact: Receivers who haven't used bot recently won't get notifications
+   → Priority: High - affects core UX for new recipients
 ```
 
 ### Security Considerations
