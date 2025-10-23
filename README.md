@@ -104,25 +104,63 @@ pnpm install
 
 2. **Configure environment**
 
+Create a `.env` file in the backend directory using the template:
+
 ```bash
-cp .env.example .env
+cp ENV-TEMPLATE.txt .env
 ```
 
 Required environment variables:
 
 ```env
-# Coinbase CDP v2 Credentials
+# WhatsApp Business API (Meta)
+# Get these from: https://developers.facebook.com/apps/
+WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id_here
+WHATSAPP_ACCESS_TOKEN=your_permanent_access_token_here
+WHATSAPP_VERIFY_TOKEN=sippy_hackathon_2025
+
+# Sippy WhatsApp Number (for onboarding links)
+# Your Sippy bot's WhatsApp number in international format without + (e.g., 573001234567)
+SIPPY_WHATSAPP_NUMBER=573001234567
+
+# Coinbase CDP SDK v2
+# Get these from: https://portal.cdp.coinbase.com/
 CDP_API_KEY_ID=your_api_key_id
 CDP_API_KEY_SECRET=your_api_key_secret
-CDP_WALLET_SECRET=your_wallet_secret
+CDP_WALLET_SECRET=your_wallet_secret_ec_private_key
 
-# WhatsApp Business API
-WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
-WHATSAPP_ACCESS_TOKEN=your_access_token
-WEBHOOK_VERIFY_TOKEN=your_verify_token
+# LLM Natural Language Processing (Optional - FREE tier)
+# Set to 'false' to disable LLM and use regex-only parsing
+USE_LLM=true
 
-# RPC Endpoints
-ARBITRUM_RPC_URL=https://arb-mainnet.g.alchemy.com/v2/YOUR_KEY
+# Groq API (FREE tier - only needed if USE_LLM=true)
+# Get free API key from: https://console.groq.com
+# Note: Bot works perfectly without this (falls back to exact command matching)
+GROQ_API_KEY=your_groq_api_key_here
+
+# Arbitrum Network RPC
+ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
+
+# Gas Refuel Contract (Optional - for auto gas coverage)
+# Deploy contract from /contracts/gas-refuel first
+REFUEL_CONTRACT_ADDRESS=0xYourGasRefuelContractAddress
+REFUEL_ADMIN_PRIVATE_KEY=0xYourPrivateKeyWithFunds
+
+# Database (Railway PostgreSQL)
+# Get this from Railway dashboard → Postgres service → Variables tab
+DATABASE_URL=postgresql://postgres:password@region.railway.app:port/railway
+
+# Server Configuration
+PORT=3001
+NODE_ENV=production
+
+# Frontend URLs (for bot messages)
+RECEIPT_BASE_URL=https://www.sippy.lat/receipt/
+FUND_URL=https://www.sippy.lat/fund
+
+# Optional: Demo Features
+WHATSAPP_BUTTONS=true
+DEMO_SHOW_REFUEL=true
 ```
 
 3. **Run the backend**
@@ -131,13 +169,58 @@ ARBITRUM_RPC_URL=https://arb-mainnet.g.alchemy.com/v2/YOUR_KEY
 pnpm dev
 ```
 
-### Frontend Setup (Basic Demo)
+### Frontend Setup
+
+1. **Install dependencies**
 
 ```bash
 cd frontend
 pnpm install
-pnpm dev
 ```
+
+2. **Configure environment**
+
+Create a `.env.local` file in the frontend directory:
+
+```bash
+cp ENV-TEMPLATE.txt .env.local
+```
+
+Required environment variables:
+
+```bash
+# Backend API Connection
+BACKEND_URL=http://localhost:3001
+# In production: BACKEND_URL=https://backend.sippy.lat
+
+# Base URL (for API routes)
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+# In production: NEXT_PUBLIC_BASE_URL=https://www.sippy.lat
+
+# Refuel Admin Wallet (Optional - for gas refueling functionality)
+REFUEL_ADMIN_PRIVATE_KEY=0x...your_admin_private_key
+
+# RPC URLs
+BASE_RPC_URL=https://base-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_KEY
+ARBITRUM_RPC_URL=https://arb-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_KEY
+
+# Avail Nexus Configuration
+AVAIL_NETWORK=mainnet
+
+# Blockscout API (for transaction data and activity)
+NEXT_PUBLIC_BLOCKSCOUT_API_KEY=your_blockscout_api_key
+NEXT_PUBLIC_BLOCKSCOUT_BASE_URL=https://arbitrum.blockscout.com/api/v2
+```
+
+> **Note**: The `REFUEL_ADMIN_PRIVATE_KEY` should match the backend's admin key if using gas refueling.
+
+3. **Run the frontend**
+
+```bash
+pnpm dev  # runs on http://localhost:3000
+```
+
+> **See also**: `frontend/ENV-SETUP.md` for detailed environment configuration and production deployment instructions.
 
 ---
 
