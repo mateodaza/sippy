@@ -155,7 +155,21 @@ app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
     const message = messages[0];
     const from = message.from;
     const messageId = message.id;
-    const text = message.text?.body || '';
+
+    // Extract text from either regular text message or interactive button/list reply
+    let text = '';
+    if (message.text?.body) {
+      text = message.text.body;
+    } else if (message.interactive?.button_reply?.title) {
+      // User clicked a button - use the button title as the command
+      text = message.interactive.button_reply.title;
+      console.log(`🔘 Button clicked: "${text}" (id: ${message.interactive.button_reply.id})`);
+    } else if (message.interactive?.list_reply?.title) {
+      // User selected from a list - use the list item title as the command
+      text = message.interactive.list_reply.title;
+      console.log(`📋 List item selected: "${text}" (id: ${message.interactive.list_reply.id})`);
+    }
+
     const timestamp = message.timestamp;
 
     // Idempotency: check if we've already processed this message

@@ -58,6 +58,18 @@ export interface WhatsAppMessage {
   text?: {
     body: string;
   };
+  interactive?: {
+    type: 'button_reply' | 'list_reply';
+    button_reply?: {
+      id: string;
+      title: string;
+    };
+    list_reply?: {
+      id: string;
+      title: string;
+      description?: string;
+    };
+  };
   type: string;
 }
 
