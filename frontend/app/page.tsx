@@ -25,6 +25,7 @@ import {
 import { BorderBeam } from '@/components/ui/border-beam';
 import BlurFade from '@/components/ui/blur-fade';
 import { Marquee } from '@/components/ui/marquee';
+import BetaAccessBanner from '@/components/BetaAccessBanner';
 
 export default function HomePage() {
   return (
@@ -83,6 +84,11 @@ export default function HomePage() {
                 <br />
                 No wallet. No gas fees. No blockchain knowledge required.
               </p>
+
+              {/* Beta Access Banner */}
+              <div className='animate-fade-in-up animation-delay-250'>
+                <BetaAccessBanner variant='compact' />
+              </div>
 
               {/* Buttons */}
               <div className='flex flex-wrap gap-3.5 pt-4 animate-fade-in-up animation-delay-300'>

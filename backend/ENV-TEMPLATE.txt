@@ -6,6 +6,11 @@ WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id_here
 WHATSAPP_ACCESS_TOKEN=your_permanent_access_token_here
 WHATSAPP_VERIFY_TOKEN=sippy_hackathon_2025
 
+# Sippy WhatsApp Number (for onboarding links)
+# Your Sippy bot's WhatsApp number in international format without + (e.g., 573001234567)
+# This is used to generate WhatsApp links for new users
+SIPPY_WHATSAPP_NUMBER=573001234567
+
 # Coinbase CDP SDK v2
 # Get these from: https://portal.cdp.coinbase.com/
 CDP_API_KEY_ID=your_api_key_id

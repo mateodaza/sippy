@@ -4,7 +4,7 @@ import { WagmiProvider, createConfig, http, useAccount } from 'wagmi';
 import { arbitrum, mainnet, optimism, base, polygon } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConnectKitProvider, getDefaultConfig } from 'connectkit';
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode } from 'react';
 import { NexusProvider } from './NexusProvider';
 
 const config = createConfig(
@@ -28,18 +28,14 @@ const config = createConfig(
     appIcon: 'https://sippy.app/icon.png',
 
     enableFamily: false,
+    ssr: true, // Enable SSR mode to prevent hydration mismatches
   })
 );
 
 const queryClient = new QueryClient();
 
 function InternalProvider({ children }: { children: ReactNode }) {
-  const [isConnected, setIsConnected] = useState(false);
-  const { isConnected: accountConnected } = useAccount();
-
-  useEffect(() => {
-    setIsConnected(accountConnected);
-  }, [accountConnected]);
+  const { isConnected } = useAccount();
 
   return (
     <ConnectKitProvider

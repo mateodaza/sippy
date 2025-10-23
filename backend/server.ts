@@ -19,9 +19,12 @@ import {
   markAsRead,
 } from './src/services/whatsapp.service.js';
 import {
+  formatFundETHReceivedMessage,
+  formatFundPYUSDReceivedMessage,
+} from './src/utils/messages.js';
+import {
   getAllWallets,
   getUserWallet,
-  createUserWallet,
 } from './src/services/cdp-wallet.service.js';
 import { initDb, query } from './src/services/db.js';
 import { checkLLMHealth, isLLMEnabled } from './src/services/llm.service.js';
@@ -336,16 +339,27 @@ app.get('/resolve-phone', async (req: Request, res: Response) => {
     console.log(`\n📞 Resolving phone number: +${cleanPhone}`);
 
     // Try to get existing wallet
-    let wallet = await getUserWallet(cleanPhone);
+    const wallet = await getUserWallet(cleanPhone);
 
-    // If wallet doesn't exist, create it
+    // If wallet doesn't exist, return error - user must start via WhatsApp first
     if (!wallet) {
-      console.log(`  ℹ️  Wallet not found, creating new wallet...`);
-      wallet = await createUserWallet(cleanPhone);
-      console.log(`  ✅ New wallet created: ${wallet.walletAddress}`);
-    } else {
-      console.log(`  ✅ Wallet found: ${wallet.walletAddress}`);
+      console.log(`  ℹ️  Wallet not found for +${cleanPhone}`);
+
+      // Get Sippy WhatsApp number from env
+      const sippyWhatsAppNumber = process.env.SIPPY_WHATSAPP_NUMBER;
+      const whatsappLink = sippyWhatsAppNumber
+        ? `https://wa.me/${sippyWhatsAppNumber}?text=start`
+        : undefined;
+
+      return res.status(404).json({
+        error: 'Wallet not found',
+        message: `This phone number hasn't started using Sippy yet. They need to send "start" to Sippy on WhatsApp first.`,
+        phone: `+${cleanPhone}`,
+        ...(whatsappLink && { whatsappLink }),
+      });
     }
+
+    console.log(`  ✅ Wallet found: ${wallet.walletAddress}`);
 
     res.json({
       address: wallet.walletAddress,
@@ -405,6 +419,71 @@ app.get('/resolve-address', async (req: Request, res: Response) => {
     console.error('❌ Error resolving address:', error);
     res.status(500).json({
       error: 'Failed to resolve address',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+/**
+ * Notify user about received funds from Fund flow
+ * POST /notify-fund
+ * Body: { phone: string, type: 'eth' | 'pyusd', amount: string, txHash: string }
+ */
+app.post('/notify-fund', async (req: Request, res: Response) => {
+  try {
+    const { phone, type, amount, txHash } = req.body;
+
+    if (!phone || !type || !amount || !txHash) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'phone, type, amount, and txHash are required',
+      });
+    }
+
+    if (type !== 'eth' && type !== 'pyusd') {
+      return res.status(400).json({
+        error: 'Invalid type',
+        message: 'type must be either "eth" or "pyusd"',
+      });
+    }
+
+    // Clean phone number (remove + and spaces)
+    const cleanPhone = phone.replace(/[^\d]/g, '');
+
+    console.log(
+      `\n📲 Sending Fund notification to +${cleanPhone}: ${amount} ${type.toUpperCase()}`
+    );
+
+    // Verify wallet exists (user must have started via WhatsApp first)
+    const wallet = await getUserWallet(cleanPhone);
+    if (!wallet) {
+      return res.status(404).json({
+        error: 'Wallet not found',
+        message: `Phone number +${cleanPhone} hasn't started using Sippy yet.`,
+      });
+    }
+
+    // Format message based on type
+    const message =
+      type === 'eth'
+        ? formatFundETHReceivedMessage({ amount, txHash })
+        : formatFundPYUSDReceivedMessage({ amount, txHash });
+
+    // Send WhatsApp notification
+    await sendTextMessage(cleanPhone, message);
+
+    console.log(`  ✅ Notification sent to +${cleanPhone}`);
+
+    res.json({
+      success: true,
+      phone: `+${cleanPhone}`,
+      type,
+      amount,
+    });
+  } catch (error) {
+    console.error('❌ Error sending Fund notification:', error);
+    res.status(500).json({
+      error: 'Failed to send notification',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
   }

@@ -140,6 +140,37 @@ export function formatSendRecipientMessage(params: {
 }
 
 /**
+ * Fund flow - ETH received notification
+ */
+export function formatFundETHReceivedMessage(params: {
+  amount: string;
+  txHash: string;
+}): string {
+  const receiptUrl = RECEIPT_BASE_URL + params.txHash;
+  return (
+    `⛽ Gas received!\n\n` +
+    `You received ${params.amount} ETH for transactions.\n` +
+    `You can keep making PYUSD transfers!\n\n` +
+    `📄 Receipt: ${receiptUrl}`
+  );
+}
+
+/**
+ * Fund flow - PYUSD received notification
+ */
+export function formatFundPYUSDReceivedMessage(params: {
+  amount: string;
+  txHash: string;
+}): string {
+  const receiptUrl = RECEIPT_BASE_URL + params.txHash;
+  return (
+    `💵 PYUSD received!\n\n` +
+    `You received $${params.amount} PYUSD.\n\n` +
+    `📄 Receipt: ${receiptUrl}`
+  );
+}
+
+/**
  * Insufficient balance message
  */
 export function formatInsufficientBalanceMessage(params: {

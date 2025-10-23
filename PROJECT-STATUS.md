@@ -15,6 +15,50 @@
 
 ---
 
+## 📋 **Hackathon Check-ins**
+
+### Check-in #2 - October 22, 2025
+
+**Project Status:**
+
+- **Category**: Wallet/Payments
+- **Emoji**: 🍸
+- **Description**: Send and receive PYUSD via WhatsApp — no wallets, no gas, just your phone number.
+
+**Blockers:**
+No major blockers. Platform is stable and all core features are working on Arbitrum mainnet.
+
+**Key Highlights:**
+
+1. **Natural UX Philosophy**: We deliberately avoid crypto terminology. Users never see words like "blockchain," "gas," or "Web3." The AI explains everything in terms of "sending dollars" and "your wallet on WhatsApp." This makes PYUSD accessible to non-crypto users.
+
+2. **Hybrid Architecture**: We built a 3-layer fallback system (LLM → Regex → Error handling) that ensures 100% uptime. Even if the AI service is down or rate-limited, the bot keeps working with traditional command parsing. Users might not get conversational responses, but core functionality never breaks.
+
+3. **Cross-chain Funding**: The Nexus integration means anyone can fund a WhatsApp user from any supported chain. You could have ETH on Polygon, send it to a phone number, and they receive PYUSD on Arbitrum—all in two signatures.
+
+4. **Real mainnet deployment**: Everything works on Arbitrum mainnet with real PYUSD. We've processed actual transactions and the gas refuel system is live and working.
+
+**Progress Since Check-in #1:**
+
+Three major features shipped:
+
+1. **AI-Powered Bot** - Integrated Groq LLM for natural conversation in English & Spanish. Users type naturally ("check my balance", "envía 5 a +57...") instead of strict commands. Built hybrid LLM+regex fallback for 100% uptime. 95%+ accuracy across 79 edge case tests.
+
+2. **Transaction Explorer** - Full Blockscout integration with public profile pages (/profile/[phone]) and shareable receipts (/receipt/[txHash]). Real-time balances and transaction history with 150+ country flag support.
+
+3. **Production Hardening** - Migrated to PostgreSQL database, resolved all previous blockers (swap optimization, rate limits, liquidity issues), added comprehensive testing suite. Platform is mainnet-ready.
+
+Previous blockers resolved:
+
+- ETH→PYUSD swap: Implemented Avail Nexus for cross-chain bridging + Uniswap Universal Router for multi-hop swaps (ETH→WETH→USDC→PYUSD) with automatic slippage protection
+- Low liquidity: Built-in slippage protection and multi-pool support now handles small amounts reliably
+
+**Prize Tracks:** Avail ($10,000), PayPal USD ($10,000), Blockscout ($10,000)
+
+**Note:** Using WhatsApp's test environment for demo (requires manually adding test numbers). Planning to upgrade to production number post-hackathon for unrestricted messaging (requires Meta approval).
+
+---
+
 ## 🎉 **Major Achievements Today**
 
 ### ✅ LLM Natural Language Processing - AI-Powered Bot

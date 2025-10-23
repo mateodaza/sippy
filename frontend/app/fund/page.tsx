@@ -1,6 +1,5 @@
 'use client';
 
-//
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { ConnectKitButton } from 'connectkit';
@@ -8,6 +7,7 @@ import { bridgeEthToArbitrum } from '../../lib/nexus';
 import { swapETHToPYUSD } from '../../lib/uniswapSwap';
 import { z } from 'zod';
 import type { UserAsset } from '@avail-project/nexus-core';
+import BetaAccessBanner from '@/components/BetaAccessBanner';
 import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';
 import { useNexus } from '../providers/NexusProvider';
@@ -44,12 +44,24 @@ const formatStepName = (type: string): string => {
     send: '✉️ Sending to recipient',
     approval: '✅ Approving token',
     execute: '⚡ Executing transaction',
+    resolve: '🔍 Resolving phone number',
+    'check-balance': '💰 Checking Arbitrum balance',
+    swap: '🔄 Swapping ETH → PYUSD',
   };
   return stepNames[type] || `🔄 ${type}`;
 };
 
 export default function FundPage() {
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, isReconnecting } = useAccount();
+  const [isClient, setIsClient] = useState(false);
+
+  // Wait for client-side hydration to complete
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Show loading only while we're waiting for hydration or actively reconnecting
+  const isHydrating = !isClient || isReconnecting;
   const {
     nexusSdk,
     isInitialized,
@@ -251,29 +263,40 @@ export default function FundPage() {
     };
   }, [nexusSdk]);
 
-  const resolvePhone = async (phone: string): Promise<`0x${string}` | null> => {
-    try {
-      setCurrentStep('🔍 Resolving phone number...');
-      console.log('📱 Resolving phone number:', phone);
-      const response = await fetch(
-        `/api/resolve-phone?phone=${encodeURIComponent(phone)}`
-      );
+  const resolvePhone = async (phone: string): Promise<`0x${string}`> => {
+    setCurrentStep('🔍 Resolving phone number...');
+    console.log('📱 Resolving phone number:', phone);
+    const response = await fetch(
+      `/api/resolve-phone?phone=${encodeURIComponent(phone)}`
+    );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to resolve phone number');
+    if (!response.ok) {
+      const errorData = await response.json();
+
+      // Handle 404 - wallet not found (user hasn't started)
+      if (response.status === 404) {
+        const whatsappLink = errorData.whatsappLink;
+        let errorMessage =
+          `📱 ${phone} hasn't started using Sippy yet.\n\n` +
+          `They need to:\n` +
+          `1. Open WhatsApp\n` +
+          `2. Send "start" to Sippy\n` +
+          `3. Then you can fund their account`;
+
+        // If we have a WhatsApp link, add it to the error message
+        if (whatsappLink) {
+          errorMessage += `\n\nHelp them get started: ${whatsappLink}`;
+        }
+
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
-      console.log('✅ Phone resolved to address:', data.address);
-      return data.address as `0x${string}`;
-    } catch (err) {
-      console.error('❌ Error resolving phone:', err);
-      setError(
-        err instanceof Error ? err.message : 'Failed to resolve phone number'
-      );
-      return null;
+      throw new Error(errorData.error || 'Failed to resolve phone number');
     }
+
+    const data = await response.json();
+    console.log('✅ Phone resolved to address:', data.address);
+    return data.address as `0x${string}`;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -285,6 +308,7 @@ export default function FundPage() {
 
     setError('');
     setSuccess('');
+    setResolvedAddress('');
     setIsLoading(true);
     setCurrentStep('');
     setProgressSteps([]);
@@ -304,9 +328,6 @@ export default function FundPage() {
 
       // Resolve phone to address
       const recipientAddress = await resolvePhone(validatedPhone);
-      if (!recipientAddress) {
-        throw new Error('Could not resolve phone number to address');
-      }
 
       // Store resolved address for display
       setResolvedAddress(recipientAddress);
@@ -339,8 +360,34 @@ export default function FundPage() {
         setShowProgress(false);
         setProgressSteps([]);
         setSuccess(
-          `✅ Successfully funded ${phoneNumber} with gas for ~${selectedRefuel.txCount} transfers!`
+          `✅ Successfully funded ${phoneNumber} with gas for ~${
+            selectedRefuel.txCount
+          } transfers!${
+            result.transactionHash
+              ? `\n\nTx: ${result.transactionHash.slice(0, 10)}...`
+              : ''
+          }`
         );
+
+        // Send WhatsApp notification to recipient
+        if (result.transactionHash) {
+          try {
+            await fetch('/api/notify-fund', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                phone: phoneNumber,
+                type: 'eth',
+                amount: selectedRefuel.amount,
+                txHash: result.transactionHash,
+              }),
+            });
+          } catch (notifError) {
+            console.error('Failed to send notification:', notifError);
+            // Don't fail the whole transaction if notification fails
+          }
+        }
+
         setPhoneNumber('');
 
         // Refresh balances
@@ -425,11 +472,23 @@ export default function FundPage() {
             </p>
           </div>
 
+          {/* Beta Access Banner */}
+          <div className='max-w-2xl mx-auto mb-8 animate-fade-in-up animation-delay-50'>
+            <BetaAccessBanner variant='full' />
+          </div>
+
           {/* Main Card */}
           <div className='relative max-w-2xl mx-auto animate-fade-in-up animation-delay-100'>
             <div className='absolute -inset-4 rounded-[40px] bg-gradient-to-br from-[#dcfce7]/40 via-white/0 to-[#dbeafe]/30 blur-[40px]' />
             <div className='relative bg-white/90 backdrop-blur-xl rounded-[32px] shadow-[0_28px_70px_rgba(15,23,42,0.16)] p-8 md:p-10 border border-white/50 hover:shadow-[0_36px_86px_rgba(15,23,42,0.22)] hover:border-white/70 transition-all duration-500'>
-              {!isConnected ? (
+              {isHydrating ? (
+                <div className='text-center py-10'>
+                  <div className='w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full mx-auto mb-6 flex items-center justify-center shadow-lg animate-pulse'>
+                    <Loader2 className='w-12 h-12 text-gray-400 animate-spin' />
+                  </div>
+                  <p className='text-gray-500'>Loading...</p>
+                </div>
+              ) : !isConnected ? (
                 <div className='text-center py-10'>
                   <div className='w-24 h-24 bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] rounded-full mx-auto mb-6 flex items-center justify-center shadow-lg'>
                     <Wallet className='w-12 h-12 text-[#059669]' />
@@ -713,19 +772,27 @@ export default function FundPage() {
                             <div className='p-3 bg-gradient-to-r from-[#f0fdf4] to-[#dcfce7] rounded-lg border border-[#bbf7d0]'>
                               <div className='flex items-center justify-between mb-1'>
                                 <span className='text-xs font-medium text-[#15803d]'>
-                                  Estimated Value:
+                                  Recipient will receive:
                                 </span>
                                 <span className='text-sm font-bold text-[#0f172a]'>
-                                  ~$
-                                  {(parseFloat(pyusdAmount) * ethPrice).toFixed(
-                                    2
-                                  )}{' '}
-                                  USD
+                                  ~
+                                  {(
+                                    parseFloat(pyusdAmount) *
+                                    ethPrice *
+                                    0.995
+                                  ).toFixed(2)}{' '}
+                                  PYUSD
                                 </span>
                               </div>
                               <p className='text-xs text-gray-600'>
-                                ETH Price: ${ethPrice.toLocaleString()} • 1
-                                PYUSD = $1
+                                Value: ~$
+                                {(parseFloat(pyusdAmount) * ethPrice).toFixed(
+                                  2
+                                )}{' '}
+                                • ETH: ${ethPrice.toLocaleString()}
+                              </p>
+                              <p className='text-xs text-gray-500 italic mt-1'>
+                                * Includes ~0.5% slippage tolerance
                               </p>
                             </div>
                           ) : isLoadingPrice ? (
@@ -736,25 +803,38 @@ export default function FundPage() {
                           ) : null}
                           {isInitialized && parseFloat(pyusdAmount) > 0 && (
                             <>
-                              {parseFloat(pyusdAmount) + 0.002 >
+                              {parseFloat(pyusdAmount) >
                               parseFloat(totalEthBalance) ? (
-                                <p className='text-xs text-red-600 font-semibold flex items-center'>
-                                  <AlertCircle className='w-3.5 h-3.5 mr-1.5' />
-                                  Insufficient balance. You need{' '}
-                                  {(parseFloat(pyusdAmount) + 0.002).toFixed(
-                                    4
-                                  )}{' '}
-                                  ETH but only have{' '}
-                                  {parseFloat(totalEthBalance).toFixed(4)} ETH
-                                </p>
+                                <div className='p-2 bg-red-50 border border-red-200 rounded-lg'>
+                                  <p className='text-xs text-red-700 font-semibold flex items-start gap-1.5'>
+                                    <AlertCircle className='w-3.5 h-3.5 mt-0.5 flex-shrink-0' />
+                                    <span>
+                                      Insufficient balance. Need{' '}
+                                      <strong>
+                                        {parseFloat(pyusdAmount).toFixed(4)} ETH
+                                      </strong>
+                                      . You have{' '}
+                                      {parseFloat(totalEthBalance).toFixed(4)}{' '}
+                                      ETH.
+                                    </span>
+                                  </p>
+                                </div>
                               ) : (
                                 <p className='text-xs text-[#059669] font-semibold flex items-center'>
                                   <CheckCircle2 className='w-3.5 h-3.5 mr-1.5' />
-                                  Sufficient balance available
+                                  Sufficient balance (
+                                  {parseFloat(totalEthBalance).toFixed(4)} ETH
+                                  available)
                                 </p>
                               )}
                             </>
                           )}
+                        </div>
+                        <div className='mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg'>
+                          <p className='text-xs text-blue-900'>
+                            <strong>🔄 Swap Route:</strong> ETH → WETH → USDC →
+                            PYUSD via Uniswap on Arbitrum
+                          </p>
                         </div>
                       </div>
                     )}
@@ -810,8 +890,8 @@ export default function FundPage() {
                       </div>
                     )}
 
-                    {/* Current Step Display */}
-                    {currentStep && (
+                    {/* Current Step Display - only show if no progress steps */}
+                    {currentStep && !showProgress && (
                       <div className='p-4 bg-gradient-to-r from-[#dbeafe] to-[#bfdbfe] border border-blue-300 rounded-xl shadow-sm'>
                         <p className='text-sm text-blue-900 text-center animate-pulse font-medium flex items-center justify-center'>
                           <Loader2 className='w-4 h-4 mr-2 animate-spin' />
@@ -874,15 +954,42 @@ export default function FundPage() {
                     {/* Error Message */}
                     {error && (
                       <div className='p-4 bg-gradient-to-r from-red-50 to-rose-100 border border-red-300 rounded-xl shadow-sm'>
-                        <p className='text-sm text-red-700 font-medium flex items-center'>
-                          <AlertCircle className='w-4 h-4 mr-2 flex-shrink-0' />
-                          {error}
+                        <p className='text-sm text-red-700 font-medium flex items-start'>
+                          <AlertCircle className='w-4 h-4 mr-2 flex-shrink-0 mt-0.5' />
+                          <span className='whitespace-pre-line'>
+                            {(() => {
+                              // Check if error contains a WhatsApp link
+                              const linkMatch = error.match(
+                                /(https:\/\/wa\.me\/[^\s]+)/
+                              );
+                              if (linkMatch) {
+                                const [beforeLink, afterLink] = error.split(
+                                  linkMatch[0]
+                                );
+                                return (
+                                  <>
+                                    {beforeLink}
+                                    <a
+                                      href={linkMatch[0]}
+                                      target='_blank'
+                                      rel='noopener noreferrer'
+                                      className='text-blue-600 hover:text-blue-800 underline font-semibold'
+                                    >
+                                      Open WhatsApp
+                                    </a>
+                                    {afterLink}
+                                  </>
+                                );
+                              }
+                              return error;
+                            })()}
+                          </span>
                         </p>
                       </div>
                     )}
 
                     {/* Success Message */}
-                    {success && (
+                    {success && !isLoading && (
                       <div className='space-y-3'>
                         <div className='p-4 bg-gradient-to-r from-[#d1fae5] to-[#a7f3d0] border border-[#bbf7d0] rounded-xl shadow-md'>
                           <p className='text-sm text-[#15803d] font-semibold flex items-center'>
@@ -962,19 +1069,42 @@ export default function FundPage() {
                               setIsLoading(true);
                               setError('');
                               setSuccess('');
+                              setResolvedAddress('');
+
+                              // Initialize progress steps early
+                              setProgressSteps([
+                                {
+                                  typeID: 'resolve',
+                                  type: 'resolve',
+                                  done: false,
+                                },
+                                {
+                                  typeID: 'check-balance',
+                                  type: 'check-balance',
+                                  done: false,
+                                },
+                                { typeID: 'swap', type: 'swap', done: false },
+                              ]);
                               setShowProgress(true);
-                              setProgressSteps([]);
-                              setCurrentStep('Resolving phone number...');
+                              setCurrentStep('');
+
+                              // Validate phone number
+                              const validatedPhone =
+                                phoneSchema.parse(phoneNumber);
 
                               // Resolve recipient
                               const recipientAddr = await resolvePhone(
-                                phoneNumber
+                                validatedPhone
                               );
-                              if (!recipientAddr) {
-                                throw new Error(
-                                  'Failed to resolve phone number'
-                                );
-                              }
+
+                              // Mark resolve step as done
+                              setProgressSteps((prev) =>
+                                prev.map((s) =>
+                                  s.typeID === 'resolve'
+                                    ? { ...s, done: true }
+                                    : s
+                                )
+                              );
 
                               setResolvedAddress(recipientAddr);
                               console.log(
@@ -990,7 +1120,7 @@ export default function FundPage() {
                               }
 
                               const swapAmount = parseFloat(pyusdAmount);
-                              const minRequired = swapAmount + 0.002; // + gas buffer
+                              const minRequired = swapAmount;
 
                               // Check total available balance across all chains
                               const totalAvailable =
@@ -1001,18 +1131,40 @@ export default function FundPage() {
                                     4
                                   )} ETH but need at least ${minRequired.toFixed(
                                     4
-                                  )} ETH (${swapAmount} for swap + 0.002 for gas)`
+                                  )} ETH for the swap`
                                 );
                               }
 
                               // Check current balance on Arbitrum
-                              setCurrentStep('Checking Arbitrum balance...');
                               const arbBalance = await checkArbitrumBalance();
                               console.log(
                                 `💰 Current Arbitrum balance: ${arbBalance} ETH`
                               );
 
+                              // Mark check-balance step as done
+                              setProgressSteps((prev) =>
+                                prev.map((s) =>
+                                  s.typeID === 'check-balance'
+                                    ? { ...s, done: true }
+                                    : s
+                                )
+                              );
+
                               let skippedBridge = false;
+
+                              // Add bridge step if needed
+                              const needsBridge = arbBalance < minRequired;
+                              if (needsBridge) {
+                                setProgressSteps((prev) => [
+                                  ...prev.slice(0, 2), // resolve, check-balance
+                                  {
+                                    typeID: 'bridge',
+                                    type: 'bridge',
+                                    done: false,
+                                  },
+                                  ...prev.slice(2), // swap
+                                ]);
+                              }
 
                               // Step 1: Bridge if needed
                               if (arbBalance < minRequired) {
@@ -1046,6 +1198,16 @@ export default function FundPage() {
                                 }
 
                                 console.log('✅ Bridge completed');
+
+                                // Mark bridge step as done
+                                setProgressSteps((prev) =>
+                                  prev.map((s) =>
+                                    s.typeID === 'bridge'
+                                      ? { ...s, done: true }
+                                      : s
+                                  )
+                                );
+
                                 setCurrentStep(
                                   'Waiting for funds on Arbitrum...'
                                 );
@@ -1114,6 +1276,13 @@ export default function FundPage() {
 
                               console.log('✅ Swap completed:', swapResult);
 
+                              // Mark swap step as done
+                              setProgressSteps((prev) =>
+                                prev.map((s) =>
+                                  s.typeID === 'swap' ? { ...s, done: true } : s
+                                )
+                              );
+
                               const successMsg = skippedBridge
                                 ? `✅ Swapped ${swapAmount} ETH → PYUSD and sent to ${phoneNumber}!`
                                 : `🎉 Bridged to Arbitrum, swapped ${swapAmount} ETH → PYUSD, and sent to ${phoneNumber}!`;
@@ -1124,11 +1293,65 @@ export default function FundPage() {
                                   10
                                 )}...`
                               );
+
+                              // Send WhatsApp notification to recipient
+                              if (swapResult.txHash) {
+                                try {
+                                  const pyusdValue = ethPrice
+                                    ? (
+                                        parseFloat(pyusdAmount) *
+                                        ethPrice *
+                                        0.995
+                                      ).toFixed(2)
+                                    : pyusdAmount;
+
+                                  await fetch('/api/notify-fund', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                    },
+                                    body: JSON.stringify({
+                                      phone: phoneNumber,
+                                      type: 'pyusd',
+                                      amount: pyusdValue,
+                                      txHash: swapResult.txHash,
+                                    }),
+                                  });
+                                } catch (notifError) {
+                                  console.error(
+                                    'Failed to send notification:',
+                                    notifError
+                                  );
+                                  // Don't fail the whole transaction if notification fails
+                                }
+                              }
+
                               setShowProgress(false);
+
+                              // Refresh balances after successful swap
+                              setTimeout(async () => {
+                                if (nexusSdk && isInitialized) {
+                                  const balances =
+                                    await nexusSdk.getUnifiedBalances();
+                                  const ethAsset = balances.find(
+                                    (asset: UserAsset) =>
+                                      asset.symbol === 'ETH' ||
+                                      asset.symbol === 'WETH'
+                                  );
+                                  if (ethAsset) {
+                                    setTotalEthBalance(ethAsset.balance);
+                                  }
+                                }
+                              }, 3000);
                             } catch (err: any) {
                               console.error('Full flow error:', err);
-                              setError(err?.message || 'Flow failed');
+                              if (err instanceof z.ZodError) {
+                                setError(err.errors[0].message);
+                              } else {
+                                setError(err?.message || 'Flow failed');
+                              }
                               setShowProgress(false);
+                              setProgressSteps([]);
                             } finally {
                               setIsLoading(false);
                               setCurrentStep('');
@@ -1364,6 +1587,9 @@ export default function FundPage() {
                   allowanceModal.deny();
                   setAllowanceModal(null);
                   setIsLoading(false);
+                  setShowProgress(false);
+                  setProgressSteps([]);
+                  setCurrentStep('');
                 }}
                 className='flex-1 bg-gray-200 text-gray-800 py-3 px-6 rounded-xl font-semibold hover:bg-gray-300 transition-all active:scale-95'
               >
@@ -1385,7 +1611,9 @@ export default function FundPage() {
               Confirm Transfer
             </h3>
             <p className='text-sm text-gray-600 mb-6 text-center leading-relaxed'>
-              Transfer {selectedRefuel.amount} ETH to {phoneNumber} on Arbitrum
+              {transferMode === 'gas'
+                ? `Transfer ${selectedRefuel.amount} ETH to ${phoneNumber} on Arbitrum`
+                : `Convert ${pyusdAmount} ETH to PYUSD and send to ${phoneNumber}`}
             </p>
             <div className='space-y-2 mb-6 p-4 bg-gray-50 rounded-xl'>
               <div className='flex justify-between text-sm'>
@@ -1432,6 +1660,8 @@ export default function FundPage() {
                   intentModal.deny(); // Use deny() to reject the transaction
                   setIntentModal(null);
                   setIsLoading(false);
+                  setShowProgress(false);
+                  setProgressSteps([]);
                   setCurrentStep('');
                 }}
                 className='flex-1 bg-gray-200 text-gray-800 py-3 px-6 rounded-xl font-semibold hover:bg-gray-300 transition-all active:scale-95'
