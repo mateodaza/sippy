@@ -358,14 +358,6 @@ NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=your_project_id
 # Backend: Uses existing .env (no changes needed)
 ```
 
-**Testing:**  
-See `frontend/TESTING.md` for detailed testing guide and QA checklist.
-
-**PYUSD Bridge Research:**
-
-- See `PYUSD-RESEARCH.md` for cross-chain options
-- See `PYUSD-MAINNET-ARBITRUM.md` for Ethereum→Arbitrum implementation plan
-
 ### Phase 3: Advanced Features (Planned)
 
 - ⏳ Multi-currency support (USDC, USDT)
@@ -402,9 +394,7 @@ See `frontend/TESTING.md` for detailed testing guide and QA checklist.
 
 ## 📚 Documentation
 
-- [Developer Notes (2025-10-16)](./DEV-NOTES-2025-10-16.md) - Current state and next steps
 - [Project Status](./PROJECT-STATUS.md) - What's working, what's next
-- [GasRefuel Implementation](./GASREFUEL_IMPLEMENTATION.md) - Complete guide for gas refuel system
 - [Backend Refuel Setup](./backend/REFUEL_SETUP.md) - Backend integration guide
 - [Contract Documentation](./contracts/gas-refuel/README.md) - Smart contract details
 

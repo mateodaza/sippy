@@ -93,12 +93,10 @@ export default function HomePage() {
               {/* Buttons */}
               <div className='flex flex-wrap gap-3.5 pt-4 animate-fade-in-up animation-delay-300'>
                 <a
-                  href='https://wa.me/15556363691?text=start'
-                  target='_blank'
-                  rel='noopener noreferrer'
+                  href='mailto:hello@sippy.lat?subject=Request%20Beta%20Access&body=Hi%2C%20I%27d%20like%20to%20request%20access%20to%20Sippy%27s%20WhatsApp%20bot.'
                   className='px-7 py-3.5 bg-[#059669] text-white rounded-xl font-semibold hover:bg-[#047857] shadow-[0_18px_36px_rgba(5,150,105,0.22)] hover:shadow-[0_22px_44px_rgba(4,120,87,0.28)] active:scale-[0.98] transition-all duration-200 flex items-center gap-2 group'
                 >
-                  Message Sippy
+                  Request Beta Access
                   <ArrowRight className='w-5 h-5 group-hover:translate-x-0.5 transition-transform' />
                 </a>
                 <a
