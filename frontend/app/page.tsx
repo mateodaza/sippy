@@ -112,12 +112,12 @@ export default function HomePage() {
               {/* Trust Badges */}
               <div className='flex flex-wrap gap-x-6 gap-y-4 text-sm text-gray-600 pt-3 animate-fade-in-up animation-delay-400'>
                 <div className='flex items-center gap-2'>
-                  <Shield className='w-4 h-4 text-[#059669]' />
-                  <span>Coinbase CDP Wallets</span>
+                  <Zap className='w-4 h-4 text-[#059669]' />
+                  <span>Powered by Avail Nexus </span>
                 </div>
                 <div className='flex items-center gap-2'>
-                  <Zap className='w-4 h-4 text-[#059669]' />
-                  <span>Gasless transfers</span>
+                  <Shield className='w-4 h-4 text-[#059669]' />
+                  <span>Coinbase CDP Wallets</span>
                 </div>
               </div>
             </div>
