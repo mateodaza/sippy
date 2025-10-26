@@ -1,9 +1,3 @@
-/**
- * BALANCE Command
- *
- * Shows user's PYUSD balance and wallet info
- */
-
 import {
   getUserWallet,
   getUserBalance,
@@ -22,34 +16,26 @@ import {
 import { toUserErrorMessage } from '../utils/errors.js';
 import { getRefuelService } from '../services/refuel.service.js';
 
-/**
- * Handle "balance" command
- */
 export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
-  console.log(`\n💰 BALANCE command from +${phoneNumber}`);
+  console.log(`BALANCE command from +${phoneNumber}`);
 
   try {
-    // Check if user has a wallet
     const userWallet = await getUserWallet(phoneNumber);
     if (!userWallet) {
       await sendTextMessage(phoneNumber, formatNoWalletMessage());
       return;
     }
 
-    // Check session validity
     if (!(await isSessionValid(phoneNumber))) {
       await sendTextMessage(phoneNumber, formatSessionExpiredMessage());
       return;
     }
 
-    // Update activity
     await updateLastActivity(phoneNumber);
 
-    // Get current balance
-    console.log(`📊 Fetching balance for +${phoneNumber}...`);
+    console.log(`Fetching balance for +${phoneNumber}...`);
     const balance = await getUserBalance(phoneNumber);
 
-    // Get ETH (gas) balance
     let ethBalance: string | undefined;
     try {
       const refuelService = getRefuelService();
@@ -57,11 +43,10 @@ export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
         ethBalance = await refuelService.getUserBalance(
           userWallet.walletAddress
         );
-        console.log(`⛽ ETH balance: ${ethBalance} ETH`);
+        console.log(`ETH balance: ${ethBalance} ETH`);
       }
     } catch (error) {
-      console.warn('⚠️ Failed to get ETH balance:', error);
-      // Continue without ETH balance
+      console.warn('Failed to get ETH balance:', error);
     }
 
     let message = formatBalanceMessage({
@@ -71,19 +56,17 @@ export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
       phoneNumber,
     });
 
-    // Add warning if ETH balance is critically low (below refuel threshold)
-    // Contract refuels when balance drops below 0.00001 ETH
     if (ethBalance && parseFloat(ethBalance) < 0.00001) {
-      message += `\n\n⚠️ Low transfer balance!\nDon't worry - we top you up daily automatically. Your transfers will keep working!`;
+      message += `\n\nLow transfer balance detected. We top you up daily automatically, so transfers will continue working.`;
     }
 
     await sendTextMessage(phoneNumber, message);
 
-    console.log(`✅ Balance sent to +${phoneNumber}: ${balance} PYUSD`);
+    console.log(`Balance sent to +${phoneNumber}: ${balance} PYUSD`);
   } catch (error) {
-    console.error(`❌ Failed to get balance for +${phoneNumber}:`, error);
+    console.error(`Failed to get balance for +${phoneNumber}:`, error);
 
     const errorMessage = toUserErrorMessage(error);
-    await sendTextMessage(phoneNumber, `❌ ${errorMessage}`);
+    await sendTextMessage(phoneNumber, `Error: ${errorMessage}`);
   }
 }

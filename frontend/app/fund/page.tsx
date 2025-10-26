@@ -348,8 +348,7 @@ export default function FundPage() {
       );
 
       const result = await bridgeEthToArbitrum(nexusSdk, {
-        fromChainId: 1, // SDK will auto-optimize source chain
-        toChainId: 42161, // Arbitrum
+        toChainId: 42161, // Arbitrum - SDK auto-detects source chain with funds
         token: 'ETH',
         amount: selectedRefuel.amount,
         toAddress: recipientAddress,
@@ -1184,10 +1183,10 @@ export default function FundPage() {
                                 const bridgeResult = await bridgeEthToArbitrum(
                                   nexusSdk,
                                   {
-                                    fromChainId: 1, // Will auto-detect best source
                                     toChainId: 42161,
                                     token: 'ETH',
                                     amount: bridgeAmount,
+                                    toAddress: address, // Bridge to own address - SDK auto-detects source
                                   }
                                 );
 

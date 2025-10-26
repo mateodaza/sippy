@@ -64,12 +64,12 @@ class FreeRateLimiter {
 
     // Hard stop at limits
     if (this.minuteCount >= this.MINUTE_LIMIT) {
-      console.log('⚠️  LLM minute limit reached, using fallback');
+      console.log('LLM minute limit reached, using fallback');
       return false;
     }
 
     if (this.dailyCount >= this.DAILY_LIMIT) {
-      console.log('⚠️  LLM daily limit reached, using fallback');
+      console.log('LLM daily limit reached, using fallback');
       return false;
     }
 
@@ -94,7 +94,7 @@ class FreeRateLimiter {
     if (now - this.dayStart >= 86400000) {
       this.dailyCount = 0;
       this.dayStart = now;
-      console.log('📊 Daily LLM usage reset');
+      console.log('Daily LLM usage reset');
     }
   }
 
@@ -128,7 +128,7 @@ function getGroqClient(): Groq | null {
     try {
       groqClient = new Groq({ apiKey });
     } catch (error) {
-      console.error('❌ Failed to initialize Groq client:', error);
+      console.error('Failed to initialize Groq client:', error);
       return null;
     }
   }
@@ -316,9 +316,9 @@ export async function parseMessageWithLLM(
     };
   } catch (error) {
     if (error instanceof Error && error.message === 'Timeout') {
-      console.warn('⚠️  LLM timeout, using fallback');
+      console.warn('LLM timeout, using fallback');
     } else {
-      console.error('❌ LLM parsing error:', error);
+      console.error('LLM parsing error:', error);
     }
     return null;
   }
@@ -344,7 +344,7 @@ function validateLLMResult(result: any): boolean {
   const normalizedCommand = result.command.toLowerCase().trim();
 
   if (!validCommands.includes(normalizedCommand)) {
-    console.warn(`⚠️  LLM returned invalid command: "${result.command}"`);
+    console.warn(`LLM returned invalid command: "${result.command}"`);
     return false;
   }
 
@@ -369,7 +369,7 @@ function validateLLMResult(result: any): boolean {
       } else {
         // Unknown language value - default to ambiguous
         console.warn(
-          `⚠️  LLM returned invalid detectedLanguage: "${result.detectedLanguage}", defaulting to "ambiguous"`
+          `LLM returned invalid detectedLanguage: "${result.detectedLanguage}", defaulting to "ambiguous"`
         );
         result.detectedLanguage = 'ambiguous';
       }

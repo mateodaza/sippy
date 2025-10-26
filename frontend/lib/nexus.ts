@@ -1,7 +1,7 @@
 import { NexusSDK } from '@avail-project/nexus-core';
 
 export interface BridgeParams {
-  fromChainId: number;
+  fromChainId?: number; // Optional - will auto-detect from connected wallet if not provided
   toChainId: number;
   token: string;
   amount: string;
@@ -61,17 +61,17 @@ export async function bridgeEthToArbitrum(
   try {
     console.log('Starting transfer transaction:', params);
 
-    // If toAddress is provided, use transfer() which bridges + sends to recipient
-    // If not provided, use bridge() which only bridges to your own address
+    // If toAddress is provided, use transfer() which auto-detects source chain and bridges if needed
+    // If not provided, use bridge() which requires explicit source chain
     const result = params.toAddress
       ? await sdk.transfer({
           token: params.token as any,
           amount: params.amount,
-          chainId: params.toChainId as any, // Use destination chain
+          chainId: params.toChainId as any, // Destination chain - SDK auto-finds funds
           recipient: params.toAddress as `0x${string}`,
         })
       : await sdk.bridge({
-          chainId: params.toChainId as any, // FIXED: Use destination chain, not source
+          chainId: params.fromChainId as any, // Source chain - must be provided for bridge()
           token: params.token as any,
           amount: params.amount,
         });
@@ -105,7 +105,7 @@ export async function simulateBridge(
 ): Promise<any> {
   try {
     const simulation = await sdk.simulateBridge({
-      chainId: params.fromChainId as any,
+      chainId: params.fromChainId as any, // Source chain for simulation
       token: params.token as any,
       amount: params.amount,
     });
