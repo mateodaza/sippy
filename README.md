@@ -20,7 +20,7 @@ Just send a WhatsApp message: `send 5 to +573001234567`
 
 ### 1. **WhatsApp Bot Integration**
 
-- Commands: `/start`, `/balance`, `/send [amount] to [phone]`
+- Commands: `start`, `balance`, `send [amount] to [phone]`
 - Natural language processing for payments
 - Real-time transaction notifications
 
@@ -40,7 +40,7 @@ Just send a WhatsApp message: `send 5 to +573001234567`
 
 - Daily spending limits per user
 - Activity tracking
-- Persistent storage in `wallets.json`
+- Persistent storage backed by PostgreSQL (`phone_registry` table)
 
 ---
 
@@ -229,7 +229,7 @@ pnpm dev  # runs on http://localhost:3000
 ### Create Wallet
 
 ```
-User: /start
+User: start
 Bot:  Welcome! Your wallet is ready.
       Address: 0x5Aa5...bcde4
       Balance: 0 PYUSD
@@ -238,7 +238,7 @@ Bot:  Welcome! Your wallet is ready.
 ### Check Balance
 
 ```
-User: /balance
+User: balance
 Bot:  Balance: 10.5 PYUSD
       Address: 0x5Aa5...bcde4
 ```
@@ -271,7 +271,7 @@ Bot:  ✅ Sent 5 PYUSD to +573001234567
 
 ### Data Storage
 
-- `wallets.json`: Phone → wallet address mapping (no private keys!)
+- PostgreSQL `phone_registry` table: phone → wallet address mapping (no private keys!)
 - CDP handles all key material securely
 - Local storage for metadata only
 
