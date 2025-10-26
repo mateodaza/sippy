@@ -341,6 +341,9 @@ export default function FundPage() {
         txCount: selectedRefuel.txCount,
       });
 
+      // NOTE: Do NOT switch to Arbitrum - let SDK handle chain routing
+      // The SDK will detect which chain has funds and initiate from there
+
       // Give user context before signature request
       await new Promise((resolve) => setTimeout(resolve, 800));
       setCurrentStep(
