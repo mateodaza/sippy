@@ -374,7 +374,7 @@ export default function FundPage() {
         // Send WhatsApp notification to recipient
         if (result.transactionHash) {
           try {
-            await fetch('/api/notify-fund', {
+            const notifyResponse = await fetch('/api/notify-fund', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -384,8 +384,17 @@ export default function FundPage() {
                 txHash: result.transactionHash,
               }),
             });
+
+            if (!notifyResponse.ok) {
+              const errorData = await notifyResponse.json();
+              console.error('Failed to send notification:', errorData);
+              alert(`Warning: Transaction succeeded but notification failed: ${errorData.message || errorData.error}`);
+            } else {
+              console.log('Notification sent successfully');
+            }
           } catch (notifError) {
             console.error('Failed to send notification:', notifError);
+            alert('Warning: Transaction succeeded but notification failed. Check console for details.');
             // Don't fail the whole transaction if notification fails
           }
         }
@@ -1307,7 +1316,7 @@ export default function FundPage() {
                                       ).toFixed(2)
                                     : pyusdAmount;
 
-                                  await fetch('/api/notify-fund', {
+                                  const notifyResponse = await fetch('/api/notify-fund', {
                                     method: 'POST',
                                     headers: {
                                       'Content-Type': 'application/json',
@@ -1319,11 +1328,20 @@ export default function FundPage() {
                                       txHash: swapResult.txHash,
                                     }),
                                   });
+
+                                  if (!notifyResponse.ok) {
+                                    const errorData = await notifyResponse.json();
+                                    console.error('Failed to send notification:', errorData);
+                                    alert(`Warning: Transaction succeeded but notification failed: ${errorData.message || errorData.error}`);
+                                  } else {
+                                    console.log('Notification sent successfully');
+                                  }
                                 } catch (notifError) {
                                   console.error(
                                     'Failed to send notification:',
                                     notifError
                                   );
+                                  alert('Warning: Transaction succeeded but notification failed. Check console for details.');
                                   // Don't fail the whole transaction if notification fails
                                 }
                               }
