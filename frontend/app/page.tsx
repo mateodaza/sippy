@@ -202,9 +202,9 @@ export default function HomePage() {
         </div>
         <div className='relative max-w-4xl mx-auto px-6 text-center'>
           <p className='text-2xl md:text-3xl font-bold text-gray-900 leading-[1.4] tracking-[-0.01em]'>
-            Everyone in LatAm uses WhatsApp. <br />
+            90% of Latin America uses WhatsApp daily. <br />
             <span className='text-[#059669]'>
-              Almost no one uses crypto wallets.
+              Only 12% own crypto.
             </span>
           </p>
         </div>
@@ -248,9 +248,9 @@ export default function HomePage() {
               <p className='text-[15px] text-gray-600 leading-[1.8] mb-4'>
                 Colombia's central bank just launched{' '}
                 <span className='font-semibold text-gray-900'>Bre-B</span>, an
-                instant payment system with 220+ banks enabling transfers using
-                phone numbers and QR codes—inspired by Brazil's Pix and India's
-                UPI.
+                instant payment system with 220+ financial institutions enabling
+                transfers using phone numbers and QR codes—inspired by Brazil's
+                Pix and India's UPI.
               </p>
               <div className='space-y-2.5'>
                 <div className='flex items-start gap-2'>
