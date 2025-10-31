@@ -90,47 +90,58 @@ async function getQuote(
 
   const quoter = new ethers.Contract(QUOTER_ADDRESS, quoterAbi, provider);
 
-  // Encode path: WETH (0.05%) USDC (1%) PYUSD
-  const FEE_LOW = 500;
-  const FEE_HIGH = 10000;
+  // Try multiple fee tier combinations
+  const pathsToTry = [
+    { fees: [500, 500], name: 'WETH (0.05%) USDC (0.05%) PYUSD' },
+    { fees: [500, 3000], name: 'WETH (0.05%) USDC (0.3%) PYUSD' },
+    { fees: [3000, 500], name: 'WETH (0.3%) USDC (0.05%) PYUSD' },
+    { fees: [500, 10000], name: 'WETH (0.05%) USDC (1%) PYUSD' },
+  ];
 
-  const path = ethers.utils.solidityPack(
-    ['address', 'uint24', 'address', 'uint24', 'address'],
-    [WETH_ADDRESS, FEE_LOW, USDC_ADDRESS, FEE_HIGH, PYUSD_ADDRESS]
-  );
+  let lastError: any;
 
-  try {
-    // Note: quoteExactInput is a state-changing call that reverts with the result
-    // We need to use callStatic to get the result without sending a transaction
-    const result = await quoter.callStatic.quoteExactInput(path, amountInWei);
+  for (const { fees, name } of pathsToTry) {
+    const path = ethers.utils.solidityPack(
+      ['address', 'uint24', 'address', 'uint24', 'address'],
+      [WETH_ADDRESS, fees[0], USDC_ADDRESS, fees[1], PYUSD_ADDRESS]
+    );
 
-    console.log('📊 Quote result:', {
-      amountOut: ethers.utils.formatUnits(result.amountOut, 6), // PYUSD has 6 decimals
-      gasEstimate: result.gasEstimate?.toString(),
-    });
+    try {
+      const result = await quoter.callStatic.quoteExactInput(path, amountInWei);
 
-    return {
-      amountOut: result.amountOut,
-      path,
-    };
-  } catch (error: any) {
-    console.error('❌ Failed to get quote:', error);
+      console.log(`✅ Quote successful with ${name}:`, {
+        amountOut: ethers.utils.formatUnits(result.amountOut, 6),
+        gasEstimate: result.gasEstimate?.toString(),
+      });
 
-    // Check if it's a liquidity/pool issue
-    if (
-      error.message?.includes('INSUFFICIENT_LIQUIDITY') ||
-      error.message?.includes('cannot estimate') ||
-      error.code === 'UNPREDICTABLE_GAS_LIMIT'
-    ) {
-      throw new Error(
-        'Insufficient liquidity for WETH→USDC→PYUSD swap on Uniswap. ' +
-          'The PYUSD pools on Arbitrum may not have enough liquidity for this trade. ' +
-          'Try a smaller amount or check pool status at app.uniswap.org'
-      );
+      return {
+        amountOut: result.amountOut,
+        path,
+      };
+    } catch (error: any) {
+      console.log(`⚠️ Failed with ${name}, trying next...`);
+      lastError = error;
+      continue;
     }
-
-    throw new Error('Failed to get swap quote: ' + error.message);
   }
+
+  // All paths failed
+  console.error('❌ All paths failed, last error:', lastError);
+
+  // Check if it's a liquidity/pool issue
+  if (
+    lastError.message?.includes('INSUFFICIENT_LIQUIDITY') ||
+    lastError.message?.includes('cannot estimate') ||
+    lastError.code === 'UNPREDICTABLE_GAS_LIMIT'
+  ) {
+    throw new Error(
+      'Insufficient liquidity for WETH→USDC→PYUSD swap on Uniswap. ' +
+        'The PYUSD pools on Arbitrum may not have enough liquidity for this trade. ' +
+        'Try a smaller amount or check pool status at app.uniswap.org'
+    );
+  }
+
+  throw new Error('Failed to get swap quote: ' + lastError.message);
 }
 
 /**
