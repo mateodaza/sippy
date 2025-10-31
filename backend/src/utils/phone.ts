@@ -24,12 +24,26 @@ function extractDigitsFromDoubleZero(source?: string): string | null {
   return digits.length > 0 ? digits : null;
 }
 
+/**
+ * Privacy map: Convert names to phone numbers (case-insensitive)
+ */
+const NAME_TO_PHONE_MAP: Record<string, string> = {
+  'mateo': '573116613414',
+  'helena': '573233213692',
+};
+
 export function normalizePhoneNumber(
   rawPhone: string,
   originalText?: string
 ): string | null {
   if (!rawPhone) {
     return null;
+  }
+
+  // Check if rawPhone is a recognized name (case-insensitive)
+  const normalizedName = rawPhone.trim().toLowerCase();
+  if (NAME_TO_PHONE_MAP[normalizedName]) {
+    return NAME_TO_PHONE_MAP[normalizedName];
   }
 
   const digitsOnly = rawPhone.replace(/\D/g, '');

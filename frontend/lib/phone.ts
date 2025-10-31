@@ -298,3 +298,56 @@ export function getCountryName(iso2: string): string {
 
   return countryNames[iso2.toLowerCase()] || iso2.toUpperCase();
 }
+
+/**
+ * Privacy map for demo phone numbers
+ * Maps specific phone numbers to display names
+ */
+const PRIVACY_MAP: Record<string, string> = {
+  '573116613414': 'Mateo',
+  '+573116613414': 'Mateo',
+  '573233213692': 'Helena',
+  '+573233213692': 'Helena',
+};
+
+/**
+ * Get display name for phone number (privacy-aware)
+ * Returns the privacy name if it's a known number, otherwise returns formatted phone
+ */
+export function getPhoneDisplayName(phoneNumber: string): string {
+  // Normalize phone number (remove spaces, dashes, etc.)
+  const normalized = phoneNumber.replace(/[\s\-()]/g, '');
+
+  // Check privacy map (case-insensitive for values)
+  const privacyName = PRIVACY_MAP[normalized];
+  if (privacyName) {
+    return privacyName;
+  }
+
+  // Otherwise return formatted phone
+  return formatPhoneShort(phoneNumber);
+}
+
+/**
+ * Check if a phone number should be anonymized
+ */
+export function isPrivateNumber(phoneNumber: string): boolean {
+  const normalized = phoneNumber.replace(/[\s\-()]/g, '');
+  return normalized in PRIVACY_MAP;
+}
+
+/**
+ * Convert name to phone number (reverse lookup)
+ * Usage: Type "Mateo" or "mateo" in the input → converts to +573116613414
+ */
+export function nameToPhone(input: string): string {
+  const normalized = input.trim().toLowerCase();
+
+  // Reverse map: name → phone number
+  const nameToPhoneMap: Record<string, string> = {
+    'mateo': '+573116613414',
+    'helena': '+573233213692',
+  };
+
+  return nameToPhoneMap[normalized] || input;
+}

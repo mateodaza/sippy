@@ -11,6 +11,7 @@ import BetaAccessBanner from '@/components/BetaAccessBanner';
 import { PhoneInput } from 'react-international-phone';
 import 'react-international-phone/style.css';
 import { useNexus } from '../providers/NexusProvider';
+import { nameToPhone } from '@/lib/phone';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -25,6 +26,10 @@ import { useTransactionPopup } from '@blockscout/app-sdk';
 const phoneSchema = z
   .string()
   .regex(/^\+?\d{10,15}$/, 'Invalid phone number format');
+
+// DEMO MODE: Set to true to pre-fill with demo data
+const DEMO_MODE = true;
+const DEMO_PHONE_NUMBER = '+573116613414'; // Mateo
 
 // Constants for refuel amounts (based on ERC20 transfer costs ~0.00000065 ETH/tx with buffer)
 const REFUEL_AMOUNTS = [
@@ -76,16 +81,21 @@ export default function FundPage() {
   const { openPopup } = useTransactionPopup();
 
   const [phoneNumber, setPhoneNumber] = useState(() => {
-    // Load last used phone number from localStorage
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('lastPhoneNumber') || '';
+    // DEMO MODE: Show a random placeholder number (actual sends go to Mateo behind the scenes)
+    if (DEMO_MODE) {
+      return '+573111234567';
     }
+
+    // Load last used phone number from localStorage
+    // if (typeof window !== 'undefined') {
+    //   return localStorage.getItem('lastPhoneNumber') || '';
+    // }
     return '';
   });
   const [hasLoadedPhone, setHasLoadedPhone] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return !!localStorage.getItem('lastPhoneNumber');
-    }
+    // if (typeof window !== 'undefined') {
+    //   return !!localStorage.getItem('lastPhoneNumber');
+    // }
     return false;
   });
   const [selectedRefuel, setSelectedRefuel] = useState(REFUEL_AMOUNTS[0]); // Default: ~150 transfers
@@ -139,9 +149,9 @@ export default function FundPage() {
 
   // Save phone number to localStorage whenever it changes
   useEffect(() => {
-    if (phoneNumber && typeof window !== 'undefined') {
-      localStorage.setItem('lastPhoneNumber', phoneNumber);
-    }
+    // if (phoneNumber && typeof window !== 'undefined') {
+    //   localStorage.setItem('lastPhoneNumber', phoneNumber);
+    // }
   }, [phoneNumber]);
 
   // Helper: Check ETH balance on Arbitrum
@@ -315,8 +325,13 @@ export default function FundPage() {
     setShowProgress(false);
 
     try {
+      // DEMO MODE: Always use demo phone number, regardless of input
+      const actualPhone = DEMO_MODE
+        ? DEMO_PHONE_NUMBER
+        : nameToPhone(phoneNumber);
+
       // Validate phone number
-      const validatedPhone = phoneSchema.parse(phoneNumber);
+      const validatedPhone = phoneSchema.parse(actualPhone);
 
       // Check if we have enough balance
       const amountNum = parseFloat(selectedRefuel.amount);
@@ -346,8 +361,9 @@ export default function FundPage() {
 
       // Give user context before signature request
       await new Promise((resolve) => setTimeout(resolve, 800));
+      const displayName = DEMO_MODE ? 'Mateo' : phoneNumber;
       setCurrentStep(
-        `✍️ Please sign to send ${selectedRefuel.amount} ETH to ${phoneNumber} on Arbitrum`
+        `✍️ Please sign to send ${selectedRefuel.amount} ETH to ${displayName} on Arbitrum`
       );
 
       const result = await bridgeEthToArbitrum(nexusSdk, {
@@ -361,8 +377,9 @@ export default function FundPage() {
         setCurrentStep('');
         setShowProgress(false);
         setProgressSteps([]);
+        const displayName = DEMO_MODE ? 'Mateo' : phoneNumber;
         setSuccess(
-          `✅ Successfully funded ${phoneNumber} with gas for ~${
+          `✅ Successfully funded ${displayName} with gas for ~${
             selectedRefuel.txCount
           } transfers!${
             result.transactionHash
@@ -378,7 +395,7 @@ export default function FundPage() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                phone: phoneNumber,
+                phone: validatedPhone,
                 type: 'eth',
                 amount: selectedRefuel.amount,
                 txHash: result.transactionHash,
@@ -388,18 +405,27 @@ export default function FundPage() {
             if (!notifyResponse.ok) {
               const errorData = await notifyResponse.json();
               console.error('Failed to send notification:', errorData);
-              alert(`Warning: Transaction succeeded but notification failed: ${errorData.message || errorData.error}`);
+              alert(
+                `Warning: Transaction succeeded but notification failed: ${
+                  errorData.message || errorData.error
+                }`
+              );
             } else {
               console.log('Notification sent successfully');
             }
           } catch (notifError) {
             console.error('Failed to send notification:', notifError);
-            alert('Warning: Transaction succeeded but notification failed. Check console for details.');
+            alert(
+              'Warning: Transaction succeeded but notification failed. Check console for details.'
+            );
             // Don't fail the whole transaction if notification fails
           }
         }
 
-        setPhoneNumber('');
+        // Only clear phone number in normal mode (not demo mode)
+        if (!DEMO_MODE) {
+          setPhoneNumber('');
+        }
 
         // Refresh balances
         setTimeout(async () => {
@@ -708,7 +734,7 @@ export default function FundPage() {
                           setPhoneNumber(phone);
                           setHasLoadedPhone(false);
                         }}
-                        disabled={isLoading}
+                        disabled={isLoading || DEMO_MODE}
                         inputClassName='phone-input-field'
                         countrySelectorStyleProps={{
                           buttonClassName: 'phone-country-button',
@@ -719,14 +745,19 @@ export default function FundPage() {
                             'w-full pl-14 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-[#059669] focus:border-[#059669] text-lg transition-all',
                         }}
                       />
-                      {hasLoadedPhone && phoneNumber ? (
+                      {DEMO_MODE ? (
+                        <p className='mt-2 text-xs text-blue-600 flex items-center font-medium'>
+                          <CheckCircle2 className='w-3.5 h-3.5 mr-1.5' />
+                          Demo mode - Sending to Mateo
+                        </p>
+                      ) : hasLoadedPhone && phoneNumber ? (
                         <p className='mt-2 text-xs text-[#059669] flex items-center font-medium'>
                           <CheckCircle2 className='w-3.5 h-3.5 mr-1.5' />
                           Loaded last used number
                         </p>
                       ) : (
                         <p className='mt-2 text-xs text-gray-500'>
-                          Select country code and enter phone number
+                          Enter phone number or type "mateo" / "helena"
                         </p>
                       )}
                     </div>
@@ -1099,9 +1130,14 @@ export default function FundPage() {
                               setShowProgress(true);
                               setCurrentStep('');
 
+                              // DEMO MODE: Always use demo phone number, regardless of input
+                              const actualPhone = DEMO_MODE
+                                ? DEMO_PHONE_NUMBER
+                                : nameToPhone(phoneNumber);
+
                               // Validate phone number
                               const validatedPhone =
-                                phoneSchema.parse(phoneNumber);
+                                phoneSchema.parse(actualPhone);
 
                               // Resolve recipient
                               const recipientAddr = await resolvePhone(
@@ -1294,9 +1330,12 @@ export default function FundPage() {
                                 )
                               );
 
+                              const displayName = DEMO_MODE
+                                ? 'Mateo'
+                                : phoneNumber;
                               const successMsg = skippedBridge
-                                ? `✅ Swapped ${swapAmount} ETH → PYUSD and sent to ${phoneNumber}!`
-                                : `🎉 Bridged to Arbitrum, swapped ${swapAmount} ETH → PYUSD, and sent to ${phoneNumber}!`;
+                                ? `✅ Swapped ${swapAmount} ETH → PYUSD and sent to ${displayName}!`
+                                : `🎉 Bridged to Arbitrum, swapped ${swapAmount} ETH → PYUSD, and sent to ${displayName}!`;
 
                               setSuccess(
                                 `${successMsg}\n\nTx: ${swapResult.txHash?.slice(
@@ -1316,32 +1355,47 @@ export default function FundPage() {
                                       ).toFixed(2)
                                     : pyusdAmount;
 
-                                  const notifyResponse = await fetch('/api/notify-fund', {
-                                    method: 'POST',
-                                    headers: {
-                                      'Content-Type': 'application/json',
-                                    },
-                                    body: JSON.stringify({
-                                      phone: phoneNumber,
-                                      type: 'pyusd',
-                                      amount: pyusdValue,
-                                      txHash: swapResult.txHash,
-                                    }),
-                                  });
+                                  const notifyResponse = await fetch(
+                                    '/api/notify-fund',
+                                    {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                      },
+                                      body: JSON.stringify({
+                                        phone: validatedPhone,
+                                        type: 'pyusd',
+                                        amount: pyusdValue,
+                                        txHash: swapResult.txHash,
+                                      }),
+                                    }
+                                  );
 
                                   if (!notifyResponse.ok) {
-                                    const errorData = await notifyResponse.json();
-                                    console.error('Failed to send notification:', errorData);
-                                    alert(`Warning: Transaction succeeded but notification failed: ${errorData.message || errorData.error}`);
+                                    const errorData =
+                                      await notifyResponse.json();
+                                    console.error(
+                                      'Failed to send notification:',
+                                      errorData
+                                    );
+                                    alert(
+                                      `Warning: Transaction succeeded but notification failed: ${
+                                        errorData.message || errorData.error
+                                      }`
+                                    );
                                   } else {
-                                    console.log('Notification sent successfully');
+                                    console.log(
+                                      'Notification sent successfully'
+                                    );
                                   }
                                 } catch (notifError) {
                                   console.error(
                                     'Failed to send notification:',
                                     notifError
                                   );
-                                  alert('Warning: Transaction succeeded but notification failed. Check console for details.');
+                                  alert(
+                                    'Warning: Transaction succeeded but notification failed. Check console for details.'
+                                  );
                                   // Don't fail the whole transaction if notification fails
                                 }
                               }
@@ -1631,9 +1685,12 @@ export default function FundPage() {
               Confirm Transfer
             </h3>
             <p className='text-sm text-gray-600 mb-6 text-center leading-relaxed'>
-              {transferMode === 'gas'
-                ? `Transfer ${selectedRefuel.amount} ETH to ${phoneNumber} on Arbitrum`
-                : `Convert ${pyusdAmount} ETH to PYUSD and send to ${phoneNumber}`}
+              {(() => {
+                const displayName = DEMO_MODE ? 'Mateo' : phoneNumber;
+                return transferMode === 'gas'
+                  ? `Transfer ${selectedRefuel.amount} ETH to ${displayName} on Arbitrum`
+                  : `Convert ${pyusdAmount} ETH to PYUSD and send to ${displayName}`;
+              })()}
             </p>
             <div className='space-y-2 mb-6 p-4 bg-gray-50 rounded-xl'>
               <div className='flex justify-between text-sm'>
