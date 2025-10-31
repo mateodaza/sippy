@@ -56,8 +56,8 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
   }
 
   // SEND command: "send 10 to +573001234567" or "send $10 to 3001234567"
-  // Phone must be at least 10 digits
-  const sendPattern = /^send\s+\$?(\d+(?:\.\d+)?)\s+to\s+\+?(\d{10,})$/i;
+  // Also supports names: "send 10 to helena"
+  const sendPattern = /^send\s+\$?(\d+(?:\.\d+)?)\s+to\s+(.+)$/i;
   const sendMatch = text.trim().match(sendPattern);
 
   if (sendMatch) {
@@ -71,16 +71,33 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
       };
     }
 
-    // Parse and normalize phone number
-    const rawPhone = sendMatch[2];
-    const normalizedCandidate = normalizePhoneNumber(rawPhone, text);
-    const normalizedPhone =
-      normalizedCandidate !== null ? normalizedCandidate : rawPhone;
+    // Parse recipient - can be phone number or name
+    const rawRecipient = sendMatch[2].trim();
+
+    // Normalize recipient (handles both names like "Helena" and phone numbers)
+    const normalizedRecipient = normalizePhoneNumber(rawRecipient, text);
+
+    if (!normalizedRecipient) {
+      // If normalization failed, check if it has at least 10 digits
+      const digitsOnly = rawRecipient.replace(/\D/g, '');
+      if (digitsOnly.length < 10) {
+        return {
+          command: 'unknown',
+          originalText: text,
+        };
+      }
+      // Use digits as fallback
+      return {
+        command: 'send',
+        amount,
+        recipient: digitsOnly,
+      };
+    }
 
     return {
       command: 'send',
       amount,
-      recipient: normalizedPhone,
+      recipient: normalizedRecipient,
     };
   }
 
@@ -215,8 +232,8 @@ export function getHelpText(): string {
     `🤖 Sippy Bot Commands\n\n` +
     `🚀 start - Create your wallet\n` +
     `💰 balance - Check your PYUSD balance\n` +
-    `💸 send <amount> to <phone> - Send PYUSD\n` +
-    `   Example: send 5 to +573001234567\n` +
+    `💸 send <amount> to <contact>\n` +
+    `   Example: send 5 to Mom\n` +
     `   Or: send $10 to +573001234567\n` +
     `📊 history - View your transactions\n` +
     `ℹ️  about - What is Sippy?\n` +

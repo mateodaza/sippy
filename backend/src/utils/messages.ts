@@ -9,6 +9,30 @@ const RECEIPT_BASE_URL =
 const FUND_URL = process.env.FUND_URL || 'https://www.sippy.lat/fund';
 
 /**
+ * Privacy map: Convert phone numbers back to display names (for demo)
+ */
+const PHONE_TO_NAME_MAP: Record<string, string> = {
+  '573116613414': 'Mateo',
+  '573233213692': 'Helena',
+};
+
+/**
+ * Get display name for phone number (privacy-preserving for demo)
+ * Falls back to masked phone if not in privacy map
+ */
+function getDisplayName(phoneNumber: string): string {
+  // Check if this phone should be displayed as a name
+  if (PHONE_TO_NAME_MAP[phoneNumber]) {
+    return PHONE_TO_NAME_MAP[phoneNumber];
+  }
+  // Otherwise mask the phone number (show last 4 digits only)
+  if (phoneNumber.length > 4) {
+    return `***${phoneNumber.slice(-4)}`;
+  }
+  return phoneNumber;
+}
+
+/**
  * Format currency in USD
  */
 export function formatCurrencyUSD(amount: number): string {
@@ -75,9 +99,7 @@ export function formatBalanceMessage(params: {
     `Wallet: ${maskAddress(params.wallet)}\n\n` +
     `Add funds: ${FUND_URL}`;
 
-  if (params.phoneNumber) {
-    message += `\n📊 View activity: https://www.sippy.lat/profile/+${params.phoneNumber}`;
-  }
+  // Note: Removed profile link to protect privacy during demo
 
   return message;
 }
@@ -90,8 +112,8 @@ export function formatSendProcessingMessage(params: {
   toPhone: string;
 }): string {
   return (
-    `⏳ Sending ${formatCurrencyUSD(params.amount)} PYUSD to +${
-      params.toPhone
+    `⏳ Sending ${formatCurrencyUSD(params.amount)} PYUSD to ${
+      getDisplayName(params.toPhone)
     }...\n\n` + `Usually instant, may take up to 30 seconds.`
   );
 }
@@ -109,7 +131,7 @@ export function formatSendSuccessMessage(params: {
   let message =
     `✅ Sent\n\n` +
     `• Amount: ${formatCurrencyUSD(params.amount)} PYUSD\n` +
-    `• To: +${params.toPhone}\n` +
+    `• To: ${getDisplayName(params.toPhone)}\n` +
     `• Tx: ${shortHash(params.txHash)}\n`;
 
   if (params.gasCovered && process.env.DEMO_SHOW_REFUEL === 'true') {
@@ -132,8 +154,8 @@ export function formatSendRecipientMessage(params: {
   const receiptUrl = RECEIPT_BASE_URL + params.txHash;
   return (
     `💰 Money received!\n\n` +
-    `You received ${formatCurrencyUSD(params.amount)} PYUSD from +${
-      params.fromPhone
+    `You received ${formatCurrencyUSD(params.amount)} PYUSD from ${
+      getDisplayName(params.fromPhone)
     }.\n\n` +
     `📄 Receipt: ${receiptUrl}`
   );

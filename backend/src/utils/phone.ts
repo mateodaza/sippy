@@ -114,8 +114,14 @@ export function verifySendAgreement(
     return { match: false, mismatchReason: 'recipient' };
   }
 
+  // First, try to normalize the recipient (handles name aliases like "Helena")
+  const normalizedRecipient = normalizePhoneNumber(llmResult.recipient, originalText);
+
+  // If normalization failed, validate as raw recipient
+  const recipientToValidate = normalizedRecipient || llmResult.recipient;
+
   // Remove formatting to get clean digits (accept with or without +)
-  const cleanRecipient = llmResult.recipient.replace(/[\s\-().]/g, '');
+  const cleanRecipient = recipientToValidate.replace(/[\s\-().]/g, '');
 
   // Accept either: +NNNNNNNNNN (with +) or NNNNNNNNNN (bare digits)
   const withPlusPattern = /^\+\d{10,}$/;
