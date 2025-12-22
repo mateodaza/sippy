@@ -68,8 +68,8 @@ export default function PrivacyPolicyPage() {
                 </h2>
                 <p className='text-gray-600 leading-relaxed mb-4'>
                   Welcome to Sippy ("we," "our," or "us"). Sippy is a WhatsApp-based
-                  payment service that allows users to send and receive PYUSD
-                  (PayPal USD stablecoin) using phone numbers. This Privacy Policy
+                  payment service that allows users to send and receive digital
+                  dollars using phone numbers. This Privacy Policy
                   explains how we collect, use, disclose, and protect your
                   information when you use our service.
                 </p>
@@ -142,13 +142,13 @@ export default function PrivacyPolicyPage() {
                 </h3>
                 <ul className='list-disc pl-6 text-gray-600 space-y-2'>
                   <li>
-                    <strong>Wallet Address:</strong> A blockchain wallet address
+                    <strong>Account Address:</strong> A unique payment address
                     automatically generated and associated with your phone number.
                   </li>
                   <li>
-                    <strong>Transaction History:</strong> Records of PYUSD
-                    transfers you make or receive, stored on the public Arbitrum
-                    blockchain.
+                    <strong>Transaction History:</strong> Records of dollar
+                    transfers you make or receive, stored on our secure payment
+                    network.
                   </li>
                   <li>
                     <strong>Account Activity:</strong> Timestamps of your last
@@ -284,7 +284,7 @@ export default function PrivacyPolicyPage() {
                   </li>
                   <li>
                     <strong>Coinbase (CDP - Coinbase Developer Platform):</strong>{' '}
-                    To securely create and manage blockchain wallets. Private keys
+                    To securely create and manage payment accounts. Security keys
                     are stored in Coinbase's secure infrastructure.{' '}
                     <a
                       href='https://www.coinbase.com/legal/privacy'
@@ -296,13 +296,13 @@ export default function PrivacyPolicyPage() {
                     </a>
                   </li>
                   <li>
-                    <strong>Arbitrum Network:</strong> To process PYUSD
-                    transactions on the blockchain. Transaction data is publicly
+                    <strong>Arbitrum Network:</strong> To process dollar
+                    transactions on our payment network. Transaction data is
                     visible on the Arbitrum network.
                   </li>
                   <li>
                     <strong>Blockscout:</strong> To retrieve transaction history
-                    and balance information from the blockchain.
+                    and balance information.
                   </li>
                   <li>
                     <strong>Groq (optional):</strong> When enabled, your message
@@ -351,8 +351,8 @@ export default function PrivacyPolicyPage() {
                     hosting provider according to their data retention policies.
                   </li>
                   <li>
-                    Transaction data is stored on the public Arbitrum blockchain,
-                    which is immutable and transparent.
+                    Transaction data is stored on the Arbitrum payment network,
+                    which provides a permanent and transparent record.
                   </li>
                 </ul>
               </section>
@@ -385,9 +385,9 @@ export default function PrivacyPolicyPage() {
                     provider per their policies.
                   </li>
                   <li>
-                    <strong>Blockchain transactions</strong>: Permanently stored on
-                    the Arbitrum blockchain. This data cannot be deleted due to
-                    the immutable nature of blockchain technology.
+                    <strong>Payment transactions</strong>: Permanently stored on
+                    the Arbitrum payment network. This data cannot be deleted due to
+                    the permanent nature of our transaction records.
                   </li>
                 </ul>
                 <h3 className='text-lg font-semibold text-gray-800 mt-6 mb-3'>
@@ -405,7 +405,7 @@ export default function PrivacyPolicyPage() {
                   with subject line "Data Deletion Request" and include the phone
                   number associated with your account. We will process your
                   request within 15 business days and confirm deletion via email.
-                  Note: On-chain transaction history cannot be deleted.
+                  Note: Historical transaction records cannot be deleted.
                 </p>
               </section>
 

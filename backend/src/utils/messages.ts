@@ -70,8 +70,8 @@ export function formatDateUTC(date: Date): string {
 export function formatHelpMessage(): string {
   return (
     `🤖 Sippy Bot Commands\n\n` +
-    `💰 balance - Check your PYUSD balance\n` +
-    `💸 send <amount> to <phone> - Send PYUSD\n` +
+    `💰 balance - Check your balance\n` +
+    `💸 send <amount> to <phone> - Send dollars\n` +
     `   Example: send 5 to +573001234567\n` +
     `   Or: send $10 to +573001234567\n\n` +
     `📞 help - Show this message\n\n` +
@@ -95,7 +95,7 @@ export function formatBalanceMessage(params: {
   }
 
   message +=
-    `PYUSD: ${formatCurrencyUSD(params.balance)}\n` +
+    `USD: ${formatCurrencyUSD(params.balance)}\n` +
     `Wallet: ${maskAddress(params.wallet)}\n\n` +
     `Add funds: ${FUND_URL}`;
 
@@ -112,7 +112,7 @@ export function formatSendProcessingMessage(params: {
   toPhone: string;
 }): string {
   return (
-    `⏳ Sending ${formatCurrencyUSD(params.amount)} PYUSD to ${
+    `⏳ Sending ${formatCurrencyUSD(params.amount)} to ${
       getDisplayName(params.toPhone)
     }...\n\n` + `Usually instant, may take up to 30 seconds.`
   );
@@ -130,7 +130,7 @@ export function formatSendSuccessMessage(params: {
   const receiptUrl = RECEIPT_BASE_URL + params.txHash;
   let message =
     `✅ Sent\n\n` +
-    `• Amount: ${formatCurrencyUSD(params.amount)} PYUSD\n` +
+    `• Amount: ${formatCurrencyUSD(params.amount)}\n` +
     `• To: ${getDisplayName(params.toPhone)}\n` +
     `• Tx: ${shortHash(params.txHash)}\n`;
 
@@ -154,7 +154,7 @@ export function formatSendRecipientMessage(params: {
   const receiptUrl = RECEIPT_BASE_URL + params.txHash;
   return (
     `💰 Money received!\n\n` +
-    `You received ${formatCurrencyUSD(params.amount)} PYUSD from ${
+    `You received ${formatCurrencyUSD(params.amount)} from ${
       getDisplayName(params.fromPhone)
     }.\n\n` +
     `📄 Receipt: ${receiptUrl}`
@@ -172,22 +172,22 @@ export function formatFundETHReceivedMessage(params: {
   return (
     `⛽ Gas received!\n\n` +
     `You received ${params.amount} ETH for transactions.\n` +
-    `You can keep making PYUSD transfers!\n\n` +
+    `You can keep making transfers!\n\n` +
     `📄 Receipt: ${receiptUrl}`
   );
 }
 
 /**
- * Fund flow - PYUSD received notification
+ * Fund flow - USD received notification
  */
-export function formatFundPYUSDReceivedMessage(params: {
+export function formatFundUSDReceivedMessage(params: {
   amount: string;
   txHash: string;
 }): string {
   const receiptUrl = RECEIPT_BASE_URL + params.txHash;
   return (
-    `💵 PYUSD received!\n\n` +
-    `You received $${params.amount} PYUSD.\n\n` +
+    `💵 USD received!\n\n` +
+    `You received $${params.amount}.\n\n` +
     `📄 Receipt: ${receiptUrl}`
   );
 }
@@ -201,8 +201,8 @@ export function formatInsufficientBalanceMessage(params: {
 }): string {
   return (
     `💸 Insufficient balance\n\n` +
-    `Balance: ${formatCurrencyUSD(params.balance)} PYUSD\n` +
-    `Needed: ${formatCurrencyUSD(params.needed)} PYUSD\n\n` +
+    `Balance: ${formatCurrencyUSD(params.balance)}\n` +
+    `Needed: ${formatCurrencyUSD(params.needed)}\n\n` +
     `Add funds: ${FUND_URL}`
   );
 }

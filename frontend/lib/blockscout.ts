@@ -10,13 +10,13 @@ const BLOCKSCOUT_BASE_URL =
   'https://arbitrum.blockscout.com/api/v2';
 const BLOCKSCOUT_API_KEY = process.env.NEXT_PUBLIC_BLOCKSCOUT_API_KEY || '';
 
-const PYUSD_ADDRESS = '0x46850aD61C2B7d64d08c9C754F45254596696984';
+const USDC_ADDRESS = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
 const CHAIN_ID = 42161; // Arbitrum One
 
 export interface NormalizedTransaction {
   hash: string;
   direction?: 'sent' | 'received'; // Optional when viewer context is unknown
-  token: 'ETH' | 'PYUSD';
+  token: 'ETH' | 'USDC';
   amount: string;
   timestamp: number;
   counterparty: string;
@@ -25,7 +25,7 @@ export interface NormalizedTransaction {
 
 export interface Balance {
   eth: string;
-  pyusd: string;
+  usdc: string;
 }
 
 interface BlockscoutTransaction {
@@ -162,15 +162,15 @@ export async function getErc20Balance(
 }
 
 /**
- * Get balances for ETH and PYUSD
+ * Get balances for ETH and USDC
  */
 export async function getBalances(address: string): Promise<Balance> {
-  const [eth, pyusd] = await Promise.all([
+  const [eth, usdc] = await Promise.all([
     getNativeBalance(address),
-    getErc20Balance(address, PYUSD_ADDRESS, 6),
+    getErc20Balance(address, USDC_ADDRESS, 6),
   ]);
 
-  return { eth, pyusd };
+  return { eth, usdc };
 }
 
 /**
@@ -262,7 +262,7 @@ export async function getErc20Transfers(
       transactions.push({
         hash: transfer.transaction_hash,
         direction: isSent ? 'sent' : 'received',
-        token: 'PYUSD',
+        token: 'USDC',
         amount,
         timestamp: new Date(transfer.timestamp).getTime(),
         counterparty,
@@ -278,18 +278,18 @@ export async function getErc20Transfers(
 }
 
 /**
- * Get combined activity (ETH + PYUSD transfers) sorted by timestamp
+ * Get combined activity (ETH + USDC transfers) sorted by timestamp
  */
 export async function getActivity(
   address: string,
   limit = 10
 ): Promise<NormalizedTransaction[]> {
-  const [ethTransfers, pyusdTransfers] = await Promise.all([
+  const [ethTransfers, usdcTransfers] = await Promise.all([
     getEthTransfers(address, limit),
-    getErc20Transfers(address, PYUSD_ADDRESS, limit),
+    getErc20Transfers(address, USDC_ADDRESS, limit),
   ]);
 
-  const combined = [...ethTransfers, ...pyusdTransfers];
+  const combined = [...ethTransfers, ...usdcTransfers];
   combined.sort((a, b) => b.timestamp - a.timestamp);
 
   return combined.slice(0, limit);
@@ -309,26 +309,26 @@ export async function getTransactionByHash(
 
     // Check if it's a token transfer
     const tokenTransfers = tx.token_transfers || [];
-    const pyusdTransfer = tokenTransfers.find(
+    const usdcTransfer = tokenTransfers.find(
       (t: any) =>
-        t.token?.address_hash?.toLowerCase() === PYUSD_ADDRESS.toLowerCase() ||
-        t.token?.address?.toLowerCase() === PYUSD_ADDRESS.toLowerCase()
+        t.token?.address_hash?.toLowerCase() === USDC_ADDRESS.toLowerCase() ||
+        t.token?.address?.toLowerCase() === USDC_ADDRESS.toLowerCase()
     );
 
-    if (pyusdTransfer) {
-      // PYUSD transfer
-      const fromAddress = pyusdTransfer.from?.hash?.toLowerCase() || '';
-      const toAddress = pyusdTransfer.to?.hash?.toLowerCase() || '';
-      const decimals = parseInt(pyusdTransfer.token?.decimals || '6', 10);
+    if (usdcTransfer) {
+      // USDC transfer
+      const fromAddress = usdcTransfer.from?.hash?.toLowerCase() || '';
+      const toAddress = usdcTransfer.to?.hash?.toLowerCase() || '';
+      const decimals = parseInt(usdcTransfer.token?.decimals || '6', 10);
       const amount = ethers.utils.formatUnits(
-        pyusdTransfer.total?.value || '0',
+        usdcTransfer.total?.value || '0',
         decimals
       );
 
       return {
         hash: tx.hash,
         direction: undefined, // No viewer context available
-        token: 'PYUSD',
+        token: 'USDC',
         amount,
         timestamp: new Date(tx.timestamp).getTime(),
         counterparty: toAddress,

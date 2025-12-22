@@ -10,10 +10,10 @@ import { ethers } from 'ethers';
 import { UserWallet, SecurityLimits, TransferResult } from '../types/index.js';
 import { query } from './db.js';
 
-// PYUSD contract on Arbitrum (verified via successful transactions)
-const PYUSD_CONTRACT = '0x46850ad61c2b7d64d08c9c754f45254596696984';
-const PYUSD_DECIMALS = 6;
-const PYUSD_ABI = ['function balanceOf(address owner) view returns (uint256)'];
+// USDC contract on Arbitrum (native USDC)
+const USDC_CONTRACT = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
+const USDC_DECIMALS = 6;
+const USDC_ABI = ['function balanceOf(address owner) view returns (uint256)'];
 
 // CDP v2 Client (singleton)
 let cdpClient: CdpClient | null = null;
@@ -28,8 +28,8 @@ function getCDPClient(): CdpClient {
 
 // Security limits for MVP
 const SECURITY_LIMITS: SecurityLimits = {
-  dailyLimit: 500, // $500 PYUSD per day
-  transactionLimit: 100, // $100 PYUSD per transaction
+  dailyLimit: 500, // $500 USD per day
+  transactionLimit: 100, // $100 USD per transaction
   sessionDurationHours: 24, // 24 hour sessions
 };
 
@@ -215,7 +215,7 @@ export async function checkSecurityLimits(
 }
 
 /**
- * Get PYUSD balance for user using ethers.js
+ * Get USDC balance for user using ethers.js
  */
 export async function getUserBalance(phoneNumber: string): Promise<number> {
   const userWallet = await getUserWallet(phoneNumber);
@@ -224,24 +224,24 @@ export async function getUserBalance(phoneNumber: string): Promise<number> {
   }
 
   try {
-    console.log(`\n💰 Getting PYUSD balance for +${phoneNumber}...`);
+    console.log(`\n💰 Getting USDC balance for +${phoneNumber}...`);
 
-    // Use ethers to check PYUSD balance directly
+    // Use ethers to check USDC balance directly
     const provider = new ethers.providers.JsonRpcProvider(
       'https://arb1.arbitrum.io/rpc'
     );
-    const pyusdContract = new ethers.Contract(
-      PYUSD_CONTRACT,
-      PYUSD_ABI,
+    const usdcContract = new ethers.Contract(
+      USDC_CONTRACT,
+      USDC_ABI,
       provider
     );
 
-    const balance = await pyusdContract.balanceOf(userWallet.walletAddress);
+    const balance = await usdcContract.balanceOf(userWallet.walletAddress);
     const balanceAmount = parseFloat(
-      ethers.utils.formatUnits(balance, PYUSD_DECIMALS)
+      ethers.utils.formatUnits(balance, USDC_DECIMALS)
     );
 
-    console.log(`✅ Balance: ${balanceAmount} PYUSD`);
+    console.log(`✅ Balance: ${balanceAmount} USDC`);
     return balanceAmount;
   } catch (error) {
     console.error(`❌ Failed to get balance for +${phoneNumber}:`, error);
@@ -250,9 +250,9 @@ export async function getUserBalance(phoneNumber: string): Promise<number> {
 }
 
 /**
- * Send PYUSD to another address using CDP SDK v2
+ * Send USDC to another address using CDP SDK v2
  */
-export async function sendPYUSD(
+export async function sendUSDC(
   fromPhoneNumber: string,
   toAddress: string,
   amount: number
@@ -264,7 +264,7 @@ export async function sendPYUSD(
 
   try {
     console.log(
-      `\n💸 Sending ${amount} PYUSD from +${fromPhoneNumber} to ${toAddress}...`
+      `\n💸 Sending ${amount} USDC from +${fromPhoneNumber} to ${toAddress}...`
     );
 
     const cdp = getCDPClient();
@@ -275,13 +275,13 @@ export async function sendPYUSD(
 
     console.log(`✅ Account loaded: ${account.address}`);
 
-    // Prepare PYUSD transfer call data
-    console.log(`📝 Preparing PYUSD transfer...`);
+    // Prepare USDC transfer call data
+    console.log(`📝 Preparing USDC transfer...`);
 
     // Use ethers.utils.parseUnits for precise decimal handling
     const amountBigNumber = ethers.utils.parseUnits(
       amount.toString(),
-      PYUSD_DECIMALS
+      USDC_DECIMALS
     );
     const selector = '0xa9059cbb'; // transfer(address,uint256)
     const toAddressPadded = ethers.utils.hexZeroPad(toAddress, 32).slice(2);
@@ -292,7 +292,7 @@ export async function sendPYUSD(
       `${selector}${toAddressPadded}${amountPadded}` as `0x${string}`;
 
     console.log(
-      `   Amount: ${amount} PYUSD (${amountBigNumber.toString()} units)`
+      `   Amount: ${amount} USDC (${amountBigNumber.toString()} units)`
     );
     console.log(`   Sending transaction...\n`);
 
@@ -300,7 +300,7 @@ export async function sendPYUSD(
     const result = await cdp.evm.sendTransaction({
       address: account.address,
       transaction: {
-        to: PYUSD_CONTRACT as `0x${string}`,
+        to: USDC_CONTRACT as `0x${string}`,
         data: callData,
       },
       network: 'arbitrum' as any,
@@ -322,15 +322,15 @@ export async function sendPYUSD(
       timestamp: Date.now(),
     };
   } catch (error) {
-    console.error(`❌ Failed to send PYUSD:`, error);
+    console.error(`❌ Failed to send USDC:`, error);
     throw error;
   }
 }
 
 /**
- * Send PYUSD to another user by phone number
+ * Send USDC to another user by phone number
  */
-export async function sendPYUSDToUser(
+export async function sendUSDCToUser(
   fromPhoneNumber: string,
   toPhoneNumber: string,
   amount: number
@@ -340,7 +340,7 @@ export async function sendPYUSDToUser(
     throw new Error('Recipient not registered with Sippy');
   }
 
-  return await sendPYUSD(fromPhoneNumber, toUserWallet.walletAddress, amount);
+  return await sendUSDC(fromPhoneNumber, toUserWallet.walletAddress, amount);
 }
 
 /**

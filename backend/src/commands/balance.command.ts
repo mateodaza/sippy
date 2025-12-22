@@ -62,7 +62,7 @@ export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
 
     await sendTextMessage(phoneNumber, message);
 
-    console.log(`Balance sent to +${phoneNumber}: ${balance} PYUSD`);
+    console.log(`Balance sent to +${phoneNumber}: ${balance} USD`);
   } catch (error) {
     console.error(`Failed to get balance for +${phoneNumber}:`, error);
 

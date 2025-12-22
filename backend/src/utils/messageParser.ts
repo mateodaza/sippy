@@ -231,7 +231,7 @@ export function getHelpText(): string {
   return (
     `🤖 Sippy Bot Commands\n\n` +
     `🚀 start - Create your wallet\n` +
-    `💰 balance - Check your PYUSD balance\n` +
+    `💰 balance - Check your balance\n` +
     `💸 send <amount> to <contact>\n` +
     `   Example: send 5 to Mom\n` +
     `   Or: send $10 to +573001234567\n` +
@@ -253,9 +253,9 @@ export function getAboutText(): string {
     `📱 Send to Phone Numbers\n` +
     `Just send money using a phone number. No extra apps, no complex codes or random numbers to remember!\n\n` +
     `💵 Always $1 = $1\n` +
-    `Your balance uses PYUSD, a digital dollar backed by PayPal. Always stable, always $1.\n\n` +
+    `Your balance is in digital dollars. Always stable, always $1.\n\n` +
     `🔒 Safe & Fast\n` +
-    `Powered by Coinbase on Arbitrum network. Your money is secure and transfers happen in seconds.\n\n` +
+    `Powered by Coinbase. Your money is secure and transfers happen in seconds.\n\n` +
     `🆓 No Transaction Fees\n` +
     `We cover the cost of your transfers daily. Just send money - we handle the rest!\n\n` +
     `Send "help" to see all commands.`

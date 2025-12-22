@@ -4,15 +4,15 @@ import { Web3Provider } from './providers/Web3Provider';
 import { BlockscoutProvider } from './providers/BlockscoutProvider';
 
 export const metadata: Metadata = {
-  title: 'Sippy - Send PYUSD via WhatsApp on Arbitrum',
+  title: 'Sippy - Send Dollars via WhatsApp',
   description:
-    'Transfer PayPal USD stablecoin using just a phone number. No wallet app, no gas fees, no blockchain knowledge required. Powered by Coinbase CDP on Arbitrum.',
+    'Transfer digital dollars using just a phone number. No app download, no fees, no complications. Instant transfers powered by Coinbase.',
   keywords:
-    'PYUSD, PayPal USD, WhatsApp payments, Arbitrum, Coinbase CDP, stablecoin transfers, gasless payments, phone number wallet',
+    'WhatsApp payments, digital dollars, instant transfers, Coinbase, phone number payments, send money WhatsApp, Latin America payments',
   openGraph: {
-    title: 'Sippy - Send PYUSD via WhatsApp',
+    title: 'Sippy - Send Dollars via WhatsApp',
     description:
-      'Transfer PYUSD stablecoin using just WhatsApp. No wallet app. No gas fees. Instant transfers on Arbitrum.',
+      'Transfer digital dollars using just WhatsApp. No app download. No fees. Instant transfers 24/7.',
     type: 'website',
   },
 };

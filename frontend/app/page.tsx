@@ -1,6 +1,6 @@
 /**
  * Sippy Landing Page
- * Send PYUSD via WhatsApp on Arbitrum
+ * Send Dollars via WhatsApp
  */
 
 import Image from 'next/image';
@@ -16,11 +16,6 @@ import {
   Users,
   Clock,
   MessageCircle,
-  DollarSign,
-  TrendingDown,
-  Globe,
-  Heart,
-  AlertCircle,
 } from 'lucide-react';
 import { BorderBeam } from '@/components/ui/border-beam';
 import BlurFade from '@/components/ui/blur-fade';
@@ -73,16 +68,16 @@ export default function HomePage() {
 
               {/* Heading */}
               <h1 className='text-5xl md:text-[3.5rem] lg:text-[3.8rem] font-bold text-[#0f172a] leading-[1.08] tracking-[-0.025em] animate-fade-in-up animation-delay-100'>
-                Send PYUSD
+                Send Dollars
                 <br />
                 <span className='text-[#059669]'>via WhatsApp</span>
               </h1>
 
               {/* Description */}
               <p className='text-lg md:text-xl text-gray-600 leading-[1.75] max-w-xl animate-fade-in-up animation-delay-200'>
-                Transfer PayPal USD stablecoin using just a phone number.
+                Transfer digital dollars using just a phone number.
                 <br />
-                No wallet. No gas fees. No blockchain knowledge required.
+                No app download. No fees. No complications.
               </p>
 
               {/* Beta Access Banner */}
@@ -110,12 +105,12 @@ export default function HomePage() {
               {/* Trust Badges */}
               <div className='flex flex-wrap gap-x-6 gap-y-4 text-sm text-gray-600 pt-3 animate-fade-in-up animation-delay-400'>
                 <div className='flex items-center gap-2'>
-                  <Zap className='w-4 h-4 text-[#059669]' />
-                  <span>Powered by Avail Nexus </span>
+                  <Shield className='w-4 h-4 text-[#059669]' />
+                  <span>Secured by Coinbase</span>
                 </div>
                 <div className='flex items-center gap-2'>
-                  <Shield className='w-4 h-4 text-[#059669]' />
-                  <span>Coinbase CDP Wallets</span>
+                  <Zap className='w-4 h-4 text-[#059669]' />
+                  <span>Instant transfers 24/7</span>
                 </div>
               </div>
             </div>
@@ -177,12 +172,12 @@ export default function HomePage() {
                           </div>
                         </div>
                         <p className='text-[36px] font-black text-gray-900 leading-none'>
-                          $5 PYUSD
+                          $5 USD
                         </p>
                         <div className='flex items-center gap-1.5 text-[#059669] bg-[#dcfce7]/80 px-3 py-1.5 rounded-lg w-fit'>
                           <Check className='w-3.5 h-3.5' />
                           <span className='text-[11px] font-semibold'>
-                            Gas covered by Sippy
+                            No fees charged
                           </span>
                         </div>
                       </div>
@@ -204,7 +199,7 @@ export default function HomePage() {
           <p className='text-2xl md:text-3xl font-bold text-gray-900 leading-[1.4] tracking-[-0.01em]'>
             90% of Latin America uses WhatsApp daily. <br />
             <span className='text-[#059669]'>
-              Only 12% own crypto.
+              Sending dollars shouldn't be complicated.
             </span>
           </p>
         </div>
@@ -284,23 +279,23 @@ export default function HomePage() {
                   <h3 className='text-xl font-bold text-gray-900 mb-1.5'>
                     The Missing Bridge
                   </h3>
-                  <p className='text-sm text-gray-500'>Traditional ↔ Crypto</p>
+                  <p className='text-sm text-gray-500'>Local ↔ Global</p>
                 </div>
               </div>
               <p className='text-[15px] text-gray-600 leading-[1.8] mb-4'>
-                While Bre-B connects banks,{' '}
+                While Bre-B connects Colombian banks,{' '}
                 <span className='font-semibold text-gray-900'>
                   Sippy bridges the gap
                 </span>{' '}
-                to global stablecoins, giving Colombians and Latin Americans
-                access to USD-denominated assets via the same familiar
+                to the global economy, giving Colombians and Latin Americans
+                access to USD-denominated transfers via the same familiar
                 interface: WhatsApp and phone numbers.
               </p>
               <div className='space-y-2.5'>
                 <div className='flex items-start gap-2'>
                   <Check className='w-5 h-5 text-[#2563eb] flex-shrink-0 mt-0.5' />
                   <span className='text-sm text-gray-700'>
-                    Protection from inflation (PYUSD = USD)
+                    Protection from local currency inflation
                   </span>
                 </div>
                 <div className='flex items-start gap-2'>
@@ -312,7 +307,7 @@ export default function HomePage() {
                 <div className='flex items-start gap-2'>
                   <Check className='w-5 h-5 text-[#2563eb] flex-shrink-0 mt-0.5' />
                   <span className='text-sm text-gray-700'>
-                    Trusted brand: PayPal USD (PYUSD), issued by Paxos
+                    Secure infrastructure by Coinbase
                   </span>
                 </div>
                 <div className='flex items-start gap-2'>
@@ -354,7 +349,7 @@ export default function HomePage() {
                 <span className='font-semibold text-white'>
                   the timing is perfect
                 </span>{' '}
-                to introduce crypto payments through the same familiar channels.
+                to introduce dollar payments through the same familiar channels.
               </p>
             </div>
           </div>
@@ -372,7 +367,7 @@ export default function HomePage() {
               Why <span className='text-[#059669]'>Sippy</span>?
             </h2>
             <p className='text-lg md:text-xl text-gray-600 leading-[1.7] max-w-2xl mx-auto animate-fade-in-up animation-delay-100'>
-              The simplest way to send stablecoins using just WhatsApp
+              The simplest way to send dollars using just WhatsApp
             </p>
           </div>
 
@@ -391,17 +386,17 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* No Gas Fees */}
+            {/* No Fees */}
             <div className='group bg-white rounded-2xl p-8 shadow-[0_18px_42px_rgba(15,23,42,0.08)] border border-gray-100 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] hover:border-gray-200 transition-all duration-300 animate-fade-in-up animation-delay-200'>
               <div className='w-12 h-12 bg-[#dbeafe] rounded-xl flex items-center justify-center mb-5 shadow-inner shadow-sky-200/60'>
                 <Zap className='w-6 h-6 text-[#2563eb]' />
               </div>
               <h3 className='text-lg font-bold text-gray-900 mb-2.5'>
-                Gas Fees Covered
+                Zero Fees
               </h3>
               <p className='text-[15px] text-gray-600 leading-[1.75]'>
-                We cover the transaction fees automatically. Just send PYUSD, no
-                setup needed.
+                We cover all transaction fees automatically. Just send dollars,
+                no hidden costs.
               </p>
             </div>
 
@@ -419,17 +414,17 @@ export default function HomePage() {
               </p>
             </div>
 
-            {/* No Private Keys */}
+            {/* Secure */}
             <div className='group bg-white rounded-2xl p-8 shadow-[0_18px_42px_rgba(15,23,42,0.08)] border border-gray-100 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] hover:border-gray-200 transition-all duration-300 animate-fade-in-up animation-delay-400'>
               <div className='w-12 h-12 bg-[#fed7aa] rounded-xl flex items-center justify-center mb-5 shadow-inner shadow-orange-200/70'>
                 <Key className='w-6 h-6 text-[#ea580c]' />
               </div>
               <h3 className='text-lg font-bold text-gray-900 mb-2.5'>
-                No Private Keys
+                Bank-Grade Security
               </h3>
               <p className='text-[15px] text-gray-600 leading-[1.75]'>
-                Secured by Coinbase MPC technology. Can't lose your keys. Can't
-                get phished.
+                Secured by Coinbase infrastructure. No passwords to remember.
+                No accounts to hack.
               </p>
             </div>
 
@@ -439,11 +434,11 @@ export default function HomePage() {
                 <Clock className='w-6 h-6 text-[#db2777]' />
               </div>
               <h3 className='text-lg font-bold text-gray-900 mb-2.5'>
-                Instant on Arbitrum
+                Instant Transfers
               </h3>
               <p className='text-[15px] text-gray-600 leading-[1.75]'>
-                Transactions confirm in seconds on Arbitrum. Fast, cheap, and
-                reliable.
+                Transactions confirm in seconds. Fast, reliable, and available
+                24/7.
               </p>
             </div>
 
@@ -475,7 +470,7 @@ export default function HomePage() {
               <span className='text-[#059669]'>Use Cases</span>
             </h2>
             <p className='text-lg text-gray-600 leading-[1.7]'>
-              Send PYUSD for anything, anytime, with just a phone number
+              Send dollars for anything, anytime, with just a phone number
             </p>
           </div>
 
@@ -627,7 +622,7 @@ export default function HomePage() {
                   Get Funded
                 </h3>
                 <p className='mx-auto max-w-xs text-sm md:text-base text-[#d0fae5] leading-[1.7] mb-4'>
-                  Receive PYUSD from anyone, or use our{' '}
+                  Receive dollars from anyone, or use our{' '}
                   <a
                     href='/fund'
                     className='text-white font-semibold underline decoration-[#34d399] decoration-2 underline-offset-2 hover:decoration-white transition-colors'
@@ -647,7 +642,7 @@ export default function HomePage() {
                   Start Paying
                 </h3>
                 <p className='mx-auto max-w-xs text-sm md:text-base text-[#d0fae5] leading-[1.7]'>
-                  Send, receive, and manage PYUSD through simple WhatsApp
+                  Send, receive, and manage dollars through simple WhatsApp
                   messages.
                 </p>
               </div>
@@ -671,14 +666,14 @@ export default function HomePage() {
                     balance
                   </code>
                   <span className='text-[13px] md:text-sm'>
-                    Check PYUSD balance
+                    Check your balance
                   </span>
                 </div>
                 <div className='flex items-start gap-2.5 rounded-lg border border-white/0 p-3 transition-all duration-200 hover:border-white/15 hover:bg-white/5'>
                   <code className='font-mono text-[13px] font-semibold text-[#34d399]'>
                     send X to +57...
                   </code>
-                  <span className='text-[13px] md:text-sm'>Transfer PYUSD</span>
+                  <span className='text-[13px] md:text-sm'>Transfer dollars</span>
                 </div>
                 <div className='flex items-start gap-2.5 rounded-lg border border-white/0 p-3 transition-all duration-200 hover:border-white/15 hover:bg-white/5'>
                   <code className='font-mono text-[13px] font-semibold text-[#34d399]'>
@@ -728,7 +723,7 @@ export default function HomePage() {
               colorTo='#10b981'
             />
 
-            <div className='grid sm:grid-cols-2 lg:grid-cols-3 gap-1 md:gap-2'>
+            <div className='grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 max-w-4xl mx-auto'>
               <BlurFade delay={0.25} inView>
                 <div className='group w-full h-full bg-white rounded-2xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300 flex flex-col items-center text-center'>
                   <div className='w-16 h-16 bg-[#eff6ff] rounded-2xl flex items-center justify-center mb-4 shadow-inner shadow-blue-200/50 group-hover:scale-110 transition-transform duration-300'>
@@ -743,29 +738,11 @@ export default function HomePage() {
                   <p className='text-base font-bold text-gray-900 mb-1'>
                     Arbitrum
                   </p>
-                  <p className='text-sm text-gray-500'>L2 Network</p>
+                  <p className='text-sm text-gray-500'>Payment Network</p>
                 </div>
               </BlurFade>
 
               <BlurFade delay={0.3} inView>
-                <div className='group w-full h-full bg-white rounded-2xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300 flex flex-col items-center text-center'>
-                  <div className='w-16 h-16 bg-[#ede9fe] rounded-2xl flex items-center justify-center mb-4 shadow-inner shadow-violet-200/50 group-hover:scale-110 transition-transform duration-300'>
-                    <Image
-                      src='/images/logos/avail.svg'
-                      alt='Avail'
-                      width={44}
-                      height={44}
-                      className='w-11 h-11 object-contain'
-                    />
-                  </div>
-                  <p className='text-base font-bold text-gray-900 mb-1'>
-                    Avail
-                  </p>
-                  <p className='text-sm text-gray-500'>Nexus Settlement</p>
-                </div>
-              </BlurFade>
-
-              <BlurFade delay={0.35} inView>
                 <div className='group w-full h-full bg-white rounded-2xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300 flex flex-col items-center text-center'>
                   <div className='w-16 h-16 bg-[#e0f2fe] rounded-2xl flex items-center justify-center mb-4 shadow-inner shadow-sky-200/60 group-hover:scale-110 transition-transform duration-300'>
                     <Image
@@ -783,25 +760,25 @@ export default function HomePage() {
                 </div>
               </BlurFade>
 
-              <BlurFade delay={0.4} inView>
+              <BlurFade delay={0.35} inView>
                 <div className='group w-full h-full bg-white rounded-2xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300 flex flex-col items-center text-center'>
-                  <div className='w-16 h-16 bg-[#dbeafe] rounded-2xl flex items-center justify-center mb-4 shadow-inner shadow-blue-200/50 group-hover:scale-110 transition-transform duration-300'>
+                  <div className='w-16 h-16 bg-[#dcfce7] rounded-2xl flex items-center justify-center mb-4 shadow-inner shadow-emerald-200/50 group-hover:scale-110 transition-transform duration-300'>
                     <Image
-                      src='/images/logos/pyusd.svg'
-                      alt='PYUSD'
+                      src='/images/logos/circle.png'
+                      alt='Circle'
                       width={44}
                       height={44}
                       className='w-11 h-11 object-contain'
                     />
                   </div>
                   <p className='text-base font-bold text-gray-900 mb-1'>
-                    PYUSD
+                    Circle
                   </p>
-                  <p className='text-sm text-gray-500'>PayPal USD</p>
+                  <p className='text-sm text-gray-500'>Digital Dollars</p>
                 </div>
               </BlurFade>
 
-              <BlurFade delay={0.45} inView>
+              <BlurFade delay={0.4} inView>
                 <div className='group w-full h-full bg-white rounded-2xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300 flex flex-col items-center text-center'>
                   <div className='w-16 h-16 bg-[#dcfce7] rounded-2xl flex items-center justify-center mb-4 shadow-inner shadow-emerald-200/60 group-hover:scale-110 transition-transform duration-300'>
                     <Image
@@ -819,23 +796,6 @@ export default function HomePage() {
                 </div>
               </BlurFade>
 
-              <BlurFade delay={0.5} inView>
-                <div className='group w-full h-full bg-white rounded-2xl p-6 border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-300 flex flex-col items-center text-center'>
-                  <div className='w-16 h-16 bg-[#e0f2fe] rounded-2xl flex items-center justify-center mb-4 shadow-inner shadow-cyan-200/60 group-hover:scale-110 transition-transform duration-300'>
-                    <Image
-                      src='/images/logos/blockscout.svg'
-                      alt='Blockscout'
-                      width={44}
-                      height={44}
-                      className='w-11 h-11 object-contain'
-                    />
-                  </div>
-                  <p className='text-base font-bold text-gray-900 mb-1'>
-                    Blockscout
-                  </p>
-                  <p className='text-sm text-gray-500'>Block Explorer</p>
-                </div>
-              </BlurFade>
             </div>
           </div>
         </div>
@@ -876,27 +836,16 @@ export default function HomePage() {
                 GitHub
               </a>
               <a
-                href='https://arbiscan.io/token/0x46850aD61C2B7d64d08c9C754F45254596696984'
-                target='_blank'
-                rel='noopener noreferrer'
+                href='mailto:hello@sippy.lat'
                 className='hover:text-[#059669] transition-colors duration-200 font-medium'
               >
-                PYUSD Contract
-              </a>
-              <a
-                href='https://docs.cdp.coinbase.com/server-wallets/v2/introduction/welcome'
-                target='_blank'
-                rel='noopener noreferrer'
-                className='hover:text-[#059669] transition-colors duration-200 font-medium'
-              >
-                CDP Docs
+                Contact
               </a>
             </div>
           </div>
           <div className='text-center mt-8 pt-6 border-t border-gray-100'>
             <p className='text-[11px] text-gray-500'>
-              Built for ETHGlobal ETHOnline 2025 • Powered by Coinbase CDP,
-              PYUSD & Arbitrum
+              Built for ETHGlobal ETHOnline 2025 • Powered by Coinbase
             </p>
           </div>
         </div>

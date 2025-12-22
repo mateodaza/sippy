@@ -1,0 +1,922 @@
+SIPPY - QUESTBOOK FORM RESPONSES V4
+
+Arbitrum New Protocols and Ideas 3.0
+Final version reflecting accurate technical state and refined scope (December 2025).
+
+================================================================================
+APPLICANT INFORMATION
+================================================================================
+
+Name:
+Sippy
+
+Email:
+[TU EMAIL AQUI]
+
+Telegram:
+@SippyPayments
+
+Twitter:
+@SippyPayments
+
+Discord:
+discord.gg/sippy
+
+Website:
+https://sippy.lat
+
+LinkedIn:
+https://www.linkedin.com/in/mateo-daza-448469170/
+https://www.linkedin.com/in/carlos-quintero-076a36153/
+
+Instagram:
+N/A
+
+Others:
+GitHub: https://github.com/mateodaza/sippy
+ETHGlobal Showcase: https://ethglobal.com/showcase/sippy-2smms
+Noah Biel: https://noahbiel.xyz
+
+Do you acknowledge that your team will be subject to a KYC requirement?
+Yes
+
+Do you acknowledge that, in case of approval, you will have to provide a report at the completion of the grant and, three months later, complete a survey about your experience?
+Yes
+
+Please provide the wallet that will receive the grant (ARB1 chain):
+[TU WALLET ARBITRUM ONE AQUI - 0x...]
+
+================================================================================
+GRANT INFORMATION
+================================================================================
+
+Title:
+Sippy: WhatsApp Stablecoin Payments for Colombia
+
+Project Details:
+
+Sippy enables users to send, receive, and spend USDC stablecoins through WhatsApp messages. No app downloads. No seed phrases. No crypto knowledge required.
+
+THE PROBLEM WE'RE SOLVING:
+
+Colombia received $11.85B in remittances in 2024, losing ~$650M annually to transfer fees averaging 5.5% (World Bank data). Despite improvements in banking access, existing crypto solutions still require app downloads, seed phrases, and technical knowledge that excludes mainstream users. WhatsApp reaches 92% of Colombian internet users - we meet them where they already are.
+
+WHAT WE'VE BUILT (Live on Arbitrum One):
+
+- Working WhatsApp bot that processes natural language payment commands
+- LLM engine (Groq - Llama 3.3 70B) handling Spanish and English
+- Wallet creation via simple "start" command
+- Gasless transactions (users never pay fees)
+- GasRefuel smart contract deployed on Arbitrum One mainnet
+
+CURRENT TRACTION:
+
+- ETHOnline 2025 Finalist
+- End-to-end payment flow validated on mainnet
+TECH STACK:
+
+- Smart Contract: GasRefuel.sol on Arbitrum One (gas management)
+- Wallet Infrastructure: Coinbase CDP Server Wallets
+- Messaging: WhatsApp Business API via Meta Cloud API
+- Backend: Node.js/TypeScript with Groq LLM (Llama 3.3 70B)
+- Database: PostgreSQL for phone-to-wallet registry
+- Token: USDC on Arbitrum One
+
+Category:
+Consumer App
+
+What innovation or value will your project bring to Arbitrum? What previously unaddressed problems is it solving? Is the project introducing genuinely new mechanisms?
+
+WHAT'S NEW:
+
+1. WhatsApp to Blockchain Bridge: First known protocol on Arbitrum converting WhatsApp messages into on-chain transactions. No existing solution combines messaging + wallets + stablecoins this way.
+
+2. Zero-Download Onboarding: Users interact with crypto without installing any app. This breaks the fundamental UX barrier that has blocked mainstream adoption.
+
+3. LLM Transaction Parsing: Natural language in Spanish/English processed by Llama 3.3 70B into blockchain operations. Novel application of LLMs to simplify crypto.
+
+PROBLEMS WE ADDRESS:
+
+- The Last Mile: Crypto solutions require downloads, accounts, and technical knowledge. Sippy meets users on WhatsApp - 92% penetration in Colombia.
+
+- The Wallet Paradox: Getting a wallet is difficult for non-technical users. Sippy simplifies this to a single "start" message.
+
+- Fee Extraction: Colombians lose ~$650M/year to remittance fees (5.5% average). Sippy reduces this to near-zero using USDC rails on Arbitrum.
+
+
+
+VALUE FOR ARBITRUM:
+
+- Colombia proof-of-concept for 500M+ LATAM WhatsApp users
+- Every Sippy user = new Arbitrum wallet with USDC
+- Positions Arbitrum as THE consumer payments chain
+- First-mover advantage in messaging payments - replicable model for regional expansion
+- Embodies "Arbitrum Everywhere" by bringing Arbitrum to WhatsApp - where 92% of Colombians already are
+
+Do you have a target audience? If so, which one?
+
+PRIMARY AUDIENCE:
+
+- Colombian remittance users (sending/receiving international money - $11.85B market)
+- Users seeking lower fees (current 5.5% average vs near-zero with USDC)
+- WhatsApp power users (92% of Colombian internet users)
+- Freelancers receiving international payments in stablecoins
+
+DEMOGRAPHICS:
+
+- Age: 25-55 years old
+- Geography: Colombia (Bogota, Medellin, Cali, Barranquilla, Cartagena)
+- Profile: Mobile-first, WhatsApp-native, little to no crypto experience
+- Tech comfort: Can use WhatsApp, don't want to learn new apps
+
+For protocols/ideas categories: General public, others (mainstream non-crypto users)
+
+Team experience and completeness:
+
+TEAM STATUS: Complete. No key hires needed.
+
+CORE TEAM:
+
+MATEO DAZA - Project Manager & Lead Software Engineer
+LinkedIn: https://www.linkedin.com/in/mateo-daza-448469170/
+
+Role: Technical leadership, smart contract development, frontend architecture
+
+Experience:
+-  8+ years Web3 development
+- Currently Lead Frontend Engineer at Asymmetry Finance - shipping live DeFi products (USDaf, veASF, afCVX, safETH)
+- 4.5 years at Giveth as Lead Software Engineer
+- 2 ETHGlobal Finalist projects (Sippy 2025, Blobscan 2022)
+- Co-founder Ethereum Colombia
+
+---
+
+CARLOS QUINTERO - Full-Stack Software Engineer
+LinkedIn: https://www.linkedin.com/in/carlos-quintero-076a36153/
+
+Role: Backend infrastructure, API development, system architecture
+
+Experience:
+- 8+ years building scalable applications
+- Web2 and Web3 expertise
+- RESTful APIs, GraphQL, third-party integrations
+- Multiple shipped products across fintech and e-commerce
+
+---
+
+NOAH BIEL - Web3 Strategy & Partnerships Lead
+Web: https://noahbiel.xyz
+
+Role: Grant management, partnership development, communications
+
+Experience:
+- Grant management at Giveth.io, General Magic, Prisma.events
+- Master's in Social Innovation
+- DEI and accessibility expertise
+
+---
+
+Combined: 18+ years relevant experience
+
+VERIFIABLE TRACK RECORD:
+
+- Sippy ETHOnline 2025 Finalist: https://ethglobal.com/showcase/sippy-2smms
+- Blobscan ETHBogota 2022 Finalist: https://ethglobal.com/showcase/blobscan-explorer-5bmqk
+- Asymmetry Finance: Live production DeFi
+- Giveth: 4.5 years platform development
+- Colombian Web3 communities: Ethereum Colombia (co-founder), Barranquilla On-chain, Cartagena On-chain
+
+
+Do you know about any comparable protocol, event, game, tool or project within the Arbitrum ecosystem?
+
+No direct competitor we're aware of exists on Arbitrum.
+
+COMPETITIVE ANALYSIS:
+
+MetaMask, Rainbow - Require app download, seed phrases
+Argent - Dedicated wallet app, not messaging-native
+Telegram bots - Different platform, lower LATAM penetration
+Coinbase Card - Requires existing account, full KYC, US-centric
+Venmo/PayPal - Centralized, high international fees, no crypto
+Peanut Protocol - Link-based transfers (share URL, recipient clicks to claim on web). Not conversational.
+
+To our knowledge, Sippy is the first WhatsApp-native payment protocol on Arbitrum.
+
+The closest comparable is M-Pesa in Africa (mobile money via SMS), but that's centralized, fiat-only, and doesn't exist in LATAM. Sippy brings that accessibility model to crypto.
+
+What is the current stage of your project?
+
+MVP (Live on Arbitrum One Mainnet)
+
+WHAT'S WORKING TODAY:
+
+Smart Contract - GasRefuel.sol deployed on Arbitrum One (0xC8367a549e05D9184B8e320856cb9A10FDc1DE46 - https://arbiscan.io/address/0xC8367a549e05D9184B8e320856cb9A10FDc1DE46)
+WhatsApp Bot - Working with Meta Cloud API
+LLM Engine - Groq (Llama 3.3 70B) - ES/EN
+Wallet Infrastructure - Coinbase CDP Server Wallets
+Gasless Transactions - Gas funded via GasRefuel
+Demo - Public on ETHGlobal
+
+USER ACQUISITION FUNNEL:
+- M2 (150 users): Team's personal networks + Ethereum Colombia community - achievable through direct outreach
+- M3 (300 users): 2x growth via word-of-mouth + marketing - each user invites 1-2 people
+- M4 (500+ users): Network effects + freelancer communities - viral loop kicks in as payment recipients become users
+
+
+
+VALIDATED:
+
+- End-to-end payment flow on Arbitrum One mainnet
+- LLM command parsing working
+- Simple "start" command wallet creation
+- Gasless transaction execution
+
+KNOWN ISSUES TO FIX:
+
+- Language-switching bug
+- 24-hour WhatsApp window limitation (fixed with templates)
+- Privacy controls needed
+
+PROOF: https://ethglobal.com/showcase/sippy-2smms
+
+Have you received a grant from the DAO, Foundation, or any Arbitrum ecosystem related program or conducted any IRL like a hackathon or workshop?
+
+No grants from Arbitrum DAO or Foundation.
+
+ETHGlobal ETHOnline 2025: Sippy was developed and selected as FINALIST
+- Public showcase: https://ethglobal.com/showcase/sippy-2smms
+- Working demo video available
+- Competed against hundreds of submissions
+
+This is our first Arbitrum grant application.
+
+Have you received a grant from any other entity in other blockchains that are not Arbitrum?
+
+No. Sippy emerged from ETHOnline 2025 where it was selected as Finalist. This is our first funding request.
+
+Team has grant management experience through Giveth.io, General Magic, and Prisma.events.
+
+
+
+
+
+
+
+
+================================================================================
+GRANT REQUEST DETAILS
+================================================================================
+
+What is the idea/project for which you are applying for a grant?
+
+SIPPY: WhatsApp USDC Payments on Arbitrum for Colombia
+
+We're taking our validated MVP to production with a focused launch in Colombia.
+
+IMPLEMENTATION PLAN:
+
+PHASE 1 - MVP Revamp for Production (Weeks 1-8):
+- Migrate from PYUSD to USDC (most liquidity on Arbitrum)
+- Security audit for GasRefuel.sol
+- WhatsApp Business API production approval
+- Portuguese language support
+- User protection: PIN confirmation, 2FA for large transfers
+- Opt-out/export functionality for wallets
+- Monitoring infrastructure
+
+PHASE 2 - Beta Launch & Legal Ops (Weeks 9-16):
+- App rebranding and UX improvements
+- 150 beta users in Colombia
+- $5,000+ transaction volume
+- Legal entity and regulatory compliance
+- NPS measurement and user feedback
+
+PHASE 3 - Optimization, Scale & Growth (Weeks 17-24):
+- 300 users in Colombia
+- $12,000+ cumulative volume
+- Performance optimization
+- Marketing campaign
+- Public analytics dashboard
+
+PHASE 4 - Consolidation & Closeout (Weeks 25-28):
+- 500+ users (target 700)
+- $25,000+ cumulative volume (target $35K)
+- Developer documentation
+- Final report to Arbitrum DAO
+
+
+
+TECHNICAL ARCHITECTURE:
+
+User WhatsApp message -> Meta Cloud API -> LLM Engine (Groq) -> Sippy Backend -> Coinbase CDP -> Arbitrum One
+
+Components:
+- GasRefuel.sol: Funds user wallets with ETH for gas
+- Coinbase CDP SDK: Wallet creation and transaction signing
+- PostgreSQL: Phone to wallet mapping
+- Groq LLM: Natural language parsing (Llama 3.3 70B)
+- Token: USDC on Arbitrum One
+
+Outline the major deliverables you will obtain with this grant:
+
+1. USDC Integration on Arbitrum One (replacing PYUSD)
+2. Audited GasRefuel.sol contract
+3. WhatsApp Business API production approval
+4. Portuguese language support (ES/EN/PT)
+5. User protection: PIN confirmation, 2FA
+6. Opt-out/export functionality for wallets
+7. 150 Beta Users with real transactions
+8. $5,000+ Transaction Volume (beta)
+9. Legal entity and compliance framework
+10. 300 Users at M3 completion
+11. 500+ Users at grant completion
+12. $25,000+ Cumulative Volume
+13. Public analytics dashboard
+14. Developer documentation and technical blog posts (architecture, integration patterns, lessons learned)
+
+
+Please explain how your idea/project aligns with the Arbitrum ecosystem goals (e.g., DeFi dominance, developer tools, ecosystem expansion) and why it will serve as a growth force for Arbitrum?
+
+DIRECT ALIGNMENT:
+
+ECOSYSTEM EXPANSION:
+Opens NEW market of LATAM WhatsApp users who have never used crypto. These are completely new blockchain users, not users switching from other chains.
+
+NEW USER ACQUISITION:
+Every Sippy user gets an Arbitrum wallet. We're not competing for DeFi users - we're creating an onboarding pipeline from mainstream to Arbitrum.
+
+STABLECOIN VOLUME:
+USDC is 52-58% of Arbitrum stablecoin TVL. By focusing on USDC, we align with where liquidity already exists.
+
+CONSUMER APP LEADERSHIP:
+Positions Arbitrum as THE chain for consumer payments - competitive advantage vs Base, Optimism pursuing same market.
+
+WHY SIPPY IS A GROWTH FORCE:
+
+1. Viral Network Effects:
+User A sends to User B (no Sippy) -> B gets WhatsApp notification -> B now has Arbitrum wallet + USDC -> B tells C -> Growth
+
+2. Sticky Acquisition:
+Users onboarded stay on Arbitrum (funds on-chain)
+Creates permanent fiat -> Arbitrum pipeline
+
+3. Market Positioning:
+Early L2 mover with true consumer payment solution
+"Arbitrum Everywhere" - including WhatsApp, the dominant messaging platform in LATAM
+
+PROJECTED 28-WEEK IMPACT:
+
+- 500-700 new Arbitrum wallets
+- $25,000-35,000 USDC volume
+- Colombia active and proven
+- Model ready to replicate across LATAM
+
+What is your requested grant:
+
+$41,000 USD
+
+Justification:
+- Working MVP reduces execution risk
+- ETHOnline 2025 Finalist (external validation)
+- Experienced team with production track record
+- Focused scope: Colombia only, USDC only
+- Conservative targets based on $41K budget
+- ROI: 500+ new Arbitrum users = ~$82/user acquisition (conservative estimate)
+
+
+
+
+
+Please provide a detailed breakdown of the budget in term of utilizations, costs and other relevant information:
+
+BUDGET BREAKDOWN ($41,000 USD):
+SECURITY AUDIT - $2,000 (5%)
+- GasRefuel.sol is ~100 lines using standard OpenZeppelin patterns (Ownable, Pausable, ReentrancyGuard)
+- Scope limited to: gas funding logic, access control, rate limiting - no complex DeFi logic
+- Comparable to Code4rena/Sherlock "mini audits" or independent security researcher review
+- Backend checklist: API auth, input validation, rate limiting - not a full pentest
+SECURITY, INFRASTRUCTURE & BACKEND - $18,000 (44%)
+- USDC integration (replacing PYUSD)
+- Opt-out/export functionality for wallets
+- WhatsApp production integration
+- Portuguese language support
+- Language-switching bug fix
+- Rate limiting, privacy controls
+- PIN confirmation, 2FA implementation
+- Cloud servers, database, monitoring
+- GasRefuel contract maintenance
+FRONTEND & UX - $8,000 (19%)
+- App rebranding
+- Profile pages optimization
+- Analytics dashboard
+- Mobile-responsive improvements
+GAS OPERATIONS - $1,000 (2%)
+- GasRefuel contract top-ups
+- Arbitrum tx cost: ~$0.01 each
+- 500 users x 50 tx avg = 25,000 tx = ~$250
+- 4x buffer for: growth beyond 500 target, failed tx retries, and operational runway post-grant
+OPS & LEGAL - $8,000 (20%)
+- Legal entity formation
+- Terms of Service and Privacy Policy
+- Colombia regulatory compliance
+- Monitoring infrastructure
+- Incident response documentation
+- Server/hosting costs
+GROWTH & MARKETING - $4,000 (10%)
+- Content creation (videos, tutorials, demos)
+- Crypto influencer collaborations in LATAM
+- Community events and conference presence
+- Social media campaigns (Twitter/X, Instagram, TikTok)
+
+TOTAL: $41,000 USD
+
+
+Provide a list of the milestones, with the USD amount of the grant associated to it, the deliverables that will be provided, and the estimated completion time:
+
+MILESTONE 1: MVP Revamp for Production
+Amount: $13,000 USD
+Timeline: 8 weeks from approval
+
+Deliverables:
+- USDC integration replacing PYUSD
+- GasRefuel.sol security audit completed
+- WhatsApp Business API production approval from Meta
+- Portuguese language support (ES/EN/PT)
+- Language-switching bug fixed
+- PIN/signature confirmation before sending
+- 2FA for large transfers (>$50)
+- Opt-out/export functionality for wallets
+- Privacy controls (phone visibility settings)
+- Monitoring infrastructure live
+
+KPIs:
+- Audit report with 0 critical/high findings
+- WhatsApp production number active
+- 3 languages supported
+- User protection features documented and tested
+
+---
+
+MILESTONE 2: App Rebranding, Beta Launch & Legal Ops
+Amount: $12,000 USD
+Timeline: 16 weeks from approval (8 weeks after M1)
+
+Deliverables:
+- App rebranding: "digital dollar transfers" positioning for Meta compliance
+- 150 beta users in Colombia with active wallets
+- $5,000+ transaction volume (USDC)
+- Legal entity established (Colombia SAS)
+- Terms of Service and Privacy Policy aligned with WhatsApp Commerce Policy
+- Colombia regulatory compliance documentation
+- Meta WhatsApp Business API compliance review with legal counsel
+- User feedback collected, NPS measured (target >40)
+
+KPIs:
+- 150 unique wallets created
+- $5K+ cumulative volume
+- NPS > 40
+- Legal entity active
+- WhatsApp Business API compliant
+
+---
+
+MILESTONE 3: Optimization, Scale & Growth
+Amount: $10,000 USD
+Timeline: 24 weeks from approval (8 weeks after M2)
+
+Deliverables:
+- 300 registered users in Colombia
+- $12,000+ cumulative transaction volume
+- Performance optimization based on beta feedback
+- Marketing campaign execution (content, influencer collabs, community events)
+- Public analytics dashboard
+
+KPIs:
+- 300 unique wallets
+- $12K+ cumulative volume
+- Marketing reach metrics (impressions, engagement)
+- Dashboard public
+
+---
+
+MILESTONE 4: Consolidation & Closeout
+Amount: $6,000 USD
+Timeline: 28 weeks from approval (4 weeks after M3)
+
+Deliverables:
+- 500+ total users (target 700)
+- $25,000+ cumulative volume (target $35K)
+- Developer documentation and technical blog posts (architecture patterns, WhatsApp integration lessons, LLM parsing approaches)
+- Final report submitted to Arbitrum DAO
+
+KPIs:
+- 500+ unique wallets
+- $25K+ cumulative volume
+- Developer documentation and technical blog posts
+
+
+---
+
+TOTAL FUNDING: $41,000 USD
+TOTAL TIMELINE: 28 weeks (~6.5 months)
+
+Are milestones clearly defined, time-bound, and measurable with quantitative metrics where applicable? What are your reference KPI, if applicable, for each milestone:
+
+Yes. All milestones have quantitative KPIs:
+
+MILESTONE 1 KPIs (Week 8):
+- Audit: Report published, 0 critical/high
+- WhatsApp: Production number active
+- Languages: 3 supported (ES/EN/PT)
+- Security: PIN/2FA flows documented
+- Verification: Audit report link, status page
+
+MILESTONE 2 KPIs (Week 16):
+- Users: 150 unique wallets
+- Volume: $5,000+ USDC
+- Satisfaction: NPS > 40
+- Legal: Entity established, Meta-compliant positioning
+- Verification: On-chain analytics, legal docs, WhatsApp Business verification
+
+MILESTONE 3 KPIs (Week 24):
+- Users: 300 unique wallets
+- Volume: $12,000+ cumulative
+- Marketing: Campaign metrics (reach, engagement)
+- Dashboard: Public analytics
+- Verification: On-chain analytics, dashboard URL, social metrics
+
+MILESTONE 4 KPIs (Week 28):
+- Users: 500+ (target 700)
+- Volume: $25,000+ (target $35K)
+- Developer documentation and technical blog posts
+
+ONGOING METRICS:
+- Daily/Weekly Active Users
+- Transaction count and average size
+- User retention (7-day, 30-day)
+- Error rate and uptime
+
+
+What is the estimated maximum time for the completion of the project?
+
+28 weeks (~6.5 months) from grant approval.
+
+Within the 6-month guidance with reasonable buffer for external dependencies (Meta approval, auditor availability).
+
+Timeline:
+- Weeks 1-8: MVP Revamp for Production
+- Weeks 9-16: Beta Launch & Legal Ops
+- Weeks 17-24: Optimization, Scale & Growth
+- Weeks 25-28: Consolidation & Closeout
+
+Our MVP already exists and was validated at ETHOnline 2025, reducing execution risk.
+
+How should the Arbitrum community measure the success of this grant?
+
+PRIMARY SUCCESS METRICS:
+
+New Arbitrum Wallets - Target: 500+ (goal 700) - Verification: On-chain (Arbiscan/Dune)
+USDC Volume - Target: $25,000+ (goal $35K) - Verification: On-chain transfers
+Transaction Count - Target: 1,000+ - Verification: On-chain count
+User Retention - Target: >30% monthly - Verification: Analytics dashboard
+Colombia Active - Target: Yes - Verification: Geo-distribution
+
+SECONDARY METRICS:
+- Developer documentation views/engagement
+- Technical blog post reach
+- Community growth
+- User NPS score
+
+REPORTING:
+- Monthly progress updates to Arbitrum forum
+- Public real-time analytics dashboard
+- Final comprehensive report
+- 3-month follow-up survey
+
+LONG-TERM INDICATORS (12 months post-grant):
+- 5,000+ users
+- $100K+ monthly volume
+- Self-sustaining via fiat on/off ramp fees
+- Ready to expand beyond Colombia
+
+What is the economic plan for maintaining operations or continuing the growth of your project after the grant period?
+
+REVENUE MODEL:
+
+1. FREE P2P TRANSFERS
+Sippy-to-Sippy USDC transfers remain FREE. This is our core value proposition and growth driver - we won't compromise adoption with fees that contradict our "near-zero cost" pitch.
+
+2. FUTURE MONETIZATION (Post-Grant)
+- Fiat on/off ramps: 1-2% fee on cash-in/cash-out (significantly lower than 5-10% remittance fees). Requires banking/fintech partnership in Colombia (e.g., Bre-B or similar) - conversations planned during M3/M4 once user traction is proven.
+- Business accounts: Monthly subscription for merchants receiving payments
+- API access: Enterprise integrations for remittance corridors
+- Premium features: Higher limits, scheduled payments, invoice generation for freelancers
+
+3. WHY THIS MODEL WORKS
+- Free transfers = viral adoption (zero friction for users)
+- Monetize the edges (fiat conversion), not the core (P2P)
+- Build user base first, monetize infrastructure later
+- Proven model: Venmo, Cash App, Wise all started this way
+
+PATH TO SUSTAINABILITY:
+
+Break-even Analysis (with fiat partnership):
+- At 5,000 users converting $100 avg/month to fiat
+- 1.5% on-ramp/off-ramp fee = $7,500/month
+- Sustainable for continued operations
+
+Growth Options:
+- Banking/fintech partnership for fiat on/off ramps (priority post-grant)
+- Follow-on grants for regional expansion
+- Strategic partnerships with remittance corridors
+- Seed funding if traction warrants
+
+LONG-TERM VISION:
+
+Sippy aims to become the "crypto Venmo" for Latin America - making "Arbitrum Everywhere" a reality across 500M+ WhatsApp users in the region. This grant funds Colombia proof-of-concept. Success here proves the model for regional expansion.
+
+WHY WE WON'T NEED CONTINUOUS GRANTS:
+
+1. Built-in Revenue: Fiat on/off ramp fees once integrated (post-grant)
+2. Network Effects: Free P2P = each user brings more users organically
+3. Infrastructure Leverage: Once built, serves more users at marginal cost
+4. Market Timing: LATAM crypto adoption accelerating
+
+COMMITMENT TO ARBITRUM:
+
+Sippy remains committed to Arbitrum as primary infrastructure. Our success = Arbitrum's success. Every user onboarded strengthens the ecosystem.
+
+We're building toward "Arbitrum Everywhere" - starting with WhatsApp in Colombia, then expanding across LATAM.
+
+
+================================================================================
+DOMAIN SPECIFIC INFORMATION - New Protocols and Ideas
+================================================================================
+
+Category:
+Consumer App
+
+Protocol Performance:
+
+Sippy is at MVP stage, live on Arbitrum One mainnet.
+
+ETHONLINE 2025 RESULTS:
+- Selected as FINALIST among hundreds of submissions
+- Working demo publicly reviewed by judges
+- End-to-end transaction flow validated
+
+TECHNICAL VALIDATION:
+- GasRefuel.sol deployed on Arbitrum One mainnet
+- Coinbase CDP wallet integration functional
+- WhatsApp Business API working via Meta Cloud API
+- Gasless transactions operational
+- Phone to wallet mapping functional
+
+PERFORMANCE:
+- Avg transaction time: <5 seconds
+- Error rate: <1%
+
+PROOF: https://ethglobal.com/showcase/sippy-2smms
+
+
+
+
+
+Audit History & Security Vendors:
+
+CURRENT STATUS: No formal audit (MVP stage)
+
+AUDIT PLAN:
+
+Timeline: Milestone 1 (Weeks 1-8)
+Budget: $2,000 USD (contract is ~100 lines, simple scope)
+
+Audit Scope:
+- GasRefuel.sol - Gas funding logic and access control
+- Backend security assessment
+- CDP integration flows
+
+Deliverables:
+- Audit report published
+- All critical/high findings resolved
+- Gas optimization implemented
+
+SECURITY MEASURES IMPLEMENTED:
+- GasRefuel with Ownable access control
+- Pause/unpause emergency controls
+- Rate limiting (MAX_DAILY_REFUELS, REFUEL_COOLDOWN)
+- Transaction limits ($500/day, $100/tx)
+- Session management
+- Message deduplication
+
+PLANNED (M1):
+- Backend rate limiting enhancements
+- Privacy controls
+- WhatsApp Template Messages
+- Monitoring infrastructure
+- PIN/signature confirmation
+- 2FA for large transfers
+
+BUG BOUNTY: Planned post-mainnet scaling
+
+Is your project composable with other projects on Arbitrum? If so, please explain how:
+
+FOCUSED COMPOSABILITY:
+
+Sippy wallets are standard Arbitrum EOA accounts via Coinbase CDP. Our focus is simplicity:
+
+- Current: USDC on Arbitrum for send/receive
+- Opt-out: Export functionality so users can use wallet elsewhere
+- Philosophy: Sippy makes onboarding easy. Complex features are for specialized apps.
+
+ECOSYSTEM VALUE:
+
+1. User Expansion: Sippy users become Arbitrum users who can explore the ecosystem
+2. Volume Growth: Every transaction = Arbitrum network activity
+3. Accessibility: Demonstrates Arbitrum can serve mainstream users
+4. USDC Distribution: Increases USDC usage on Arbitrum
+
+WHY NOT DEFI:
+
+Sippy's philosophy: "Easy for everyone. Send and receive. Nothing complex."
+
+We intentionally don't build:
+- Yield farming
+- Trading/swaps
+- Lending/borrowing
+
+Users who want these can export wallet and use specialized DeFi apps.
+
+Is the proposal scope realistic and well-defined given the team, resources, and deliverables?
+
+YES. Here's the evidence:
+
+1. MVP ALREADY EXISTS
+
+- Core functionality built at ETHOnline 2025
+- Selected as Finalist (external validation)
+- Live on Arbitrum One mainnet
+- Not starting from zero
+- Demo: https://ethglobal.com/showcase/sippy-2smms
+
+
+
+
+2. EXPERIENCED TEAM
+
+Mateo Daza: 8+ years Web3, Lead at Asymmetry Finance, 2 ETHGlobal Finalists
+Carlos Quintero: 8+ years production apps, Web2/Web3
+Noah Biel: Grant management expertise, Master's in Social Innovation
+
+Combined: 18+ years relevant experience
+
+3. CONSERVATIVE TARGETS
+
+M1: Production Ready - 8 weeks - Code exists, focused scope
+M2: 150 users - 16 weeks - Controlled beta, team networks
+M3: 300 users - 24 weeks - Organic growth + marketing push
+M4: 500+ users - 28 weeks - Consolidation phase
+
+4. FOCUSED SCOPE
+
+IN SCOPE:
+- USDC payments (send/receive)
+- Colombia only
+- User protection (PIN, 2FA)
+- Opt-out/export
+- Developer documentation and technical blog posts
+
+OUT OF SCOPE:
+- Multi-token support
+- Multi-country expansion
+- Fiat on/off ramps
+- DeFi integrations
+- Merchant POS
+
+5. RISK MITIGATION
+
+Audit delays - Low probability - Simple contract, 8-week buffer
+Meta WhatsApp rejection/delay - Medium probability - Mitigated through Legal Ops (M2): Position as "digital dollar transfers" compliant with WhatsApp Commerce Policy for financial services. Legal counsel will ensure messaging and terms align with both Colombian regulations and Meta's policies. No crypto terminology in user-facing content.
+Slow adoption - Medium probability - Conservative 500 target, concrete acquisition plan (see below)
+Technical issues - Low probability - Experienced team, validated code
+
+
+6. USER ACQUISITION STRATEGY
+
+Phase 1 - Seed Users (M2: 150 users):
+- Team's personal networks in Colombia (Ethereum Colombia community, tech circles)
+- Controlled invites to friends/family of early testers
+- Local crypto communities and on-chain groups (Ethereum Colombia, Barranquilla On-chain, Cartagena On-chain)
+
+Phase 2 - Organic Growth (M3: 300 users):
+- Word-of-mouth from satisfied beta users
+- Content marketing: WhatsApp status updates, Instagram/TikTok reels showing ease of use
+- Crypto Twitter/X presence targeting LATAM audience
+- Collaborations with LATAM crypto influencers and educators
+
+Phase 3 - Scale (M4: 500+ users):
+- Targeting freelancer communities receiving international payments
+- Strategic content partnerships with crypto media in Spanish
+- Community events and demos at LATAM crypto conferences
+- Viral loop: people who receive payments become active users and invite others
+
+CONCLUSION:
+
+Scope is deliberately conservative:
+- Working MVP (not just an idea)
+- Hackathon validation (external proof)
+- Experienced team (verifiable)
+- Clear milestones (quantitative)
+- Realistic timeline (28 weeks)
+- Defined boundaries (Colombia, USDC only)
+- Transparent about current stage (hackathon MVP)
+
+We are confident in delivering every milestone on time and within budget.
+
+
+
+
+
+
+
+
+
+================================================================================
+OTHER INFORMATION
+================================================================================
+
+How did you find out about this program?
+Arbitrum Twitter
+
+================================================================================
+MILESTONES (Separate Form)
+================================================================================
+
+Milestone 01:
+
+Title: MVP Revamp for Production
+
+Details: Take working MVP to production-ready state on Arbitrum One. Includes USDC integration (replacing PYUSD), GasRefuel.sol security audit, WhatsApp Business API production approval from Meta, Portuguese language support (3 languages: ES/EN/PT), language-switching bug fix, user protection features (PIN confirmation, 2FA for large transfers), opt-out/export functionality for wallets, privacy controls, and monitoring infrastructure.
+
+Deadline: [8 weeks from approval - select date]
+
+Funding Ask: 13000
+
+---
+
+Milestone 02:
+
+Title: App Rebranding, Beta Launch & Legal Ops
+
+Details: Launch private beta with 150 real users in Colombia. Includes app rebranding (positioning as "digital dollar transfers" for Meta compliance), 150 beta users with active Arbitrum wallets, $5,000+ USDC transaction volume, legal entity establishment, Terms of Service and Privacy Policy aligned with both Colombian regulations and WhatsApp Commerce Policy, and user feedback with NPS measurement (target >40). Legal counsel ensures compliant positioning for Meta approval.
+
+Deadline: [16 weeks from approval - select date]
+
+Funding Ask: 12000
+
+---
+
+Milestone 03:
+
+Title: Optimization, Scale & Growth
+
+Details: Scale to 300 users with optimized performance and marketing push. Includes 300 registered users in Colombia, $12,000+ cumulative transaction volume, performance optimization based on beta feedback, marketing campaign execution (content, influencer collaborations, community events), and public analytics dashboard.
+
+Deadline: [24 weeks from approval - select date]
+
+Funding Ask: 10000
+
+---
+
+Milestone 04:
+
+Title: Consolidation & Closeout
+
+Details: Consolidate to 500+ users with documentation release. Includes 500+ total users (target 700), $25,000+ cumulative volume (target $35K), developer documentation and technical blog posts (architecture patterns, WhatsApp integration lessons, LLM parsing approaches), and final report to Arbitrum DAO.
+
+
+Deadline: [28 weeks from approval - select date]
+
+Funding Ask: 6000
+
+---
+
+Funding Asked (Total): 41000
+
+
+
+
+================================================================================
+CHECKLIST BEFORE SUBMITTING
+================================================================================
+
+[ ] Add your email
+[ ] Add your Arbitrum One wallet address (0x...)
+[ ] Select milestone dates (8, 16, 24, 28 weeks from approval)
+[ ] Mark Yes on KYC acknowledgment
+[ ] Mark Yes on reporting acknowledgment
+
+================================================================================
+
+Document generated December 2025
+V4: Conservative targets (500 users, $25K volume), "Arbitrum Everywhere" alignment, free P2P model

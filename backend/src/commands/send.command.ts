@@ -2,7 +2,7 @@ import {
   getUserWallet,
   isSessionValid,
   updateLastActivity,
-  sendPYUSDToUser,
+  sendUSDCToUser,
   getUserBalance,
   checkSecurityLimits,
 } from '../services/cdp-wallet.service.js';
@@ -29,7 +29,7 @@ export async function handleSendCommand(
   toPhoneNumber: string
 ): Promise<void> {
   console.log(
-    `SEND command: +${fromPhoneNumber} -> +${toPhoneNumber} (${amount} PYUSD)`
+    `SEND command: +${fromPhoneNumber} -> +${toPhoneNumber} (${amount} USD)`
   );
 
   try {
@@ -121,7 +121,7 @@ export async function handleSendCommand(
     }
 
     console.log(`Executing transfer...`);
-    const result = await sendPYUSDToUser(
+    const result = await sendUSDCToUser(
       fromPhoneNumber,
       toPhoneNumber,
       amount
@@ -151,7 +151,7 @@ export async function handleSendCommand(
 
     console.log(`Transfer completed. Hash: ${result.transactionHash}`);
   } catch (error) {
-    console.error(`Failed to send PYUSD:`, error);
+    console.error(`Failed to send USDC:`, error);
 
     const errorMessage = toUserErrorMessage(error);
     await sendTextMessage(

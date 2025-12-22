@@ -87,8 +87,8 @@ export default async function ReceiptPage({ params }: ReceiptPageProps) {
   let fromAddress: string;
   let toAddress: string;
 
-  if (transaction.token === 'PYUSD' && txDetails?.token_transfers?.[0]) {
-    // PYUSD transfer - get actual sender/receiver from token_transfers
+  if (transaction.token === 'USDC' && txDetails?.token_transfers?.[0]) {
+    // USDC transfer - get actual sender/receiver from token_transfers
     fromAddress =
       txDetails.token_transfers[0].from?.hash || txDetails.from?.hash;
     toAddress =

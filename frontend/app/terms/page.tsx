@@ -69,8 +69,8 @@ export default function TermsOfServicePage() {
                 <p className='text-gray-600 leading-relaxed mb-4'>
                   Welcome to Sippy. These Terms of Service ("Terms") govern your
                   use of the Sippy service ("Service"), a WhatsApp-based payment
-                  application that enables users to send and receive PYUSD (PayPal
-                  USD stablecoin) on the Arbitrum blockchain network.
+                  application that enables users to send and receive digital
+                  dollars using phone numbers.
                 </p>
                 <p className='text-gray-600 leading-relaxed'>
                   By using our Service, you agree to be bound by these Terms. If
@@ -136,18 +136,18 @@ export default function TermsOfServicePage() {
                 </p>
                 <ul className='list-disc pl-6 text-gray-600 space-y-2'>
                   <li>
-                    Creating a blockchain wallet linked to your phone number.
+                    Creating a payment account linked to your phone number.
                   </li>
                   <li>
-                    Sending and receiving PYUSD stablecoin to other phone numbers.
+                    Sending and receiving digital dollars to other phone numbers.
                   </li>
-                  <li>Checking your PYUSD balance.</li>
+                  <li>Checking your balance.</li>
                   <li>Viewing your transaction history.</li>
                 </ul>
                 <p className='text-gray-600 leading-relaxed mt-4'>
-                  Our Service operates on the Arbitrum blockchain network and uses
-                  Coinbase CDP (Coinbase Developer Platform) for secure wallet
-                  management.
+                  Our Service uses Coinbase CDP (Coinbase Developer Platform) for
+                  secure account management and the Arbitrum network for payment
+                  processing.
                 </p>
               </section>
 
@@ -162,11 +162,11 @@ export default function TermsOfServicePage() {
                 </p>
                 <ul className='list-disc pl-6 text-gray-600 space-y-2'>
                   <li>
-                    A blockchain wallet is automatically created and linked to your
+                    A payment account is automatically created and linked to your
                     phone number.
                   </li>
                   <li>
-                    Your wallet private keys are securely stored by Coinbase in
+                    Your account security keys are securely stored by Coinbase in
                     their Trusted Execution Environment (TEE).
                   </li>
                   <li>
@@ -197,8 +197,8 @@ export default function TermsOfServicePage() {
                     transaction.
                   </li>
                   <li>
-                    <strong>Gas Fees:</strong> Sippy covers blockchain gas fees for
-                    standard transactions during the beta period.
+                    <strong>Transaction Fees:</strong> Sippy covers transaction fees
+                    during the beta period.
                   </li>
                 </ul>
                 <p className='text-gray-600 leading-relaxed mt-4'>
@@ -233,10 +233,10 @@ export default function TermsOfServicePage() {
                 </p>
               </section>
 
-              {/* Blockchain and Cryptocurrency Risks */}
+              {/* Transaction Risks */}
               <section className='mb-10'>
                 <h2 className='text-2xl font-bold text-gray-900 mb-4'>
-                  8. Blockchain and Cryptocurrency Risks
+                  8. Transaction Risks
                 </h2>
                 <p className='text-gray-600 leading-relaxed mb-4'>
                   By using our Service, you acknowledge and accept the following
@@ -244,25 +244,21 @@ export default function TermsOfServicePage() {
                 </p>
                 <ul className='list-disc pl-6 text-gray-600 space-y-2'>
                   <li>
-                    <strong>Irreversible Transactions:</strong> Blockchain
-                    transactions are irreversible. Once a transaction is confirmed,
+                    <strong>Irreversible Transactions:</strong> Transactions
+                    are irreversible. Once a transaction is confirmed,
                     it cannot be undone.
                   </li>
                   <li>
-                    <strong>Price Volatility:</strong> While PYUSD is designed as a
-                    stablecoin, cryptocurrency values can fluctuate.
-                  </li>
-                  <li>
-                    <strong>Technology Risks:</strong> Blockchain technology is
+                    <strong>Technology Risks:</strong> Digital payment systems are
                     subject to technical issues, bugs, and security
                     vulnerabilities.
                   </li>
                   <li>
-                    <strong>Regulatory Changes:</strong> Cryptocurrency regulations
+                    <strong>Regulatory Changes:</strong> Digital payment regulations
                     may change, potentially affecting the Service.
                   </li>
                   <li>
-                    <strong>Network Congestion:</strong> Transactions may be delayed
+                    <strong>Network Delays:</strong> Transactions may be delayed
                     during periods of high network activity.
                   </li>
                 </ul>
@@ -332,16 +328,12 @@ export default function TermsOfServicePage() {
                     use is also subject to WhatsApp's Terms of Service.
                   </li>
                   <li>
-                    <strong>Coinbase CDP:</strong> For wallet infrastructure and
-                    key management.
+                    <strong>Coinbase CDP:</strong> For account infrastructure and
+                    security management.
                   </li>
                   <li>
-                    <strong>Arbitrum Network:</strong> For blockchain transaction
+                    <strong>Arbitrum Network:</strong> For transaction
                     processing.
-                  </li>
-                  <li>
-                    <strong>PYUSD (Paxos):</strong> The stablecoin used for
-                    transactions.
                   </li>
                 </ul>
                 <p className='text-gray-600 leading-relaxed mt-4'>
@@ -374,7 +366,7 @@ export default function TermsOfServicePage() {
                   </li>
                   <li>
                     We are not liable for service interruptions caused by
-                    third-party providers or blockchain network issues.
+                    third-party providers or network issues.
                   </li>
                 </ul>
               </section>
@@ -421,10 +413,10 @@ export default function TermsOfServicePage() {
                 </p>
                 <p className='text-gray-600 leading-relaxed mt-4'>
                   <strong>Termination:</strong> You may stop using the Service at
-                  any time. Upon termination, your wallet and any remaining PYUSD
-                  balance will remain accessible on the Arbitrum blockchain
-                  through other wallet applications (such as MetaMask or Coinbase
-                  Wallet) using the wallet address associated with your account.
+                  any time. Upon termination, your funds and any remaining
+                  balance will remain accessible through compatible wallet
+                  applications using the account address associated with your
+                  phone number.
                 </p>
               </section>
 
@@ -457,7 +449,7 @@ export default function TermsOfServicePage() {
                   </li>
                   <li>
                     <strong>Investigation:</strong> For transaction disputes, we
-                    will review blockchain records and our system logs to
+                    will review transaction records and our system logs to
                     investigate the issue.
                   </li>
                 </ul>
@@ -466,15 +458,14 @@ export default function TermsOfServicePage() {
                 </h3>
                 <ul className='list-disc pl-6 text-gray-600 space-y-2'>
                   <li>
-                    <strong>Blockchain transactions are irreversible.</strong>{' '}
-                    Once confirmed on the Arbitrum network, transactions cannot
-                    be reversed or refunded by Sippy.
+                    <strong>Transactions are irreversible.</strong>{' '}
+                    Once confirmed, transactions cannot be reversed or refunded
+                    by Sippy.
                   </li>
                   <li>
                     <strong>User error:</strong> Sippy is not responsible for
-                    funds sent to incorrect phone numbers or wallet addresses.
-                    Please verify recipient details before confirming
-                    transactions.
+                    funds sent to incorrect phone numbers. Please verify
+                    recipient details before confirming transactions.
                   </li>
                   <li>
                     <strong>System errors:</strong> If a technical error on our

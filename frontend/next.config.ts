@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
       process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
     NEXT_PUBLIC_ENABLE_TESTNET: process.env.NEXT_PUBLIC_ENABLE_TESTNET,
   },
+  turbopack: {},
   webpack: (config) => {
     config.resolve.fallback = {
       fs: false,

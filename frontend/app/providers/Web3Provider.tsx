@@ -1,11 +1,10 @@
 'use client';
 
-import { WagmiProvider, createConfig, http, useAccount } from 'wagmi';
+import { WagmiProvider, createConfig, http } from 'wagmi';
 import { arbitrum, mainnet, optimism, base, polygon } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConnectKitProvider, getDefaultConfig } from 'connectkit';
 import { ReactNode } from 'react';
-import { NexusProvider } from './NexusProvider';
 
 const config = createConfig(
   getDefaultConfig({
@@ -28,38 +27,30 @@ const config = createConfig(
     appIcon: 'https://sippy.app/icon.png',
 
     enableFamily: false,
-    ssr: true, // Enable SSR mode to prevent hydration mismatches
+    ssr: true,
   })
 );
 
 const queryClient = new QueryClient();
 
-function InternalProvider({ children }: { children: ReactNode }) {
-  const { isConnected } = useAccount();
-
-  return (
-    <ConnectKitProvider
-      options={{
-        hideNoWalletCTA: true, // Hide "I don't have a wallet" link
-        hideRecentBadge: true, // Hide "recent" badge
-        hideQuestionMarkCTA: true, // Hide help button
-        hideTooltips: false, // Keep tooltips for guidance
-        walletConnectCTA: 'link', // Make WalletConnect less prominent (link instead of button)
-      }}
-      customTheme={{
-        '--ck-font-family': 'system-ui, sans-serif',
-      }}
-    >
-      <NexusProvider isConnected={isConnected}>{children}</NexusProvider>
-    </ConnectKitProvider>
-  );
-}
-
 export function Web3Provider({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={config} reconnectOnMount={true}>
       <QueryClientProvider client={queryClient}>
-        <InternalProvider>{children}</InternalProvider>
+        <ConnectKitProvider
+          options={{
+            hideNoWalletCTA: true,
+            hideRecentBadge: true,
+            hideQuestionMarkCTA: true,
+            hideTooltips: false,
+            walletConnectCTA: 'link',
+          }}
+          customTheme={{
+            '--ck-font-family': 'system-ui, sans-serif',
+          }}
+        >
+          {children}
+        </ConnectKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );

@@ -100,7 +100,7 @@ export function ProfileHeader({
             </div>
           </div>
 
-          {/* Main PYUSD Balance */}
+          {/* Main USD Balance */}
           <div className='sm:mt-[-60px] text-center pt-2 pb-4 sm:pt-4 sm:pb-6'>
             <div className='text-white/80 text-sm sm:text-base font-medium mb-3 tracking-wide uppercase'>
               Available Balance
@@ -109,7 +109,7 @@ export function ProfileHeader({
               <div className='text-5xl sm:text-6xl md:text-7xl font-black text-white tracking-tight'>
                 $
                 <NumberTicker
-                  value={parseFloat(balances.pyusd)}
+                  value={parseFloat(balances.usdc)}
                   decimalPlaces={2}
                   className='text-white'
                 />
@@ -118,7 +118,7 @@ export function ProfileHeader({
             <div className='inline-flex items-center gap-2 px-4 py-1.5 bg-white/15 backdrop-blur-sm rounded-full border border-white/25'>
               <div className='w-2 h-2 rounded-full bg-[#4ade80] animate-pulse' />
               <span className='text-white/90 text-xs sm:text-sm font-semibold'>
-                PYUSD
+                USD
               </span>
               <span className='text-white/60 text-xs'>•</span>
               <span className='text-white/70 text-xs'>Arbitrum One</span>
