@@ -91,7 +91,13 @@ export default function TermsOfServicePage() {
                     Mateo Jose Daza Benjumea
                   </p>
                   <p className='text-gray-600'>Sippy</p>
-                  <p className='text-gray-600 flex items-center gap-2 mt-2'>
+                  <div className='mt-3 pt-3 border-t border-gray-200'>
+                    <p className='text-gray-600'>Carrera 59 # 96-153</p>
+                    <p className='text-gray-600'>BRUXXEL APTO 402</p>
+                    <p className='text-gray-600'>Barranquilla, Atlántico 080001</p>
+                    <p className='text-gray-600'>Colombia</p>
+                  </div>
+                  <p className='text-gray-600 flex items-center gap-2 mt-3 pt-3 border-t border-gray-200'>
                     <Mail className='w-4 h-4' />
                     <a
                       href='mailto:hello@sippy.lat'
@@ -100,7 +106,6 @@ export default function TermsOfServicePage() {
                       hello@sippy.lat
                     </a>
                   </p>
-                  <p className='text-gray-600 mt-1'>Colombia</p>
                 </div>
               </section>
 
@@ -146,8 +151,9 @@ export default function TermsOfServicePage() {
                 </ul>
                 <p className='text-gray-600 leading-relaxed mt-4'>
                   Our Service uses Coinbase CDP (Coinbase Developer Platform) for
-                  secure account management and the Arbitrum network for payment
-                  processing.
+                  secure account management and the Arbitrum network (a public
+                  blockchain) for payment processing. Transaction data on Arbitrum
+                  is publicly visible and permanently recorded.
                 </p>
               </section>
 
@@ -332,8 +338,9 @@ export default function TermsOfServicePage() {
                     security management.
                   </li>
                   <li>
-                    <strong>Arbitrum Network:</strong> For transaction
-                    processing.
+                    <strong>Arbitrum Network:</strong> A public blockchain for
+                    transaction processing. On-chain data is publicly visible
+                    and immutable.
                   </li>
                 </ul>
                 <p className='text-gray-600 leading-relaxed mt-4'>
@@ -413,10 +420,11 @@ export default function TermsOfServicePage() {
                 </p>
                 <p className='text-gray-600 leading-relaxed mt-4'>
                   <strong>Termination:</strong> You may stop using the Service at
-                  any time. Upon termination, your funds and any remaining
-                  balance will remain accessible through compatible wallet
-                  applications using the account address associated with your
-                  phone number.
+                  any time. Upon termination, your funds remain on the Arbitrum
+                  network. To withdraw any remaining balance, please contact us
+                  at hello@sippy.lat with a withdrawal request including your
+                  phone number and a destination wallet address. We will process
+                  withdrawal requests within 15 business days.
                 </p>
               </section>
 

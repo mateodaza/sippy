@@ -20,7 +20,7 @@ import {
 } from './src/services/whatsapp.service.js';
 import {
   formatFundETHReceivedMessage,
-  formatFundPYUSDReceivedMessage,
+  formatFundUSDReceivedMessage,
 } from './src/utils/messages.js';
 import {
   getAllWallets,
@@ -481,7 +481,7 @@ app.post('/notify-fund', async (req: Request, res: Response) => {
     const message =
       type === 'eth'
         ? formatFundETHReceivedMessage({ amount, txHash })
-        : formatFundPYUSDReceivedMessage({ amount, txHash });
+        : formatFundUSDReceivedMessage({ amount, txHash });
 
     // Send WhatsApp notification
     await sendTextMessage(cleanPhone, message);

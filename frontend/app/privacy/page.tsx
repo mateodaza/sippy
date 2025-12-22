@@ -147,8 +147,8 @@ export default function PrivacyPolicyPage() {
                   </li>
                   <li>
                     <strong>Transaction History:</strong> Records of dollar
-                    transfers you make or receive, stored on our secure payment
-                    network.
+                    transfers you make or receive, stored on the Arbitrum
+                    network (a public blockchain).
                   </li>
                   <li>
                     <strong>Account Activity:</strong> Timestamps of your last
@@ -297,8 +297,9 @@ export default function PrivacyPolicyPage() {
                   </li>
                   <li>
                     <strong>Arbitrum Network:</strong> To process dollar
-                    transactions on our payment network. Transaction data is
-                    visible on the Arbitrum network.
+                    transactions. Arbitrum is a public blockchain, meaning
+                    transaction data (amounts, addresses, timestamps) is
+                    publicly visible and permanently recorded.
                   </li>
                   <li>
                     <strong>Blockscout:</strong> To retrieve transaction history
@@ -351,8 +352,9 @@ export default function PrivacyPolicyPage() {
                     hosting provider according to their data retention policies.
                   </li>
                   <li>
-                    Transaction data is stored on the Arbitrum payment network,
-                    which provides a permanent and transparent record.
+                    Transaction data is stored on the Arbitrum network (a public
+                    blockchain), which provides a permanent and publicly
+                    visible record.
                   </li>
                 </ul>
               </section>
@@ -386,8 +388,8 @@ export default function PrivacyPolicyPage() {
                   </li>
                   <li>
                     <strong>Payment transactions</strong>: Permanently stored on
-                    the Arbitrum payment network. This data cannot be deleted due to
-                    the permanent nature of our transaction records.
+                    the Arbitrum network (a public blockchain). This data cannot
+                    be deleted due to the immutable nature of blockchain records.
                   </li>
                 </ul>
                 <h3 className='text-lg font-semibold text-gray-800 mt-6 mb-3'>
@@ -405,7 +407,8 @@ export default function PrivacyPolicyPage() {
                   with subject line "Data Deletion Request" and include the phone
                   number associated with your account. We will process your
                   request within 15 business days and confirm deletion via email.
-                  Note: Historical transaction records cannot be deleted.
+                  Note: Transaction records on the Arbitrum blockchain cannot be
+                  deleted due to the immutable nature of public blockchains.
                 </p>
               </section>
 
