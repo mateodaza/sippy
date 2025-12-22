@@ -856,6 +856,18 @@ export default function HomePage() {
             </div>
             <div className='flex gap-6 text-[13px] text-gray-600'>
               <a
+                href='/privacy'
+                className='hover:text-[#059669] transition-colors duration-200 font-medium'
+              >
+                Privacy Policy
+              </a>
+              <a
+                href='/terms'
+                className='hover:text-[#059669] transition-colors duration-200 font-medium'
+              >
+                Terms of Service
+              </a>
+              <a
                 href='https://github.com/mateodaza/sippy'
                 target='_blank'
                 rel='noopener noreferrer'
