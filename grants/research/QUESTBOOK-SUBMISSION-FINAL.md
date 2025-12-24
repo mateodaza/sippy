@@ -1,12 +1,12 @@
-# Sippy - Questbook Resubmission V5
+# Sippy - Questbook Resubmission (Final)
 
-**Responses to Admin Feedback (Chilla - December 22, 2025)**
+**Response to Admin Feedback - Chilla (December 22, 2025)**
 
 ---
 
 ## Product & Differentiation
 
-### Q: While "zero-download" onboarding improves UX, it does not eliminate trust, custody, or regulatory complexity. Please clarify how these risks are handled rather than abstracted away.
+### While "zero-download" onboarding improves UX, it does not eliminate trust, custody, or regulatory complexity. Please clarify how these risks are handled rather than abstracted away.
 
 **Trust & Custody:**
 Trust and custody are addressed directly in Milestone 1 through concrete technical implementations:
@@ -36,7 +36,7 @@ These aren't abstractions - they're specific features and compliance frameworks 
 
 ---
 
-### Q: The "wallet paradox" appears reduced but not fully solved, as users still rely on backend abstractions they may not understand. How is user trust established and maintained?
+### The "wallet paradox" appears reduced but not fully solved, as users still rely on backend abstractions they may not understand. How is user trust established and maintained?
 
 User trust is established through transparency and education at every touchpoint:
 
@@ -65,7 +65,7 @@ Sippy is semi-custodial by design. We prioritize simplicity for mainstream users
 
 ---
 
-### Q: Please clarify whether Arbitrum will remain the foundational settlement chain long-term, or whether the project intends to become multichain in the future.
+### Please clarify whether Arbitrum will remain the foundational settlement chain long-term, or whether the project intends to become multichain in the future.
 
 **Arbitrum is our foundational settlement layer for the foreseeable future.**
 
@@ -83,7 +83,7 @@ We have no plans for multichain deployment. Our focus is proving the model on Ar
 
 ## Technical Architecture & Risk
 
-### Q: What is the custody model (custodial, MPC, smart contract wallet, delegated signing)?
+### What is the custody model (custodial, MPC, smart contract wallet, delegated signing)?
 
 **Custody Model: MPC-based via Coinbase CDP Server Wallets**
 
@@ -102,7 +102,7 @@ Semi-custodial is the right trade-off for mainstream adoption. Users who can't m
 
 ---
 
-### Q: What happens if a user loses WhatsApp access or changes phone numbers?
+### What happens if a user loses WhatsApp access or changes phone numbers?
 
 **Account Recovery Flow (M1 Deliverable):**
 
@@ -125,7 +125,7 @@ Semi-custodial is the right trade-off for mainstream adoption. Users who can't m
 
 ---
 
-### Q: What safeguards exist to prevent LLM misinterpretation or user error when parsing natural-language transactions?
+### What safeguards exist to prevent LLM misinterpretation or user error when parsing natural-language transactions?
 
 **LLM Transaction Safeguards (Implemented + M1 Enhancements):**
 
@@ -161,7 +161,7 @@ If LLM is uncertain: "I didn't understand that. Did you mean to send money? Plea
 
 ---
 
-### Q: What confirmation, fallback, or dispute mechanisms are in place if an incorrect transaction is initiated?
+### What confirmation, fallback, or dispute mechanisms are in place if an incorrect transaction is initiated?
 
 **Pre-Transaction Protection:**
 - Transaction preview with amount, recipient phone, recipient name (if registered)
@@ -195,10 +195,10 @@ Ticket system optimization with analytics on common issues, faster resolution pa
 
 ## Regulatory & Platform Risk
 
-### Q: WhatsApp is a closed platform with aggressive anti-bot and anti-financial-abuse policies. What is the mitigation plan if WhatsApp restricts or bans the service?
+### WhatsApp is a closed platform with aggressive anti-bot and anti-financial-abuse policies. What is the mitigation plan if WhatsApp restricts or bans the service?
 
 **Prevention - We're Already Approved:**
-We recently received WhatsApp Business API approval for 2,000 bot-initiated messages per day with unlimited user-initiated interactions. This validates our approach and compliance with Meta's policies. We're ready to begin scaling immediately. If verification is required, we're happy to arrange a call or alternative method to confirm our approval status (no screenshots shared).
+We recently received WhatsApp Business API approval for 2,000 bot-initiated messages per day with unlimited user-initiated interactions. This validates our approach and compliance with Meta's policies. We're ready to begin scaling immediately. If verification is required, we're happy to arrange a call or alternative method to confirm our approval status.
 
 **Compliance Strategy:**
 - Positioning as "digital dollar transfers" (compliant with WhatsApp Commerce Policy for financial services)
@@ -228,7 +228,7 @@ We recently received WhatsApp Business API approval for 2,000 bot-initiated mess
 
 ---
 
-### Q: Under which regulatory framework is this project operating in Colombia?
+### Under which regulatory framework is this project operating in Colombia?
 
 **Current Colombian Regulatory Framework:**
 
@@ -264,7 +264,7 @@ Tpaga and Truora already operate WhatsApp-based financial services in Colombia, 
 
 ---
 
-### Q: Who is the regulated entity, and who holds legal liability for compliance, AML/KYC, and dispute resolution?
+### Who is the regulated entity, and who holds legal liability for compliance, AML/KYC, and dispute resolution?
 
 **Regulated Entity: Sippy SAS**
 
@@ -292,7 +292,7 @@ Sippy SAS will be established as a Colombian Sociedad por Acciones Simplificada 
 
 ## Traction & Current State
 
-### Q: As the product is live in beta, please provide current traction metrics (e.g., users onboarded, active wallets, transaction volume).
+### As the product is live in beta, please provide current traction metrics (e.g., users onboarded, active wallets, transaction volume).
 
 **Clarification on Current State:**
 
@@ -319,7 +319,7 @@ The smart contract is deployed and functional on Arbitrum One mainnet - not test
 
 ---
 
-### Q: When a user initiates a transaction, whose USDC is being transferred (custodial pool, user-owned balance, prefunded liquidity)?
+### When a user initiates a transaction, whose USDC is being transferred (custodial pool, user-owned balance, prefunded liquidity)?
 
 **User-Owned Balance - No Pooled Funds**
 
@@ -344,7 +344,7 @@ When User A sends $25 to User B:
 
 ---
 
-### Q: What assumptions are being made about liquidity management at this stage?
+### What assumptions are being made about liquidity management at this stage?
 
 **No Pooled Liquidity Required**
 
@@ -367,7 +367,7 @@ When we integrate fiat on/off ramps (post-grant), we'll need to consider:
 
 ---
 
-### Q: Why are you choosing USDC?
+### Why are you choosing USDC?
 
 **USDC is the optimal choice for Colombian stablecoin payments:**
 
@@ -383,12 +383,12 @@ When we integrate fiat on/off ramps (post-grant), we'll need to consider:
 
 ## Team & Development
 
-### Q: The team appears experienced; however, beyond prior involvement with Asymmetry Finance, we would like additional detail on relevant past roles and responsibilities.
+### The team appears experienced; however, beyond prior involvement with Asymmetry Finance, we would like additional detail on relevant past roles and responsibilities.
 
 **Detailed Team Experience:**
 
-### Mateo Daza - Project Manager & Lead Software Engineer
-[LinkedIn](https://www.linkedin.com/in/mateo-daza-448469170/) | [GitHub](https://github.com/mateodaza)
+**Mateo Daza - Project Manager & Lead Software Engineer**
+LinkedIn: https://www.linkedin.com/in/mateo-daza-448469170/ | GitHub: https://github.com/mateodaza
 
 **Current:** Lead Frontend Engineer at Asymmetry Finance
 - Shipping production DeFi products: USDaf, veASF, afCVX, safETH
@@ -408,8 +408,8 @@ When we integrate fiat on/off ramps (post-grant), we'll need to consider:
 
 ---
 
-### Carlos Quintero - Full-Stack Software Engineer
-[LinkedIn](https://www.linkedin.com/in/carlos-quintero-076a36153/) | [GitHub](https://github.com/CarlosQ96)
+**Carlos Quintero - Full-Stack Software Engineer**
+LinkedIn: https://www.linkedin.com/in/carlos-quintero-076a36153/ | GitHub: https://github.com/CarlosQ96
 
 **Experience (8+ years):**
 - Full-stack development across fintech and e-commerce
@@ -426,8 +426,8 @@ When we integrate fiat on/off ramps (post-grant), we'll need to consider:
 
 ---
 
-### Noah Biel - Web3 Strategy & Partnerships Lead
-[Website](https://noahbiel.xyz)
+**Noah Biel - Web3 Strategy & Partnerships Lead**
+Website: https://noahbiel.xyz
 
 **Grant Management Experience:**
 - Giveth.io - Grant coordination and reporting
@@ -445,24 +445,24 @@ When we integrate fiat on/off ramps (post-grant), we'll need to consider:
 ---
 
 **Team CVs:**
-- Mateo Daza: [CV](https://docs.google.com/document/d/1sRKdt6cX4ORViJRPAAcBX4w_MkP1JtSqogeLqodWR0c/edit?usp=sharing)
-- Carlos Quintero: [CV](https://drive.google.com/file/d/1lpPBryEbmggpC7GRHRetxQAEnG-9Pwv1/view?usp=sharing)
+- Mateo Daza: https://docs.google.com/document/d/1sRKdt6cX4ORViJRPAAcBX4w_MkP1JtSqogeLqodWR0c/edit?usp=sharing
+- Carlos Quintero: https://drive.google.com/file/d/1lpPBryEbmggpC7GRHRetxQAEnG-9Pwv1/view?usp=sharing
 
 **Combined Experience:** 18+ years in relevant Web3 development and operations
 
 ---
 
-### Q: Please share your GitHub so we can review existing development.
+### Please share your GitHub so we can review existing development.
 
 **GitHub Repositories:**
 
 **Team GitHub Profiles:**
-- Mateo Daza: [github.com/mateodaza](https://github.com/mateodaza)
-- Carlos Quintero: [github.com/CarlosQ96](https://github.com/CarlosQ96)
+- Mateo Daza: https://github.com/mateodaza
+- Carlos Quintero: https://github.com/CarlosQ96
 
 **Public Contributions:**
 - Giveth Platform: Open source contributions visible on both team members' GitHub profiles
-- Blobscan: [ETHBogota 2022 Finalist](https://ethglobal.com/showcase/blobscan-explorer-5bmqk)
+- Blobscan: https://ethglobal.com/showcase/blobscan-explorer-5bmqk (ETHBogota 2022 Finalist)
 
 **Sippy Repository:**
 The hackathon repository is currently private during active development. We're happy to provide reviewer access upon request.
@@ -476,7 +476,7 @@ The hackathon repository is currently private during active development. We're h
 
 ## Milestones, Growth & Execution Risk
 
-### Q: The milestones are generally well structured, but the final milestone consists primarily of KPIs rather than concrete deliverables. Please revise to include specific outputs.
+### The milestones are generally well structured, but the final milestone consists primarily of KPIs rather than concrete deliverables. Please revise to include specific outputs.
 
 **Revised Milestone 4 Deliverables:**
 
@@ -530,7 +530,7 @@ Timeline: 28 weeks from approval (4 weeks after M3)
 
 ---
 
-### Q: Given the significant legal and platform uncertainties, what is the contingency plan if WhatsApp limits or disallows payments on the platform?
+### Given the significant legal and platform uncertainties, what is the contingency plan if WhatsApp limits or disallows payments on the platform?
 
 **Contingency: Webapp Fallback (M2 Deliverable)**
 
@@ -562,7 +562,7 @@ We're already approved for WhatsApp Business API with 2,000 bot-initiated messag
 
 ---
 
-### Q: Please expand on the user acquisition strategy. How do users discover and adopt the product within WhatsApp, and what marketing channels will be used? Do you have X?
+### Please expand on the user acquisition strategy. How do users discover and adopt the product within WhatsApp, and what marketing channels will be used? Do you have X?
 
 **User Acquisition Strategy:**
 
@@ -592,7 +592,7 @@ We're already approved for WhatsApp Business API with 2,000 bot-initiated messag
 - User-generated content encouraged
 
 *Social Media:*
-- Twitter/X: [@SippyLat](https://twitter.com/SippyLat) (active)
+- Twitter/X: @SippyLat (active)
 - Crypto Twitter presence targeting LATAM audience
 - Educational content about stablecoins and remittances
 
@@ -622,13 +622,13 @@ We're already approved for WhatsApp Business API with 2,000 bot-initiated messag
 
 *Viral Loop:*
 - Core growth mechanic: P2P transfers naturally onboard recipients
-- Person receives payment via Sippy → becomes user → sends to others
+- Person receives payment via Sippy -> becomes user -> sends to others
 - Each active user brings 1-2 new users organically
 
 ---
 
 **Social Media Presence:**
-- Twitter/X: [@SippyLat](https://twitter.com/SippyLat)
+- Twitter/X: @SippyLat
 - Telegram: @SippyPayments (community channel)
 - Discord: discord.gg/sippy
 
@@ -636,7 +636,7 @@ We're already approved for WhatsApp Business API with 2,000 bot-initiated messag
 
 ## Sustainability
 
-### Q: The business model is sufficiently detailed and supports multiple potential use cases; however, defensibility remains unclear. What prevents a large wallet provider, bank, or alternative chain from replicating this approach?
+### The business model is sufficiently detailed and supports multiple potential use cases; however, defensibility remains unclear. What prevents a large wallet provider, bank, or alternative chain from replicating this approach?
 
 **Defensibility - Why Large Players Can't Easily Replicate:**
 
@@ -644,7 +644,7 @@ We're already approved for WhatsApp Business API with 2,000 bot-initiated messag
 
 Network effects in payments are local, not global. Venmo dominates the US but not Mexico. M-Pesa dominates Kenya but failed in South Africa and Tanzania. Sippy's network grows within Colombia's WhatsApp social graph - each user makes the service more valuable to their contacts. Large players would need to rebuild this network from scratch in each market.
 
-Reference: [Harvard M-Pesa Analysis](https://d3.harvard.edu/platform-rctom/submission/m-pesa-how-sub-saharan-africa-bred-the-global-leader-in-mobile-money/) - M-Pesa's success was "incredibly difficult to replicate in other emerging markets, even by M-Pesa's parent company Vodafone."
+Reference: Harvard M-Pesa Analysis - M-Pesa's success was "incredibly difficult to replicate in other emerging markets, even by M-Pesa's parent company Vodafone."
 
 **2. Context-Specific Execution Matters**
 
@@ -724,18 +724,18 @@ Sippy follows this playbook for Colombian stablecoins on Arbitrum.
 ### Milestone 1: MVP Revamp for Production
 **Amount:** $13,000 USD | **Timeline:** 8 weeks
 
-**Deliverables (Updated):**
+**Deliverables:**
 - USDC integration replacing PYUSD
 - GasRefuel.sol security audit completed
 - WhatsApp Business API production approval (already achieved: 2,000 messages/day)
 - Portuguese language support (ES/EN/PT)
 - Language-switching bug fixed
 - PIN/signature confirmation before sending
-- **2FA via email verification code for transfers >$50**
+- 2FA via email verification code for transfers >$50
 - Opt-out/export functionality for wallets
 - Privacy controls (phone visibility settings)
-- **User settings feature (confirmation thresholds, limits, 2FA preferences)**
-- **Account recovery flow (email backup, verification process)**
+- User settings feature (confirmation thresholds, limits, 2FA preferences)
+- Account recovery flow (email backup, verification process)
 - Monitoring infrastructure live
 
 ---
@@ -743,7 +743,7 @@ Sippy follows this playbook for Colombian stablecoins on Arbitrum.
 ### Milestone 2: App Rebranding, Beta Launch & Legal Ops
 **Amount:** $12,000 USD | **Timeline:** 16 weeks
 
-**Deliverables (Updated):**
+**Deliverables:**
 - App rebranding: "digital dollar transfers" positioning
 - 150 beta users in Colombia with active wallets
 - $5,000+ transaction volume (USDC)
@@ -751,7 +751,7 @@ Sippy follows this playbook for Colombian stablecoins on Arbitrum.
 - Terms of Service and Privacy Policy
 - Colombia regulatory compliance documentation
 - Meta WhatsApp Business API compliance review with legal counsel
-- **Webapp fallback built as contingency infrastructure**
+- Webapp fallback built as contingency infrastructure
 - User feedback collected, NPS measured (target >40)
 
 ---
@@ -763,7 +763,7 @@ Sippy follows this playbook for Colombian stablecoins on Arbitrum.
 - 300 registered users in Colombia
 - $12,000+ cumulative transaction volume
 - Performance optimization based on beta feedback
-- **Passkeys 2FA upgrade (replacing email verification for smoother UX)**
+- Passkeys 2FA upgrade (replacing email verification for smoother UX)
 - Marketing campaign execution
 - Public analytics dashboard
 
@@ -772,13 +772,13 @@ Sippy follows this playbook for Colombian stablecoins on Arbitrum.
 ### Milestone 4: Consolidation & Closeout
 **Amount:** $6,000 USD | **Timeline:** 28 weeks
 
-**Deliverables (Revised - Concrete Outputs):**
+**Deliverables:**
 - 500+ total users (target 700)
 - $25,000+ cumulative volume (target $35K)
 - Technical documentation package
 - 2-3 technical blog posts published
 - Public analytics dashboard live
-- Open source: GasRefuel contract verified on Arbiscan
+- GasRefuel contract verified on Arbiscan
 - 3-5 written user testimonials (video optional)
 - Support ticket system implemented
 - Final report to Arbitrum DAO
@@ -786,18 +786,5 @@ Sippy follows this playbook for Colombian stablecoins on Arbitrum.
 
 ---
 
-## Checklist Before Submitting V5
-
-- [x] Add team CVs as public PDF links
-- [x] Confirm @SippyLat Twitter is active
-- [x] Review all milestone deliverables for consistency
-- [x] Verify Carlos's GitHub link works (https://github.com/CarlosQ96)
-- [x] Final proofread for typos
-- [x] Add WhatsApp approval proof offer
-- [x] Add UIAF reporting operationalization
-- [ ] Copy responses into Questbook form
-
----
-
-*Document generated December 2025*
-*V5: Addresses all admin feedback with regulatory research, technical detail, and concrete deliverables*
+*Resubmission: December 2025*
+*Addresses all admin feedback with regulatory research, technical detail, and concrete deliverables*
