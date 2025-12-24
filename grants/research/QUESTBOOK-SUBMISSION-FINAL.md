@@ -569,7 +569,7 @@ We're already approved for WhatsApp Business API with 2,000 bot-initiated messag
 **Phase 1 - Seed Users (M2: 150 users)**
 
 *Community Events (Proven Format):*
-- "Pay your pizza with Sippy" activations - we've successfully run these events in Barranquilla and Cartagena
+- "Pay your pizza with Sippy" activations - format proven from team's previous community events in Barranquilla and Cartagena
 - Local crypto meetups with live demos
 - Hands-on onboarding sessions at community gatherings
 
