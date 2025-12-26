@@ -222,7 +222,7 @@ We recently received WhatsApp Business API approval for 2,000 bot-initiated mess
 
 **Why This Risk is Manageable:**
 - Tpaga and Truora already operate WhatsApp financial services in Colombia
-- Our 2,000 messages/day approval demonstrates Meta's acceptance
+- Our approval (2,000 bot-initiated/day + unlimited user-initiated) demonstrates Meta's acceptance
 - WhatsApp restriction would slow growth but not kill the project
 - Webapp fallback ensures continuity
 
@@ -411,36 +411,69 @@ LinkedIn: https://www.linkedin.com/in/mateo-daza-448469170/ | GitHub: https://gi
 **Carlos Quintero - Full-Stack Software Engineer**
 LinkedIn: https://www.linkedin.com/in/carlos-quintero-076a36153/ | GitHub: https://github.com/CarlosQ96
 
-**Experience (8+ years):**
-- Full-stack development across fintech and e-commerce
-- RESTful APIs, GraphQL, third-party integrations
-- Node.js/TypeScript backend architecture
-- PostgreSQL database design and optimization
-- Previous contributions to Giveth platform
+**Current:** Lead Backend Developer at Giveth (2022-Present)
+- Leading development of Giveth.io, decentralized peer-to-peer donation platform
+- Integrating smart contracts and Web3 APIs across multiple EVM blockchains
+- Hosting quadratic funding rounds and wallet integrations
+- Optimizing database and GraphQL services for stable API
 
-**Relevant Skills:**
-- WhatsApp Business API integration
+**Previous:** Backend Developer at Koombea (2017-2022)
+- Led backend development for fintech, Shopify e-commerce, and internal products
+- Built Tuily: FinTech platform for credit cards to SMBs in Colombia
+- Developed Doitcenter/Ultracompras e-commerce sites (Panama)
+- Built backend for Doitcenter mobile apps
+
+**Technical Expertise:**
+- Node.js, TypeScript, GraphQL, NestJs, Docker
+- PostgreSQL, MongoDB
+- Ethers, The Graph (Web3)
+- Ruby on Rails (5+ years)
+- WhatsApp Business API integration (Sippy core infrastructure)
 - LLM/AI integration (Groq, OpenAI)
-- Payment system architecture
-- Production-scale backend systems
+
+**Education:** Systems Engineer & Computer Science - Universidad del Norte (2013-2018)
+- Graduated as distinguished student
+
+**Community:** Co-builder, Quillalabs / Ethereum Colombia
+
+**Hackathon Track Record:**
+- Sippy - ETHOnline 2025 Finalist (backend architecture)
 
 ---
 
 **Noah Biel - Web3 Strategy & Partnerships Lead**
 Website: https://noahbiel.xyz
 
-**Grant Management Experience:**
-- Giveth.io - Grant coordination and reporting
-- General Magic - Web3 project management
-- Prisma.events - Event and partnership development
+**Current:** Prisma DIDs (2025-2026)
+- Project Manager, Product Owner & Design, Partnerships
+- Cardano-native decentralized IDs for verifiable contributions
+- Supporting onboarding of 250+ developers across Sub-Saharan Africa
 
-**Education:** Master's in Social Innovation
+**Previous:** Grants Analyst at General Magic (2024)
+- Researched, identified, and secured grant opportunities for clients
+- Developed AI-powered automations for grant data organization
+- Part of the Fundraising team supporting Web3 projects
 
-**Relevant Skills:**
-- Grant writing and milestone reporting
-- Partnership development
-- Community building and communications
-- DEI and accessibility expertise
+**Previous:** Cerne Fellow at Floristic (2023-2024)
+- Mentoring in governance, Public Goods, fundraising, and DAOs
+- Specialized in regenerative economics and decentralized systems
+
+**Web3 Funding Track Record:**
+- Secured funding from Uniswap QF and Ethereum Foundation (2020)
+- Grant coordination at Giveth.io
+
+**Education:** Master's in Social Innovation (2020-2021)
+
+**Affiliations:**
+- SDG4 Youth & Student Network - UNESCO-hosted global network (2022-2027)
+- UNESCO SOST Transcriativa / Brazil - Board Member
+- Cardano Community, MyCoFi Community
+
+**Expertise:**
+- Grant writing, research, and milestone reporting
+- Partnership development and cross-sector dialogue
+- Community building and international network coordination
+- DEI, accessibility, and inclusive program design
 
 ---
 
@@ -727,7 +760,7 @@ Sippy follows this playbook for Colombian stablecoins on Arbitrum.
 **Deliverables:**
 - USDC integration replacing PYUSD
 - GasRefuel.sol security audit completed
-- WhatsApp Business API production approval (already achieved: 2,000 messages/day)
+- WhatsApp Business API production approval (already achieved: 2,000 bot-initiated/day + unlimited user-initiated)
 - Portuguese language support (ES/EN/PT)
 - Language-switching bug fixed
 - PIN/signature confirmation before sending

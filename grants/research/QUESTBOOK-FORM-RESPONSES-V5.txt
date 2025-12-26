@@ -76,7 +76,7 @@ CURRENT TRACTION:
 
 - ETHOnline 2025 Finalist
 - End-to-end payment flow validated on mainnet
-- WhatsApp Business API approved (2,000 bot-initiated messages/day)
+- WhatsApp Business API approved (2,000 bot-initiated messages/day + unlimited user-initiated)
 
 TECH STACK:
 
@@ -158,63 +158,93 @@ CV: https://docs.google.com/document/d/1sRKdt6cX4ORViJRPAAcBX4w_MkP1JtSqogeLqodW
 
 Role: Technical leadership, smart contract development, frontend architecture
 
-Current: Lead Frontend Engineer at Asymmetry Finance
-- Shipping production DeFi products: USDaf, veASF, afCVX, safETH
-- Frontend architecture for multi-million TVL protocols
-- Smart contract integration and testing
+Current: Lead Frontend Engineer at Asymmetry Finance (2023-Present)
+- Lead front-end architecture for DeFi suite: USDaf, veASF governance locker, LST yield products
+- Design and implement smart contract indexers and subgraph integrations
+- Co-designed The Gem Rush: gamified incentives and airdrop campaign
 
-Previous: Lead Software Engineer at Giveth (4.5 years)
-- Led development of Giveth donation platform
-- Built and maintained production Web3 applications
-- Open source contributions visible on GitHub
+Previous: Lead Software Engineer at Giveth (2020-2025, 4.5 years)
+- Led frontend development for decentralized donation platform on Ethereum
+- Built with TypeScript, Next.js (SSR), and Web3 integrations
+- Improved performance and scalability across blockchain integrations
+
+Previous: Application Engineer at Commons Stack / TEC (2021-2022)
+- Built TEC application for augmented bonding curve economy
+- Contributed to DAO governance models inspired by Elinor Ostrom's work
+
+Technical Expertise:
+- Frontend: TypeScript, React, Next.js, State Management
+- Web3: Solidity, Viem, Ethers.js, The Graph, wallet integrations
+- AI: LLM prompting, agent-based workflows
+- Other: Git, CI/CD, DevOps, Technical leadership
+
+Education: Systems Engineer & Computer Scientist - Universidad del Norte (2018)
+- Scholarship awarded for high scores in national exams
 
 Hackathon Track Record:
 - Sippy - ETHOnline 2025 Finalist
 - Blobscan - ETHBogota 2022 Finalist
 
-Community: Co-founder, Ethereum Colombia
+Community:
+- Co-founder, Ethereum Colombia (2020 - Present)
+- Built DAO for community funds, education, and hackathons
 
 ---
 
 CARLOS QUINTERO - Full-Stack Software Engineer
 LinkedIn: https://www.linkedin.com/in/carlos-quintero-076a36153/
 GitHub: https://github.com/CarlosQ96
-CV: https://drive.google.com/file/d/1lpPBryEbmggpC7GRHRetxQAEnG-9Pwv1/view?usp=sharing
+CV: https://drive.google.com/file/id/1lpPBryEbmggpC7GRHRetxQAEnG-9Pwv1/view?usp=sharing
 
 Role: Backend infrastructure, API development, system architecture
 
-Experience (8+ years):
-- Full-stack development across fintech and e-commerce
-- RESTful APIs, GraphQL, third-party integrations
-- Node.js/TypeScript backend architecture
-- PostgreSQL database design and optimization
-- Previous contributions to Giveth platform
+Current: Lead Backend Developer at Giveth (2022-Present)
+- Leading development of Giveth.io, decentralized peer-to-peer donation platform
+- Integrating smart contracts and Web3 APIs across multiple EVM blockchains
+- Optimizing database and GraphQL services for stable API
 
-Relevant Skills:
-- WhatsApp Business API integration
+Previous: Backend Developer at Koombea (2017-2022)
+- Led backend development for fintech and e-commerce products
+- Built Tuily: FinTech platform for credit cards to SMBs in Colombia
+
+Technical Expertise:
+- Node.js, TypeScript, GraphQL, NestJs, Docker, PostgreSQL
+- Web3: Ethers, The Graph, WhatsApp Business API integration
 - LLM/AI integration (Groq, OpenAI)
-- Payment system architecture
-- Production-scale backend systems
+
+Education: Systems Engineer & Computer Science - Universidad del Norte (2013-2018)
+- Graduated as distinguished student
+
+Community: Co-builder, Quillalabs / Ethereum Colombia
 
 ---
 
 NOAH BIEL - Web3 Strategy & Partnerships Lead
-Web: https://noahbiel.xyz
+Website: https://noahbiel.xyz
 
 Role: Grant management, partnership development, communications
 
-Grant Management Experience:
-- Giveth.io - Grant coordination and reporting
-- General Magic - Web3 project management
-- Prisma.events - Event and partnership development
+Current: Prisma DIDs (2025-2026)
+- Project Manager, Product Owner & Design, Partnerships
+- Supporting onboarding of 250+ developers across Sub-Saharan Africa
 
-Education: Master's in Social Innovation
+Previous: Grants Analyst at General Magic (2024)
+- Researched and secured grant opportunities for Web3 clients
+- Developed AI-powered automations for grant data organization
 
-Relevant Skills:
-- Grant writing and milestone reporting
-- Partnership development
-- Community building and communications
-- DEI and accessibility expertise
+Previous: Cerne Fellow at Floristic (2023-2024)
+- Mentoring in governance, Public Goods, and DAOs
+
+Web3 Funding Track Record:
+- Secured funding from Uniswap QF and Ethereum Foundation (2020)
+
+Education: Master's in Social Innovation (2020-2021)
+
+Affiliations: UNESCO SDG4 Network, UNESCO SOST Board Member
+
+Expertise:
+- Grant writing, research, and milestone reporting
+- Partnership development and community building
 
 ---
 
@@ -257,7 +287,7 @@ MVP (Live on Arbitrum One Mainnet)
 WHAT'S WORKING TODAY:
 
 Smart Contract - GasRefuel.sol deployed on Arbitrum One (0xC8367a549e05D9184B8e320856cb9A10FDc1DE46 - https://arbiscan.io/address/0xC8367a549e05D9184B8e320856cb9A10FDc1DE46)
-WhatsApp Bot - Working with Meta Cloud API (approved: 2,000 messages/day)
+WhatsApp Bot - Working with Meta Cloud API (approved: 2,000 bot-initiated/day + unlimited user-initiated)
 LLM Engine - Groq (Llama 3.3 70B) - ES/EN
 Wallet Infrastructure - Coinbase CDP Server Wallets (MPC-based)
 Gasless Transactions - Gas funded via GasRefuel
@@ -460,52 +490,33 @@ Please provide a detailed breakdown of the budget in term of utilizations, costs
 
 BUDGET BREAKDOWN ($41,000 USD):
 
-SECURITY AUDIT - $2,000 (5%)
-- GasRefuel.sol is ~100 lines using standard OpenZeppelin patterns (Ownable, Pausable, ReentrancyGuard)
-- Scope limited to: gas funding logic, access control, rate limiting - no complex DeFi logic
-- Comparable to Code4rena/Sherlock "mini audits" or independent security researcher review
-- Backend checklist: API auth, input validation, rate limiting - not a full pentest
+MILESTONE 1: $13,000
+Personnel/Team Costs | $50/hr × 105 hrs + $45/hr × 75 hrs + $35/hr × 25 hrs | $9,500
+Infrastructure/Software | $500
+Equipment/Materials | $0
+Marketing/Outreach | $0
+Other Expenses (Audit + Contingency) | $3,000
 
-SECURITY, INFRASTRUCTURE & BACKEND - $18,000 (44%)
-- USDC integration (replacing PYUSD)
-- Opt-out/export functionality for wallets
-- WhatsApp production integration
-- Portuguese language support
-- Language-switching bug fix
-- Rate limiting, privacy controls
-- PIN confirmation, 2FA implementation
-- User settings feature
-- Account recovery flow
-- Cloud servers, database, monitoring
-- GasRefuel contract maintenance
+MILESTONE 2: $12,000
+Personnel/Team Costs | $50/hr × 60 hrs + $45/hr × 60 hrs + $35/hr × 20 hrs | $6,400
+Infrastructure/Software | $500
+Equipment/Materials | $0
+Marketing/Outreach | $500
+Other Expenses (Legal entity, counsel, ToS) | $4,600
 
-FRONTEND & UX - $8,000 (19%)
-- App rebranding
-- Profile pages optimization
-- Analytics dashboard
-- Mobile-responsive improvements
-- Webapp fallback (M2 contingency)
+MILESTONE 3: $10,000
+Personnel/Team Costs | $50/hr × 40 hrs + $45/hr × 60 hrs + $35/hr × 20 hrs | $5,400
+Infrastructure/Software | $500
+Equipment/Materials | $0
+Marketing/Outreach | $3,500
+Other Expenses | $600
 
-GAS OPERATIONS - $1,000 (2%)
-- GasRefuel contract top-ups
-- Arbitrum tx cost: ~$0.01 each
-- 500 users x 50 tx avg = 25,000 tx = ~$250
-- 4x buffer for: growth beyond 500 target, failed tx retries, and operational runway post-grant
-
-OPS & LEGAL - $8,000 (20%)
-- Legal entity formation (Sippy SAS)
-- Terms of Service and Privacy Policy
-- Colombia regulatory compliance (SARLAFT, UIAF reporting workflow)
-- Legal counsel review
-- Monitoring infrastructure
-- Incident response documentation
-- Server/hosting costs
-
-GROWTH & MARKETING - $4,000 (10%)
-- Content creation (videos, tutorials, demos)
-- Crypto influencer collaborations in LATAM (3-5 micro-influencers)
-- Community events ("Pay your pizza with Sippy" activations)
-- Social media campaigns (Twitter/X, Instagram, TikTok)
+MILESTONE 4: $6,000
+Personnel/Team Costs | $50/hr × 25 hrs + $45/hr × 25 hrs + $35/hr × 35 hrs | $3,600
+Infrastructure/Software | $300
+Equipment/Materials | $0
+Marketing/Outreach | $800
+Other Expenses (Gas Operations) | $1,300
 
 TOTAL: $41,000 USD
 
@@ -518,7 +529,7 @@ Timeline: 8 weeks from approval
 Deliverables:
 - USDC integration replacing PYUSD
 - GasRefuel.sol security audit completed
-- WhatsApp Business API production (already approved: 2,000 messages/day)
+- WhatsApp Business API production (already approved: 2,000 bot-initiated/day + unlimited user-initiated)
 - Portuguese language support (ES/EN/PT)
 - Language-switching bug fixed
 - PIN/signature confirmation before sending
@@ -699,6 +710,7 @@ Sippy-to-Sippy USDC transfers remain FREE. This is our core value proposition an
 
 2. FUTURE MONETIZATION (Post-Grant)
 - Fiat on/off ramps: 1-2% fee on cash-in/cash-out (significantly lower than 5-10% remittance fees). Requires banking/fintech partnership in Colombia (e.g., Bre-B or similar) - conversations planned during M3/M4 once user traction is proven.
+- Merchant payments: 1-2% from businesses accepting Sippy payments (roadmap post-grant)
 - Business accounts: Monthly subscription for merchants receiving payments
 - API access: Enterprise integrations for remittance corridors
 - Premium features: Higher limits, scheduled payments, invoice generation for freelancers
@@ -758,7 +770,7 @@ ETHONLINE 2025 RESULTS:
 TECHNICAL VALIDATION:
 - GasRefuel.sol deployed on Arbitrum One mainnet
 - Coinbase CDP wallet integration functional (MPC-based)
-- WhatsApp Business API working via Meta Cloud API (2,000 messages/day approved)
+- WhatsApp Business API working via Meta Cloud API (2,000 bot-initiated/day + unlimited user-initiated)
 - Gasless transactions operational
 - Phone to wallet mapping functional
 
@@ -889,7 +901,7 @@ OUT OF SCOPE:
 5. RISK MITIGATION
 
 Audit delays - Low probability - Simple contract, 8-week buffer
-Meta WhatsApp restriction - Low probability - Already approved (2,000 messages/day), webapp fallback in M2
+Meta WhatsApp restriction - Low probability - Already approved (2,000 bot-initiated/day + unlimited user-initiated), webapp fallback in M2
 Slow adoption - Medium probability - Conservative 500 target, concrete acquisition plan
 Technical issues - Low probability - Experienced team, validated code
 
@@ -952,7 +964,7 @@ Milestone 01:
 
 Title: MVP Revamp for Production
 
-Details: Take working MVP to production-ready state on Arbitrum One. Includes USDC integration (replacing PYUSD), GasRefuel.sol security audit, Portuguese language support (3 languages: ES/EN/PT), language-switching bug fix, user protection features (PIN confirmation, 2FA via email for transfers >$50), opt-out/export functionality for wallets, user settings feature (confirmation thresholds, limits, 2FA preferences), account recovery flow (email backup, verification process), privacy controls, and monitoring infrastructure. WhatsApp Business API production already approved (2,000 messages/day).
+Details: Take working MVP to production-ready state on Arbitrum One. Includes USDC integration (replacing PYUSD), GasRefuel.sol security audit, Portuguese language support (3 languages: ES/EN/PT), language-switching bug fix, user protection features (PIN confirmation, 2FA via email for transfers >$50), opt-out/export functionality for wallets, user settings feature (confirmation thresholds, limits, 2FA preferences), account recovery flow (email backup, verification process), privacy controls, and monitoring infrastructure. WhatsApp Business API production already approved (2,000 bot-initiated/day + unlimited user-initiated).
 
 Deadline: [8 weeks from approval - select date]
 
