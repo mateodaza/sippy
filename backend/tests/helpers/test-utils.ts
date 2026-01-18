@@ -63,8 +63,8 @@ export class TestRunner {
 
 // Test phone numbers (for consistent testing)
 export const TEST_PHONES = {
-  MAIN: '573116613414',
-  TEST: '573001234567',
+  MAIN: '573001234567',
+  TEST: '573001234568',
   FORMATTED: '+573001234567',
 };
 

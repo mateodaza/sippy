@@ -85,7 +85,7 @@ When deploying to production (Vercel, Netlify, etc.), make sure to set these env
 After deploying, test the phone resolution API:
 
 ```bash
-curl https://www.sippy.lat/api/resolve-phone?phone=%2B573116613414
+curl https://www.sippy.lat/api/resolve-phone?phone=%2B573001234567
 ```
 
 This should return a JSON response with the wallet address if the phone number has a wallet.

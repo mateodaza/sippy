@@ -285,7 +285,7 @@ async function handleCommand(
             phoneNumber,
             `❌ Invalid send command format.\n\n` +
               `Use: "send 10 to +573001234567"\n\n` +
-              `Example: send 5 to +573116613414`
+              `Example: send 5 to +573001234567`
           );
         }
         break;
@@ -335,7 +335,7 @@ async function handleCommand(
 
 /**
  * Resolve phone number to wallet address
- * GET /resolve-phone?phone=+573116613414
+ * GET /resolve-phone?phone=+573001234567
  */
 app.get('/resolve-phone', async (req: Request, res: Response) => {
   try {

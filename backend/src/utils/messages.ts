@@ -9,11 +9,11 @@ const RECEIPT_BASE_URL =
 const FUND_URL = process.env.FUND_URL || 'https://www.sippy.lat/fund';
 
 /**
- * Privacy map: Convert phone numbers back to display names (for demo)
+ * Privacy map: Convert phone numbers back to display names
+ * Add phone-to-name mappings here for privacy display
  */
 const PHONE_TO_NAME_MAP: Record<string, string> = {
-  '573116613414': 'Mateo',
-  '573233213692': 'Helena',
+  // Add mappings here: 'phonenumber': 'Display Name'
 };
 
 /**

@@ -34,7 +34,6 @@ export default function RootLayout({
                   '@context': 'https://schema.org',
                   '@type': 'Organization',
                   name: 'Sippy',
-                  legalName: 'Mateo Jose Daza Benjumea',
                   url: 'https://sippy.app',
                 }),
               }}

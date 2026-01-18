@@ -24,9 +24,9 @@ const phoneSchema = z
   .string()
   .regex(/^\+?\d{10,15}$/, 'Invalid phone number format');
 
-// DEMO MODE: Set to true to pre-fill with demo data
-const DEMO_MODE = true;
-const DEMO_PHONE_NUMBER = '+573116613414'; // Mateo
+// DEMO MODE: Set to false for production
+const DEMO_MODE = false;
+const DEMO_PHONE_NUMBER = '';
 
 export default function FundPage() {
   const { address, isConnected, isReconnecting } = useAccount();
@@ -216,7 +216,7 @@ export default function FundPage() {
         throw new Error(swapResult.error || 'Swap failed');
       }
 
-      const displayName = DEMO_MODE ? 'Mateo' : phoneNumber;
+      const displayName = DEMO_MODE ? 'Demo User' : phoneNumber;
       setSuccess(
         `✅ Swapped ${swapAmount} ETH → PYUSD and sent to ${displayName}!\n\nTx: ${swapResult.txHash?.slice(0, 10)}...`
       );
@@ -405,7 +405,7 @@ export default function FundPage() {
                     {DEMO_MODE && (
                       <p className='mt-2 text-xs text-blue-600 flex items-center font-medium'>
                         <CheckCircle2 className='w-3.5 h-3.5 mr-1.5' />
-                        Demo mode - Sending to Mateo
+                        Demo mode enabled
                       </p>
                     )}
                   </div>

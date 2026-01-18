@@ -26,10 +26,10 @@ function extractDigitsFromDoubleZero(source?: string): string | null {
 
 /**
  * Privacy map: Convert names to phone numbers (case-insensitive)
+ * Add name-to-phone mappings here for quick lookup
  */
 const NAME_TO_PHONE_MAP: Record<string, string> = {
-  'mateo': '573116613414',
-  'helena': '573233213692',
+  // Add mappings here: 'name': 'phonenumber'
 };
 
 export function normalizePhoneNumber(

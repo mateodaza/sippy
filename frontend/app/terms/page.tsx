@@ -88,15 +88,9 @@ export default function TermsOfServicePage() {
                 </p>
                 <div className='bg-gray-50 rounded-xl p-6 border border-gray-100'>
                   <p className='text-gray-800 font-medium'>
-                    Mateo Jose Daza Benjumea
+                    Sippy
                   </p>
-                  <p className='text-gray-600'>Sippy</p>
-                  <div className='mt-3 pt-3 border-t border-gray-200'>
-                    <p className='text-gray-600'>Carrera 59 # 96-153</p>
-                    <p className='text-gray-600'>BRUXXEL APTO 402</p>
-                    <p className='text-gray-600'>Barranquilla, Atlántico 080001</p>
-                    <p className='text-gray-600'>Colombia</p>
-                  </div>
+                  <p className='text-gray-600'>Company registration in progress</p>
                   <p className='text-gray-600 flex items-center gap-2 mt-3 pt-3 border-t border-gray-200'>
                     <Mail className='w-4 h-4' />
                     <a
@@ -537,15 +531,9 @@ export default function TermsOfServicePage() {
                 </p>
                 <div className='bg-[#dbeafe] rounded-xl p-6 border border-[#93c5fd]'>
                   <p className='text-gray-800 font-medium text-lg'>
-                    Mateo Jose Daza Benjumea
+                    Sippy
                   </p>
-                  <p className='text-gray-600 font-medium'>Sippy</p>
-                  <div className='mt-3 pt-3 border-t border-blue-200'>
-                    <p className='text-gray-600'>Carrera 59 # 96-153</p>
-                    <p className='text-gray-600'>BRUXXEL APTO 402</p>
-                    <p className='text-gray-600'>Barranquilla, Atlántico 080001</p>
-                    <p className='text-gray-600'>Colombia</p>
-                  </div>
+                  <p className='text-gray-600 font-medium'>Company registration in progress</p>
                   <p className='text-gray-700 flex items-center gap-2 mt-3 pt-3 border-t border-blue-200'>
                     <Mail className='w-4 h-4 text-[#2563eb]' />
                     <a

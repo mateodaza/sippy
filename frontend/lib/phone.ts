@@ -304,10 +304,7 @@ export function getCountryName(iso2: string): string {
  * Maps specific phone numbers to display names
  */
 const PRIVACY_MAP: Record<string, string> = {
-  '573116613414': 'Mateo',
-  '+573116613414': 'Mateo',
-  '573233213692': 'Helena',
-  '+573233213692': 'Helena',
+  // Add phone-to-name mappings here for privacy display
 };
 
 /**
@@ -338,15 +335,14 @@ export function isPrivateNumber(phoneNumber: string): boolean {
 
 /**
  * Convert name to phone number (reverse lookup)
- * Usage: Type "Mateo" or "mateo" in the input → converts to +573116613414
+ * Usage: Type a name in the input → converts to phone number
  */
 export function nameToPhone(input: string): string {
   const normalized = input.trim().toLowerCase();
 
   // Reverse map: name → phone number
   const nameToPhoneMap: Record<string, string> = {
-    'mateo': '+573116613414',
-    'helena': '+573233213692',
+    // Add name-to-phone mappings here for quick lookup
   };
 
   return nameToPhoneMap[normalized] || input;
