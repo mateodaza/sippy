@@ -7,6 +7,11 @@ import {
   checkSecurityLimits,
 } from '../services/cdp-wallet.service.js';
 import {
+  getEmbeddedWallet,
+  getEmbeddedBalance,
+  sendToPhoneNumber,
+} from '../services/embedded-wallet.service.js';
+import {
   sendTextMessage,
   sendButtonMessage,
 } from '../services/whatsapp.service.js';
@@ -23,6 +28,8 @@ import {
 } from '../utils/messages.js';
 import { toUserErrorMessage } from '../utils/errors.js';
 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.sippy.lat';
+
 export async function handleSendCommand(
   fromPhoneNumber: string,
   amount: number,
@@ -38,6 +45,21 @@ export async function handleSendCommand(
       return;
     }
 
+    // Check for embedded wallet first (new self-custodial system)
+    const embeddedWallet = await getEmbeddedWallet(fromPhoneNumber);
+
+    if (embeddedWallet) {
+      // Use embedded wallet flow with spend permissions
+      await handleEmbeddedSend(
+        fromPhoneNumber,
+        toPhoneNumber,
+        amount,
+        embeddedWallet
+      );
+      return;
+    }
+
+    // Fall back to legacy server wallet flow
     const senderWallet = await getUserWallet(fromPhoneNumber);
     if (!senderWallet) {
       await sendTextMessage(fromPhoneNumber, formatNoWalletMessage());
@@ -49,8 +71,11 @@ export async function handleSendCommand(
       return;
     }
 
-    const recipientWallet = await getUserWallet(toPhoneNumber);
-    if (!recipientWallet) {
+    // Check recipient has a wallet (either embedded or legacy)
+    const recipientEmbedded = await getEmbeddedWallet(toPhoneNumber);
+    const recipientLegacy = await getUserWallet(toPhoneNumber);
+
+    if (!recipientEmbedded && !recipientLegacy) {
       await sendTextMessage(
         fromPhoneNumber,
         formatRecipientNotFoundMessage(toPhoneNumber)
@@ -159,6 +184,117 @@ export async function handleSendCommand(
       `Transfer failed.\n\n${errorMessage}`
     );
   }
+}
+
+/**
+ * Handle send using embedded wallet with spend permissions
+ */
+async function handleEmbeddedSend(
+  fromPhoneNumber: string,
+  toPhoneNumber: string,
+  amount: number,
+  senderWallet: { phoneNumber: string; walletAddress: string; spendPermissionHash: string | null; dailyLimit: number | null }
+): Promise<void> {
+  // Check if sender has spend permission
+  if (!senderWallet.spendPermissionHash) {
+    const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + fromPhoneNumber)}`;
+    await sendTextMessage(
+      fromPhoneNumber,
+      `You need to complete your wallet setup before sending.\n\n` +
+        `Please finish setup here:\n${setupUrl}`
+    );
+    return;
+  }
+
+  // Check recipient has a wallet (either embedded or legacy)
+  const recipientEmbedded = await getEmbeddedWallet(toPhoneNumber);
+  const recipientLegacy = await getUserWallet(toPhoneNumber);
+
+  if (!recipientEmbedded && !recipientLegacy) {
+    await sendTextMessage(
+      fromPhoneNumber,
+      formatRecipientNotFoundMessage(toPhoneNumber)
+    );
+    return;
+  }
+
+  // Check balance
+  const senderBalance = await getEmbeddedBalance(fromPhoneNumber);
+  if (senderBalance < amount) {
+    await sendTextMessage(
+      fromPhoneNumber,
+      formatInsufficientBalanceMessage({
+        balance: senderBalance,
+        needed: amount,
+      })
+    );
+    return;
+  }
+
+  // Check daily limit
+  if (senderWallet.dailyLimit && amount > senderWallet.dailyLimit) {
+    const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent('+' + fromPhoneNumber)}`;
+    await sendTextMessage(
+      fromPhoneNumber,
+      `Amount exceeds your daily limit of $${senderWallet.dailyLimit}.\n\n` +
+        `You can change your limit here:\n${settingsUrl}`
+    );
+    return;
+  }
+
+  await sendTextMessage(
+    fromPhoneNumber,
+    formatSendProcessingMessage({
+      amount,
+      toPhone: toPhoneNumber,
+    })
+  );
+
+  console.log(`Executing embedded wallet transfer via spend permission...`);
+
+  // Execute transfer using spend permission
+  const result = await sendToPhoneNumber(fromPhoneNumber, toPhoneNumber, amount);
+
+  // Build success message with remaining allowance info
+  let successMessage = formatSendSuccessMessage({
+    amount,
+    toPhone: toPhoneNumber,
+    txHash: result.transactionHash,
+    gasCovered: true, // Embedded wallets use paymaster
+  });
+
+  // Add remaining allowance info if available
+  if (result.remainingAllowance !== undefined) {
+    const remaining = result.remainingAllowance.toFixed(2);
+    successMessage += `\n\nSpending limit: $${remaining} remaining`;
+
+    if (result.periodEndsAt) {
+      const resetDate = new Date(result.periodEndsAt);
+      const daysUntilReset = Math.ceil((result.periodEndsAt - Date.now()) / (1000 * 60 * 60 * 24));
+      if (daysUntilReset <= 1) {
+        successMessage += ` (resets tomorrow)`;
+      } else {
+        successMessage += ` (resets in ${daysUntilReset} days)`;
+      }
+    }
+  }
+
+  await sendTextMessage(fromPhoneNumber, successMessage);
+
+  const recipientMessage = formatSendRecipientMessage({
+    amount,
+    fromPhone: fromPhoneNumber,
+    txHash: result.transactionHash,
+  });
+
+  await sendTextMessage(toPhoneNumber, recipientMessage);
+
+  await sendButtonMessage(fromPhoneNumber, 'Need anything else?', [
+    { title: 'Balance' },
+    { title: 'Help' },
+  ]);
+
+  console.log(`Embedded transfer completed. Hash: ${result.transactionHash}`);
 }
 
 /**

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Web3Provider } from './providers/Web3Provider';
 import { BlockscoutProvider } from './providers/BlockscoutProvider';
+import { CDPProvider } from './providers/cdp-provider';
 
 export const metadata: Metadata = {
   title: 'Sippy - Send Dollars via WhatsApp',
@@ -26,20 +27,22 @@ export default function RootLayout({
     <html lang='en'>
       <body className='min-h-screen bg-gradient-to-br from-white via-[#eefaf4] to-[#f8fbff] antialiased'>
         <BlockscoutProvider>
-          <Web3Provider>
-            <script
-              type='application/ld+json'
-              dangerouslySetInnerHTML={{
-                __html: JSON.stringify({
-                  '@context': 'https://schema.org',
-                  '@type': 'Organization',
-                  name: 'Sippy',
-                  url: 'https://sippy.app',
-                }),
-              }}
-            />
-            {children}
-          </Web3Provider>
+          <CDPProvider>
+            <Web3Provider>
+              <script
+                type='application/ld+json'
+                dangerouslySetInnerHTML={{
+                  __html: JSON.stringify({
+                    '@context': 'https://schema.org',
+                    '@type': 'Organization',
+                    name: 'Sippy',
+                    url: 'https://sippy.app',
+                  }),
+                }}
+              />
+              {children}
+            </Web3Provider>
+          </CDPProvider>
         </BlockscoutProvider>
       </body>
     </html>

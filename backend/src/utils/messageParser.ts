@@ -55,6 +55,13 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
     };
   }
 
+  // SETTINGS command
+  if (normalizedText === 'settings' || normalizedText === 'config' || normalizedText === 'configuracion') {
+    return {
+      command: 'settings',
+    };
+  }
+
   // SEND command: "send 10 to +573001234567" or "send $10 to 3001234567"
   // Also supports names: "send 10 to helena"
   const sendPattern = /^send\s+\$?(\d+(?:\.\d+)?)\s+to\s+(.+)$/i;

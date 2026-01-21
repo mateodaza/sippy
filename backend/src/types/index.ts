@@ -29,6 +29,7 @@ export interface ParsedCommand {
     | 'balance'
     | 'send'
     | 'history'
+    | 'settings'
     | 'unknown';
   amount?: number;
   recipient?: string;

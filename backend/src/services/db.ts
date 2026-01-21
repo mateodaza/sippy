@@ -59,8 +59,22 @@ export async function initDb(): Promise<void> {
         last_reset_date TEXT NOT NULL
       )
     `);
-    
-    console.log('✅ Database schema initialized');
+
+    // Add columns for embedded wallet spend permissions (safe to run multiple times)
+    await query(`
+      ALTER TABLE phone_registry
+      ADD COLUMN IF NOT EXISTS spend_permission_hash VARCHAR(66)
+    `);
+    await query(`
+      ALTER TABLE phone_registry
+      ADD COLUMN IF NOT EXISTS daily_limit DECIMAL(18, 6)
+    `);
+    await query(`
+      ALTER TABLE phone_registry
+      ADD COLUMN IF NOT EXISTS permission_created_at BIGINT
+    `);
+
+    console.log('✅ Database schema initialized (with spend permissions)');
     
     // Log current record count
     const result = await query<{ count: string }>('SELECT COUNT(*) as count FROM phone_registry');

@@ -5,6 +5,11 @@ import {
   updateLastActivity,
 } from '../services/cdp-wallet.service.js';
 import {
+  getEmbeddedWallet,
+  getEmbeddedBalance,
+  getRemainingAllowance,
+} from '../services/embedded-wallet.service.js';
+import {
   sendTextMessage,
   sendButtonMessage,
 } from '../services/whatsapp.service.js';
@@ -16,10 +21,21 @@ import {
 import { toUserErrorMessage } from '../utils/errors.js';
 import { getRefuelService } from '../services/refuel.service.js';
 
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.sippy.lat';
+
 export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
   console.log(`BALANCE command from +${phoneNumber}`);
 
   try {
+    // Check for embedded wallet first (new self-custodial system)
+    const embeddedWallet = await getEmbeddedWallet(phoneNumber);
+
+    if (embeddedWallet) {
+      await handleEmbeddedBalance(phoneNumber, embeddedWallet);
+      return;
+    }
+
+    // Fall back to legacy server wallet flow
     const userWallet = await getUserWallet(phoneNumber);
     if (!userWallet) {
       await sendTextMessage(phoneNumber, formatNoWalletMessage());
@@ -69,4 +85,45 @@ export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
     const errorMessage = toUserErrorMessage(error);
     await sendTextMessage(phoneNumber, `Error: ${errorMessage}`);
   }
+}
+
+/**
+ * Handle balance for embedded wallet users
+ */
+async function handleEmbeddedBalance(
+  phoneNumber: string,
+  wallet: { phoneNumber: string; walletAddress: string; spendPermissionHash: string | null; dailyLimit: number | null }
+): Promise<void> {
+  console.log(`Fetching embedded wallet balance for +${phoneNumber}...`);
+
+  const balance = await getEmbeddedBalance(phoneNumber);
+
+  let message = formatBalanceMessage({
+    balance,
+    wallet: wallet.walletAddress,
+    phoneNumber,
+  });
+
+  // Add spending limit info for embedded wallets
+  if (wallet.spendPermissionHash) {
+    const allowanceInfo = await getRemainingAllowance(phoneNumber);
+    if (allowanceInfo) {
+      const remaining = allowanceInfo.remaining.toFixed(2);
+      const total = allowanceInfo.allowance.toFixed(2);
+      message += `\n\nSpending limit: $${remaining} of $${total}/day remaining`;
+
+      const hoursUntilReset = Math.ceil((allowanceInfo.periodEndsAt - Date.now()) / (1000 * 60 * 60));
+      if (hoursUntilReset <= 24) {
+        message += ` (resets in ${hoursUntilReset}h)`;
+      }
+    }
+  } else {
+    // No permission - prompt to complete setup
+    const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + phoneNumber)}`;
+    message += `\n\nComplete setup to enable sending:\n${setupUrl}`;
+  }
+
+  await sendTextMessage(phoneNumber, message);
+
+  console.log(`Balance sent to +${phoneNumber}: ${balance} USD`);
 }

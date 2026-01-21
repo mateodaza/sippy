@@ -29,12 +29,17 @@ import {
 import { initDb, query } from './src/services/db.js';
 import { checkLLMHealth, isLLMEnabled } from './src/services/llm.service.js';
 import { ParsedCommand, WebhookPayload } from './src/types/index.js';
+import embeddedWalletRoutes from './src/routes/embedded-wallet.routes.js';
+import { initSpenderWallet } from './src/services/embedded-wallet.service.js';
 
 const app = express();
 
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// API Routes for embedded wallets
+app.use('/api', embeddedWalletRoutes);
 
 const PORT = process.env.PORT || 3001;
 const VERIFY_TOKEN =
@@ -298,6 +303,21 @@ async function handleCommand(
         );
         break;
 
+      case 'settings':
+        const frontendUrl =
+          process.env.FRONTEND_URL || 'https://www.sippy.lat';
+        const settingsUrl = `${frontendUrl}/settings?phone=${encodeURIComponent('+' + phoneNumber)}`;
+        await sendTextMessage(
+          phoneNumber,
+          `⚙️ Manage your Sippy settings:\n\n` +
+            `${settingsUrl}\n\n` +
+            `You can:\n` +
+            `• Change your daily spending limit\n` +
+            `• Revoke Sippy's permission\n` +
+            `• Export your wallet keys`
+        );
+        break;
+
       case 'unknown':
         // Check if LLM provided a helpful conversational message
         if (command.helpfulMessage) {
@@ -530,6 +550,13 @@ async function startServer() {
   try {
     // Initialize database schema
     await initDb();
+
+    // Initialize spender wallet for embedded wallets
+    try {
+      await initSpenderWallet();
+    } catch (err) {
+      console.warn('⚠️  Spender wallet init failed (may need CDP API keys):', err);
+    }
 
     // Check LLM feature flag and availability (non-blocking)
     if (!isLLMEnabled()) {
