@@ -319,6 +319,7 @@ router.post('/ensure-gas', async (req: Request, res: Response) => {
       return res.json({
         ready: true,
         balance,
+        alreadyFunded: true,
       });
     }
 
@@ -327,35 +328,13 @@ router.post('/ensure-gas', async (req: Request, res: Response) => {
     const refuelResult = await refuelService.checkAndRefuel(walletAddress);
 
     if (refuelResult.success) {
-      console.log(`✅ Refuel tx sent: ${refuelResult.txHash}`);
-
-      // Wait for transaction to be mined (poll balance)
-      const maxWaitMs = 30000; // 30 seconds max
-      const pollIntervalMs = 2000; // Check every 2 seconds
-      const startTime = Date.now();
-
-      while (Date.now() - startTime < maxWaitMs) {
-        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-        balance = await refuelService.getUserBalance(walletAddress);
-
-        if (parseFloat(balance) >= minBalance) {
-          console.log(`✅ Refuel confirmed! New balance: ${balance} ETH`);
-          return res.json({
-            ready: true,
-            balance,
-            txHash: refuelResult.txHash,
-          });
-        }
-      }
-
-      // Timeout - tx might still be pending
-      console.warn(`⚠️ Refuel tx sent but not confirmed within ${maxWaitMs / 1000}s`);
+      // tx.wait() already confirmed the transaction, so user has gas now
+      console.log(`✅ Refueled wallet: ${refuelResult.txHash}`);
+      balance = await refuelService.getUserBalance(walletAddress);
       return res.json({
-        ready: false,
-        pending: true,
+        ready: true,
         balance,
         txHash: refuelResult.txHash,
-        error: 'Refuel transaction pending',
       });
     } else {
       console.warn(`⚠️ Refuel failed: ${refuelResult.error}`);
