@@ -6,6 +6,7 @@
 
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
+import cors from 'cors';
 import {
   parseMessage,
   getHelpText,
@@ -35,6 +36,7 @@ import { initSpenderWallet } from './src/services/embedded-wallet.service.js';
 const app = express();
 
 // Middleware
+app.use(cors()); // Enable CORS for frontend requests
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
