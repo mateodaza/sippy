@@ -1,0 +1,63 @@
+---
+config:
+  layout: elk
+---
+flowchart TB
+    User[User] --> Action{Action}
+
+    Action -->|New user| Onboard
+    Action -->|Send money| Transfer
+    Action -->|Add funds or Cash out| Ramp
+
+    subgraph Onboard["1. ONBOARDING (No KYC)"]
+        O1[Phone number] --> O2[SMS verification]
+        O2 --> O3[ToS and consent]
+        O3 --> O4[PIN/Passkey setup]
+        O4 --> O5[Non-custodial wallet created]
+        O5 --> O6[User sets spending limit]
+        O6 --> O7[Keys stored in TEE - user owns]
+    end
+
+    subgraph Transfer["2. P2P TRANSFER (No KYC, No Key Access)"]
+        T1[User sends via WhatsApp] --> T2[Sippy validates request]
+        T2 --> T3[KYT screening - future]
+        T3 --> T4[Spend permission executes]
+        T4 --> T5[Smart contract enforces limit]
+        T5 --> T6[USDC transferred to recipient]
+        TNote[Sippy never touches private keys]
+    end
+
+    subgraph Ramp["3. ON/OFF-RAMP (Fiat Provider)"]
+        direction TB
+        D1{Direction}
+        D1 -->|Buy USDC| OnRamp
+        D1 -->|Cash out| OffRamp
+
+        subgraph OnRamp[On-Ramp]
+            OA{Amount}
+            OA -->|Small| OB[No KYC needed]
+            OA -->|Large| OC{KYC Status}
+            OC -->|Not verified| OD[KYC verification]
+            OC -->|Already verified| OE[Skip KYC]
+            OB --> OF[Provider]
+            OD --> OF
+            OE --> OF
+            OF --> R2[USDC in wallet]
+        end
+
+        subgraph OffRamp[Off-Ramp - KYC Always Required]
+            XA{KYC Status}
+            XA -->|Not verified| XB[KYC verification]
+            XA -->|Already verified| XC[Skip KYC]
+            XB --> XD[Provider]
+            XC --> XD
+            XD --> X2[Fiat to bank]
+        end
+
+        Note[KYC reused across large on-ramps and all off-ramps]
+    end
+
+    Onboard --> User
+    R2 --> User
+    T6 --> User
+    X2 --> User

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions } from '@coinbase/cdp-hooks';
+import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn } from '@coinbase/cdp-hooks';
 import { parseUnits } from 'viem';
 
 /**
@@ -12,6 +12,9 @@ import { parseUnits } from 'viem';
  * 1. View current spend permission details
  * 2. Revoke existing permission
  * 3. Create new permission with different limit
+ *
+ * Session persistence: Uses useCurrentUser and useIsSignedIn hooks
+ * to automatically restore session if user is already authenticated.
  */
 
 // Environment variables
@@ -48,6 +51,8 @@ function SettingsContent() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [hasCheckedSession, setHasCheckedSession] = useState(false);
 
   // Permission state
   const [walletStatus, setWalletStatus] = useState<WalletStatus | null>(null);
@@ -65,12 +70,79 @@ function SettingsContent() {
   const { refetch: refetchPermissions, data: permissionsData } = useListSpendPermissions({
     network: NETWORK as 'arbitrum',
   });
+  const { currentUser } = useCurrentUser();
+  const { isSignedIn } = useIsSignedIn();
 
   // Security: Phone number must match what was sent in the WhatsApp link
   const isPhoneLocked = !!phoneFromUrl;
 
   // Check if CDP is configured
   const isCdpConfigured = !!CDP_PROJECT_ID;
+
+  // Session recovery: Check for existing session on mount
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      // Only run once
+      if (hasCheckedSession) return;
+
+      // Wait for CDP to initialize
+      if (isSignedIn === undefined) return;
+
+      setHasCheckedSession(true);
+
+      // If not signed in, show phone step
+      if (!isSignedIn || !currentUser) {
+        console.log('No existing session, showing login');
+        setIsCheckingSession(false);
+        return;
+      }
+
+      console.log('Found existing CDP session, restoring...');
+
+      try {
+        // Get wallet address from current user
+        const smartAccountAddress = currentUser.evmSmartAccounts?.[0] || currentUser.evmAccounts?.[0];
+        if (!smartAccountAddress) {
+          console.log('No wallet in session');
+          setIsCheckingSession(false);
+          return;
+        }
+
+        setWalletAddress(smartAccountAddress);
+        console.log('Restored wallet:', smartAccountAddress);
+
+        // Fetch wallet status from backend
+        if (BACKEND_URL) {
+          const accessToken = await getAccessToken();
+          if (accessToken) {
+            const response = await fetch(`${BACKEND_URL}/api/wallet-status`, {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+              },
+            });
+
+            if (response.ok) {
+              const status = await response.json();
+              setWalletStatus(status);
+              if (status.dailyLimit) {
+                setNewLimit(status.dailyLimit.toString());
+              }
+              console.log('Wallet status restored:', status);
+            }
+          }
+        }
+
+        // Session restored - go directly to authenticated view
+        setAuthStep('authenticated');
+      } catch (err) {
+        console.error('Session recovery failed:', err);
+      } finally {
+        setIsCheckingSession(false);
+      }
+    };
+
+    checkExistingSession();
+  }, [isSignedIn, currentUser, hasCheckedSession, getAccessToken]);
 
   // Fetch wallet status from backend after authentication
   const fetchWalletStatus = async () => {
@@ -297,6 +369,20 @@ function SettingsContent() {
     setNewLimit('100');
     await handleChangeLimit();
   };
+
+  // Show loading while checking for existing session
+  if (isCheckingSession) {
+    return (
+      <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
+        <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center'>
+          <div className='animate-pulse'>
+            <div className='text-4xl mb-4'>🔐</div>
+            <p className='text-gray-600'>Checking your session...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Render auth flow if not authenticated
   if (authStep !== 'authenticated') {
