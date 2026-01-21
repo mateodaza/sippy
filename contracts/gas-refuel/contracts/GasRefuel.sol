@@ -11,17 +11,11 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * @dev Implements daily limits, cooldowns, and emergency controls
  */
 contract GasRefuel is Ownable, Pausable, ReentrancyGuard {
-    // Minimum ETH balance before refuel is needed
-    uint256 public constant MIN_BALANCE = 0.00001 ether; // ~3 PYUSD transfers
-
-    // Amount to refuel (enough for ~25 PYUSD transfers)
-    uint256 public constant REFUEL_AMOUNT = 0.00001 ether;
-
-    // Maximum refuels per user per day
-    uint256 public constant MAX_DAILY_REFUELS = 1;
-
-    // Cooldown between refuels (1 hour)
-    uint256 public constant REFUEL_COOLDOWN = 1 hours;
+    // Configurable parameters (can be changed by owner)
+    uint256 public minBalance = 0.00005 ether; // Min balance before refuel needed
+    uint256 public refuelAmount = 0.0001 ether; // Amount to send per refuel
+    uint256 public maxDailyRefuels = 3; // Max refuels per user per day
+    uint256 public refuelCooldown = 10 minutes; // Cooldown between refuels
 
     // Tracking
     mapping(address => uint256) public lastRefuelTime;
@@ -49,8 +43,8 @@ contract GasRefuel is Ownable, Pausable, ReentrancyGuard {
      */
     function refuel(address user) external onlyOwner whenNotPaused nonReentrant {
         require(user != address(0), "Invalid user address");
-        require(address(this).balance >= REFUEL_AMOUNT, "Insufficient contract balance");
-        require(user.balance < MIN_BALANCE, "User balance sufficient");
+        require(address(this).balance >= refuelAmount, "Insufficient contract balance");
+        require(user.balance < minBalance, "User balance sufficient");
 
         // Reset daily counter if new day
         uint256 currentDay = block.timestamp / 1 days;
@@ -61,13 +55,13 @@ contract GasRefuel is Ownable, Pausable, ReentrancyGuard {
 
         // Check cooldown
         require(
-            block.timestamp >= lastRefuelTime[user] + REFUEL_COOLDOWN,
+            block.timestamp >= lastRefuelTime[user] + refuelCooldown,
             "Cooldown active"
         );
 
         // Check daily limit
         require(
-            dailyRefuelCount[user] < MAX_DAILY_REFUELS,
+            dailyRefuelCount[user] < maxDailyRefuels,
             "Daily limit reached"
         );
 
@@ -76,10 +70,10 @@ contract GasRefuel is Ownable, Pausable, ReentrancyGuard {
         dailyRefuelCount[user]++;
 
         // Transfer ETH
-        (bool success, ) = payable(user).call{value: REFUEL_AMOUNT}("");
+        (bool success, ) = payable(user).call{value: refuelAmount}("");
         require(success, "Transfer failed");
 
-        emit Refueled(user, REFUEL_AMOUNT, block.timestamp);
+        emit Refueled(user, refuelAmount, block.timestamp);
     }
 
     /**
@@ -89,37 +83,37 @@ contract GasRefuel is Ownable, Pausable, ReentrancyGuard {
     function batchRefuel(address[] calldata users) external onlyOwner whenNotPaused nonReentrant {
         for (uint256 i = 0; i < users.length; i++) {
             address user = users[i];
-            
+
             // Guard against zero address
             if (user == address(0)) continue;
-            
+
             // Check contract has enough balance
-            if (address(this).balance < REFUEL_AMOUNT) break;
-            
+            if (address(this).balance < refuelAmount) break;
+
             // Check user needs refuel
-            if (user.balance >= MIN_BALANCE) continue;
-            
+            if (user.balance >= minBalance) continue;
+
             // Reset daily counter if new day
             uint256 currentDay = block.timestamp / 1 days;
             if (lastResetDay[user] < currentDay) {
                 dailyRefuelCount[user] = 0;
                 lastResetDay[user] = currentDay;
             }
-            
+
             // Check cooldown
-            if (block.timestamp < lastRefuelTime[user] + REFUEL_COOLDOWN) continue;
-            
+            if (block.timestamp < lastRefuelTime[user] + refuelCooldown) continue;
+
             // Check daily limit
-            if (dailyRefuelCount[user] >= MAX_DAILY_REFUELS) continue;
-            
+            if (dailyRefuelCount[user] >= maxDailyRefuels) continue;
+
             // Transfer ETH
-            (bool success, ) = payable(user).call{value: REFUEL_AMOUNT}("");
-            
+            (bool success, ) = payable(user).call{value: refuelAmount}("");
+
             // Only update state if transfer succeeded
             if (success) {
                 lastRefuelTime[user] = block.timestamp;
                 dailyRefuelCount[user]++;
-                emit Refueled(user, REFUEL_AMOUNT, block.timestamp);
+                emit Refueled(user, refuelAmount, block.timestamp);
             }
         }
     }
@@ -166,18 +160,52 @@ contract GasRefuel is Ownable, Pausable, ReentrancyGuard {
      */
     function canRefuel(address user) external view returns (bool) {
         if (paused()) return false;
-        if (address(this).balance < REFUEL_AMOUNT) return false;
-        if (user.balance >= MIN_BALANCE) return false;
+        if (address(this).balance < refuelAmount) return false;
+        if (user.balance >= minBalance) return false;
 
         uint256 currentDay = block.timestamp / 1 days;
         if (lastResetDay[user] < currentDay) {
             return true; // New day, counter reset
         }
 
-        if (dailyRefuelCount[user] >= MAX_DAILY_REFUELS) return false;
-        if (block.timestamp < lastRefuelTime[user] + REFUEL_COOLDOWN) return false;
+        if (dailyRefuelCount[user] >= maxDailyRefuels) return false;
+        if (block.timestamp < lastRefuelTime[user] + refuelCooldown) return false;
 
         return true;
+    }
+
+    // ============ ADMIN SETTERS ============
+
+    /**
+     * @notice Set minimum balance threshold
+     * @param _minBalance New minimum balance in wei
+     */
+    function setMinBalance(uint256 _minBalance) external onlyOwner {
+        minBalance = _minBalance;
+    }
+
+    /**
+     * @notice Set refuel amount
+     * @param _refuelAmount New refuel amount in wei
+     */
+    function setRefuelAmount(uint256 _refuelAmount) external onlyOwner {
+        refuelAmount = _refuelAmount;
+    }
+
+    /**
+     * @notice Set max daily refuels per user
+     * @param _maxDailyRefuels New max daily refuels
+     */
+    function setMaxDailyRefuels(uint256 _maxDailyRefuels) external onlyOwner {
+        maxDailyRefuels = _maxDailyRefuels;
+    }
+
+    /**
+     * @notice Set cooldown between refuels
+     * @param _refuelCooldown New cooldown in seconds
+     */
+    function setRefuelCooldown(uint256 _refuelCooldown) external onlyOwner {
+        refuelCooldown = _refuelCooldown;
     }
 }
 

@@ -20,11 +20,11 @@ async function main() {
   console.log("✅ GasRefuel deployed to:", address);
   console.log("🔐 Owner:", await gasRefuel.owner());
   console.log("⏸️  Paused:", await gasRefuel.paused());
-  console.log("\n📋 Contract details:");
-  console.log("  • MIN_BALANCE:", ethers.formatEther(await gasRefuel.MIN_BALANCE()), "ETH");
-  console.log("  • REFUEL_AMOUNT:", ethers.formatEther(await gasRefuel.REFUEL_AMOUNT()), "ETH");
-  console.log("  • MAX_DAILY_REFUELS:", (await gasRefuel.MAX_DAILY_REFUELS()).toString());
-  console.log("  • REFUEL_COOLDOWN:", (await gasRefuel.REFUEL_COOLDOWN()).toString(), "seconds (1 hour)");
+  console.log("\n📋 Contract details (configurable):");
+  console.log("  • minBalance:", ethers.formatEther(await gasRefuel.minBalance()), "ETH");
+  console.log("  • refuelAmount:", ethers.formatEther(await gasRefuel.refuelAmount()), "ETH");
+  console.log("  • maxDailyRefuels:", (await gasRefuel.maxDailyRefuels()).toString());
+  console.log("  • refuelCooldown:", (await gasRefuel.refuelCooldown()).toString(), "seconds");
 
   console.log("\n🔗 Arbiscan verification:");
   console.log("  npx hardhat verify --network arbitrum", address);

@@ -111,32 +111,21 @@ class RefuelService {
     }
 
     try {
-      // Check if user needs refuel
+      // Check if user can be refueled via contract
       const canRefuel = await this.contract!.canRefuel(userAddress);
 
       if (!canRefuel) {
-        // Diagnose why canRefuel returned false
+        // Diagnose why
         const isPaused = await this.isPaused();
         if (isPaused) {
-          console.error('❌ Refuel contract is PAUSED - run unpause script');
           return {
             success: false,
-            error: 'Refuel contract is paused. Admin needs to unpause it.',
-          };
-        }
-
-        const contractBalance = await this.getContractBalance();
-        if (parseFloat(contractBalance) < 0.00001) {
-          console.error(`❌ Refuel contract has insufficient balance: ${contractBalance} ETH`);
-          return {
-            success: false,
-            error: `Refuel contract needs ETH. Current balance: ${contractBalance} ETH`,
+            error: 'Refuel contract is paused',
           };
         }
 
         const userBalance = await this.getUserBalance(userAddress);
-        if (parseFloat(userBalance) >= 0.00001) {
-          console.log(`ℹ️ User already has sufficient balance: ${userBalance} ETH`);
+        if (parseFloat(userBalance) >= 0.00005) {
           return {
             success: false,
             error: `User already has sufficient ETH: ${userBalance}`,
@@ -149,17 +138,16 @@ class RefuelService {
         };
       }
 
-      // Execute refuel
-      console.log(`⛽ Refueling ${userAddress}...`);
+      // Execute refuel via contract
+      console.log(`⛽ Refueling ${userAddress} via contract...`);
       const tx = await this.contract!.refuel(userAddress, {
-        gasLimit: 200000, // Increased gas limit for refuel operation
+        gasLimit: 100000,
       });
 
       const receipt = await tx.wait();
 
       console.log(`✅ Refueled ${userAddress}`);
       console.log(`  • TX: ${receipt.transactionHash}`);
-      console.log(`  • Gas used: ${receipt.gasUsed.toString()}`);
 
       return {
         success: true,

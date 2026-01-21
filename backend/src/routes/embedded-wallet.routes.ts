@@ -312,7 +312,7 @@ router.post('/ensure-gas', async (req: Request, res: Response) => {
 
     // Check current balance
     let balance = await refuelService.getUserBalance(walletAddress);
-    const minBalance = 0.00001; // Same as contract MIN_BALANCE
+    const minBalance = 0.00005; // Same as contract MIN_BALANCE (50k gwei for UserOp)
 
     if (parseFloat(balance) >= minBalance) {
       console.log(`✅ Wallet already has sufficient balance: ${balance} ETH`);

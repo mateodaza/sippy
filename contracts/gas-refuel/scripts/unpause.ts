@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 
 async function main() {
-  const contractAddress = "0xC8367a549e05D9184B8e320856cb9A10FDc1DE46";
+  const contractAddress = "0xE4e5474E97E89d990082505fC5708A6a11849936";
 
   console.log("🔓 Unpausing GasRefuel contract...\n");
   console.log("Contract:", contractAddress);
