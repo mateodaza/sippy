@@ -2,6 +2,7 @@
   "name": "sippy-backend",
   "version": "1.0.0",
   "type": "module",
+  "packageManager": "pnpm@10.6.1",
   "description": "Sippy WhatsApp payment backend",
   "main": "dist/server.js",
   "scripts": {
