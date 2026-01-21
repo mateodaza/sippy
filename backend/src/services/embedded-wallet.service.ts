@@ -316,15 +316,15 @@ export async function sendWithSpendPermission(
     );
 
     // Get remaining allowance after the transfer
-    const allowanceInfo = await getRemainingAllowance(fromPhoneNumber);
+    const postTransferAllowance = await getRemainingAllowance(fromPhoneNumber);
 
     return {
       transactionHash: userOp.transactionHash,
       amount,
       recipient: toAddress,
       timestamp: Date.now(),
-      remainingAllowance: allowanceInfo?.remaining,
-      periodEndsAt: allowanceInfo?.periodEndsAt,
+      remainingAllowance: postTransferAllowance?.remaining,
+      periodEndsAt: postTransferAllowance?.periodEndsAt,
     };
   } catch (error) {
     console.error(`❌ Failed to send USDC:`, error);
