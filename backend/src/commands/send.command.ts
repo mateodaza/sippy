@@ -255,6 +255,9 @@ async function handleEmbeddedSend(
   // Execute transfer using spend permission
   const result = await sendToPhoneNumber(fromPhoneNumber, toPhoneNumber, amount);
 
+  // Transfer succeeded - from here, notification errors should NOT report "Transfer failed"
+  console.log(`Embedded transfer completed. Hash: ${result.transactionHash}`);
+
   // Build success message with remaining allowance info
   let successMessage = formatSendSuccessMessage({
     amount,
@@ -269,7 +272,6 @@ async function handleEmbeddedSend(
     successMessage += `\n\nSpending limit: $${remaining} remaining`;
 
     if (result.periodEndsAt) {
-      const resetDate = new Date(result.periodEndsAt);
       const daysUntilReset = Math.ceil((result.periodEndsAt - Date.now()) / (1000 * 60 * 60 * 24));
       if (daysUntilReset <= 1) {
         successMessage += ` (resets tomorrow)`;
@@ -279,22 +281,31 @@ async function handleEmbeddedSend(
     }
   }
 
-  await sendTextMessage(fromPhoneNumber, successMessage);
+  // Send notifications - errors here are non-critical since transfer succeeded
+  try {
+    await sendTextMessage(fromPhoneNumber, successMessage);
+  } catch (notifyError) {
+    console.error('Failed to send success notification to sender:', notifyError);
+    // Don't throw - transfer already succeeded
+  }
 
-  const recipientMessage = formatSendRecipientMessage({
-    amount,
-    fromPhone: fromPhoneNumber,
-    txHash: result.transactionHash,
-  });
+  try {
+    const recipientMessage = formatSendRecipientMessage({
+      amount,
+      fromPhone: fromPhoneNumber,
+      txHash: result.transactionHash,
+    });
+    await sendTextMessage(toPhoneNumber, recipientMessage);
+  } catch (notifyError) {
+    console.error('Failed to send notification to recipient:', notifyError);
+    // Don't throw - transfer already succeeded
+  }
 
-  await sendTextMessage(toPhoneNumber, recipientMessage);
-
+  // Best effort - button message failure is not critical
   await sendButtonMessage(fromPhoneNumber, 'Need anything else?', [
     { title: 'Balance' },
     { title: 'Help' },
   ]);
-
-  console.log(`Embedded transfer completed. Hash: ${result.transactionHash}`);
 }
 
 /**

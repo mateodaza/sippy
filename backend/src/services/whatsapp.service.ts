@@ -48,11 +48,38 @@ export async function sendTextMessage(
         }
       );
 
-      const data = (await response.json()) as WhatsAppAPIResponse &
-        WhatsAppAPIError;
+      // Check for 5xx errors before parsing JSON (might return plain text like "Service Unavailable")
+      if (response.status >= 500 && attempt < retries) {
+        console.warn(
+          `⚠️  WhatsApp API error (${response.status}), retrying... (${
+            attempt + 1
+          }/${retries})`
+        );
+        await sleep(500 * (attempt + 1)); // Exponential backoff
+        continue;
+      }
+
+      // Try to parse JSON, handle non-JSON responses
+      let data: WhatsAppAPIResponse & WhatsAppAPIError;
+      try {
+        data = (await response.json()) as WhatsAppAPIResponse & WhatsAppAPIError;
+      } catch (parseError) {
+        // Response wasn't valid JSON (e.g., "Service Unavailable" plain text)
+        const responseText = await response.text().catch(() => 'Unknown response');
+        if (attempt < retries) {
+          console.warn(
+            `⚠️  WhatsApp API returned non-JSON response, retrying... (${
+              attempt + 1
+            }/${retries})`
+          );
+          await sleep(500 * (attempt + 1));
+          continue;
+        }
+        throw new Error(`WhatsApp API error: ${response.status} - ${responseText}`);
+      }
 
       if (!response.ok) {
-        // Retry on 5xx errors
+        // Retry on 5xx errors (should rarely reach here due to check above)
         if (response.status >= 500 && attempt < retries) {
           console.warn(
             `⚠️  WhatsApp API error (${response.status}), retrying... (${
@@ -75,10 +102,12 @@ export async function sendTextMessage(
       }
       return data;
     } catch (error) {
-      // Retry on network errors
+      // Retry on network errors or JSON parse errors
       if (
         attempt < retries &&
-        (error instanceof TypeError || (error as any).code === 'ECONNRESET')
+        (error instanceof TypeError ||
+         error instanceof SyntaxError ||
+         (error as any).code === 'ECONNRESET')
       ) {
         console.warn(
           `⚠️  Network error, retrying... (${attempt + 1}/${retries})`
