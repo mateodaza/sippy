@@ -19,6 +19,10 @@ export function CDPProvider({ children }: CDPProviderProps) {
     <CDPHooksProvider
       config={{
         projectId: CDP_PROJECT_ID,
+        ethereum: {
+          createOnLogin: 'smart',
+          enableSpendPermissions: true,
+        },
       }}
     >
       {children}
