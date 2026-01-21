@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, Suspense, useEffect } from 'react';
+import { useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission } from '@coinbase/cdp-hooks';
+import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions } from '@coinbase/cdp-hooks';
 import { parseUnits } from 'viem';
 
 /**
@@ -55,6 +55,9 @@ function SettingsContent() {
   const { getAccessToken } = useGetAccessToken();
   const { createSpendPermission } = useCreateSpendPermission();
   const { revokeSpendPermission } = useRevokeSpendPermission();
+  const { refetch: refetchPermissions, data: permissionsData } = useListSpendPermissions({
+    network: NETWORK as 'arbitrum',
+  });
 
   // Security: Phone number must match what was sent in the WhatsApp link
   const isPhoneLocked = !!phoneFromUrl;
@@ -154,13 +157,32 @@ function SettingsContent() {
     setError(null);
 
     try {
-      console.log('Revoking spend permission...');
+      if (!walletAddress) {
+        throw new Error('Wallet address not found. Please refresh and try again.');
+      }
+
+      console.log('Finding spend permission to revoke...');
+
+      // Refresh permissions list first
+      await refetchPermissions();
+
+      // Find the permission for Sippy's spender from the data
+      const sippyPermission = permissionsData?.spendPermissions?.find(
+        (p) =>
+          p.permission?.spender?.toLowerCase() === SIPPY_SPENDER_ADDRESS.toLowerCase() &&
+          !p.revoked
+      );
+
+      if (!sippyPermission) {
+        throw new Error('No active Sippy permission found to revoke.');
+      }
+
+      console.log('Revoking spend permission:', sippyPermission.permissionHash);
 
       // Revoke using CDP SDK (with paymaster so users without gas can revoke)
       await revokeSpendPermission({
         network: NETWORK as 'arbitrum',
-        spender: SIPPY_SPENDER_ADDRESS as `0x${string}`,
-        token: 'usdc',
+        permissionHash: sippyPermission.permissionHash,
         useCdpPaymaster: true,
       });
 
