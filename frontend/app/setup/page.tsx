@@ -46,6 +46,8 @@ function SetupContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true); // Start true to check on mount
+  const [isPreparingWallet, setIsPreparingWallet] = useState(false); // Waiting for gas
+  const [gasReady, setGasReady] = useState(false);
 
   // CDP Hooks
   const { signInWithSms } = useSignInWithSms();
@@ -152,6 +154,58 @@ function SetupContent() {
     checkExistingSession();
   }, [isSignedIn, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Ensure wallet has gas before allowing permission creation
+  const ensureGasReady = async (): Promise<boolean> => {
+    if (!BACKEND_URL) return true; // No backend, assume ready
+
+    setIsPreparingWallet(true);
+    setError(null);
+
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        throw new Error('No access token');
+      }
+
+      console.log('Ensuring wallet has gas...');
+      const response = await fetch(`${BACKEND_URL}/api/ensure-gas`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to check gas status');
+      }
+
+      const result = await response.json();
+      console.log('Gas status:', result);
+
+      if (result.ready) {
+        setGasReady(true);
+        return true;
+      } else if (result.pending) {
+        // Transaction pending, wait a bit more and retry
+        console.log('Gas tx pending, waiting...');
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        return ensureGasReady(); // Recursive retry
+      } else {
+        // Refuel failed but might already have enough
+        console.warn('Gas ensure failed:', result.error);
+        // Try anyway - user might have funded manually
+        return true;
+      }
+    } catch (err) {
+      console.error('Failed to ensure gas:', err);
+      // Don't block the user, let them try anyway
+      return true;
+    } finally {
+      setIsPreparingWallet(false);
+    }
+  };
+
   // Step 1: Send SMS OTP
   const handleSendOtp = async () => {
     setIsLoading(true);
@@ -250,6 +304,13 @@ function SetupContent() {
         throw new Error('Sippy spender address not configured.');
       }
 
+      // First ensure wallet has gas (this will wait for refuel if needed)
+      console.log('Checking gas availability...');
+      const hasGas = await ensureGasReady();
+      if (!hasGas) {
+        throw new Error('Could not prepare wallet for transaction. Please try again.');
+      }
+
       console.log('Creating spend permission for:', {
         spender: SIPPY_SPENDER_ADDRESS,
         dailyLimit,
@@ -301,11 +362,37 @@ function SetupContent() {
       }
 
       setStep('done');
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Permission creation failed:', err);
-      setError(
-        err instanceof Error ? err.message : 'Failed to create permission'
-      );
+
+      // Check if it's a gas/balance error and provide helpful message
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      if (errorMsg.toLowerCase().includes('insufficient') ||
+          errorMsg.toLowerCase().includes('balance') ||
+          errorMsg.toLowerCase().includes('gas')) {
+        setError(
+          'Insufficient ETH for gas fees. Please wait a moment and try again - we\'re sending you some ETH.'
+        );
+        // Trigger a re-registration to attempt refuel again
+        if (BACKEND_URL && walletAddress) {
+          try {
+            const accessToken = await getAccessToken();
+            if (accessToken) {
+              await fetch(`${BACKEND_URL}/api/register-wallet`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${accessToken}`,
+                },
+              });
+            }
+          } catch {}
+        }
+      } else {
+        setError(
+          err instanceof Error ? err.message : 'Failed to create permission'
+        );
+      }
     } finally {
       setIsLoading(false);
     }
@@ -482,11 +569,21 @@ function SetupContent() {
 
             <button
               onClick={handleApprovePermission}
-              disabled={isLoading}
+              disabled={isLoading || isPreparingWallet}
               className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
             >
-              {isLoading ? 'Approving...' : 'Approve & Continue'}
+              {isPreparingWallet
+                ? 'Preparing wallet...'
+                : isLoading
+                  ? 'Approving...'
+                  : 'Approve & Continue'}
             </button>
+
+            {isPreparingWallet && (
+              <p className='mt-2 text-sm text-gray-500 text-center animate-pulse'>
+                Setting up gas for your first transaction...
+              </p>
+            )}
           </div>
         )}
 

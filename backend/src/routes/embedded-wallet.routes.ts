@@ -288,6 +288,90 @@ router.post('/revoke-permission', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/ensure-gas
+ *
+ * Ensures wallet has sufficient gas for transactions.
+ * Triggers refuel if needed and waits for it to complete.
+ * Returns when wallet is ready or after timeout.
+ */
+router.post('/ensure-gas', async (req: Request, res: Response) => {
+  try {
+    const { walletAddress } = await verifyCdpSession(req.headers.authorization);
+
+    console.log(`\n⛽ Ensuring gas for wallet: ${walletAddress}`);
+
+    const refuelService = getRefuelService();
+    if (!refuelService.isAvailable()) {
+      console.warn('⚠️ Refuel service not available');
+      return res.json({
+        ready: false,
+        error: 'Refuel service not available',
+        balance: '0',
+      });
+    }
+
+    // Check current balance
+    let balance = await refuelService.getUserBalance(walletAddress);
+    const minBalance = 0.00001; // Same as contract MIN_BALANCE
+
+    if (parseFloat(balance) >= minBalance) {
+      console.log(`✅ Wallet already has sufficient balance: ${balance} ETH`);
+      return res.json({
+        ready: true,
+        balance,
+      });
+    }
+
+    // Attempt refuel
+    console.log(`⛽ Wallet needs refuel (balance: ${balance} ETH)`);
+    const refuelResult = await refuelService.checkAndRefuel(walletAddress);
+
+    if (refuelResult.success) {
+      console.log(`✅ Refuel tx sent: ${refuelResult.txHash}`);
+
+      // Wait for transaction to be mined (poll balance)
+      const maxWaitMs = 30000; // 30 seconds max
+      const pollIntervalMs = 2000; // Check every 2 seconds
+      const startTime = Date.now();
+
+      while (Date.now() - startTime < maxWaitMs) {
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        balance = await refuelService.getUserBalance(walletAddress);
+
+        if (parseFloat(balance) >= minBalance) {
+          console.log(`✅ Refuel confirmed! New balance: ${balance} ETH`);
+          return res.json({
+            ready: true,
+            balance,
+            txHash: refuelResult.txHash,
+          });
+        }
+      }
+
+      // Timeout - tx might still be pending
+      console.warn(`⚠️ Refuel tx sent but not confirmed within ${maxWaitMs / 1000}s`);
+      return res.json({
+        ready: false,
+        pending: true,
+        balance,
+        txHash: refuelResult.txHash,
+        error: 'Refuel transaction pending',
+      });
+    } else {
+      console.warn(`⚠️ Refuel failed: ${refuelResult.error}`);
+      return res.json({
+        ready: false,
+        balance,
+        error: refuelResult.error,
+      });
+    }
+  } catch (error) {
+    console.error('❌ Ensure gas error:', error);
+    res.status(500).json({ error: 'Failed to ensure gas' });
+  }
+});
+
+/**
  * GET /api/wallet-status
  *
  * Check if a phone number has a wallet and spend permission.
