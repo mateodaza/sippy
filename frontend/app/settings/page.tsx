@@ -21,6 +21,13 @@ const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
 
+// USDC addresses by network (CDP SDK doesn't support 'usdc' shortcut on Arbitrum)
+const USDC_ADDRESSES: Record<string, string> = {
+  arbitrum: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+  base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+};
+const USDC_ADDRESS = USDC_ADDRESSES[NETWORK] || USDC_ADDRESSES.arbitrum;
+
 type AuthStep = 'phone' | 'otp' | 'authenticated';
 
 interface WalletStatus {
@@ -233,7 +240,7 @@ function SettingsContent() {
       const result = await createSpendPermission({
         network: NETWORK as 'arbitrum',
         spender: SIPPY_SPENDER_ADDRESS as `0x${string}`,
-        token: 'usdc',
+        token: USDC_ADDRESS as `0x${string}`,
         allowance: parseUnits(newLimit, 6), // USDC has 6 decimals
         periodInDays: 1, // Daily limit
         useCdpPaymaster: true, // Gas sponsored by CDP
