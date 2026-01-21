@@ -193,21 +193,16 @@ function SetupContent() {
       if (result.ready) {
         setGasReady(true);
         return true;
-      } else if (result.pending) {
-        // Transaction pending, wait a bit more and retry
-        console.log('Gas tx pending, waiting...');
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        return ensureGasReady(); // Recursive retry
       } else {
-        // Refuel failed but might already have enough
-        console.warn('Gas ensure failed:', result.error);
-        // Try anyway - user might have funded manually
-        return true;
+        // Refuel failed - show the actual error
+        console.error('Gas ensure failed:', result.error);
+        setError(result.error || 'Could not fund wallet with gas. Please try again later.');
+        return false;
       }
     } catch (err) {
       console.error('Failed to ensure gas:', err);
-      // Don't block the user, let them try anyway
-      return true;
+      setError('Failed to prepare wallet. Please try again.');
+      return false;
     } finally {
       setIsPreparingWallet(false);
     }
