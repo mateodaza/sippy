@@ -87,12 +87,15 @@ export default async function ReceiptPage({ params }: ReceiptPageProps) {
   let fromAddress: string;
   let toAddress: string;
 
-  if (transaction.token === 'USDC' && txDetails?.token_transfers?.[0]) {
+  if (transaction.token === 'USDC' && txDetails?.token_transfers?.length > 0) {
     // USDC transfer - get actual sender/receiver from token_transfers
-    fromAddress =
-      txDetails.token_transfers[0].from?.hash || txDetails.from?.hash;
-    toAddress =
-      txDetails.token_transfers[0].to?.hash || transaction.counterparty;
+    // For spend permission batched txs, there are 2 transfers:
+    // 1. User → Spender (spend permission pull)
+    // 2. Spender → Recipient (actual transfer)
+    // We want the first "from" and the last "to" to show user→recipient
+    const transfers = txDetails.token_transfers;
+    fromAddress = transfers[0].from?.hash || txDetails.from?.hash;
+    toAddress = transfers[transfers.length - 1].to?.hash || transaction.counterparty;
   } else {
     // Native ETH transfer
     fromAddress = txDetails?.from?.hash || transaction.counterparty;

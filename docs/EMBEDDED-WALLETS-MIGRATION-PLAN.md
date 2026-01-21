@@ -1,5 +1,32 @@
 # Sippy Implementation Plan: Embedded Wallets + Spend Permissions
 
+## Implementation Status: ✅ COMPLETE (Jan 2026)
+
+### Deployed Infrastructure
+
+| Component | Address/Value | Network |
+|-----------|---------------|---------|
+| **GasRefuel Contract** | `0xE4e5474E97E89d990082505fC5708A6a11849936` | Arbitrum |
+| **Sippy Spender Wallet** | `0xB396805F4C4eb7A45E237A9468FB647C982fBeb1` | Arbitrum |
+| **USDC Token** | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` | Arbitrum |
+| **SpendPermissionManager** | `0xf85210B21cC50302F477BA56686d2019dC9b67Ad` | All networks |
+
+### Key Implementation Notes
+
+1. **Two token transfers per send**: When using spend permissions, each USDC send creates TWO token transfers in one atomic transaction:
+   - Transfer 1: User → Spender (via SpendPermissionManager.spend)
+   - Transfer 2: Spender → Recipient (via USDC.transfer)
+
+2. **Receipt page fix**: The receipt page at `/receipt/[txHash]` uses `transfers[0].from` and `transfers[transfers.length - 1].to` to show the correct user→recipient flow.
+
+3. **CDP creates two addresses per user**: Each embedded wallet user gets:
+   - EOA (Externally Owned Account) - the underlying private key
+   - Smart Account - the ERC-4337 contract wallet used for all operations
+
+4. **GasRefuel contract is configurable**: Admin can adjust `minBalance`, `refuelAmount`, `maxDailyRefuels`, and `refuelCooldown` without redeployment.
+
+---
+
 ## Executive Summary
 
 This document outlines the technical plan to implement **Embedded Wallets + Spend Permissions** for Sippy, providing a **non-custodial model** where users own their keys while maintaining the same WhatsApp-based UX.

@@ -243,6 +243,7 @@ export function getHelpText(): string {
     `   Example: send 5 to Mom\n` +
     `   Or: send $10 to +573001234567\n` +
     `📊 history - View your transactions\n` +
+    `⚙️ settings - Manage spending limits\n` +
     `ℹ️  about - What is Sippy?\n` +
     `📞 help - Show this message\n\n` +
     `💡 Need funds? ${fundUrl}`
