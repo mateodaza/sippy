@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn } from '@coinbase/cdp-hooks';
+import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut } from '@coinbase/cdp-hooks';
 import { parseUnits } from 'viem';
 
 /**
@@ -72,6 +72,7 @@ function SettingsContent() {
   });
   const { currentUser } = useCurrentUser();
   const { isSignedIn } = useIsSignedIn();
+  const { signOut } = useSignOut();
 
   // Security: Phone number must match what was sent in the WhatsApp link
   const isPhoneLocked = !!phoneFromUrl;
@@ -85,23 +86,32 @@ function SettingsContent() {
       // Only run once
       if (hasCheckedSession) return;
 
-      // Wait for CDP to initialize
+      // Wait for CDP to initialize - isSignedIn starts as undefined
       if (isSignedIn === undefined) return;
 
+      // If signed in, wait for currentUser to be populated before deciding
+      // This prevents a race condition where isSignedIn=true but currentUser is still loading
+      if (isSignedIn && !currentUser) {
+        console.log('Signed in but waiting for currentUser to load...');
+        return; // Don't set hasCheckedSession yet, wait for currentUser
+      }
+
+      // Now we can make a decision
       setHasCheckedSession(true);
 
       // If not signed in, show phone step
-      if (!isSignedIn || !currentUser) {
+      if (!isSignedIn) {
         console.log('No existing session, showing login');
         setIsCheckingSession(false);
         return;
       }
 
+      // At this point: isSignedIn=true AND currentUser is loaded
       console.log('Found existing CDP session, restoring...');
 
       try {
         // Get wallet address from current user
-        const smartAccountAddress = currentUser.evmSmartAccounts?.[0] || currentUser.evmAccounts?.[0];
+        const smartAccountAddress = currentUser!.evmSmartAccounts?.[0] || currentUser!.evmAccounts?.[0];
         if (!smartAccountAddress) {
           console.log('No wallet in session');
           setIsCheckingSession(false);
@@ -178,6 +188,18 @@ function SettingsContent() {
         throw new Error('CDP not configured. Please set NEXT_PUBLIC_CDP_PROJECT_ID.');
       }
 
+      // Check if already signed in - if so, just restore session
+      if (isSignedIn && currentUser) {
+        console.log('Already signed in, restoring session...');
+        const smartAccountAddress = currentUser.evmSmartAccounts?.[0] || currentUser.evmAccounts?.[0];
+        if (smartAccountAddress) {
+          setWalletAddress(smartAccountAddress);
+          await fetchWalletStatus();
+          setAuthStep('authenticated');
+          return;
+        }
+      }
+
       // Phone number must be in E.164 format (e.g., +573001234567)
       const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
 
@@ -188,9 +210,21 @@ function SettingsContent() {
       setAuthStep('otp');
     } catch (err) {
       console.error('Failed to send OTP:', err);
-      setError(
-        err instanceof Error ? err.message : 'Failed to send verification code'
-      );
+      // Handle "already signed in" error from CDP
+      const errorMsg = err instanceof Error ? err.message : 'Failed to send verification code';
+      if (errorMsg.toLowerCase().includes('already') || errorMsg.toLowerCase().includes('session')) {
+        // Try to restore the existing session
+        if (currentUser) {
+          const smartAccountAddress = currentUser.evmSmartAccounts?.[0] || currentUser.evmAccounts?.[0];
+          if (smartAccountAddress) {
+            setWalletAddress(smartAccountAddress);
+            await fetchWalletStatus();
+            setAuthStep('authenticated');
+            return;
+          }
+        }
+      }
+      setError(errorMsg);
     } finally {
       setIsLoading(false);
     }
@@ -619,6 +653,22 @@ function SettingsContent() {
             </p>
           </div>
         )}
+
+        {/* Sign out for security */}
+        <div className='mt-6 pt-6 border-t'>
+          <button
+            onClick={async () => {
+              await signOut();
+              setAuthStep('phone');
+              setWalletAddress(null);
+              setWalletStatus(null);
+              setHasCheckedSession(false);
+            }}
+            className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+          >
+            Sign out of this device
+          </button>
+        </div>
 
         {/* Footer */}
         <div className='mt-8 text-center text-xs text-gray-500'>

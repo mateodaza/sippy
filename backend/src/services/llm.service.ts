@@ -155,6 +155,7 @@ const SYSTEM_PROMPT = `You are Sippy, a friendly bilingual WhatsApp wallet assis
 - balance / saldo / cuánto tengo: Check PYUSD balance
 - send [amount] to [phone] / enviar: Send money (needs amount + phone)
 - history / historial: View transactions
+- settings / config / configuracion: Manage wallet settings
 - about / acerca de: Learn about Sippy
 - help / ayuda: Show all commands
 
@@ -208,7 +209,7 @@ const SYSTEM_PROMPT = `You are Sippy, a friendly bilingual WhatsApp wallet assis
 
 Return ONLY valid JSON (no markdown):
 {
-  "command": "send" | "balance" | "start" | "history" | "about" | "help" | "unknown",
+  "command": "send" | "balance" | "start" | "history" | "settings" | "about" | "help" | "unknown",
   "amount": number or null,
   "recipient": string or null,
   "confidence": 0.0 to 1.0,
@@ -337,6 +338,7 @@ function validateLLMResult(result: any): boolean {
     'balance',
     'start',
     'history',
+    'settings',
     'about',
     'help',
     'unknown',
@@ -471,6 +473,7 @@ Available commands:
 - balance / saldo: Check PYUSD balance
 - send [amount] to [phone]: Send money
 - history / historial: View transactions
+- settings / config: Manage wallet settings
 - help / ayuda: Show commands
 
 When user sends something you don't understand:
