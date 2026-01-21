@@ -141,7 +141,7 @@ class RefuelService {
       // Execute refuel via contract
       console.log(`⛽ Refueling ${userAddress} via contract...`);
       const tx = await this.contract!.refuel(userAddress, {
-        gasLimit: 100000,
+        gasLimit: 300000, // Higher gas limit for Smart Account transfers
       });
 
       const receipt = await tx.wait();
