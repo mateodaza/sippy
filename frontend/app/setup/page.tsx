@@ -170,7 +170,8 @@ function SetupContent() {
         token: USDC_ADDRESS as `0x${string}`,
         allowance: parseUnits(dailyLimit, 6), // USDC has 6 decimals
         periodInDays: 1, // Daily limit
-        useCdpPaymaster: true, // Gas sponsored by CDP
+        // CDP paymaster only works on Base - users on Arbitrum need ETH for gas
+        ...(NETWORK === 'base' && { useCdpPaymaster: true }),
       });
 
       console.log('Spend permission created:', result);

@@ -186,11 +186,12 @@ function SettingsContent() {
 
       console.log('Revoking spend permission:', sippyPermission.permissionHash);
 
-      // Revoke using CDP SDK (with paymaster so users without gas can revoke)
+      // Revoke using CDP SDK
       await revokeSpendPermission({
         network: NETWORK as 'arbitrum',
         permissionHash: sippyPermission.permissionHash,
-        useCdpPaymaster: true,
+        // CDP paymaster only works on Base
+        ...(NETWORK === 'base' && { useCdpPaymaster: true }),
       });
 
       // Update backend - this MUST succeed to keep state in sync
@@ -243,7 +244,8 @@ function SettingsContent() {
         token: USDC_ADDRESS as `0x${string}`,
         allowance: parseUnits(newLimit, 6), // USDC has 6 decimals
         periodInDays: 1, // Daily limit
-        useCdpPaymaster: true, // Gas sponsored by CDP
+        // CDP paymaster only works on Base - users on Arbitrum need ETH for gas
+        ...(NETWORK === 'base' && { useCdpPaymaster: true }),
       });
 
       console.log('Spend permission created:', result);

@@ -9,6 +9,7 @@ import { Router, Request, Response } from 'express';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import { query } from '../services/db.js';
 import { getSippySpenderAccount } from '../services/embedded-wallet.service.js';
+import { getRefuelService } from '../services/refuel.service.js';
 import {
   NETWORK,
   USDC_ADDRESSES,
@@ -136,6 +137,18 @@ router.post('/register-wallet', async (req: Request, res: Response) => {
     );
 
     console.log(`✅ Embedded wallet registered for +${normalizedPhone}`);
+
+    // Auto-refuel new wallet so user has gas for spend permission creation
+    const refuelService = getRefuelService();
+    if (refuelService.isAvailable()) {
+      console.log(`⛽ Checking if wallet needs refuel...`);
+      const refuelResult = await refuelService.checkAndRefuel(walletAddress);
+      if (refuelResult.success) {
+        console.log(`✅ Wallet refueled: ${refuelResult.txHash}`);
+      } else {
+        console.log(`ℹ️ Refuel skipped: ${refuelResult.error}`);
+      }
+    }
 
     res.json({ success: true, network: NETWORK });
   } catch (error) {
