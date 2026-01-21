@@ -48,6 +48,7 @@ function SetupContent() {
   const [isCheckingSession, setIsCheckingSession] = useState(true); // Start true to check on mount
   const [isPreparingWallet, setIsPreparingWallet] = useState(false); // Waiting for gas
   const [gasReady, setGasReady] = useState(false);
+  const [hasCheckedSession, setHasCheckedSession] = useState(false); // Only check once on mount
 
   // CDP Hooks
   const { signInWithSms } = useSignInWithSms();
@@ -64,11 +65,17 @@ function SetupContent() {
   // Check if CDP is configured
   const isCdpConfigured = !!CDP_PROJECT_ID;
 
-  // Recovery: Check for existing session on mount
+  // Recovery: Check for existing session on mount (only once)
   useEffect(() => {
     const checkExistingSession = async () => {
-      // Wait a bit for CDP to initialize
+      // Only run this check once on mount
+      if (hasCheckedSession) return;
+
+      // Wait for CDP to initialize
       if (isSignedIn === undefined) return;
+
+      // Mark that we've checked
+      setHasCheckedSession(true);
 
       // If not signed in, just show the phone step
       if (!isSignedIn || !currentUser) {
@@ -152,7 +159,7 @@ function SetupContent() {
     };
 
     checkExistingSession();
-  }, [isSignedIn, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isSignedIn, currentUser, hasCheckedSession]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ensure wallet has gas before allowing permission creation
   const ensureGasReady = async (): Promise<boolean> => {
