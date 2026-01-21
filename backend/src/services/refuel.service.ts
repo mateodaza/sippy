@@ -62,8 +62,31 @@ class RefuelService {
       console.log('✅ RefuelService initialized');
       console.log('  • Contract:', this.contractAddress);
       console.log('  • Admin:', this.signer.address);
+
+      // Log contract status on startup
+      this.logContractStatus();
     } catch (error) {
       console.error('❌ Failed to initialize RefuelService:', error);
+    }
+  }
+
+  /**
+   * Log contract status for diagnostics
+   */
+  private async logContractStatus(): Promise<void> {
+    try {
+      const isPaused = await this.isPaused();
+      const balance = await this.getContractBalance();
+      console.log(`  • Paused: ${isPaused ? '⏸️  YES - NEEDS UNPAUSE' : '▶️  No'}`);
+      console.log(`  • Balance: ${balance} ETH`);
+      if (isPaused) {
+        console.warn('⚠️ Refuel contract is PAUSED. Run: cd contracts/gas-refuel && npx hardhat run scripts/unpause.ts --network arbitrum');
+      }
+      if (parseFloat(balance) < 0.001) {
+        console.warn('⚠️ Refuel contract has low balance. Send ETH to:', this.contractAddress);
+      }
+    } catch (error) {
+      console.error('❌ Failed to check contract status:', error);
     }
   }
 
@@ -92,9 +115,37 @@ class RefuelService {
       const canRefuel = await this.contract!.canRefuel(userAddress);
 
       if (!canRefuel) {
+        // Diagnose why canRefuel returned false
+        const isPaused = await this.isPaused();
+        if (isPaused) {
+          console.error('❌ Refuel contract is PAUSED - run unpause script');
+          return {
+            success: false,
+            error: 'Refuel contract is paused. Admin needs to unpause it.',
+          };
+        }
+
+        const contractBalance = await this.getContractBalance();
+        if (parseFloat(contractBalance) < 0.00001) {
+          console.error(`❌ Refuel contract has insufficient balance: ${contractBalance} ETH`);
+          return {
+            success: false,
+            error: `Refuel contract needs ETH. Current balance: ${contractBalance} ETH`,
+          };
+        }
+
+        const userBalance = await this.getUserBalance(userAddress);
+        if (parseFloat(userBalance) >= 0.00001) {
+          console.log(`ℹ️ User already has sufficient balance: ${userBalance} ETH`);
+          return {
+            success: false,
+            error: `User already has sufficient ETH: ${userBalance}`,
+          };
+        }
+
         return {
           success: false,
-          error: 'User does not need refuel or cannot be refueled',
+          error: 'User cannot be refueled (daily limit or cooldown)',
         };
       }
 

@@ -146,8 +146,10 @@ router.post('/register-wallet', async (req: Request, res: Response) => {
       if (refuelResult.success) {
         console.log(`✅ Wallet refueled: ${refuelResult.txHash}`);
       } else {
-        console.log(`ℹ️ Refuel skipped: ${refuelResult.error}`);
+        console.log(`⚠️ Refuel failed or skipped: ${refuelResult.error}`);
       }
+    } else {
+      console.warn(`⚠️ Refuel service not available - user will need ETH for gas`);
     }
 
     res.json({ success: true, network: NETWORK });

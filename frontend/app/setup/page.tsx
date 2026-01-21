@@ -2,7 +2,7 @@
 
 import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission } from '@coinbase/cdp-hooks';
+import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useCurrentUser, useIsSignedIn, useSignOut } from '@coinbase/cdp-hooks';
 import { parseUnits } from 'viem';
 
 /**
@@ -45,18 +45,112 @@ function SetupContent() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true); // Start true to check on mount
 
   // CDP Hooks
   const { signInWithSms } = useSignInWithSms();
   const { verifySmsOTP } = useVerifySmsOTP();
   const { getAccessToken } = useGetAccessToken();
   const { createSpendPermission, status: permissionStatus } = useCreateSpendPermission();
+  const { currentUser } = useCurrentUser();
+  const { isSignedIn } = useIsSignedIn();
+  const { signOut } = useSignOut();
 
   // Security: Phone number must match what was sent in the WhatsApp link
   const isPhoneLocked = !!phoneFromUrl;
 
   // Check if CDP is configured
   const isCdpConfigured = !!CDP_PROJECT_ID;
+
+  // Recovery: Check for existing session on mount
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      // Wait a bit for CDP to initialize
+      if (isSignedIn === undefined) return;
+
+      // If not signed in, just show the phone step
+      if (!isSignedIn || !currentUser) {
+        console.log('No existing session, starting fresh');
+        setIsCheckingSession(false);
+        return;
+      }
+
+      console.log('Found existing CDP session, checking state...');
+
+      try {
+        // Get wallet address from current user
+        const smartAccountAddress = currentUser.evmSmartAccounts?.[0] || currentUser.evmAccounts?.[0];
+        if (!smartAccountAddress) {
+          console.log('No wallet in session, starting fresh');
+          await signOut();
+          setIsCheckingSession(false);
+          return;
+        }
+
+        setWalletAddress(smartAccountAddress);
+        console.log('Found wallet:', smartAccountAddress);
+
+        // Check backend status
+        if (BACKEND_URL) {
+          const accessToken = await getAccessToken();
+          if (accessToken) {
+            // First ensure wallet is registered (this also triggers refuel)
+            const registerResponse = await fetch(`${BACKEND_URL}/api/register-wallet`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+              },
+            });
+
+            if (registerResponse.ok) {
+              console.log('Wallet registered/confirmed in backend');
+            } else {
+              console.warn('Failed to register wallet:', await registerResponse.text());
+            }
+
+            // Check wallet status to determine which step to resume from
+            const statusResponse = await fetch(`${BACKEND_URL}/api/wallet-status`, {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+              },
+            });
+
+            if (statusResponse.ok) {
+              const status = await statusResponse.json();
+              console.log('Backend wallet status:', status);
+
+              if (status.hasPermission) {
+                // Already complete
+                console.log('User already has permission, going to done');
+                setStep('done');
+              } else {
+                // Wallet registered but no permission
+                console.log('Wallet registered but no permission, going to permission step');
+                setStep('permission');
+              }
+            } else {
+              // No status = go to permission step
+              setStep('permission');
+            }
+          }
+        } else {
+          // No backend, just go to permission step
+          setStep('permission');
+        }
+      } catch (err) {
+        console.error('Session recovery failed:', err);
+        // On error, let user start fresh
+        try {
+          await signOut();
+        } catch {}
+      } finally {
+        setIsCheckingSession(false);
+      }
+    };
+
+    checkExistingSession();
+  }, [isSignedIn, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Step 1: Send SMS OTP
   const handleSendOtp = async () => {
@@ -216,6 +310,20 @@ function SetupContent() {
       setIsLoading(false);
     }
   };
+
+  // Show loading while checking session
+  if (isCheckingSession) {
+    return (
+      <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
+        <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center'>
+          <div className='animate-pulse'>
+            <div className='text-4xl mb-4'>🔍</div>
+            <p className='text-gray-600'>Checking your account...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
