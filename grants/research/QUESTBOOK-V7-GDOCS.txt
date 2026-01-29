@@ -1,0 +1,966 @@
+Name:
+Sippy
+
+Telegram:
+@SippyPayments
+
+
+Twitter:
+@SippyLat
+
+
+Discord:
+discord.gg/sippy
+
+
+Website:
+https://sippy.lat
+
+
+LinkedIn:
+https://www.linkedin.com/in/mateo-daza-448469170/
+https://www.linkedin.com/in/carlos-quintero-076a36153/
+
+
+Others:
+GitHub (Mateo): https://github.com/mateodaza
+GitHub (Carlos): https://github.com/CarlosQ96
+ETHGlobal Showcase: https://ethglobal.com/showcase/sippy-2smms
+Noah Biel: https://noahbiel.xyz
+
+
+Do you acknowledge that your team will be subject to a KYC requirement?
+Yes
+
+
+Do you acknowledge that, in case of approval, you will have to provide a report at the completion of the grant and, three months later, complete a survey about your experience?
+Yes
+
+
+Please provide the wallet that will receive the grant (ARB1 chain):
+
+Title:
+Sippy: WhatsApp Stablecoin Payments for Latin America
+
+
+
+Project Details:
+
+Sippy enables users to send, receive, and hold USDC stablecoins through WhatsApp messages. No app downloads. No seed phrases. No crypto knowledge required.
+
+WHY "SIPPY":
+
+Sippy is designed to be the first taste of Web3 for users who would never otherwise try it. Like a sippy cup for a child learning to drink, we provide a safe, simple introduction to blockchain - not the full complexity. Users don't need to understand Arbitrum, gas fees, or wallets. They just send money to friends via WhatsApp.
+
+THE PROBLEM WE'RE SOLVING:
+
+Mainstream crypto adoption is blocked by complexity: app downloads, seed phrases, gas fees, and technical jargon. Even "simple" wallets require understanding foreign concepts. Sippy removes ALL of this - users interact with USDC through the app they already use daily (WhatsApp has 90%+ penetration across Latin America).
+We're creating the on-ramp for users who would never download a wallet app.
+
+WHAT WE'VE BUILT (Live on Arbitrum One):
+
+- Working WhatsApp bot that processes natural language payment commands
+- LLM engine (Groq - Llama 3.3 70B) handling Spanish and English
+- Non-custodial embedded wallets via Coinbase CDP
+- Spend permission system with user-controlled daily limits
+- Gasless transactions (users never pay fees)
+- GasRefuel smart contract deployed on Arbitrum One mainnet
+- Web UI for wallet setup and settings management (sippy.lat/setup)
+
+CURRENT TRACTION:
+
+- ETHOnline 2025 Finalist
+- End-to-end payment flow validated on mainnet
+- WhatsApp Business API approved (2,000 bot-initiated messages/day + unlimited user-initiated)
+- In active talks for fiat on/off ramp integration
+
+TECH STACK:
+
+- Wallet Infrastructure: Coinbase CDP Embedded Wallets (non-custodial smart accounts)
+- Spend Permissions: SpendPermissionManager contract for user-approved transfers
+- Smart Contract: GasRefuel.sol on Arbitrum One (gas sponsorship)
+- Messaging: WhatsApp Business API via Meta Cloud API
+- Backend: Node.js/TypeScript with Groq LLM (Llama 3.3 70B)
+- Database: PostgreSQL for phone-to-wallet registry
+- Token: USDC on Arbitrum One
+CUSTODY MODEL:
+
+Non-custodial via Coinbase CDP Embedded Wallets. Each user gets their own smart account authenticated via SMS. Users control their funds completely - Sippy operates through spend permissions that users can revoke anytime.
+
+How it works:
+1. User creates wallet via sippy.lat/setup (SMS verification through CDP)
+2. User grants Sippy a spend permission with their chosen daily limit
+3. When user sends via WhatsApp, Sippy's spender wallet executes the transfer using the permission
+4. User can revoke permission or change limits anytime via settings
+
+Sippy never holds user funds. The spend permission model means onramp providers can send directly to user wallets with clear regulatory separation.
+
+WHY ARBITRUM (LONG-TERM COMMITMENT):
+
+Arbitrum is our foundational settlement layer for the foreseeable future.
+
+Why Arbitrum:
+- Cost: Arbitrum's low fees (~$0.01/tx) are essential for our "near-zero cost" value proposition
+- USDC Liquidity: Largest stablecoin TVL on any L2 - best on/off ramp availability
+- Ecosystem: Strong consumer app momentum aligns with Sippy's mission
+- Infrastructure: Reliable, battle-tested, excellent developer tooling
+- "Arbitrum Everywhere": Our mission directly embodies this - bringing Arbitrum to WhatsApp
+
+Our Commitment:
+We have no plans for multichain deployment. Our focus is proving the model on Arbitrum starting in Colombia, then scaling across Latin America on the same infrastructure. Sippy's success = Arbitrum's success. Every user onboarded is a new Arbitrum wallet with USDC volume.
+
+WHY USDC:
+
+USDC is the optimal choice for Latin American stablecoin payments:
+
+1. Liquidity: 52-58% of Arbitrum stablecoin TVL - best on/off ramp availability
+2. Trust: Circle-backed, regulated issuer, transparent monthly reserve attestations
+3. Stability: No significant depeg history
+4. On/Off Ramps: Fiat gateways across LATAM support USDC (Bitso, Binance P2P, local exchanges, Onramp)
+5. Regulatory Clarity: Circle is a regulated money transmitter
+6. Arbitrum Native: Deep integration with Arbitrum ecosystem
+7. Market Validation: Stablecoins dominate crypto transactions across Latin America
+
+
+REGULATORY FRAMEWORK:
+
+We're establishing Sippy with a proper legal foundation from day one. Our legal team is advising on:
+- Entity structure for LATAM operations (foundation for regional expansion)
+- Compliance pathways across multiple jurisdictions
+- Future-proofing for potential custodial licensing if regulations require it
+
+The non-custodial architecture simplifies regulatory requirements significantly - Sippy never holds user funds, users control their own wallets. Our legal entity will secure necessary permits to clear any gray areas and ensure full compliance across jurisdictions.
+
+AML/KYC Compliance:
+- Tiered KYC based on transaction limits
+- User-controlled daily spend limits (enforced on-chain)
+- Transaction reporting where required
+
+ONRAMP STRATEGY:
+
+We're in active talks for fiat on/off ramp integration. Our non-custodial architecture makes this integration cleaner:
+
+- Users control their own wallets (CDP Embedded Wallets)
+- Onramp sends USDC directly to user's wallet address
+- Sippy doesn't touch user funds during onramp
+- Clear regulatory separation between Sippy (payments) and Onramp (fiat conversion)
+
+Target flow: User sends COP via local payment method -> Onramp converts -> USDC lands in user's Sippy wallet -> Ready to send via WhatsApp.
+
+This is similar to how PayPal handles third-party cards - the user experience is seamless, but the regulated entity (Onramp) handles fiat conversion.
+
+LIQUIDITY MODEL:
+
+No Pooled Liquidity Required
+
+Sippy's P2P model doesn't require liquidity management:
+- User A's USDC goes directly to User B
+- No intermediary pool, no AMM, no liquidity provider
+- Standard blockchain transfer via spend permissions
+
+What We Do Manage:
+- GasRefuel Contract: Sponsors gas for user transactions
+
+
+Category:
+Consumer App
+
+What innovation or value will your project bring to Arbitrum? What previously unaddressed problems is it solving? Is the project introducing genuinely new mechanisms?
+
+SIPPY'S CORE INNOVATION: Arbitrum Everywhere - Starting with WhatsApp
+
+Most crypto products force users to come to them (download app, create account, learn concepts). Sippy brings Arbitrum to where users already are: WhatsApp.
+
+Users interact via WhatsApp. They see "Powered by Arbitrum" and balances in both USD and local currency equivalent. They send money to phone numbers. They own an Arbitrum smart wallet with USDC - and can verify every transaction on Arbiscan.
+
+This is "Arbitrum Everywhere" in action: users discover they're part of the Arbitrum ecosystem through the simplest possible entry point. No app download. No seed phrase. Just WhatsApp.
+
+The bridge: from "I just want to send money" to "I'm an Arbitrum user" - naturally, without forcing the learning curve.
+
+WHAT'S NEW:
+
+1. WhatsApp to Blockchain Bridge: First known protocol on Arbitrum converting WhatsApp messages into on-chain transactions. No existing solution combines messaging + wallets + stablecoins this way.
+
+2. Zero-Download Onboarding: Users interact with crypto without installing any app. This breaks the fundamental UX barrier that has blocked mainstream adoption.
+
+3. Non-Custodial Smart Wallets: Users get true ownership through Coinbase CDP Embedded Wallets. No seed phrases to manage, but full control of funds. Users can revoke Sippy's access anytime.
+
+4. Spend Permission Model: Users approve daily limits on-chain. Transfers happen atomically - spend() + transfer() in one user operation. Users control their own security parameters.
+
+5. Integrated Fiat Onramp (In Progress): With Onramp integration, users can go from local currency to USDC in their wallet without leaving the Sippy experience.
+
+6. Dual Currency Display: All balances and transactions show USD amount with local currency equivalent in real-time (e.g., "25 USD (~104,000 COP)"). Users understand value in familiar terms while holding stable dollars - bridging the mental model gap for first-time stablecoin users.
+
+
+7. LLM Transaction Parsing: Natural language in Spanish/English processed by Llama 3.3 70B into blockchain operations.
+
+PROBLEMS WE ADDRESS:
+
+- The Last Mile: Crypto solutions require downloads, accounts, and technical knowledge. Sippy meets users on WhatsApp - 90%+ penetration across Latin America.
+
+- The Wallet Paradox: Getting a wallet is difficult for non-technical users. Sippy simplifies this to SMS verification + permission approval.
+
+- The Onramp Problem: Getting fiat into crypto is still painful. With Onramp integration, users can fund their wallet through familiar local payment methods.
+
+- The Custody Concern: Users don't want to trust custodians. With embedded wallets, they don't have to - they control their own funds.
+
+- Currency Context: Users want to understand value in their local currency. We show "25 USD (~104,000 COP)" so they grasp real purchasing power while holding stable dollars.
+
+TRUST & CUSTODY:
+
+- Non-Custodial: Users control their own smart wallets via Coinbase CDP
+- Spend Permissions: Users set their own daily limits, can revoke anytime
+- Transaction Transparency: Every transaction shows amount, recipient, and Arbiscan link
+- User-Controlled Security: Daily limits enforced on-chain, not by Sippy
+
+VALUE FOR ARBITRUM:
+
+- First "training wheels" wallet that graduates users into the Arbitrum ecosystem
+- Every Sippy user = new Arbitrum smart wallet with USDC
+- Positions Arbitrum as THE consumer-friendly chain for Latin America
+- Proves "Arbitrum Everywhere" works - even for users who don't know what Arbitrum is
+- LATAM-wide potential: not just Colombia, but much of the region on Arbitrum
+
+
+
+Do you have a target audience? If so, which one?
+PRIMARY AUDIENCE:
+
+We target Latin Americans who would NEVER download a wallet app - but would use WhatsApp to send money. Starting in Colombia, expanding across LATAM.
+
+
+
+
+1. Stablecoin-Curious Segment (Users Who Want to HOLD Dollars):
+- Freelancers receiving international payments in USDC who don't want immediate peso conversion
+- Users seeking inflation hedge (Colombian peso lost ~15% vs USD in recent years)
+- Tech-adjacent professionals who've heard of stablecoins but never tried them
+- Note: We're not competing for remittance users who need immediate COP - that's Felix Pago's market. We target users who want to keep stable dollars.
+
+2. Local P2P Payment Users:
+- Small transactions where traditional banking is overkill
+- WhatsApp-native users (90%+ penetration across Latin America)
+
+3. Informal Commerce & Small Businesses:
+- Street vendors, small shops accepting digital payments
+- Service providers (hairdressers, mechanics, tutors)
+- Anyone tired of cash handling or bank transfer delays
+
+4. Regular WhatsApp Users:
+- Friends splitting bills, paying each other back
+- Family members sending money locally
+- Anyone who uses WhatsApp daily and wants simpler payments
+
+NOT OUR TARGET:
+- Pure remittance users who need immediate local currency (that's Felix Pago's market)
+- DeFi power users (they already have wallets)
+- Crypto traders (wrong product)
+
+DEMOGRAPHICS:
+
+- Age: 22-50 years old
+- Geography: Colombia first (Cartagena, Barranquilla, Bogota), then LATAM expansion
+- Profile: Mobile-first, WhatsApp-native, open to "digital dollars"
+- Tech comfort: Can use WhatsApp, want simpler payments without learning new apps
+- Economic profile: From informal vendors to professionals - anyone seeking stable value
+
+WHY LATAM:
+
+- WhatsApp dominance: 90%+ penetration across the region
+- Currency instability: Argentina, Venezuela, Colombia, Brazil - all have populations seeking dollar stability
+- Crypto adoption: Latin America leads emerging markets in stablecoin usage
+- Shared language: Spanish covers most of the region, Portuguese for Brazil
+- Same infrastructure: One Arbitrum deployment serves much of the continent
+
+For protocols/ideas categories: General public, others (mainstream users seeking simple digital dollar payments)
+
+
+
+
+
+
+Team experience and completeness:
+
+TEAM STATUS: Complete. No key hires needed.
+
+CORE TEAM:
+
+MATEO DAZA - Project Manager & Lead Software Engineer
+LinkedIn: https://www.linkedin.com/in/mateo-daza-448469170/
+GitHub: https://github.com/mateodaza
+
+Role: Technical leadership, smart contract development, frontend architecture
+
+Current: Lead Frontend Engineer at Asymmetry Finance (2023-Present)
+- Lead front-end architecture for DeFi suite: USDaf, veASF governance locker, LST yield products
+- Design and implement smart contract indexers and subgraph integrations
+
+Previous: Lead Software Engineer at Giveth (2020-2025, 4.5 years)
+- Led frontend development for decentralized donation platform on Ethereum
+
+Technical Expertise:
+- Frontend: TypeScript, React, Next.js, State Management
+- Web3: Solidity, Viem, Ethers.js, The Graph, wallet integrations
+- AI: LLM prompting, agent-based workflows
+
+Education: Systems Engineer & Computer Scientist - Universidad del Norte (2018)
+
+Hackathon Track Record:
+- Sippy - ETHOnline 2025 Finalist
+- Blobscan - ETHBogota 2022 Finalist
+
+Community: Co-founder, Ethereum Colombia (2020 - Present)
+
+---
+
+CARLOS QUINTERO - Full-Stack Software Engineer
+LinkedIn: https://www.linkedin.com/in/carlos-quintero-076a36153/
+GitHub: https://github.com/CarlosQ96
+
+Role: Backend infrastructure, API development, system architecture
+
+Current: Lead Backend Developer at Giveth (2022-Present)
+- Leading development of Giveth.io, decentralized peer-to-peer donation platform
+- Integrating smart contracts and Web3 APIs across multiple EVM blockchains
+
+Previous: Backend Developer at Koombea (2017-2022)
+- Led backend development for fintech and e-commerce products
+- Built Tuily: FinTech platform for credit cards to SMBs in Colombia
+
+Technical Expertise:
+- Node.js, TypeScript, GraphQL, NestJs, Docker, PostgreSQL
+- Web3: Ethers, The Graph, WhatsApp Business API integration
+- LLM/AI integration (Groq, OpenAI)
+
+Education: Systems Engineer & Computer Science - Universidad del Norte (2013-2018)
+
+Community: Co-builder, Quillalabs / Ethereum Colombia
+
+---
+
+NOAH BIEL - Web3 Strategy & Partnerships Lead
+Website: https://noahbiel.xyz
+
+Role: Grant management, partnership development, communications
+
+Current: Prisma DIDs (2025-2026)
+- Project Manager, Product Owner & Design, Partnerships
+- Supporting onboarding of 250+ developers across Sub-Saharan Africa
+
+Previous: Grants Analyst at General Magic (2024)
+- Researched and secured grant opportunities for Web3 clients
+
+Education: Master's in Social Innovation (2020-2021)
+
+Expertise:
+- Grant writing, research, and milestone reporting
+- Partnership development and community building
+
+---
+
+LEGAL ADVISORS:
+We've engaged a legal team to advise on entity structure and compliance for LATAM operations. This ensures Sippy is built on solid legal foundations from day one.
+
+---
+
+Combined: 18+ years relevant experience
+
+
+
+
+Do you know about any comparable protocol, event, game, tool or project within the Arbitrum ecosystem?
+
+No direct competitor exists on Arbitrum for our specific use case.
+
+IMPORTANT CLARIFICATION - SIPPY VS FELIX PAGO:
+
+Felix Pago was raised in feedback. They're an impressive company ($105M raised, $3B+ volume), but we're fundamentally different products:
+
+Felix Pago is a fiat-to-fiat remittance pipe. Users never own a wallet - crypto is invisible infrastructure on Stellar. It's one-way (US to LATAM), and users end up with pesos in their bank account. Target: immigrants sending money home. Value prop: "Send money cheaper."
+
+Sippy is a first Web3 taste via WhatsApp. Users own a non-custodial smart wallet on Arbitrum. It's bidirectional P2P, and users end up with USDC in their own wallet with full self-custody. Target: stablecoin-curious Latin Americans. Value prop: "Your first digital dollar wallet."
+
+Felix competes with Western Union. Sippy creates Arbitrum's consumer onboarding layer.
+
+Felix's success creates zero value for Arbitrum (they use Stellar). Every Sippy user = new Arbitrum wallet.
+
+OTHER COMPETITORS:
+
+MetaMask, Rainbow - Require app download, seed phrases
+Argent - Dedicated wallet app, not messaging-native
+Telegram bots - Different platform, lower LATAM penetration
+Peanut Protocol - Link-based transfers, not conversational
+
+To our knowledge, Sippy is the first WhatsApp-native non-custodial wallet on Arbitrum.
+
+
+What is the current stage of your project?
+
+MVP (Live on Arbitrum One Mainnet)
+
+WHAT'S WORKING TODAY:
+
+Smart Contract - GasRefuel.sol deployed on Arbitrum One (0xC8367a549e05D9184B8e320856cb9A10FDc1DE46)
+WhatsApp Bot - Working with Meta Cloud API (approved: 2,000 bot-initiated/day + unlimited user-initiated)
+LLM Engine - Groq (Llama 3.3 70B) - ES/EN
+Wallet Infrastructure - Coinbase CDP Embedded Wallets (non-custodial)
+Spend Permissions - User-controlled daily limits enforced on-chain
+Gasless Transactions - Gas funded via GasRefuel
+Web Setup - sippy.lat/setup for wallet creation and settings
+Demo - Public on ETHGlobal
+
+CURRENT METRICS (Testing):
+- Team wallets created and tested
+- End-to-end payment flow validated
+- Spend permission system working
+- Full architecture migrated to non-custodial
+
+What "Live on Mainnet" Means:
+The smart contract is deployed and functional on Arbitrum One mainnet - not testnet. The system works. We haven't launched publicly because we're finalizing the onramp integration to ensure smooth user onboarding.
+
+PROOF: https://ethglobal.com/showcase/sippy-2smms
+
+Have you received a grant from the DAO, Foundation, or any Arbitrum ecosystem related program or conducted any IRL like a hackathon or workshop?
+
+No grants from Arbitrum DAO or Foundation.
+
+ETHGlobal ETHOnline 2025: Sippy was developed and selected as FINALIST
+- Public showcase: https://ethglobal.com/showcase/sippy-2smms
+- Working demo video available
+- Competed against hundreds of submissions
+
+This is our first Arbitrum grant application.
+
+Have you received a grant from any other entity in other blockchains that are not Arbitrum?
+
+No. Sippy emerged from ETHOnline 2025 where it was selected as Finalist. This is our first funding request.
+
+Team has grant management experience through Giveth.io, General Magic, and Prisma.events.
+
+
+What is the idea/project for which you are applying for a grant?
+
+SIPPY: The First Taste of Web3 via WhatsApp
+
+We're taking our validated MVP to production with a focused beta in Colombia, with infrastructure ready to scale across Latin America.
+
+CORE VISION:
+
+Sippy isn't trying to replace remittance services or compete with DeFi apps. We're creating the "training wheels" for Web3 - a product so simple that users can start immediately and discover they're part of Arbitrum as they grow comfortable.
+
+Users start by sending USDC to friends via WhatsApp. They see "Powered by Arbitrum" and can verify transactions on Arbiscan. They control their own smart wallet through spend permissions. This is "Arbitrum Everywhere" in action - bringing Arbitrum to WhatsApp where 90%+ of Latin Americans already are.
+
+KEY DEVELOPMENTS SINCE V6:
+
+1. NON-CUSTODIAL ARCHITECTURE: Migrated to Coinbase CDP Embedded Wallets. Users own their smart accounts. Sippy operates via spend permissions that users control.
+
+2. ONRAMP: In active talks for fiat on/off ramp. Non-custodial architecture makes integration cleaner - Onramp sends directly to user wallets. This is the final piece for a complete end-to-end user experience.
+
+3. LEGAL FOUNDATION: Engaged legal team to advise on entity structure and compliance for LATAM operations. Will secure necessary permits to clear any gray areas.
+
+4. LATAM READY: Architecture supports expansion beyond Colombia across LATAM. Legal entity enables multi-jurisdiction operations.
+
+IMPLEMENTATION PLAN:
+
+PHASE 1 - Production Ready (Weeks 1-10):
+- Onramp integration (API integration, testing, user flow)
+- Security hardening (rate limits, transaction checks)
+- Dual currency display (USD + local currency)
+- Monitoring infrastructure
+- Legal entity setup with advisors
+- Closed beta: 50 testers validating full flow including onramp
+
+
+
+
+PHASE 2 - Public Beta (Weeks 11-24):
+- Legal basics: ToS, Privacy Policy
+- Documentation and blog posts
+- Final report to Arbitrum DAO
+
+TECHNICAL ARCHITECTURE:
+
+User WhatsApp message -> Meta Cloud API -> LLM Engine (Groq) -> Sippy Backend -> Coinbase CDP -> Arbitrum One
+
+Components:
+- GasRefuel.sol: Funds user wallets with ETH for gas
+- CDP Embedded Wallets: Non-custodial smart accounts
+- SpendPermissionManager: On-chain permission enforcement
+- PostgreSQL: Phone to wallet mapping
+- Groq LLM: Natural language parsing (Llama 3.3 70B)
+- Token: USDC on Arbitrum One
+- Onramp: Fiat on/off ramp integration
+
+
+Outline the major deliverables you will obtain with this grant:
+
+1. Onramp integration (fiat to USDC)
+2. Non-custodial wallet system with spend permissions (DONE - refinements needed)
+3. Security hardening (rate limits, transaction checks)
+4. Dual currency display (USD + local currency)
+5. Privacy controls
+6. Monitoring infrastructure
+7. Legal entity establishment
+8. Legal basics (ToS, Privacy Policy)
+9. Technical documentation package
+10. 1-2 Technical blog posts
+11. User testimonials (10-15)
+12. Final report to Arbitrum DAO
+
+
+
+
+
+
+
+Please explain how your idea/project aligns with the Arbitrum ecosystem goals (e.g., DeFi dominance, developer tools, ecosystem expansion) and why it will serve as a growth force for Arbitrum?
+
+DIRECT ALIGNMENT:
+
+ECOSYSTEM EXPANSION - THE RIGHT WAY:
+Sippy doesn't compete for existing crypto users. We create NEW Arbitrum users from people who would never download MetaMask or Coinbase. This is pure ecosystem growth.
+
+THE "FIRST TASTE" FUNNEL:
+1. User sends WhatsApp message -> gets Arbitrum smart wallet (doesn't know it)
+2. User sends USDC to friends -> using Arbitrum (doesn't care)
+3. User gets curious -> explores Arbiscan -> sees their wallet
+4. User becomes Arbitrum power user -> our job is done
+
+Most users stop at step 2. That's fine - they're still Arbitrum users with on-chain activity. The curious ones graduate to DeFi, NFTs, etc.
+
+STABLECOIN VOLUME:
+USDC is 52-58% of Arbitrum stablecoin TVL. Every Sippy transaction adds to this.
+
+CONSUMER APP LEADERSHIP:
+Positions Arbitrum as THE chain for "normal people" in Latin America - competitive advantage vs Base, Optimism.
+
+WHY SIPPY IS A GROWTH FORCE:
+
+1. Viral Network Effects:
+User A sends to User B -> B gets WhatsApp notification -> B now has Arbitrum wallet -> B tells C -> Growth
+
+2. Sticky Acquisition:
+Users onboarded stay on Arbitrum. Their funds are on-chain. Even if they never use Sippy again, they're Arbitrum users.
+
+3. "Arbitrum Everywhere":
+We literally bring Arbitrum to WhatsApp - where 90%+ of Latin Americans already are. This is the vision embodied.
+
+4. LATAM Market:
+One integration opens much of the continent. Same language, same WhatsApp dominance, same need for dollar stability.
+
+
+PROJECTED 24-WEEK IMPACT:
+- Proof that "first digital dollar experience" works
+- Foundation for LATAM expansion
+
+What is your requested grant:
+
+$25,000 USD
+
+Justification:
+- Working MVP with non-custodial architecture
+- ETHOnline 2025 Finalist (external validation)
+- Experienced team with production track record
+- Onramp integration in progress (addresses Chilla's feedback)
+- Legal team engaged for proper entity structure
+- LATAM-ready infrastructure
+
+Please provide a detailed breakdown of the budget in term of utilizations, costs and other relevant information:
+
+BUDGET BREAKDOWN ($25,000 USD):
+
+MILESTONE 1: $15,000 (Production Ready)
+Personnel (Mateo + Carlos: ~150 combined hours) | $7,500
+Legal (entity setup, compliance review, advisory) | $5,500
+Infrastructure (hosting, monitoring, APIs) | $1,500
+Contingency | $500
+
+Note: M1 focuses heavily on legal foundation and onramp integration. This addresses the onramp blocker raised by Chilla, establishes proper legal structure, and secures permits for full compliance across LATAM.
+
+Why Legal Costs Are High ($8K total / 32%):
+Operating a payment service in LATAM requires proper entity structure from day one. Our legal budget covers: (1) Entity formation in Colombia with LATAM expansion in mind, (2) Compliance review for non-custodial payment facilitation, (3) Regulatory advisory to ensure we're not operating in gray areas, and (4) ToS/Privacy Policy drafting. Getting this right now prevents costly pivots later and builds trust with onramp partners who need compliant counterparties.
+
+
+
+MILESTONE 2: $10,000 (Beta Launch)
+Personnel (Mateo + Carlos + Noah: ~130 combined hours) | $5,000
+Legal (ToS, Privacy Policy, compliance finalization) | $2,500
+Infrastructure | $500
+Gas operations | $500
+Contingency | $1,500
+
+TOTAL: $25,000 USD
+Provide a list of the milestones, with the USD amount of the grant associated to it, the deliverables that will be provided, and the estimated completion time:
+MILESTONE 1: Production Ready
+Amount: $15,000 USD
+Timeline: 10 weeks from approval
+
+Deliverables:
+- Onramp integration (API integration, testing, user flow)
+- Non-custodial wallet refinements
+- Security hardening:
+  - Rate limiting and session management
+  - Transaction sanity checks
+  - Improved error handling
+- Dual currency display (USD + COP/local currency equivalent in all UI)
+- Privacy controls (phone visibility settings)
+- User settings (daily limits adjustment via settings page)
+- Monitoring infrastructure (error tracking, uptime)
+- Legal entity establishment with advisors
+- WhatsApp production number active (already approved)
+- Closed beta: 50 testers validating full flow including onramp
+
+KPIs:
+- Onramp Integration working end-to-end
+- All security features implemented and tested
+- Dual currency display live
+- Legal entity established
+- Monitoring dashboard active
+- 50 closed beta testers with successful transactions (including onramp)
+- Ready for public beta launch
+
+---
+
+MILESTONE 2: Public Beta
+Amount: $10,000 USD
+Timeline: 24 weeks from approval (14 weeks after M1)
+
+Deliverables:
+- Legal basics:
+  - Terms of Service
+  - Privacy Policy
+  - Compliance documentation
+- Technical documentation package
+- 1-2 blog posts (WhatsApp integration patterns, non-custodial UX lessons)
+- User testimonials (10-15)
+- Final report to Arbitrum DAO
+
+KPIs:
+- Transaction success rate: >98%
+- Average transaction time: <10 seconds
+- System uptime: >99%
+- NPS: >40
+- Documentation: Published
+- Report: Delivered to Arbitrum DAO
+
+---
+
+TOTAL FUNDING: $25,000 USD
+TOTAL TIMELINE: 24 weeks (~6 months)
+
+
+Are milestones clearly defined, time-bound, and measurable with quantitative metrics where applicable? What are your reference KPI, if applicable, for each milestone:
+Yes. All milestones have quantitative KPIs:
+
+MILESTONE 1 KPIs (Week 10):
+- Onramp: Integration functional end-to-end
+- Security: All features implemented and tested
+- Display: Dual currency (USD/local) showing correctly
+- Legal: Entity established with advisors
+- Monitoring: Dashboard live with error tracking
+- Closed beta: 50 testers with successful transactions including onramp
+- Verification: Internal testing complete, ready for public beta
+
+MILESTONE 2 KPIs (Week 24):
+- Transaction success rate: >98%
+- Average transaction time: <10 seconds
+- System uptime: >99%
+- Onboarding completion rate: >80%
+- NPS: >40
+- Documentation: Published and accessible
+- Report: Delivered to Arbitrum DAO
+- Verification: On-chain analytics, system metrics dashboard
+
+
+
+ONGOING METRICS:
+- Transaction success rate and average completion time
+- System uptime and error rate
+- Onboarding completion rate
+- User retention (7-day, 30-day)
+- Onramp conversion rate
+- NPS tracking
+
+What is the estimated maximum time for the completion of the project?
+
+24 weeks (~6 months) from grant approval.
+
+Timeline:
+- Weeks 1-10: Production Ready (Onramp integration, security, legal entity, 50 closed beta testers)
+- Weeks 11-24: Public Beta
+
+Our MVP already exists and was validated at ETHOnline 2025. The non-custodial architecture is implemented. Main work is Onramp integration and legal setup.
+
+
+How should the Arbitrum community measure the success of this grant?
+
+PRIMARY SUCCESS METRICS:
+
+Transaction Success Rate - Target: >98% - Verification: System metrics
+Avg Transaction Time - Target: <10 seconds - Verification: System metrics
+System Uptime - Target: >99% - Verification: Monitoring dashboard
+Onboarding Completion - Target: >80% - Verification: Analytics
+Onramp Working - Target: Yes - Verification: Demo video, user testimonials
+NPS Score - Target: >40 - Verification: User surveys
+Documentation - Target: Published - Verification: Public links
+Report - Target: Delivered - Verification: Forum post
+
+SECONDARY METRICS:
+- Technical blog post engagement
+- User retention rates
+- Onramp conversion rate
+
+REPORTING:
+- Progress updates to Arbitrum forum
+- Final comprehensive report
+- 3-month follow-up survey
+
+
+
+WHAT SUCCESS MEANS:
+
+If we demonstrate a reliable, fast, and user-friendly system where Latin Americans can onramp fiat to USDC and send payments via WhatsApp - with >98% success rate and <10 second transactions - we've proven the model works and is ready to scale. That's the "first digital dollar experience" thesis validated with proper infrastructure.
+
+What is the economic plan for maintaining operations or continuing the growth of your project after the grant period?
+
+REVENUE MODEL:
+
+1. FREE P2P TRANSFERS (ALWAYS)
+Sippy-to-Sippy USDC transfers remain FREE. This is our core value proposition.
+
+2. FUTURE MONETIZATION (Post-Grant)
+- Fiat on/off ramps: Revenue share with Onramp on conversion fees
+- Premium features: Higher daily limits, scheduled payments
+- Business accounts: Monthly subscription for merchants
+- API access: Enterprise integrations
+
+3. WHY THIS MODEL WORKS
+- Free transfers = viral adoption (zero friction)
+- Monetize the edges (fiat conversion), not the core (P2P)
+- Build user base first, monetize infrastructure later
+- Proven model: Venmo, Cash App, Wise
+
+PATH TO SUSTAINABILITY:
+
+With users and working onramp proven:
+1. Seed Funding: Approach LATAM-focused VCs with traction
+2. Follow-on Grants: Apply for larger Arbitrum grants with proven user base
+3. Onramp Revenue Share: Ongoing income from onramp conversions
+4. Regional Expansion: Replicate model across LATAM
+5. Business accounts: Expand to merchant adoption if demand emerges
+
+We're not asking Arbitrum to fund our entire journey - just the proof-of-concept with proper onramp infrastructure.
+
+
+Category:
+Consumer App
+
+
+—-------------------------------------
+Domain Specific Information
+
+Protocol Performance:
+Sippy is at MVP stage, live on Arbitrum One mainnet.
+
+ETHONLINE 2025 RESULTS:
+- Selected as FINALIST among hundreds of submissions
+- Working demo publicly reviewed by judges
+- End-to-end transaction flow validated
+
+TECHNICAL VALIDATION:
+- GasRefuel.sol deployed on Arbitrum One mainnet
+- Coinbase CDP Embedded Wallet integration functional (non-custodial)
+- Spend permission system working
+- WhatsApp Business API working (2,000 bot-initiated/day + unlimited user-initiated)
+- Gasless transactions operational
+
+PERFORMANCE:
+- Avg transaction time: <5 seconds
+- Error rate: <1%
+
+PROOF: https://ethglobal.com/showcase/sippy-2smms
+
+Audit History & Security Vendors:
+
+CURRENT STATUS: No formal audit (MVP stage)
+
+SECURITY PLAN (M1):
+
+Internal security review (included in dev costs). Contract is ~100 lines.
+
+Scope:
+- GasRefuel.sol - Gas funding logic and access control
+- Backend security assessment
+- CDP integration flows
+- Spend permission verification
+
+SECURITY MEASURES IMPLEMENTED:
+- Non-custodial architecture (Sippy never holds user funds)
+- Spend permissions with user-controlled daily limits (enforced on-chain)
+- GasRefuel with Ownable access control
+- Pause/unpause emergency controls
+- Rate limiting
+- Transaction limits
+- Session management
+- Message deduplication
+
+PLANNED (M1):
+- Enhanced rate limiting
+- Transaction sanity checks
+- Monitoring infrastructure
+- Improved error handling
+
+LLM SAFEGUARDS:
+
+1. Structured Parsing:
+LLM extracts intent into structured format (action, amount, recipient) - never executed directly from raw text. If parsing confidence is low, system asks for clarification.
+
+2. Explicit Confirmation:
+Before any transfer, user sees:
+"Send $25 USDC to +57 300 XXX XXXX (Maria)? Reply YES to confirm."
+
+3. Amount Sanity Checks:
+- Transactions > user's daily limit: Blocked (enforced on-chain via spend permissions)
+- Unusual amounts flagged for confirmation
+
+4. Recipient Validation:
+- System confirms recipient exists before execution
+- New recipients flagged: "This is a new contact. Please verify the number."
+- Phone number format validation
+
+5. User-Controlled Settings:
+Users can customize via settings page:
+- Daily spend limit (enforced on-chain)
+- Confirmation preferences
+- Phone visibility
+
+
+Is your project composable with other projects on Arbitrum? If so, please explain how:
+
+FOCUSED COMPOSABILITY:
+
+Sippy wallets are standard Arbitrum smart accounts via Coinbase CDP. Users can:
+
+1. Receive any token -> Any ERC-20 on Arbitrum can be sent to their wallet
+2. Use external apps -> Connect wallet to any Arbitrum dApp
+3. Graduate to DeFi -> Full ecosystem access when ready
+
+Our philosophy: Sippy is the "first taste." Complex features are for specialized apps. We onboard users simply; they explore the ecosystem when ready.
+
+ECOSYSTEM VALUE:
+
+1. User Expansion: Sippy users become Arbitrum users who can explore
+2. Volume Growth: Every transaction = Arbitrum network activity
+3. On-ramp: "Training wheels" that graduate users to full Web3
+4. USDC Distribution: Increases stablecoin usage on Arbitrum
+5. LATAM Gateway: Opens LATAM to Arbitrum ecosystem
+
+Is the proposal scope realistic and well-defined given the team, resources, and deliverables?
+
+YES. Here's the evidence:
+
+1. MVP ALREADY EXISTS
+- Core functionality built at ETHOnline 2025
+- Selected as Finalist (external validation)
+- Live on Arbitrum One mainnet
+- Non-custodial architecture implemented
+- Demo: https://ethglobal.com/showcase/sippy-2smms
+
+2. EXPERIENCED TEAM
+- Mateo Daza: 8+ years Web3, Lead at Asymmetry Finance
+- Carlos Quintero: 8+ years production, Lead at Giveth
+- Noah Biel: Grant management, Master's in Social Innovation
+- Legal advisors engaged
+- Combined: 18+ years relevant experience
+
+3. ACHIEVABLE TARGETS
+- M1: Production Ready - 10 weeks - Onramp integration, legal setup
+- M2: Public Beta - 14 weeks - System reliability proven, documentation complete
+
+4. FOCUSED SCOPE
+
+IN SCOPE:
+- Onramp integration
+- USDC payments (send/receive)
+- Colombia focus, LATAM-ready infrastructure
+- User protection (spend permissions, rate limits)
+- Dual currency display
+- Legal entity establishment
+- Documentation
+
+OUT OF SCOPE:
+- Multi-token support
+- Multi-country launch (infrastructure ready, focus on Colombia)
+- Building our own fiat rails
+- DeFi integrations
+
+5. RISK MITIGATION
+
+Risk: Onramp integration delays | Probability: Medium | Mitigation: Already in talks, non-custodial makes it easier
+Risk: WhatsApp restriction | Probability: Low | Mitigation: Already approved, webapp fallback ready as contingency
+Risk: User loses WhatsApp access | Probability: Low | Mitigation: Wallet export to external app, account recovery via SMS re-verification
+Risk: Technical issues | Probability: Low | Mitigation: Experienced team, validated MVP
+Risk: Legal complexity | Probability: Low | Mitigation: Engaged legal advisors from start
+
+6. USER ACQUISITION STRATEGY
+
+Phase 1
+- Team's personal networks in Colombia
+- Ethereum Colombia community events (~500 members)
+- Pizza Day events in Cartagena and Barranquilla (100+ users last year)
+- "Pay your lunch with Sippy" activations
+- Word-of-mouth growth
+
+Beta testers achievable through direct outreach alone.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+—----------------
+
+Extra Section: Milestones 
+
+How did you find out about this program?
+Arbitrum Twitter
+
+
+Milestone 01 - Title:
+Production Ready
+
+
+Milestone 01 - Details:
+Complete Fiat onramp integration, establish legal entity, and prepare for public beta. Includes Onramp API integration and testing, security hardening (rate limiting, transaction checks), dual currency display (USD + local currency), privacy controls, monitoring infrastructure, legal entity establishment with advisors, and closed beta with 50 testers validating full flow including onramp.
+
+Milestone 01 - Deadline:
+[10 weeks from approval - select date]
+
+Milestone 01 - Funding Ask:
+15000
+
+Milestone 02 - Title:
+Beta Launch
+
+Milestone 02 - Details:
+Launch public beta in Colombia. Includes legal basics (Terms of Service, Privacy Policy), technical documentation package, 1-2 blog posts on WhatsApp integration and non-custodial UX, user testimonials, and final report to Arbitrum DAO. Success measured by system reliability (>98% transaction success, <10s avg time, >99% uptime) and user satisfaction (NPS >40).
+
+
+Milestone 02 - Deadline:
+[24 weeks from approval - select date]
+
+
+Milestone 02 - Funding Ask:
+10000
+
+Funding Asked (Total):
+25000
