@@ -35,7 +35,7 @@ async function testExistingWallet() {
       );
 
       if (balance !== undefined) {
-        console.log(`   Balance: ${balance} PYUSD`);
+        console.log(`   Balance: ${balance} USDC`);
       }
     }
   } catch (error: any) {

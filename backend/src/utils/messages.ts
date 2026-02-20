@@ -592,6 +592,48 @@ export function formatCommandErrorMessage(lang: Lang = 'en'): string {
   return m[lang]();
 }
 
+// --- Greeting (regex-matched, zero LLM cost) ---
+
+export function formatGreetingMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () =>
+      `Hey, welcome to Sippy.\n\n` +
+      `You can send dollars to any phone number, check your balance, or add funds.\n\n` +
+      `Try "balance", "help", or "send 5 to +57..."`,
+    es: () =>
+      `Hola, bienvenido a Sippy.\n\n` +
+      `Puedes enviar dolares a cualquier numero de telefono, consultar tu saldo o agregar fondos.\n\n` +
+      `Prueba "saldo", "ayuda" o "enviar 5 a +57..."`,
+    pt: () =>
+      `Oi, bem-vindo ao Sippy.\n\n` +
+      `Voce pode enviar dolares para qualquer numero de telefone, consultar seu saldo ou adicionar fundos.\n\n` +
+      `Tente "saldo", "ajuda" ou "enviar 5 para +57..."`,
+  };
+  return m[lang]();
+}
+
+// --- Social phrases (regex-matched, zero LLM cost) ---
+
+export function formatSocialReplyMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `Anytime. Let me know if you need anything — "balance", "send", or "help".`,
+    es: () => `Con gusto. Avisame si necesitas algo — "saldo", "enviar" o "ayuda".`,
+    pt: () => `Disponha. Me avise se precisar de algo — "saldo", "enviar" ou "ajuda".`,
+  };
+  return m[lang]();
+}
+
+// --- Media messages (non-text) ---
+
+export function formatTextOnlyMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `I can only read text messages. Try "help" to see what I can do.`,
+    es: () => `Solo puedo leer mensajes de texto. Prueba "ayuda" para ver lo que puedo hacer.`,
+    pt: () => `So consigo ler mensagens de texto. Tente "ajuda" para ver o que posso fazer.`,
+  };
+  return m[lang]();
+}
+
 // --- Button labels ---
 
 export function buttonNeedAnythingElse(lang: Lang = 'en'): string {

@@ -83,6 +83,16 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     // "idioma es", "idioma en", "idioma pt"
     /^idioma\s+(en|es|pt)$/i,
   ],
+  greeting: [
+    /^(hi|hello|hey|yo|sup|what's up|whats up|good morning|good afternoon|good evening)$/i,
+    /^(hola|buenas?|qu[eé] tal|buenos d[ií]as|buenas tardes|buenas noches|saludos)$/i,
+    /^(oi|ol[aá]|bom dia|boa tarde|boa noite|e a[ií])$/i,
+  ],
+  social: [
+    /^(thanks|thank you|thx|ty|ok|okay|cool|got it|great|nice|perfect|awesome|sure|bye|goodbye|see you)$/i,
+    /^(gracias|dale|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada)$/i,
+    /^(obrigado|obrigada|valeu|beleza|legal|perfeito|tchau|at[eé] logo|de nada)$/i,
+  ],
 };
 
 /** Trilingual send patterns — strict format, must extract amount + recipient */

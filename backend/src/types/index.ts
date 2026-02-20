@@ -31,6 +31,8 @@ export interface ParsedCommand {
     | 'history'
     | 'settings'
     | 'language'
+    | 'greeting'
+    | 'social'
     | 'unknown';
   amount?: number;
   recipient?: string;
@@ -125,8 +127,8 @@ export interface WhatsAppAPIError {
 }
 
 export interface SecurityLimits {
-  dailyLimit: number; // PYUSD per day
-  transactionLimit: number; // PYUSD per transaction
+  dailyLimit: number; // USDC per day
+  transactionLimit: number; // USDC per transaction
   sessionDurationHours: number; // Session validity in hours
 }
 

@@ -28,6 +28,9 @@ import {
   formatUnknownCommandMessage,
   formatLanguageSetMessage,
   formatCommandErrorMessage,
+  formatGreetingMessage,
+  formatSocialReplyMessage,
+  formatTextOnlyMessage,
 } from './src/utils/messages.js';
 import {
   getAllWallets,
@@ -231,6 +234,15 @@ app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
     // Mark message as read
     await markAsRead(messageId);
 
+    // Handle non-text messages (images, audio, stickers, video, location, etc.)
+    if (!text && message.type && message.type !== 'text' && message.type !== 'interactive') {
+      console.log(`📎 Non-text message (${message.type}) from +${from}`);
+      const mediaLang = await getUserLanguage(from) || 'en';
+      await sendTextMessage(from, formatTextOnlyMessage(mediaLang), mediaLang);
+      processedMessages.set(messageId, Date.now());
+      return;
+    }
+
     // Parse command (with context for observability logging)
     const command = await parseMessage(text, { messageId, phoneNumber: from });
     console.log(`\n🎯 Command parsed:`, command);
@@ -329,6 +341,14 @@ async function handleCommand(
 
       case 'settings':
         await sendTextMessage(phoneNumber, formatSettingsMessage(phoneNumber, lang), lang);
+        break;
+
+      case 'greeting':
+        await sendTextMessage(phoneNumber, formatGreetingMessage(lang), lang);
+        break;
+
+      case 'social':
+        await sendTextMessage(phoneNumber, formatSocialReplyMessage(lang), lang);
         break;
 
       case 'language': {
@@ -474,7 +494,7 @@ app.get('/resolve-address', async (req: Request, res: Response) => {
 /**
  * Notify user about received funds from Fund flow
  * POST /notify-fund
- * Body: { phone: string, type: 'eth' | 'pyusd', amount: string, txHash: string }
+ * Body: { phone: string, type: 'eth' | 'usdc', amount: string, txHash: string }
  */
 app.post('/notify-fund', async (req: Request, res: Response) => {
   try {
@@ -487,10 +507,10 @@ app.post('/notify-fund', async (req: Request, res: Response) => {
       });
     }
 
-    if (type !== 'eth' && type !== 'pyusd') {
+    if (type !== 'eth' && type !== 'usdc' && type !== 'pyusd') {
       return res.status(400).json({
         error: 'Invalid type',
-        message: 'type must be either "eth" or "pyusd"',
+        message: 'type must be either "eth" or "usdc"',
       });
     }
 

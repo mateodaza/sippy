@@ -27,7 +27,7 @@ async function testUserJourney() {
     if (wallet1) {
       console.log(`   ✓ Wallet: ${wallet1.walletAddress}`);
       const balance = await getUserBalance(TEST_PHONES.MAIN);
-      console.log(`   ✓ Balance: ${balance} PYUSD`);
+      console.log(`   ✓ Balance: ${balance} USDC`);
     }
 
     // Step 2: Check or create test user
@@ -51,7 +51,7 @@ async function testUserJourney() {
       runner.assert(true, 'Test user already has wallet');
       console.log(`   ✓ Wallet: ${wallet2.walletAddress}`);
       const balance2 = await getUserBalance(TEST_PHONES.TEST);
-      console.log(`   ✓ Balance: ${balance2} PYUSD`);
+      console.log(`   ✓ Balance: ${balance2} USDC`);
     }
   } catch (error: any) {
     runner.assert(false, 'Complete user journey', error.message);
