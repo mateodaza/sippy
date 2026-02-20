@@ -72,7 +72,7 @@ CURRENT TRACTION:
 - ETHOnline 2025 Finalist
 - End-to-end payment flow validated on mainnet
 - WhatsApp Business API approved (2,000 bot-initiated messages/day + unlimited user-initiated)
-- In active talks for fiat on/off ramp integration
+- Fiat on/off ramp partner identified with agreement in place
 
 TECH STACK:
 
@@ -131,14 +131,28 @@ We're establishing Sippy with a proper legal foundation from day one. Our legal 
 
 The non-custodial architecture simplifies regulatory requirements significantly - Sippy never holds user funds, users control their own wallets. Our legal entity will secure necessary permits to clear any gray areas and ensure full compliance across jurisdictions.
 
-AML/KYC Compliance:
-- Tiered KYC based on transaction limits
-- User-controlled daily spend limits (enforced on-chain)
-- Transaction reporting where required
+AML / KYC & fraud prevention (proportional by design)
+
+Compliance is implemented as a risk-based, proportional system aligned with the current non-custodial scope:
+• tiered KYC based on transaction thresholds,
+• user-controlled daily spend limits (enforced onchain),
+• transaction monitoring and reporting where required,
+• clear terms, conditions, and policies to prevent fraud and misuse,
+• clean separation of responsibility between the protocol and third-party providers.
+
+Why this matters
+• Arbitrum funds a launch-ready, non-custodial access layer today
+• The legal structure eliminates future rework or retroactive licensing
+• Arbitrum gains wallets and users immediately
+• Regulatory risk is contained offchain
+• UX can improve over time without regulatory friction
+• The infrastructure remains reusable and sustainable
+
+In short, the DAO is funding a forward-compatible legal foundation that enables safe launch today and optional evolution tomorrow — without risk, rework, or dependency.
 
 ONRAMP STRATEGY:
 
-We're in active talks for fiat on/off ramp integration. Our non-custodial architecture makes this integration cleaner:
+We've identified a fiat on/off ramp partner with an agreement in place. Our non-custodial architecture makes this integration cleaner:
 
 - Users control their own wallets (CDP Embedded Wallets)
 - Onramp sends USDC directly to user's wallet address
@@ -259,7 +273,7 @@ NOT OUR TARGET:
 DEMOGRAPHICS:
 
 - Age: 22-50 years old
-- Geography: Colombia first (Cartagena, Barranquilla, Bogota), then LATAM expansion
+- Geography: Colombia first (Cartagena, Barranquilla, Bogota), then LATAM expansion (Mexico, Peru, Argentina)
 - Profile: Mobile-first, WhatsApp-native, open to "digital dollars"
 - Tech comfort: Can use WhatsApp, want simpler payments without learning new apps
 - Economic profile: From informal vendors to professionals - anyone seeking stable value
@@ -361,9 +375,11 @@ Expertise:
 LEGAL ADVISORS:
 We've engaged a legal team to advise on entity structure and compliance for LATAM operations. This ensures Sippy is built on solid legal foundations from day one.
 
+ICHS Legal & Advisors is a Colombia-based law firm specialized in corporate, fintech, and regulatory structuring, advising on the design of compliant and sustainable legal frameworks for innovative business models.
+
 ---
 
-Combined: 18+ years relevant experience
+Combined: 16+ years relevant experience
 
 
 
@@ -442,7 +458,7 @@ What is the idea/project for which you are applying for a grant?
 
 SIPPY: The First Taste of Web3 via WhatsApp
 
-We're taking our validated MVP to production with a focused beta in Colombia, with infrastructure ready to scale across Latin America.
+We're taking our validated MVP to production with a focused launch in Colombia, with infrastructure ready to scale across Latin America.
 
 CORE VISION:
 
@@ -454,7 +470,7 @@ KEY DEVELOPMENTS SINCE V6:
 
 1. NON-CUSTODIAL ARCHITECTURE: Migrated to Coinbase CDP Embedded Wallets. Users own their smart accounts. Sippy operates via spend permissions that users control.
 
-2. ONRAMP: In active talks for fiat on/off ramp. Non-custodial architecture makes integration cleaner - Onramp sends directly to user wallets. This is the final piece for a complete end-to-end user experience.
+2. ONRAMP: Fiat on/off ramp partner identified with agreement in place. Non-custodial architecture makes integration cleaner - Onramp sends directly to user wallets. This is the final piece for a complete end-to-end user experience.
 
 3. LEGAL FOUNDATION: Engaged legal team to advise on entity structure and compliance for LATAM operations. Will secure necessary permits to clear any gray areas.
 
@@ -462,7 +478,7 @@ KEY DEVELOPMENTS SINCE V6:
 
 IMPLEMENTATION PLAN:
 
-PHASE 1 - Production Ready (Weeks 1-10):
+PHASE 1 - Production Ready (Weeks 1-6):
 - Onramp integration (API integration, testing, user flow)
 - Security hardening (rate limits, transaction checks)
 - Dual currency display (USD + local currency)
@@ -473,7 +489,10 @@ PHASE 1 - Production Ready (Weeks 1-10):
 
 
 
-PHASE 2 - Public Beta (Weeks 11-24):
+PHASE 2 - Public Launch (Weeks 7-16):
+- Ongoing maintenance and bug fixes from user feedback
+- User support and system optimization
+- Feature iterations based on initial user feedback
 - Legal basics: ToS, Privacy Policy
 - Documentation and blog posts
 - Final report to Arbitrum DAO
@@ -501,7 +520,7 @@ Outline the major deliverables you will obtain with this grant:
 5. Privacy controls
 6. Monitoring infrastructure
 7. Legal entity establishment
-8. Legal basics (ToS, Privacy Policy)
+8. Legal basics (regulatory framework, compliance policies, contractual structure, and risk mitigation)
 9. Technical documentation package
 10. 1-2 Technical blog posts
 11. User testimonials (10-15)
@@ -549,7 +568,7 @@ We literally bring Arbitrum to WhatsApp - where 90%+ of Latin Americans already 
 One integration opens much of the continent. Same language, same WhatsApp dominance, same need for dollar stability.
 
 
-PROJECTED 24-WEEK IMPACT:
+PROJECTED 16-WEEK IMPACT:
 - Proof that "first digital dollar experience" works
 - Foundation for LATAM expansion
 
@@ -569,31 +588,32 @@ Please provide a detailed breakdown of the budget in term of utilizations, costs
 
 BUDGET BREAKDOWN ($25,000 USD):
 
-MILESTONE 1: $15,000 (Production Ready)
-Personnel (Mateo + Carlos: ~150 combined hours) | $7,500
-Legal (entity setup, compliance review, advisory) | $5,500
-Infrastructure (hosting, monitoring, APIs) | $1,500
+MILESTONE 1: $12,000 (Production Ready)
+Personnel (Mateo + Carlos: ~130 combined hours) | $6,000
+Legal (entity setup, compliance review, advisory) | $4,300
+Infrastructure (hosting, monitoring, APIs) | $1,200
 Contingency | $500
 
 Note: M1 focuses heavily on legal foundation and onramp integration. This addresses the onramp blocker raised by Chilla, establishes proper legal structure, and secures permits for full compliance across LATAM.
 
-Why Legal Costs Are High ($8K total / 32%):
-Operating a payment service in LATAM requires proper entity structure from day one. Our legal budget covers: (1) Entity formation in Colombia with LATAM expansion in mind, (2) Compliance review for non-custodial payment facilitation, (3) Regulatory advisory to ensure we're not operating in gray areas, and (4) ToS/Privacy Policy drafting. Getting this right now prevents costly pivots later and builds trust with onramp partners who need compliant counterparties.
+Why Legal Costs Are Justified ($6.3K total / 25%):
+Operating a payment service in LATAM requires proper entity structure from day one. Our legal budget covers: (1) Entity formation for LATAM operations, (2) Regulatory advisory to ensure full compliance. Getting this right now prevents costly pivots later and builds trust with onramp partners who need compliant counterparties.
 
-
-
-MILESTONE 2: $10,000 (Beta Launch)
-Personnel (Mateo + Carlos + Noah: ~130 combined hours) | $5,000
-Legal (ToS, Privacy Policy, compliance finalization) | $2,500
+MILESTONE 2: $9,250 (Public Launch)
+Personnel (Mateo + Carlos: ~100 combined hours) | $4,000
+Legal (ToS, Privacy Policy, compliance finalization) | $2,000
+Marketing (community events, activations, outreach) | $2,000
 Infrastructure | $500
-Gas operations | $500
-Contingency | $1,500
+Contingency | $750
+
+MILESTONE 3: $3,750 (Final Report)
+Growth tracking report disbursed 3 months after grant completion. No KPIs required - used to verify traction and document learnings.
 
 TOTAL: $25,000 USD
 Provide a list of the milestones, with the USD amount of the grant associated to it, the deliverables that will be provided, and the estimated completion time:
 MILESTONE 1: Production Ready
-Amount: $15,000 USD
-Timeline: 10 weeks from approval
+Amount: $12,000 USD
+Timeline: 6 weeks from approval
 
 Deliverables:
 - Onramp integration (API integration, testing, user flow)
@@ -617,77 +637,103 @@ KPIs:
 - Legal entity established
 - Monitoring dashboard active
 - 50 closed beta testers with successful transactions (including onramp)
-- Ready for public beta launch
+- $10K+ USDC volume (organic)
+- Ready for public launch
 
 ---
 
-MILESTONE 2: Public Beta
-Amount: $10,000 USD
-Timeline: 24 weeks from approval (14 weeks after M1)
+MILESTONE 2: Public Launch
+Amount: $9,250 USD
+Timeline: 16 weeks from approval (10 weeks after M1)
 
 Deliverables:
+- Ongoing maintenance and bug fixes from user feedback
+- User support and system optimization
+- Feature iterations based on initial user feedback
 - Legal basics:
   - Terms of Service
   - Privacy Policy
-  - Compliance documentation
+  - Risk disclosures & user consent flows
 - Technical documentation package
 - 1-2 blog posts (WhatsApp integration patterns, non-custodial UX lessons)
 - User testimonials (10-15)
 - Final report to Arbitrum DAO
 
 KPIs:
+- 200-400 onchain transactions
+- $50K-100K USDC volume
+- 75-100 monthly active wallets
 - Transaction success rate: >98%
-- Average transaction time: <10 seconds
 - System uptime: >99%
+- Bug resolution time: <48 hours
 - NPS: >40
 - Documentation: Published
 - Report: Delivered to Arbitrum DAO
+- 100% of user flows covered by Terms, disclosures, and consent
+- 100% of third-party integrations contractually scoped and documented
+
+---
+
+MILESTONE 3: Final Report
+Amount: $3,750 USD
+Timeline: 3 months after grant completion
+
+Deliverables:
+- Growth tracking report with onchain-verifiable metrics
+- Post-launch traction analysis
+- Lessons learned and next steps
+
+No KPIs required. Disbursed upon delivery of final growth report.
 
 ---
 
 TOTAL FUNDING: $25,000 USD
-TOTAL TIMELINE: 24 weeks (~6 months)
+TOTAL TIMELINE: 16 weeks (~4 months) + 3-month follow-up report
 
 
 Are milestones clearly defined, time-bound, and measurable with quantitative metrics where applicable? What are your reference KPI, if applicable, for each milestone:
 Yes. All milestones have quantitative KPIs:
 
-MILESTONE 1 KPIs (Week 10):
+MILESTONE 1 KPIs (Week 6):
 - Onramp: Integration functional end-to-end
 - Security: All features implemented and tested
 - Display: Dual currency (USD/local) showing correctly
 - Legal: Entity established with advisors
 - Monitoring: Dashboard live with error tracking
 - Closed beta: 50 testers with successful transactions including onramp
-- Verification: Internal testing complete, ready for public beta
+- Volume: $10K+ USDC (organic)
+- Verification: Internal testing complete, ready for public launch
 
-MILESTONE 2 KPIs (Week 24):
+MILESTONE 2 KPIs (Week 16):
+- 200-400 onchain transactions
+- $50K-100K USDC volume
+- 75-100 monthly active wallets
 - Transaction success rate: >98%
-- Average transaction time: <10 seconds
 - System uptime: >99%
-- Onboarding completion rate: >80%
 - NPS: >40
 - Documentation: Published and accessible
 - Report: Delivered to Arbitrum DAO
-- Verification: On-chain analytics, system metrics dashboard
+- Verification: On-chain analytics, tracking dashboard
 
-
+MILESTONE 3 (3 months after completion):
+- Growth tracking report with onchain-verifiable metrics
+- No KPIs required - disbursed upon delivery
 
 ONGOING METRICS:
-- Transaction success rate and average completion time
+- Transaction volume and USDC throughput
+- Monthly active wallets
 - System uptime and error rate
 - Onboarding completion rate
-- User retention (7-day, 30-day)
-- Onramp conversion rate
 - NPS tracking
 
 What is the estimated maximum time for the completion of the project?
 
-24 weeks (~6 months) from grant approval.
+16 weeks (~4 months) from grant approval.
 
 Timeline:
-- Weeks 1-10: Production Ready (Onramp integration, security, legal entity, 50 closed beta testers)
-- Weeks 11-24: Public Beta
+- Weeks 1-6: Production Ready (Onramp integration, security, legal entity, 50 closed beta testers)
+- Weeks 7-16: Public Launch
+- 3 months after completion: Final Report (M3)
 
 Our MVP already exists and was validated at ETHOnline 2025. The non-custodial architecture is implemented. Main work is Onramp integration and legal setup.
 
@@ -696,18 +742,18 @@ How should the Arbitrum community measure the success of this grant?
 
 PRIMARY SUCCESS METRICS:
 
+Onchain Transactions - Target: 200-400 - Verification: Tracking dashboard
+USDC Volume - Target: $50K-100K - Verification: On-chain analytics
+Monthly Active Wallets - Target: 75-100 - Verification: On-chain analytics
 Transaction Success Rate - Target: >98% - Verification: System metrics
-Avg Transaction Time - Target: <10 seconds - Verification: System metrics
 System Uptime - Target: >99% - Verification: Monitoring dashboard
-Onboarding Completion - Target: >80% - Verification: Analytics
-Onramp Working - Target: Yes - Verification: Demo video, user testimonials
 NPS Score - Target: >40 - Verification: User surveys
 Documentation - Target: Published - Verification: Public links
 Report - Target: Delivered - Verification: Forum post
 
 SECONDARY METRICS:
 - Technical blog post engagement
-- User retention rates
+- Onboarding completion rate
 - Onramp conversion rate
 
 REPORTING:
@@ -725,7 +771,7 @@ What is the economic plan for maintaining operations or continuing the growth of
 
 REVENUE MODEL:
 
-1. FREE P2P TRANSFERS (ALWAYS)
+1. FREE P2P TRANSFERS
 Sippy-to-Sippy USDC transfers remain FREE. This is our core value proposition.
 
 2. FUTURE MONETIZATION (Post-Grant)
@@ -743,11 +789,10 @@ Sippy-to-Sippy USDC transfers remain FREE. This is our core value proposition.
 PATH TO SUSTAINABILITY:
 
 With users and working onramp proven:
-1. Seed Funding: Approach LATAM-focused VCs with traction
-2. Follow-on Grants: Apply for larger Arbitrum grants with proven user base
-3. Onramp Revenue Share: Ongoing income from onramp conversions
-4. Regional Expansion: Replicate model across LATAM
-5. Business accounts: Expand to merchant adoption if demand emerges
+1. Follow-on Grants: Apply for larger Arbitrum grants with proven user base
+2. Onramp Revenue Share: Ongoing income from onramp conversions
+3. Regional Expansion: Replicate model across LATAM
+4. Business accounts: Expand to merchant adoption if demand emerges
 
 We're not asking Arbitrum to fund our entire journey - just the proof-of-concept with proper onramp infrastructure.
 
@@ -756,7 +801,6 @@ Category:
 Consumer App
 
 
-—-------------------------------------
 Domain Specific Information
 
 Protocol Performance:
@@ -869,13 +913,12 @@ YES. Here's the evidence:
 2. EXPERIENCED TEAM
 - Mateo Daza: 8+ years Web3, Lead at Asymmetry Finance
 - Carlos Quintero: 8+ years production, Lead at Giveth
-- Noah Biel: Grant management, Master's in Social Innovation
 - Legal advisors engaged
-- Combined: 18+ years relevant experience
+- Combined: 16+ years relevant experience
 
 3. ACHIEVABLE TARGETS
-- M1: Production Ready - 10 weeks - Onramp integration, legal setup
-- M2: Public Beta - 14 weeks - System reliability proven, documentation complete
+- M1: Production Ready - 6 weeks - Onramp integration, legal setup
+- M2: Public Launch - 10 weeks - System reliability proven, documentation complete
 
 4. FOCUSED SCOPE
 
@@ -927,8 +970,6 @@ Beta testers achievable through direct outreach alone.
 
 
 
-—----------------
-
 Extra Section: Milestones 
 
 How did you find out about this program?
@@ -940,27 +981,69 @@ Production Ready
 
 
 Milestone 01 - Details:
-Complete Fiat onramp integration, establish legal entity, and prepare for public beta. Includes Onramp API integration and testing, security hardening (rate limiting, transaction checks), dual currency display (USD + local currency), privacy controls, monitoring infrastructure, legal entity establishment with advisors, and closed beta with 50 testers validating full flow including onramp.
+Complete Fiat onramp integration, establish legal entity, and prepare for public launch. Includes Onramp API integration and testing, security hardening (rate limiting, transaction checks), dual currency display (USD + local currency), privacy controls, monitoring infrastructure, legal entity establishment with advisors, and closed beta with 50 testers validating full flow including onramp.
 
 Milestone 01 - Deadline:
-[10 weeks from approval - select date]
+[6 weeks from approval - select date]
 
 Milestone 01 - Funding Ask:
-15000
+12000
 
 Milestone 02 - Title:
-Beta Launch
+Public Launch
 
 Milestone 02 - Details:
-Launch public beta in Colombia. Includes legal basics (Terms of Service, Privacy Policy), technical documentation package, 1-2 blog posts on WhatsApp integration and non-custodial UX, user testimonials, and final report to Arbitrum DAO. Success measured by system reliability (>98% transaction success, <10s avg time, >99% uptime) and user satisfaction (NPS >40).
-
+Public launch in Colombia with marketing push. Includes ongoing maintenance and bug fixes from user feedback, user support and system optimization, feature iterations, community events and activations, legal basics (Terms of Service, Privacy Policy), technical documentation package, 1-2 blog posts on WhatsApp integration and non-custodial UX, user testimonials, and final report to Arbitrum DAO. Growth KPIs: 200-400 onchain transactions, $50K-100K USDC volume, 75-100 monthly active wallets. System KPIs: >98% transaction success, >99% uptime, NPS >40.
 
 Milestone 02 - Deadline:
-[24 weeks from approval - select date]
-
+[16 weeks from approval - select date]
 
 Milestone 02 - Funding Ask:
-10000
+9250
+
+Milestone 03 - Title:
+Final Report
+
+Milestone 03 - Details:
+Growth tracking report delivered 3 months after grant completion. Includes onchain-verifiable metrics, post-launch traction analysis, and lessons learned. No KPIs required - used to verify traction and document learnings for the Arbitrum community.
+
+Milestone 03 - Deadline:
+[3 months after M2 completion - select date]
+
+Milestone 03 - Funding Ask:
+3750
 
 Funding Asked (Total):
 25000
+
+
+FOLLOW UP TO CHILLA RESPONSE IN CHAT
+
+Hey Chilla,
+
+Thanks for the guidance. We took time to address the onramp blocker properly.
+
+ONRAMP PROGRESS
+
+We're in active talks for fiat on/off ramp integration, following exactly the PayPal model you suggested:
+
+Sippy handles payments (user-owned wallets)
+Onramp partner handles fiat conversion (KYC, compliance, banking)
+Clear regulatory separation
+Flow: COP via local payment → Onramp converts → USDC lands in user's wallet → Ready to send via WhatsApp.
+
+BUDGET: $23K
+
+M1 ($14K, 6 weeks): Onramp integration, security hardening, legal entity, 50 testers with full flow working
+M2 ($9K, 10 weeks): Public launch, maintenance, documentation, final report
+We're bringing back the legal foundation we had cut previously ($6.3K / 27%) - onramp partners need a proper entity structure to work with us.
+
+SUMMARY OF CHANGES
+
+Onramp: Now in active talks, PayPal-style partner model
+Architecture: Non-custodial via Coinbase CDP Embedded Wallets
+Legal: Brought back for entity formation
+Timeline: 20 weeks → 16 weeks
+Milestones: 4 → 2
+Scope: 500 users → 50 testers (realistic for closed beta with onramp validation)
+Happy to discuss further.

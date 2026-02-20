@@ -7,11 +7,7 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import {
-  parseMessage,
-  getHelpText,
-  getAboutText,
-} from './src/utils/messageParser.js';
+import { parseMessage } from './src/utils/messageParser.js';
 import { handleStartCommand } from './src/commands/start.command.js';
 import { handleBalanceCommand } from './src/commands/balance.command.js';
 import { handleSendCommand } from './src/commands/send.command.js';
@@ -20,18 +16,29 @@ import {
   markAsRead,
 } from './src/services/whatsapp.service.js';
 import {
+  type Lang,
   formatFundETHReceivedMessage,
   formatFundUSDReceivedMessage,
+  formatHelpMessage,
+  formatAboutMessage,
+  formatInvalidSendFormat,
+  formatHistoryMessage,
+  formatSettingsMessage,
+  formatRateLimitedMessage,
+  formatUnknownCommandMessage,
+  formatLanguageSetMessage,
+  formatCommandErrorMessage,
 } from './src/utils/messages.js';
 import {
   getAllWallets,
   getUserWallet,
 } from './src/services/cdp-wallet.service.js';
-import { initDb, query } from './src/services/db.js';
-import { checkLLMHealth, isLLMEnabled } from './src/services/llm.service.js';
+import { initDb, query, getUserLanguage, setUserLanguage } from './src/services/db.js';
+import { checkLLMHealth, isLLMEnabled, getRateLimitStats, getModelConfig_public } from './src/services/llm.service.js';
 import { ParsedCommand, WebhookPayload } from './src/types/index.js';
 import embeddedWalletRoutes from './src/routes/embedded-wallet.routes.js';
 import { initSpenderWallet } from './src/services/embedded-wallet.service.js';
+import { detectLanguage, PERSIST_THRESHOLD } from './src/utils/language.js';
 
 const app = express();
 
@@ -224,27 +231,54 @@ app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
     // Mark message as read
     await markAsRead(messageId);
 
-    // Parse command
-    const command = await parseMessage(text);
+    // Parse command (with context for observability logging)
+    const command = await parseMessage(text, { messageId, phoneNumber: from });
     console.log(`\n🎯 Command parsed:`, command);
 
     // Log LLM status for observability
     if (command.llmStatus) {
-      const statusEmoji =
-        {
+      const statusEmojiMap: Record<string, string> = {
           success: '✅',
+          skipped: '⚡',
+          'format-hint': '📝',
           disabled: '🔒',
           'rate-limited': '⏱️',
           timeout: '⏰',
           error: '❌',
           'low-confidence': '🤔',
           'validation-failed': '⚠️',
-        }[command.llmStatus] || 'ℹ️';
+        };
+      const statusEmoji = statusEmojiMap[command.llmStatus] || 'ℹ️';
       console.log(`${statusEmoji} LLM Status: ${command.llmStatus}`);
     }
 
-    // Handle commands
-    await handleCommand(from, command);
+    // Language detection + persistence (Step 4)
+    // 1. Check DB for persisted preference
+    let userLang = await getUserLanguage(from);
+
+    // 2. If command is explicit language switch, persist immediately
+    if (command.command === 'language' && command.detectedLanguage) {
+      const lang = command.detectedLanguage as 'en' | 'es' | 'pt';
+      await setUserLanguage(from, lang);
+      userLang = lang;
+    }
+
+    // 3. If no persisted preference, auto-detect from message text
+    if (!userLang) {
+      const detection = detectLanguage(text);
+      if (detection && detection.confidence >= PERSIST_THRESHOLD) {
+        await setUserLanguage(from, detection.lang);
+        userLang = detection.lang;
+      } else if (detection) {
+        // Use for this message only, don't persist
+        userLang = detection.lang;
+      }
+      // If detection is null, userLang stays null → default to 'en' in handlers
+    }
+
+    // Handle commands with resolved language
+    const lang: Lang = userLang || 'en';
+    await handleCommand(from, command, lang);
 
     // Only mark as processed if we successfully handled the command
     processedMessages.set(messageId, Date.now());
@@ -260,85 +294,65 @@ app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
  */
 async function handleCommand(
   phoneNumber: string,
-  command: ParsedCommand
+  command: ParsedCommand,
+  lang: Lang
 ): Promise<void> {
   try {
     switch (command.command) {
       case 'start':
-        await handleStartCommand(phoneNumber);
+        await handleStartCommand(phoneNumber, lang);
         break;
 
       case 'help':
-        await sendTextMessage(phoneNumber, getHelpText());
+        await sendTextMessage(phoneNumber, formatHelpMessage(lang), lang);
         break;
 
       case 'about':
-        await sendTextMessage(phoneNumber, getAboutText());
+        await sendTextMessage(phoneNumber, formatAboutMessage(lang), lang);
         break;
 
       case 'balance':
-        await handleBalanceCommand(phoneNumber);
+        await handleBalanceCommand(phoneNumber, lang);
         break;
 
       case 'send':
         if (command.amount && command.recipient) {
-          await handleSendCommand(
-            phoneNumber,
-            command.amount,
-            command.recipient
-          );
+          await handleSendCommand(phoneNumber, command.amount, command.recipient, lang);
         } else {
-          await sendTextMessage(
-            phoneNumber,
-            `❌ Invalid send command format.\n\n` +
-              `Use: "send 10 to +573001234567"\n\n` +
-              `Example: send 5 to +573001234567`
-          );
+          await sendTextMessage(phoneNumber, formatInvalidSendFormat(lang), lang);
         }
         break;
 
       case 'history':
-        await sendTextMessage(
-          phoneNumber,
-          `📊 Transaction history\n\n` +
-            `View your activity at:\nhttps://www.sippy.lat/profile/+${phoneNumber}`
-        );
+        await sendTextMessage(phoneNumber, formatHistoryMessage(phoneNumber, lang), lang);
         break;
 
       case 'settings':
-        const frontendUrl =
-          process.env.FRONTEND_URL || 'https://www.sippy.lat';
-        const settingsUrl = `${frontendUrl}/settings?phone=${encodeURIComponent('+' + phoneNumber)}`;
-        await sendTextMessage(
-          phoneNumber,
-          `⚙️ Manage your Sippy settings:\n\n` +
-            `${settingsUrl}\n\n` +
-            `You can:\n` +
-            `• Change your daily spending limit\n` +
-            `• Revoke Sippy's permission\n` +
-            `• Export your wallet keys`
-        );
+        await sendTextMessage(phoneNumber, formatSettingsMessage(phoneNumber, lang), lang);
         break;
 
+      case 'language': {
+        const langNames: Record<string, string> = {
+          en: 'English', es: 'Español', pt: 'Português',
+        };
+        const langName = langNames[command.detectedLanguage || ''] || command.detectedLanguage || '';
+        await sendTextMessage(phoneNumber, formatLanguageSetMessage(langName, lang), lang);
+        break;
+      }
+
       case 'unknown':
-        // Check if LLM provided a helpful conversational message
         if (command.helpfulMessage) {
-          // LLM included a natural, conversational response
-          await sendTextMessage(phoneNumber, command.helpfulMessage);
+          await sendTextMessage(phoneNumber, command.helpfulMessage, lang);
         } else {
-          // Check if rate-limited (user should know why natural language failed)
           const rateLimitNote =
             command.llmStatus === 'rate-limited'
-              ? `\n⏱️ Natural language is temporarily limited. Please use exact commands.\n\n`
+              ? `\n${formatRateLimitedMessage(lang)}\n\n`
               : '';
-
-          // Fallback to standard command list
           await sendTextMessage(
             phoneNumber,
-            `❓ I didn't understand: "${command.originalText}"\n` +
-              rateLimitNote +
-              `\nHere are the available commands:\n\n` +
-              getHelpText()
+            formatUnknownCommandMessage(command.originalText || '', lang) +
+              (rateLimitNote ? `\n${rateLimitNote}` : ''),
+            lang
           );
         }
         break;
@@ -348,10 +362,7 @@ async function handleCommand(
     }
   } catch (error) {
     console.error(`❌ Error handling command:`, error);
-    await sendTextMessage(
-      phoneNumber,
-      `❌ Error processing your command. Please try again.`
-    );
+    await sendTextMessage(phoneNumber, formatCommandErrorMessage(lang), lang);
   }
 }
 
@@ -499,14 +510,15 @@ app.post('/notify-fund', async (req: Request, res: Response) => {
       });
     }
 
-    // Format message based on type
+    // Format message in recipient's language
+    const fundLang = await getUserLanguage(cleanPhone) || 'en';
     const message =
       type === 'eth'
-        ? formatFundETHReceivedMessage({ amount, txHash })
-        : formatFundUSDReceivedMessage({ amount, txHash });
+        ? formatFundETHReceivedMessage({ amount, txHash }, fundLang)
+        : formatFundUSDReceivedMessage({ amount, txHash }, fundLang);
 
     // Send WhatsApp notification
-    await sendTextMessage(cleanPhone, message);
+    await sendTextMessage(cleanPhone, message, fundLang);
 
     console.log(`  ✅ Notification sent to +${cleanPhone}`);
 
@@ -522,6 +534,35 @@ app.post('/notify-fund', async (req: Request, res: Response) => {
       error: 'Failed to send notification',
       message: error instanceof Error ? error.message : 'Unknown error',
     });
+  }
+});
+
+/**
+ * Debug: Parse stats (last 24h)
+ */
+app.get('/debug/parse-stats', async (req: Request, res: Response) => {
+  try {
+    const result = await query(`
+      SELECT
+        parse_source,
+        status,
+        model,
+        COUNT(*) as count,
+        AVG(latency_ms)::int as avg_latency_ms,
+        SUM(prompt_tokens) as total_prompt_tokens,
+        SUM(completion_tokens) as total_completion_tokens
+      FROM parse_log
+      WHERE created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY parse_source, status, model
+      ORDER BY count DESC
+    `);
+    res.json({
+      stats: result.rows,
+      models: getModelConfig_public(),
+      rateLimits: getRateLimitStats(),
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to query parse stats' });
   }
 });
 
@@ -557,39 +598,46 @@ async function startServer() {
     try {
       await initSpenderWallet();
     } catch (err) {
-      console.warn('⚠️  Spender wallet init failed (may need CDP API keys):', err);
+      console.warn('Spender wallet init failed (may need CDP API keys):', err);
     }
 
     // Check LLM feature flag and availability (non-blocking)
+    const modelCfg = getModelConfig_public();
     if (!isLLMEnabled()) {
-      console.log('🔒 LLM: DISABLED via USE_LLM flag (regex-only mode)');
+      console.log('LLM: DISABLED via USE_LLM flag (regex-only mode)');
     } else {
       const llmStatus = await checkLLMHealth();
       if (llmStatus.available) {
-        console.log('✅ LLM: ENABLED & Available (enhanced natural language)');
+        console.log(`LLM: ENABLED — Primary: ${modelCfg.primary}`);
+        if (modelCfg.tieringEnabled) {
+          console.log(`     Tiering: ON — Fallback: ${modelCfg.fallback}`);
+        } else {
+          console.log('     Tiering: OFF (single model)');
+        }
       } else {
-        console.log('⚠️  LLM: ENABLED but Unavailable (using regex fallback)');
-        console.log(`   Reason: ${llmStatus.reason}`);
+        console.log('LLM: ENABLED but Unavailable (regex fallback)');
+        console.log(`     Reason: ${llmStatus.reason}`);
       }
     }
 
     app.listen(PORT, () => {
       console.log('\n╔════════════════════════════════════════════════╗');
-      console.log('║   🚀 Sippy Backend Server Started             ║');
+      console.log('║   Sippy Backend Server Started                ║');
       console.log('╚════════════════════════════════════════════════╝\n');
-      console.log(`📡 Server: http://localhost:${PORT}`);
-      console.log(`🔐 Verify Token: ${VERIFY_TOKEN}`);
-      console.log('\n📋 Endpoints:');
+      console.log(`Server: http://localhost:${PORT}`);
+      console.log(`Verify Token: ${VERIFY_TOKEN}`);
+      console.log('\nEndpoints:');
       console.log(`  GET  / - Health check`);
       console.log(`  GET  /debug/wallets - See registered wallets`);
+      console.log(`  GET  /debug/parse-stats - Parse pipeline stats`);
       console.log(`  GET  /resolve-phone - Resolve phone to wallet address`);
       console.log(`  GET  /webhook/whatsapp - Webhook verification`);
       console.log(`  POST /webhook/whatsapp - Webhook events`);
       console.log(`  POST /api/register - Register wallet`);
-      console.log('\n🎯 Waiting for webhook events...\n');
+      console.log('\nWaiting for webhook events...\n');
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    console.error('Failed to start server:', error);
     process.exit(1);
   }
 }

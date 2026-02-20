@@ -1,24 +1,32 @@
 /**
- * LLM Service - Natural Language Understanding with Groq
+ * LLM Service — Model Router with Groq
  *
- * Provides intelligent message parsing using Groq's FREE Llama 3.1 model.
- * Includes feature flag, rate limiting, and graceful fallback handling.
+ * Config-driven model selection with automatic fallback.
+ * Default: llama-3.3-70b-versatile (most reliable json_object on Groq free).
+ * Fallback: llama-3.1-8b-instant (14.4K RPD, handles overflow).
+ *
+ * Tiering can be enabled via LLM_TIERING=true. When disabled (default for M1),
+ * only the primary model is used. When enabled, the router automatically falls
+ * back to the secondary model on rate limit or error.
+ *
+ * SCALABILITY NOTE: Rate limiters are in-memory per-process. If you scale
+ * horizontally (multiple instances), move counters to shared storage (DB/Redis)
+ * before relying on limits for cost control.
  */
 
 import Groq from 'groq-sdk';
 import { ParsedCommand } from '../types/index.js';
+import { llmResultSchema } from '../types/schemas.js';
 
 // ============================================================================
-// Types & Interfaces
+// Types
 // ============================================================================
 
-interface LLMParseResult {
-  command: string;
-  amount?: number;
-  recipient?: string;
-  confidence: number;
-  helpfulMessage?: string;
-  detectedLanguage?: 'en' | 'es' | 'ambiguous';
+interface LLMCallResult {
+  parsed: ParsedCommand | null;
+  model: string;
+  promptTokens?: number;
+  completionTokens?: number;
 }
 
 interface HealthStatus {
@@ -27,52 +35,63 @@ interface HealthStatus {
 }
 
 // ============================================================================
+// Model Configuration
+// ============================================================================
+
+interface ModelConfig {
+  id: string;
+  rpm: number;       // Requests per minute (Groq free tier)
+  rpd: number;       // Requests per day (Groq free tier)
+  timeout: number;   // Timeout in ms
+  maxTokens: number; // Max output tokens (thinking models need more)
+}
+
+const MODEL_CATALOG: Record<string, ModelConfig> = {
+  'qwen/qwen3-32b': { id: 'qwen/qwen3-32b', rpm: 30, rpd: 1000, timeout: 5000, maxTokens: 512 },
+  'llama-3.1-8b-instant': { id: 'llama-3.1-8b-instant', rpm: 30, rpd: 14400, timeout: 3000, maxTokens: 150 },
+  'llama-3.3-70b-versatile': { id: 'llama-3.3-70b-versatile', rpm: 30, rpd: 1000, timeout: 5000, maxTokens: 200 },
+  'meta-llama/llama-4-scout-17b-16e-instruct': { id: 'meta-llama/llama-4-scout-17b-16e-instruct', rpm: 30, rpd: 1000, timeout: 4000, maxTokens: 200 },
+};
+
+function getModelConfig(modelId: string): ModelConfig {
+  return MODEL_CATALOG[modelId] || { id: modelId, rpm: 25, rpd: 900, timeout: 5000, maxTokens: 200 };
+}
+
+const PRIMARY_MODEL = process.env.PRIMARY_LLM_MODEL || 'llama-3.3-70b-versatile';
+const FALLBACK_MODEL = process.env.FALLBACK_LLM_MODEL || 'llama-3.1-8b-instant';
+const TIERING_ENABLED = process.env.LLM_TIERING?.toLowerCase() === 'true';
+
+// ============================================================================
 // Feature Flag
 // ============================================================================
 
-/**
- * Check if LLM is enabled via environment variable
- * Defaults to true for best UX
- */
 export function isLLMEnabled(): boolean {
   const useLLM = process.env.USE_LLM?.toLowerCase();
-
-  // Default to true if not set (best UX)
   if (useLLM === undefined || useLLM === '') return true;
-
-  // Explicit disable
   if (useLLM === 'false' || useLLM === '0' || useLLM === 'no') return false;
-
   return true;
 }
 
 // ============================================================================
-// Rate Limiter (Ensure FREE forever)
+// Per-Model Rate Limiter
 // ============================================================================
 
-class FreeRateLimiter {
+class ModelRateLimiter {
   private minuteCount = 0;
   private dailyCount = 0;
-  private lastReset = Date.now();
+  private lastMinuteReset = Date.now();
   private dayStart = Date.now();
 
-  private readonly MINUTE_LIMIT = 25; // Conservative (real: 30)
-  private readonly DAILY_LIMIT = 14000; // Conservative (real: 14,400)
+  constructor(
+    private readonly minuteLimit: number,
+    private readonly dailyLimit: number,
+    private readonly modelId: string
+  ) {}
 
   canMakeRequest(): boolean {
     this.resetIfNeeded();
-
-    // Hard stop at limits
-    if (this.minuteCount >= this.MINUTE_LIMIT) {
-      console.log('LLM minute limit reached, using fallback');
-      return false;
-    }
-
-    if (this.dailyCount >= this.DAILY_LIMIT) {
-      console.log('LLM daily limit reached, using fallback');
-      return false;
-    }
-
+    if (this.minuteCount >= this.minuteLimit) return false;
+    if (this.dailyCount >= this.dailyLimit) return false;
     return true;
   }
 
@@ -83,32 +102,39 @@ class FreeRateLimiter {
 
   private resetIfNeeded(): void {
     const now = Date.now();
-
-    // Reset minute counter
-    if (now - this.lastReset >= 60000) {
+    if (now - this.lastMinuteReset >= 60000) {
       this.minuteCount = 0;
-      this.lastReset = now;
+      this.lastMinuteReset = now;
     }
-
-    // Reset daily counter
     if (now - this.dayStart >= 86400000) {
       this.dailyCount = 0;
       this.dayStart = now;
-      console.log('Daily LLM usage reset');
+      console.log(`Daily LLM usage reset for ${this.modelId}`);
     }
   }
 
   getStats() {
+    this.resetIfNeeded();
     return {
+      model: this.modelId,
       minuteCount: this.minuteCount,
       dailyCount: this.dailyCount,
-      minuteRemaining: this.MINUTE_LIMIT - this.minuteCount,
-      dailyRemaining: this.DAILY_LIMIT - this.dailyCount,
+      minuteRemaining: this.minuteLimit - this.minuteCount,
+      dailyRemaining: this.dailyLimit - this.dailyCount,
     };
   }
 }
 
-const rateLimiter = new FreeRateLimiter();
+// Create per-model limiters
+const limiters = new Map<string, ModelRateLimiter>();
+
+function getLimiter(modelId: string): ModelRateLimiter {
+  if (!limiters.has(modelId)) {
+    const config = getModelConfig(modelId);
+    limiters.set(modelId, new ModelRateLimiter(config.rpm, config.rpd, modelId));
+  }
+  return limiters.get(modelId)!;
+}
 
 // ============================================================================
 // Groq Client
@@ -137,276 +163,189 @@ function getGroqClient(): Groq | null {
 }
 
 // ============================================================================
-// System Prompt (Bilingual: English + Spanish)
+// System Prompt
 // ============================================================================
 
-const SYSTEM_PROMPT = `You are Sippy, a friendly bilingual WhatsApp wallet assistant (English/Spanish). You help users manage money through WhatsApp messages.
+const SYSTEM_PROMPT = `You are Sippy, a professional WhatsApp wallet assistant. Parse the user's message into a structured command.
 
-**About Sippy:**
-- WhatsApp wallet - send money as easy as texting
-- Uses PYUSD (digital dollars, always $1 = $1, backed by PayPal)
-- Send to phone numbers - no wallet addresses needed
-- Fast & secure on Arbitrum network
-- No transaction fees - we cover gas costs daily
-- Just text commands or natural language
+Available commands: balance, start, history, settings, about, help, unknown.
+NOTE: "send" is NOT a valid command for you. Send commands are handled separately.
 
-**Available commands:**
-- start / comenzar: Create your wallet
-- balance / saldo / cuánto tengo: Check PYUSD balance
-- send [amount] to [phone] / enviar: Send money (needs amount + phone)
-- history / historial: View transactions
-- settings / config / configuracion: Manage wallet settings
-- about / acerca de: Learn about Sippy
-- help / ayuda: Show all commands
+About Sippy: WhatsApp wallet for sending digital dollars via phone number. No fees, fast transfers.
 
-**CRITICAL RULE: FRESH LANGUAGE DETECTION - NO MEMORY**
-- ⚠️ RESET: You have ZERO memory of previous messages. Each message is 100% independent.
-- ⚠️ ALWAYS detect language from the CURRENT message ONLY
-- DO NOT carry over language from any previous context
-- Each message starts with a clean slate - detect language fresh every time
+Rules:
+- Detect the user's language (en, es, pt, or ambiguous)
+- For questions about Sippy: command "unknown", provide a brief professional explanation in the detected language
+- Never mention: crypto, cryptocurrency, blockchain, Web3
+- Keep helpfulMessage concise (2-3 sentences), professional tone, no emojis
+- Do NOT include any reasoning, thinking, or explanation. Output ONLY the JSON object.
 
-**Language Detection Rules:**
-- If message has Spanish words (cuánto, enviar, saldo, tengo, quiero, qué, cómo) → detectedLanguage: "es"
-- If message has English words (what, how, check, send, balance, have, want) → detectedLanguage: "en"
-- If ambiguous (just "balance", "10", "?") → detectedLanguage: "ambiguous", default to English response
-- If mixed language → Use dominant language based on verbs/key words
-- **English indicators**: what, how, check, send, have, want, this, is, my, can, do
-- **Spanish indicators**: qué, cómo, enviar, tengo, quiero, esto, es, mi, puedo
-
-**Language Detection Priority:**
-1. Spanish indicators: cuánto, qué, enviar, saldo, tengo, quiero, ayuda, acerca, historial, comenzar
-2. English indicators: what, how, send, balance, have, want, help, about, history, start
-3. Verb conjugations: "tengo", "quiero" → Spanish; "have", "want" → English
-4. If 50/50 mixed → Pick language of the VERB (send/enviar determines language)
-5. Single ambiguous word ("balance") → "ambiguous", use English response
-
-**Your job:**
-1. Detect user's language from THIS message only
-2. Parse and extract: command, amount (if sending), phone number (if sending)
-3. Be strict with send commands - MUST have valid amount and phone
-4. If unclear, provide helpful conversational response in THE DETECTED LANGUAGE
-
-**For questions about Sippy ("what is this?", "que es esto?", etc.):**
-- CRITICAL: Reply in the SAME language as detected from THIS message
-- If they write in English → reply in English, detectedLanguage: "en"
-- If they write in Spanish → reply in Spanish, detectedLanguage: "es"
-- Explain it's a WhatsApp wallet for sending dollars (PYUSD)
-- Be conversational, friendly, and helpful
-- Mention you can send money with just a phone number
-- Set command to "unknown" but include helpful explanation
-
-**Never mention:** crypto, cryptocurrency, blockchain, Web3
-
-**Amount extraction rules:**
-- "ten", "diez" → 10
-- "$10", "10 dollars", "10 dolares" → 10
-- "10.50" → 10.5
-- Remove currency symbols, commas
-
-**Phone number extraction rules:**
-- Keep all formats: "+573001234567", "573001234567", "+57 300 123 4567"
-- Don't normalize - return as given
-
-Return ONLY valid JSON (no markdown):
-{
-  "command": "send" | "balance" | "start" | "history" | "settings" | "about" | "help" | "unknown",
-  "amount": number or null,
-  "recipient": string or null,
-  "confidence": 0.0 to 1.0,
-  "helpfulMessage": string or null,
-  "detectedLanguage": "en" | "es" | "ambiguous"
-}
-
-**Examples:**
-
-SPANISH Question: "que es esto?"
-Response:
-{
-  "command": "unknown",
-  "confidence": 0.5,
-  "helpfulMessage": "¡Hola! Soy Sippy, tu asistente de billetera en WhatsApp 😊. Puedes enviar dinero (PYUSD) a tus amigos solo con su número de teléfono. Prueba 'saldo' para ver tus fondos o 'ayuda' para ver qué puedo hacer.",
-  "detectedLanguage": "es"
-}
-
-ENGLISH Question: "what is this?"
-Response:
-{
-  "command": "unknown",
-  "confidence": 0.5,
-  "helpfulMessage": "Hey! I'm Sippy, your WhatsApp wallet 💰. You can send money (PYUSD) to anyone using just their phone number - it's as easy as sending a text! Try 'balance' to check your funds or 'help' to see all I can do.",
-  "detectedLanguage": "en"
-}
-
-ENGLISH Question: "how does it work?"
-Response:
-{
-  "command": "unknown",
-  "confidence": 0.6,
-  "helpfulMessage": "Hey! I'm your WhatsApp wallet 💰. You can send money to anyone using just their phone number - it's as easy as sending a text! Try 'balance' to check your funds or 'help' to see all I can do.",
-  "detectedLanguage": "en"
-}
-
-SPANISH Command: "cuánto tengo"
-Response:
-{
-  "command": "balance",
-  "confidence": 0.95,
-  "detectedLanguage": "es"
-}
-
-ENGLISH (verb "send" is English): "send 10 dolares to +573001234567"
-Response:
-{
-  "command": "send",
-  "amount": 10,
-  "recipient": "+573001234567",
-  "confidence": 0.95,
-  "detectedLanguage": "en"
-}`;
+Return ONLY valid JSON (no text before or after):
+{"command": "balance"|"start"|"history"|"settings"|"about"|"help"|"unknown", "amount": null, "recipient": null, "confidence": 0.0-1.0, "helpfulMessage": string|null, "detectedLanguage": "en"|"es"|"pt"|"ambiguous"}`;
 
 // ============================================================================
-// LLM Parse Function
+// Core LLM Call (single model)
 // ============================================================================
 
+async function callModel(
+  client: Groq,
+  modelId: string,
+  text: string
+): Promise<LLMCallResult> {
+  const config = getModelConfig(modelId);
+  const limiter = getLimiter(modelId);
+
+  if (!limiter.canMakeRequest()) {
+    return { parsed: null, model: modelId };
+  }
+
+  limiter.recordRequest();
+
+  const completion = await Promise.race([
+    client.chat.completions.create({
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: text },
+      ],
+      model: config.id,
+      temperature: 0.1,
+      max_tokens: config.maxTokens,
+      response_format: { type: 'json_object' },
+    }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout')), config.timeout)
+    ),
+  ]);
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) return { parsed: null, model: modelId };
+
+  const raw = JSON.parse(content);
+
+  const zodResult = llmResultSchema.safeParse(raw);
+  if (!zodResult.success) {
+    console.warn(`LLM output failed Zod validation (${modelId}):`, zodResult.error.issues);
+    return { parsed: null, model: modelId };
+  }
+
+  const result = zodResult.data;
+
+  // Confidence checks
+  if (result.command === 'unknown' && result.confidence < 0.7) {
+    if (!result.helpfulMessage || result.helpfulMessage.length < 10) {
+      return { parsed: null, model: modelId };
+    }
+  }
+  if (result.command !== 'unknown' && result.confidence < 0.7) {
+    return { parsed: null, model: modelId };
+  }
+
+  return {
+    parsed: {
+      command: result.command,
+      amount: result.amount ?? undefined,
+      recipient: result.recipient ?? undefined,
+      helpfulMessage: result.helpfulMessage ?? undefined,
+      detectedLanguage: result.detectedLanguage,
+    },
+    model: modelId,
+    promptTokens: completion.usage?.prompt_tokens,
+    completionTokens: completion.usage?.completion_tokens,
+  };
+}
+
+// ============================================================================
+// Public API: parseMessageWithLLM (with automatic fallback)
+// ============================================================================
+
+export interface LLMParseResult {
+  parsed: ParsedCommand | null;
+  meta: CallMeta;
+}
+
+/**
+ * Parse a message with the LLM. Routes to primary model, falls back to
+ * secondary on rate limit or error (only when tiering is enabled).
+ *
+ * Returns the parsed command + model metadata (concurrency-safe, no global state).
+ */
 export async function parseMessageWithLLM(
   text: string
-): Promise<ParsedCommand | null> {
+): Promise<LLMParseResult | null> {
   const client = getGroqClient();
   if (!client) return null;
 
-  // Check rate limits
-  if (!rateLimiter.canMakeRequest()) return null;
+  // Try primary model
+  const primaryLimiter = getLimiter(PRIMARY_MODEL);
+  if (primaryLimiter.canMakeRequest()) {
+    try {
+      const result = await callModel(client, PRIMARY_MODEL, text);
+      if (result.parsed) {
+        return {
+          parsed: result.parsed,
+          meta: { model: result.model, promptTokens: result.promptTokens, completionTokens: result.completionTokens },
+        };
+      }
+      // Primary returned null (low confidence / validation fail) — don't fallback for quality issues
+      if (!TIERING_ENABLED) return null;
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Timeout') {
+        console.warn(`LLM timeout on ${PRIMARY_MODEL}`);
+      } else {
+        console.error(`LLM error on ${PRIMARY_MODEL}:`, error);
+      }
+      // Fall through to fallback if tiering is enabled
+      if (!TIERING_ENABLED) throw error;
+    }
+  }
+
+  // Fallback model (only when tiering is enabled)
+  if (!TIERING_ENABLED) return null;
+
+  if (FALLBACK_MODEL === PRIMARY_MODEL) return null;
+
+  const fallbackLimiter = getLimiter(FALLBACK_MODEL);
+  if (!fallbackLimiter.canMakeRequest()) return null;
 
   try {
-    // Record request for rate limiting
-    rateLimiter.recordRequest();
-
-    // Call Groq with 3 second timeout
-    const completion = await Promise.race([
-      client.chat.completions.create({
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: text },
-        ],
-        model: 'llama-3.1-8b-instant',
-        temperature: 0.1, // Low temperature for consistent parsing
-        max_tokens: 150,
-        response_format: { type: 'json_object' },
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout')), 3000)
-      ),
-    ]);
-
-    const content = completion.choices[0]?.message?.content;
-    if (!content) return null;
-
-    // Parse JSON response
-    const result: LLMParseResult = JSON.parse(content);
-
-    // Validate result
-    if (!validateLLMResult(result)) return null;
-
-    // Convert to ParsedCommand format
+    console.log(`Falling back to ${FALLBACK_MODEL}`);
+    const result = await callModel(client, FALLBACK_MODEL, text);
     return {
-      command: result.command as ParsedCommand['command'],
-      amount: result.amount,
-      recipient: result.recipient,
-      helpfulMessage: result.helpfulMessage,
-      detectedLanguage: result.detectedLanguage,
+      parsed: result.parsed,
+      meta: { model: result.model, promptTokens: result.promptTokens, completionTokens: result.completionTokens },
     };
   } catch (error) {
     if (error instanceof Error && error.message === 'Timeout') {
-      console.warn('LLM timeout, using fallback');
+      console.warn(`LLM timeout on fallback ${FALLBACK_MODEL}`);
     } else {
-      console.error('LLM parsing error:', error);
+      console.error(`LLM fallback error on ${FALLBACK_MODEL}:`, error);
     }
-    return null;
+    throw error;
   }
 }
 
 // ============================================================================
-// Validation
+// Model metadata type (returned alongside parse results)
 // ============================================================================
 
-function validateLLMResult(result: any): boolean {
-  if (!result || !result.command) return false;
+export interface CallMeta {
+  model: string;
+  promptTokens?: number;
+  completionTokens?: number;
+}
 
-  // Whitelist: Only accept known commands (case-insensitive)
-  const validCommands = [
-    'send',
-    'balance',
-    'start',
-    'history',
-    'settings',
-    'about',
-    'help',
-    'unknown',
-  ];
-  const normalizedCommand = result.command.toLowerCase().trim();
+// ============================================================================
+// Rate limit check (used by messageParser)
+// ============================================================================
 
-  if (!validCommands.includes(normalizedCommand)) {
-    console.warn(`LLM returned invalid command: "${result.command}"`);
-    return false;
-  }
+export function isRateLimited(): boolean {
+  const primaryLimiter = getLimiter(PRIMARY_MODEL);
+  if (primaryLimiter.canMakeRequest()) return false;
 
-  // Normalize the command for consistent handling
-  result.command = normalizedCommand;
-
-  // Validate and normalize detectedLanguage field
-  if (result.detectedLanguage) {
-    const validLanguages = ['en', 'es', 'ambiguous'];
-    const normalizedLang = result.detectedLanguage.toLowerCase().trim();
-
-    if (!validLanguages.includes(normalizedLang)) {
-      // Handle common LLM variations
-      if (normalizedLang === 'english' || normalizedLang === 'eng') {
-        result.detectedLanguage = 'en';
-      } else if (
-        normalizedLang === 'spanish' ||
-        normalizedLang === 'spa' ||
-        normalizedLang === 'español'
-      ) {
-        result.detectedLanguage = 'es';
-      } else {
-        // Unknown language value - default to ambiguous
-        console.warn(
-          `LLM returned invalid detectedLanguage: "${result.detectedLanguage}", defaulting to "ambiguous"`
-        );
-        result.detectedLanguage = 'ambiguous';
-      }
-    } else {
-      // Normalize to lowercase
-      result.detectedLanguage = normalizedLang;
-    }
-  } else {
-    // If LLM didn't provide language, mark as ambiguous
-    result.detectedLanguage = 'ambiguous';
-  }
-
-  // For "unknown" commands with low confidence, accept if there's a helpful message
-  if (result.command === 'unknown' && result.confidence < 0.7) {
-    if (result.helpfulMessage && result.helpfulMessage.length > 10) {
-      // Accept low-confidence unknown with helpful message
-      return true;
-    }
-    return false; // Reject low-confidence unknown without helpful message
-  }
-
-  // For other commands, require higher confidence
-  if (result.confidence < 0.7) return false;
-
-  // Send command validation
-  if (result.command === 'send') {
-    // Must have valid amount (reasonable range)
-    if (!result.amount || result.amount <= 0 || result.amount > 100000) {
-      return false;
-    }
-
-    // Must have valid phone (10+ characters including formatting)
-    if (!result.recipient || result.recipient.length < 10) {
-      return false;
-    }
+  // If tiering is enabled, check fallback too
+  if (TIERING_ENABLED && FALLBACK_MODEL !== PRIMARY_MODEL) {
+    const fallbackLimiter = getLimiter(FALLBACK_MODEL);
+    return !fallbackLimiter.canMakeRequest();
   }
 
   return true;
@@ -418,104 +357,38 @@ function validateLLMResult(result: any): boolean {
 
 export async function checkLLMHealth(): Promise<HealthStatus> {
   if (!isLLMEnabled()) {
-    return {
-      available: false,
-      reason: 'LLM disabled via USE_LLM flag',
-    };
+    return { available: false, reason: 'LLM disabled via USE_LLM flag' };
   }
 
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey || apiKey === 'your_groq_api_key_here') {
-    return {
-      available: false,
-      reason: 'GROQ_API_KEY not configured',
-    };
+    return { available: false, reason: 'GROQ_API_KEY not configured' };
   }
 
   const client = getGroqClient();
   if (!client) {
-    return {
-      available: false,
-      reason: 'Failed to initialize Groq client',
-    };
+    return { available: false, reason: 'Failed to initialize Groq client' };
   }
 
-  return {
-    available: true,
-  };
-}
-
-// ============================================================================
-// Natural Response Generator
-// ============================================================================
-
-/**
- * Generate a natural, helpful response for unknown commands
- * Detects language and responds appropriately
- */
-export async function generateNaturalResponse(
-  userMessage: string
-): Promise<string | null> {
-  const client = getGroqClient();
-  if (!client || !isLLMEnabled() || isRateLimited()) return null;
-
-  try {
-    rateLimiter.recordRequest();
-
-    const completion = await Promise.race([
-      client.chat.completions.create({
-        messages: [
-          {
-            role: 'system',
-            content: `You are Sippy, a friendly bilingual WhatsApp crypto wallet assistant.
-
-Available commands:
-- balance / saldo: Check PYUSD balance
-- send [amount] to [phone]: Send money
-- history / historial: View transactions
-- settings / config: Manage wallet settings
-- help / ayuda: Show commands
-
-When user sends something you don't understand:
-1. Detect their language (English or Spanish)
-2. Respond naturally in THEIR language
-3. Be helpful and friendly (not robotic)
-4. Suggest what they might have meant
-5. Keep it short (2-3 sentences max)
-
-Examples:
-User: "show me stuff" → "I'm not sure what you're looking for! Try 'balance' to check your funds or 'help' to see all commands. 😊"
-User: "quiero ver cosas" → "¡No estoy seguro de lo que buscas! Prueba 'saldo' para ver tus fondos o 'ayuda' para ver todos los comandos. 😊"`,
-          },
-          {
-            role: 'user',
-            content: `User said: "${userMessage}". Generate a helpful response.`,
-          },
-        ],
-        model: 'llama-3.1-8b-instant',
-        temperature: 0.7, // More creative for natural responses
-        max_tokens: 150,
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout')), 3000)
-      ),
-    ]);
-
-    const response = completion.choices[0]?.message?.content;
-    return response || null;
-  } catch (error) {
-    return null; // Fallback to default message
-  }
+  return { available: true };
 }
 
 // ============================================================================
 // Utilities
 // ============================================================================
 
-export function isRateLimited(): boolean {
-  return !rateLimiter.canMakeRequest();
+export function getRateLimitStats() {
+  return {
+    primary: getLimiter(PRIMARY_MODEL).getStats(),
+    ...(TIERING_ENABLED ? { fallback: getLimiter(FALLBACK_MODEL).getStats() } : {}),
+    tieringEnabled: TIERING_ENABLED,
+  };
 }
 
-export function getRateLimitStats() {
-  return rateLimiter.getStats();
+export function getModelConfig_public() {
+  return {
+    primary: PRIMARY_MODEL,
+    fallback: FALLBACK_MODEL,
+    tieringEnabled: TIERING_ENABLED,
+  };
 }

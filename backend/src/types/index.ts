@@ -30,21 +30,24 @@ export interface ParsedCommand {
     | 'send'
     | 'history'
     | 'settings'
+    | 'language'
     | 'unknown';
   amount?: number;
   recipient?: string;
   originalText?: string;
   helpfulMessage?: string; // Natural, conversational response for unknown commands
-  detectedLanguage?: 'en' | 'es' | 'ambiguous'; // Language detected from current message
+  detectedLanguage?: 'en' | 'es' | 'pt' | 'ambiguous'; // Language detected from current message
   usedLLM?: boolean; // Track if LLM was used for parsing
   llmStatus?:
     | 'success'
+    | 'skipped'
+    | 'format-hint'
     | 'disabled'
     | 'rate-limited'
     | 'timeout'
     | 'error'
     | 'low-confidence'
-    | 'validation-failed'; // Why LLM wasn't used
+    | 'validation-failed';
 }
 
 export interface WalletInfo {

@@ -6,6 +6,7 @@
 
 import 'dotenv/config';
 import { WhatsAppAPIResponse, WhatsAppAPIError } from '../types/index.js';
+import { sanitizeOutboundMessage } from '../utils/sanitize.js';
 
 const WHATSAPP_API_URL = 'https://graph.facebook.com/v18.0';
 const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
@@ -22,10 +23,21 @@ interface Button {
 export async function sendTextMessage(
   to: string,
   text: string,
+  lang = 'en',
   retries = 2
 ): Promise<WhatsAppAPIResponse> {
-  console.log(`\n📤 Sending message to +${to}:`);
-  console.log(`   "${text}"`);
+  // Sanitize before sending — final safety net
+  const sanitized = sanitizeOutboundMessage(text, lang);
+  if (sanitized.violations.length > 0) {
+    console.warn(`Sanitizer [${sanitized.blocked ? 'BLOCKED' : 'CLEANED'}] to +${to}:`, sanitized.violations.join(', '));
+    if (sanitized.blocked) {
+      console.warn(`  Original length: ${text.length} chars`);
+    }
+  }
+  const body = sanitized.text;
+
+  console.log(`\nSending message to +${to}:`);
+  console.log(`   "${body}"`);
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -42,7 +54,7 @@ export async function sendTextMessage(
             to: to,
             type: 'text',
             text: {
-              body: text,
+              body: body,
             },
           }),
         }
@@ -138,14 +150,22 @@ function sleep(ms: number): Promise<void> {
 export async function sendButtonMessage(
   to: string,
   bodyText: string,
-  buttons: Button[]
+  buttons: Button[],
+  lang = 'en'
 ): Promise<WhatsAppAPIResponse | null> {
   // Guard: only send if enabled
   if (process.env.WHATSAPP_BUTTONS !== 'true') {
     return null;
   }
 
-  console.log(`\n📤 Sending button message to +${to}:`);
+  // Sanitize button body text
+  const sanitized = sanitizeOutboundMessage(bodyText, lang);
+  if (sanitized.violations.length > 0) {
+    console.warn(`Sanitizer [button] to +${to}:`, sanitized.violations.join(', '));
+  }
+  const cleanBody = sanitized.text;
+
+  console.log(`\nSending button message to +${to}:`);
 
   try {
     const response = await fetch(
@@ -163,7 +183,7 @@ export async function sendButtonMessage(
           interactive: {
             type: 'button',
             body: {
-              text: bodyText,
+              text: cleanBody,
             },
             action: {
               buttons: buttons.map((btn, idx) => ({

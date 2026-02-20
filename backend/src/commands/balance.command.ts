@@ -14,16 +14,19 @@ import {
   sendButtonMessage,
 } from '../services/whatsapp.service.js';
 import {
+  type Lang,
   formatBalanceMessage,
   formatNoWalletMessage,
   formatSessionExpiredMessage,
+  formatLowTransferBalanceMessage,
+  formatBalanceErrorMessage,
+  formatSpendingLimitBalance,
+  formatCompleteSetupMessage,
 } from '../utils/messages.js';
 import { toUserErrorMessage } from '../utils/errors.js';
 import { getRefuelService } from '../services/refuel.service.js';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.sippy.lat';
-
-export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
+export async function handleBalanceCommand(phoneNumber: string, lang: Lang = 'en'): Promise<void> {
   console.log(`BALANCE command from +${phoneNumber}`);
 
   try {
@@ -31,19 +34,19 @@ export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
     const embeddedWallet = await getEmbeddedWallet(phoneNumber);
 
     if (embeddedWallet) {
-      await handleEmbeddedBalance(phoneNumber, embeddedWallet);
+      await handleEmbeddedBalance(phoneNumber, embeddedWallet, lang);
       return;
     }
 
     // Fall back to legacy server wallet flow
     const userWallet = await getUserWallet(phoneNumber);
     if (!userWallet) {
-      await sendTextMessage(phoneNumber, formatNoWalletMessage());
+      await sendTextMessage(phoneNumber, formatNoWalletMessage(lang), lang);
       return;
     }
 
     if (!(await isSessionValid(phoneNumber))) {
-      await sendTextMessage(phoneNumber, formatSessionExpiredMessage());
+      await sendTextMessage(phoneNumber, formatSessionExpiredMessage(lang), lang);
       return;
     }
 
@@ -70,29 +73,27 @@ export async function handleBalanceCommand(phoneNumber: string): Promise<void> {
       wallet: userWallet.walletAddress,
       ethBalance,
       phoneNumber,
-    });
+    }, lang);
 
     if (ethBalance && parseFloat(ethBalance) < 0.00001) {
-      message += `\n\nLow transfer balance detected. We top you up daily automatically, so transfers will continue working.`;
+      message += `\n\n${formatLowTransferBalanceMessage(lang)}`;
     }
 
-    await sendTextMessage(phoneNumber, message);
+    await sendTextMessage(phoneNumber, message, lang);
 
     console.log(`Balance sent to +${phoneNumber}: ${balance} USD`);
   } catch (error) {
     console.error(`Failed to get balance for +${phoneNumber}:`, error);
 
-    const errorMessage = toUserErrorMessage(error);
-    await sendTextMessage(phoneNumber, `Error: ${errorMessage}`);
+    const errorMessage = toUserErrorMessage(error, lang);
+    await sendTextMessage(phoneNumber, formatBalanceErrorMessage(errorMessage, lang), lang);
   }
 }
 
-/**
- * Handle balance for embedded wallet users
- */
 async function handleEmbeddedBalance(
   phoneNumber: string,
-  wallet: { phoneNumber: string; walletAddress: string; spendPermissionHash: string | null; dailyLimit: number | null }
+  wallet: { phoneNumber: string; walletAddress: string; spendPermissionHash: string | null; dailyLimit: number | null },
+  lang: Lang
 ): Promise<void> {
   console.log(`Fetching embedded wallet balance for +${phoneNumber}...`);
 
@@ -102,28 +103,21 @@ async function handleEmbeddedBalance(
     balance,
     wallet: wallet.walletAddress,
     phoneNumber,
-  });
+  }, lang);
 
-  // Add spending limit info for embedded wallets
   if (wallet.spendPermissionHash) {
     const allowanceInfo = await getRemainingAllowance(phoneNumber);
     if (allowanceInfo) {
       const remaining = allowanceInfo.remaining.toFixed(2);
       const total = allowanceInfo.allowance.toFixed(2);
-      message += `\n\nSpending limit: $${remaining} of $${total}/day remaining`;
-
       const hoursUntilReset = Math.ceil((allowanceInfo.periodEndsAt - Date.now()) / (1000 * 60 * 60));
-      if (hoursUntilReset <= 24) {
-        message += ` (resets in ${hoursUntilReset}h)`;
-      }
+      message += `\n\n${formatSpendingLimitBalance(remaining, total, hoursUntilReset, lang)}`;
     }
   } else {
-    // No permission - prompt to complete setup
-    const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + phoneNumber)}`;
-    message += `\n\nComplete setup to enable sending:\n${setupUrl}`;
+    message += `\n\n${formatCompleteSetupMessage(phoneNumber, lang)}`;
   }
 
-  await sendTextMessage(phoneNumber, message);
+  await sendTextMessage(phoneNumber, message, lang);
 
   console.log(`Balance sent to +${phoneNumber}: ${balance} USD`);
 }

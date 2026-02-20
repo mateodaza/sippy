@@ -17,6 +17,7 @@ import {
 } from '../services/whatsapp.service.js';
 import { getRefuelService } from '../services/refuel.service.js';
 import {
+  type Lang,
   formatSendProcessingMessage,
   formatSendSuccessMessage,
   formatSendRecipientMessage,
@@ -25,15 +26,23 @@ import {
   formatSessionExpiredMessage,
   formatRecipientNotFoundMessage,
   formatInvalidAmountMessage,
+  formatTransactionBlockedMessage,
+  formatTransferFailedMessage,
+  formatSetupRequiredMessage,
+  formatDailyLimitExceededMessage,
+  formatSpendingLimitInfo,
+  buttonNeedAnythingElse,
+  buttonBalance,
+  buttonHelp,
 } from '../utils/messages.js';
 import { toUserErrorMessage } from '../utils/errors.js';
-
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.sippy.lat';
+import { getUserLanguage } from '../services/db.js';
 
 export async function handleSendCommand(
   fromPhoneNumber: string,
   amount: number,
-  toPhoneNumber: string
+  toPhoneNumber: string,
+  lang: Lang = 'en'
 ): Promise<void> {
   console.log(
     `SEND command: +${fromPhoneNumber} -> +${toPhoneNumber} (${amount} USD)`
@@ -41,7 +50,7 @@ export async function handleSendCommand(
 
   try {
     if (amount <= 0 || isNaN(amount)) {
-      await sendTextMessage(fromPhoneNumber, formatInvalidAmountMessage());
+      await sendTextMessage(fromPhoneNumber, formatInvalidAmountMessage(lang), lang);
       return;
     }
 
@@ -49,12 +58,12 @@ export async function handleSendCommand(
     const embeddedWallet = await getEmbeddedWallet(fromPhoneNumber);
 
     if (embeddedWallet) {
-      // Use embedded wallet flow with spend permissions
       await handleEmbeddedSend(
         fromPhoneNumber,
         toPhoneNumber,
         amount,
-        embeddedWallet
+        embeddedWallet,
+        lang
       );
       return;
     }
@@ -62,12 +71,12 @@ export async function handleSendCommand(
     // Fall back to legacy server wallet flow
     const senderWallet = await getUserWallet(fromPhoneNumber);
     if (!senderWallet) {
-      await sendTextMessage(fromPhoneNumber, formatNoWalletMessage());
+      await sendTextMessage(fromPhoneNumber, formatNoWalletMessage(lang), lang);
       return;
     }
 
     if (!(await isSessionValid(fromPhoneNumber))) {
-      await sendTextMessage(fromPhoneNumber, formatSessionExpiredMessage());
+      await sendTextMessage(fromPhoneNumber, formatSessionExpiredMessage(lang), lang);
       return;
     }
 
@@ -78,7 +87,8 @@ export async function handleSendCommand(
     if (!recipientEmbedded && !recipientLegacy) {
       await sendTextMessage(
         fromPhoneNumber,
-        formatRecipientNotFoundMessage(toPhoneNumber)
+        formatRecipientNotFoundMessage(toPhoneNumber, lang),
+        lang
       );
       return;
     }
@@ -87,10 +97,8 @@ export async function handleSendCommand(
     if (senderBalance < amount) {
       await sendTextMessage(
         fromPhoneNumber,
-        formatInsufficientBalanceMessage({
-          balance: senderBalance,
-          needed: amount,
-        })
+        formatInsufficientBalanceMessage({ balance: senderBalance, needed: amount }, lang),
+        lang
       );
       return;
     }
@@ -100,7 +108,8 @@ export async function handleSendCommand(
     if (!limitsCheck.allowed) {
       await sendTextMessage(
         fromPhoneNumber,
-        `Transaction blocked.\n\n${limitsCheck.reason}\n\nThese limits help keep your account secure.`
+        formatTransactionBlockedMessage(limitsCheck.reason || '', lang),
+        lang
       );
       return;
     }
@@ -112,10 +121,8 @@ export async function handleSendCommand(
 
     await sendTextMessage(
       fromPhoneNumber,
-      formatSendProcessingMessage({
-        amount,
-        toPhone: toPhoneNumber,
-      })
+      formatSendProcessingMessage({ amount, toPhone: toPhoneNumber }, lang),
+      lang
     );
 
     let refuelTxHash = '';
@@ -157,51 +164,49 @@ export async function handleSendCommand(
       toPhone: toPhoneNumber,
       txHash: result.transactionHash,
       gasCovered: !!refuelTxHash,
-    });
+    }, lang);
 
-    await sendTextMessage(fromPhoneNumber, successMessage);
+    await sendTextMessage(fromPhoneNumber, successMessage, lang);
 
+    const recipientLang = await getUserLanguage(toPhoneNumber) || 'en';
     const recipientMessage = formatSendRecipientMessage({
       amount,
       fromPhone: fromPhoneNumber,
       txHash: result.transactionHash,
-    });
+    }, recipientLang);
 
-    await sendTextMessage(toPhoneNumber, recipientMessage);
+    await sendTextMessage(toPhoneNumber, recipientMessage, recipientLang);
 
-    await sendButtonMessage(fromPhoneNumber, 'Need anything else?', [
-      { title: 'Balance' },
-      { title: 'Help' },
-    ]);
+    await sendButtonMessage(fromPhoneNumber, buttonNeedAnythingElse(lang), [
+      { title: buttonBalance(lang) },
+      { title: buttonHelp(lang) },
+    ], lang);
 
     console.log(`Transfer completed. Hash: ${result.transactionHash}`);
   } catch (error) {
     console.error(`Failed to send USDC:`, error);
 
-    const errorMessage = toUserErrorMessage(error);
+    const errorMessage = toUserErrorMessage(error, lang);
     await sendTextMessage(
       fromPhoneNumber,
-      `Transfer failed.\n\n${errorMessage}`
+      formatTransferFailedMessage(errorMessage, lang),
+      lang
     );
   }
 }
 
-/**
- * Handle send using embedded wallet with spend permissions
- */
 async function handleEmbeddedSend(
   fromPhoneNumber: string,
   toPhoneNumber: string,
   amount: number,
-  senderWallet: { phoneNumber: string; walletAddress: string; spendPermissionHash: string | null; dailyLimit: number | null }
+  senderWallet: { phoneNumber: string; walletAddress: string; spendPermissionHash: string | null; dailyLimit: number | null },
+  lang: Lang
 ): Promise<void> {
-  // Check if sender has spend permission
   if (!senderWallet.spendPermissionHash) {
-    const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + fromPhoneNumber)}`;
     await sendTextMessage(
       fromPhoneNumber,
-      `You need to complete your wallet setup before sending.\n\n` +
-        `Please finish setup here:\n${setupUrl}`
+      formatSetupRequiredMessage(fromPhoneNumber, lang),
+      lang
     );
     return;
   }
@@ -213,7 +218,8 @@ async function handleEmbeddedSend(
   if (!recipientEmbedded && !recipientLegacy) {
     await sendTextMessage(
       fromPhoneNumber,
-      formatRecipientNotFoundMessage(toPhoneNumber)
+      formatRecipientNotFoundMessage(toPhoneNumber, lang),
+      lang
     );
     return;
   }
@@ -223,113 +229,94 @@ async function handleEmbeddedSend(
   if (senderBalance < amount) {
     await sendTextMessage(
       fromPhoneNumber,
-      formatInsufficientBalanceMessage({
-        balance: senderBalance,
-        needed: amount,
-      })
+      formatInsufficientBalanceMessage({ balance: senderBalance, needed: amount }, lang),
+      lang
     );
     return;
   }
 
   // Check daily limit
   if (senderWallet.dailyLimit && amount > senderWallet.dailyLimit) {
-    const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent('+' + fromPhoneNumber)}`;
     await sendTextMessage(
       fromPhoneNumber,
-      `Amount exceeds your daily limit of $${senderWallet.dailyLimit}.\n\n` +
-        `You can change your limit here:\n${settingsUrl}`
+      formatDailyLimitExceededMessage(senderWallet.dailyLimit, fromPhoneNumber, lang),
+      lang
     );
     return;
   }
 
   await sendTextMessage(
     fromPhoneNumber,
-    formatSendProcessingMessage({
-      amount,
-      toPhone: toPhoneNumber,
-    })
+    formatSendProcessingMessage({ amount, toPhone: toPhoneNumber }, lang),
+    lang
   );
 
   console.log(`Executing embedded wallet transfer via spend permission...`);
 
-  // Execute transfer using spend permission
   const result = await sendToPhoneNumber(fromPhoneNumber, toPhoneNumber, amount);
 
-  // Transfer succeeded - from here, notification errors should NOT report "Transfer failed"
   console.log(`Embedded transfer completed. Hash: ${result.transactionHash}`);
 
-  // Build success message with remaining allowance info
   let successMessage = formatSendSuccessMessage({
     amount,
     toPhone: toPhoneNumber,
     txHash: result.transactionHash,
-    gasCovered: true, // Embedded wallets use paymaster
-  });
+    gasCovered: true,
+  }, lang);
 
-  // Add remaining allowance info if available
   if (result.remainingAllowance !== undefined) {
     const remaining = result.remainingAllowance.toFixed(2);
-    successMessage += `\n\nSpending limit: $${remaining} remaining`;
-
+    let resetInfo = '';
     if (result.periodEndsAt) {
       const daysUntilReset = Math.ceil((result.periodEndsAt - Date.now()) / (1000 * 60 * 60 * 24));
       if (daysUntilReset <= 1) {
-        successMessage += ` (resets tomorrow)`;
+        resetInfo = lang === 'en' ? ' (resets tomorrow)' : lang === 'es' ? ' (se renueva manana)' : ' (renova amanha)';
       } else {
-        successMessage += ` (resets in ${daysUntilReset} days)`;
+        resetInfo = lang === 'en' ? ` (resets in ${daysUntilReset} days)` : lang === 'es' ? ` (se renueva en ${daysUntilReset} dias)` : ` (renova em ${daysUntilReset} dias)`;
       }
     }
+    successMessage += `\n\n${formatSpendingLimitInfo(remaining, resetInfo, lang)}`;
   }
 
   // Send notifications - errors here are non-critical since transfer succeeded
   try {
-    await sendTextMessage(fromPhoneNumber, successMessage);
+    await sendTextMessage(fromPhoneNumber, successMessage, lang);
   } catch (notifyError) {
     console.error('Failed to send success notification to sender:', notifyError);
-    // Don't throw - transfer already succeeded
   }
 
   try {
+    const recipientLang = await getUserLanguage(toPhoneNumber) || 'en';
     const recipientMessage = formatSendRecipientMessage({
       amount,
       fromPhone: fromPhoneNumber,
       txHash: result.transactionHash,
-    });
-    await sendTextMessage(toPhoneNumber, recipientMessage);
+    }, recipientLang);
+    await sendTextMessage(toPhoneNumber, recipientMessage, recipientLang);
   } catch (notifyError) {
     console.error('Failed to send notification to recipient:', notifyError);
-    // Don't throw - transfer already succeeded
   }
 
-  // Best effort - button message failure is not critical
-  await sendButtonMessage(fromPhoneNumber, 'Need anything else?', [
-    { title: 'Balance' },
-    { title: 'Help' },
-  ]);
+  await sendButtonMessage(fromPhoneNumber, buttonNeedAnythingElse(lang), [
+    { title: buttonBalance(lang) },
+    { title: buttonHelp(lang) },
+  ], lang);
 }
 
-/**
- * Parse phone number from string (helper function)
- */
 export function parsePhoneNumber(phoneStr: string): string {
-  // Remove all non-digits
   const digits = phoneStr.replace(/\D/g, '');
 
-  // If starts with +57, remove +57 and add colombia code
   if (phoneStr.includes('+57')) {
     return digits.replace(/^57/, '57');
   }
 
-  // If starts with 57 (already has country code)
   if (digits.startsWith('57') && digits.length > 10) {
     return digits;
   }
 
-  // If it's a 10-digit Colombian number, add country code
   if (digits.length === 10) {
     return '57' + digits;
   }
 
-  // Return as-is if we can't parse it
   return digits;
 }
