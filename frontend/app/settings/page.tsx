@@ -436,7 +436,7 @@ function SettingsContent() {
 
   const { status: exportStatus, cleanup: cleanupExport } = useEvmKeyExportIframe({
     address: isExportActive ? exportAddress : '',
-    containerRef: isExportActive ? iframeContainerRef : { current: null },
+    containerRef: iframeContainerRef,
     label: 'Copy Private Key',
     copiedLabel: 'Copied!',
     icon: true,
@@ -831,6 +831,12 @@ function SettingsContent() {
             </div>
           )}
 
+          {/* Iframe container — always in DOM so ref is stable for the hook */}
+          <div
+            ref={iframeContainerRef}
+            className={exportStep === 'export_active' ? 'min-h-[60px] rounded-lg border border-gray-200 p-2 bg-white' : 'hidden'}
+          />
+
           {exportStep === 'export_active' && (
             <div className='space-y-4'>
               <div className='flex justify-between items-center'>
@@ -841,11 +847,6 @@ function SettingsContent() {
                   Expires in {Math.floor(exportCountdown / 60)}:{(exportCountdown % 60).toString().padStart(2, '0')}
                 </span>
               </div>
-
-              <div
-                ref={iframeContainerRef}
-                className='min-h-[60px] rounded-lg border border-gray-200 p-2 bg-white'
-              />
 
               <p className='text-[10px] text-gray-400 font-mono break-all'>
                 addr: {exportAddress || 'none'} | status: {exportStatus ?? 'null'} | active: {String(isExportActive)}
