@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useEvmKeyExportIframe, useEvmAddress, useEvmAccounts } from '@coinbase/cdp-hooks';
 import { parseUnits } from 'viem';
@@ -434,20 +434,22 @@ function SettingsContent() {
   const exportAddress = (evmAccounts as Array<{ address: string }> | null)?.[0]?.address || evmAddress || '';
   const isExportActive = exportStep === 'export_active' && !!exportAddress;
 
+  const exportIframeTheme = useMemo(() => ({
+    pageBg: 'transparent' as const,
+    buttonBg: '#059669',
+    buttonBgHover: '#047857',
+    buttonText: '#FFFFFF',
+    buttonBorderRadius: 8,
+    buttonSize: 'md' as const,
+  }), []);
+
   const { status: exportStatus, cleanup: cleanupExport } = useEvmKeyExportIframe({
     address: isExportActive ? exportAddress : '',
     containerRef: iframeContainerRef,
     label: 'Copy Private Key',
     copiedLabel: 'Copied!',
     icon: true,
-    theme: {
-      pageBg: 'transparent',
-      buttonBg: '#059669',
-      buttonBgHover: '#047857',
-      buttonText: '#FFFFFF',
-      buttonBorderRadius: 8,
-      buttonSize: 'md',
-    },
+    theme: exportIframeTheme,
   });
 
   // Fire-and-forget audit logging
