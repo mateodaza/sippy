@@ -874,15 +874,6 @@ function SettingsContent() {
 
           {exportStep === 'idle' && (
             <>
-              <div className='p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4'>
-                <p className='text-sm text-blue-800'>
-                  Your wallet is secured by your phone number. Recover access on
-                  any device by verifying at{' '}
-                  <a href='/setup' className='underline font-medium'>
-                    sippy.lat/setup
-                  </a>
-                </p>
-              </div>
               {eoaAddress ? (
                 <button
                   onClick={handleExportStart}

@@ -12,8 +12,8 @@
 | # | Deliverable | Status | Phase |
 |---|------------|--------|-------|
 | 1 | Onramp integration (API, testing, user flow) | Blocked (waiting on Maash) | P6 |
-| 2 | Non-custodial wallet refinements | 90% | P1 (done), P2 |
-| 3 | Security hardening (rate limits, tx checks, error handling) | 70% | P4 |
+| 2 | Non-custodial wallet refinements | 95% | P1 (done), P2, Sweep+Wallet (done) |
+| 3 | Security hardening (rate limits, tx checks, error handling) | 75% | P4, rate limiting (partial) |
 | 4 | Dual currency display (USD + local) | 0% | P3 |
 | 5 | Privacy controls (phone visibility) | 0% | P5 |
 | 6 | User settings (daily limits via settings page) | 80% | P5 |
@@ -258,6 +258,8 @@ This is zero-friction: users never configure anything, they just see their local
 
 > Transaction confirmation, webhook validation, velocity checks, edge case coverage.
 > Deliverable #3. Required before any real money flows in beta.
+>
+> **Priority note:** CDP session persistence is short-lived (minutes, not days). Users re-authenticate frequently on the web wallet and settings page. This makes session management and auth UX a P0 concern — every friction point multiplies. Phase 4 must also harden the web wallet auth experience: session refresh before expiry, clear re-auth prompts, and graceful handling of expired tokens mid-operation (e.g., mid-send or mid-sweep). The WhatsApp `wallet` command (see below) becomes the primary re-entry point.
 
 ### 4.1 Transaction Confirmation Flow
 
@@ -367,19 +369,71 @@ This is zero-friction: users never configure anything, they just see their local
   - All users get: "Sippy is undergoing maintenance. Please try again shortly."
   - `POST /admin/resume` — resume normal operation
 
+### 4.6 Custom Auth: Replace CDP SMS with Sippy OTP (Twilio + JWT)
+
+> **Why:** CDP's `useSignInWithSms` sends OTP from "Coinbase" — confusing for Sippy users. Sessions are short-lived with no control over duration. Custom auth via `useAuthenticateWithJWT` gives us full control over branding, session TTL, and re-auth policy.
+
+- [ ] **Backend: Twilio OTP service** — new `backend/src/services/otp.service.ts`
+  - `POST /api/auth/send-otp` — sends OTP via Twilio to phone (E.164 format)
+  - `POST /api/auth/verify-otp` — verifies code, returns signed JWT
+  - SMS template: "Sippy: Tu codigo es 123456" (branded, trilingual)
+  - OTP: 6-digit, 5-min expiry, max 3 attempts, rate limit 5 OTPs/phone/hour
+  - Store pending OTPs in-memory Map (same pattern as other throttles)
+
+- [ ] **Backend: JWT issuer** — `backend/src/services/jwt.service.ts`
+  - Generate RS256 keypair (store private key in env `JWT_PRIVATE_KEY`, publish public key via JWKS)
+  - `POST /api/auth/.well-known/jwks.json` — serves public key for CDP to validate
+  - JWT claims: `{ sub: phoneNumber, iat, exp }` — set `exp` to 30 minutes (configurable via env)
+  - Register JWKS endpoint in CDP Portal under "Custom auth" tab
+
+- [ ] **Frontend: Replace `useSignInWithSms` with `useAuthenticateWithJWT`** — all pages
+  - Update `CDPHooksProvider` config with `customAuth: { getJwt }` callback
+  - `getJwt` calls `POST /api/auth/verify-otp` on first auth, then `POST /api/auth/refresh` for session extension
+  - Replace auth flows in `/setup`, `/settings`, `/wallet` — phone input + OTP input stays the same UI, but OTP goes to our backend instead of CDP
+  - Session TTL controlled by JWT `exp` — 30 min default, require fresh OTP for sensitive ops (export, revoke)
+
+- [ ] **Sensitive operation re-auth gate**
+  - Before export key or revoke permission: check if JWT was issued < 5 min ago
+  - If stale: require fresh OTP ("Verify again to continue") before proceeding
+  - Prevents session hijacking from accessing high-risk operations
+
+**Prerequisites:** Twilio account + phone number, CDP Portal custom auth configuration
+**Estimate:** 10-14h
+**Dependencies:** None — can be done in parallel with other Phase 4 tasks
+
+### 4.7 Web Wallet Session Robustness
+
+- [ ] **Proactive session refresh** — frontend /wallet + /settings
+  - CDP sessions expire quickly (minutes). Before any operation (send, sweep, permission change), call `getAccessToken()` and handle null → show re-auth prompt inline instead of a broken state
+  - If session dies mid-send or mid-sweep: catch, show clear "Session expired — verify again to continue", preserve form state so user doesn't lose input
+  - Consider a `useSessionGuard()` hook that wraps `getAccessToken()` with auto-redirect to phone step on failure
+
+- [ ] **WhatsApp `wallet` command** — messageParser.ts + server.ts + messages.ts
+  - Regex: `wallet`, `billetera`, `mi billetera`, `carteira`, `my wallet`
+  - Reply with personalized link: `sippy.lat/wallet?phone=+57...`
+  - Trilingual: "Open your wallet: [link]"
+  - Same pattern as existing settings link delivery
+
+- [ ] **WhatsApp post-setup wallet nudge** — embedded-wallet.routes.ts
+  - After spend permission is registered, include wallet link in the "you're all set" WhatsApp message
+  - "You can also manage your wallet anytime at sippy.lat/wallet"
+
 ### Files to Create
 - `backend/src/services/velocity.service.ts` — send rate limiting + fraud checks
 
 ### Files to Modify
 - `backend/src/commands/send.command.ts` — confirmation flow, self-send, concurrent protection
-- `backend/src/utils/messageParser.ts` — confirm/cancel/yes/no regex
-- `backend/src/utils/messages.ts` — confirmation prompts, velocity messages, blocked messages
+- `backend/src/utils/messageParser.ts` — confirm/cancel/yes/no regex + wallet command
+- `backend/src/utils/messages.ts` — confirmation prompts, velocity messages, blocked messages, wallet link
 - `backend/src/utils/phone.ts` — phone validation edge cases
-- `backend/src/types/index.ts` — add 'confirm', 'cancel' commands
-- `backend/server.ts` — webhook validation, pending tx, blocked check, admin endpoints, stale msg check
+- `backend/src/types/index.ts` — add 'confirm', 'cancel', 'wallet' commands
+- `backend/server.ts` — webhook validation, pending tx, blocked check, admin endpoints, stale msg check, wallet handler
 - `backend/src/services/db.ts` — blocked column
+- `backend/src/routes/embedded-wallet.routes.ts` — wallet link in post-setup nudge
+- `frontend/app/wallet/page.tsx` — session guard, re-auth UX
+- `frontend/app/settings/page.tsx` — session guard for sweep/export
 
-### Estimate: 14-18h
+### Estimate: 18-22h
 
 ---
 
@@ -426,28 +480,47 @@ This is zero-friction: users never configure anything, they just see their local
   - Uses Resend transactional email (generous free tier, simple API)
   - For M2: push CDP team (Austin/David) to support email as platform-level 2FA
 
-- [ ] **5.7 Export UX: EOA vs smart account clarity** — frontend settings
-  - Current export gives EOA private key, but user funds are in the smart account (ERC-4337)
-  - Importing EOA into MetaMask shows different address with $0 — confusing
-  - On export screen: show both addresses (EOA + smart account) with explanation
-  - Add text: "This key controls your smart wallet (0xABC...). To recover funds, use a wallet that supports account abstraction, or contact support."
-  - Long-term (M2): explore adding a "sweep to EOA" helper that moves funds from smart account to EOA before export
+- [x] **5.7 Sweep-to-EOA + Webapp Fallback Wallet** — DONE (shipped ahead of M2)
+  - Sweep-to-EOA integrated into export flow on /settings: warning → sweep_offer → sweeping → export_active
+  - Auto-skips sweep if smart account balance < $0.01; user can also skip manually
+  - Uses `useSendUserOperation` with `evmSmartAccountObjects` (never EOA fallback)
+  - New `/wallet` page: SMS auth → balance card (30s auto-refresh) → send USDC (to phone or 0x address) → activity list
+  - Send uses authenticated `POST /api/resolve-phone` (per-user throttle, 20/hr) for phone→wallet resolution
+  - Audit trail: `POST /api/log-web-send` → `web_send_log` table (fire-and-forget, tx_hash dedup)
+  - IP rate limiting on public `GET /resolve-phone` (10 req/min/IP, proxy-aware)
+  - `swept` event added to export audit schema
+  - Web wallet is unrestricted self-custody mode (user signs directly, no backend limits)
+  - Shared infra: `lib/usdc-transfer.ts` (encodeUsdcTransfer, ensureGasReady, buildUsdcTransferCall)
+  - Nav: /settings ↔ /wallet cross-links for authenticated users
+  - "Recover access" info box removed from wallet security section — will re-add when email recovery (5.6) ships
 
-### Files to Create
+### Files Created (5.7)
+- `frontend/lib/usdc-transfer.ts` — shared USDC transfer encoding + gas helper
+- `frontend/app/wallet/page.tsx` — webapp fallback wallet page
+
+### Files Modified (5.7)
+- `backend/src/types/schemas.ts` — `swept` event + `webSendEventSchema`
+- `backend/src/services/db.ts` — `web_send_log` table + `logWebSend()` helper
+- `backend/src/routes/embedded-wallet.routes.ts` — `POST /api/resolve-phone` + `POST /api/log-web-send`
+- `backend/server.ts` — trust proxy + IP rate limiter on `GET /resolve-phone`
+- `frontend/lib/constants.ts` — `USDC_ADDRESS` + `USDC_DECIMALS`
+- `frontend/app/settings/page.tsx` — sweep-to-EOA flow + /wallet nav link
+
+### Files to Create (remaining)
 - `backend/src/services/email.service.ts` — Resend integration + code generation/verification
 
-### Files to Modify
+### Files to Modify (remaining)
 - `backend/src/services/db.ts` — phone_visible column + helpers, verified_email column + helpers
 - `backend/src/routes/embedded-wallet.routes.ts` — new API routes (privacy, email verify, email confirm)
 - `backend/src/utils/messageParser.ts` — privacy command regex
 - `backend/src/utils/messages.ts` — privacy confirmation messages
 - `backend/src/types/index.ts` — add 'privacy' command
 - `backend/server.ts` — privacy command handler
-- `frontend/app/settings/page.tsx` — language + privacy UI, email collection, export address clarity
+- `frontend/app/settings/page.tsx` — language + privacy UI, email collection
 - `frontend/app/setup/page.tsx` — email collection step during onboarding
 - `frontend/app/profile/[phone]/page.tsx` — visibility check
 
-### Estimate: 10-14h
+### Estimate: 10-14h (remaining tasks 5.1-5.6)
 
 ---
 
@@ -672,4 +745,4 @@ Privacy (P5) and Monitoring (P7) can parallelize with Security (P4).
 - Formal smart contract audit (GasRefuel is ~100 lines, internal review sufficient)
 - PIN/2FA for transfers (confirmation flow is sufficient for M1 limits)
 - CDP platform-level email 2FA (M2 ask for OCL — M1 uses our own email gate for sensitive ops)
-- Smart account → EOA sweep tool (M2 — for now, export screen explains the relationship)
+- ~~Smart account → EOA sweep tool~~ **DONE** — shipped in Phase 5.7 with webapp fallback wallet
