@@ -7,9 +7,11 @@
 
 import { Router, Request, Response } from 'express';
 import { CdpClient } from '@coinbase/cdp-sdk';
-import { query } from '../services/db.js';
+import crypto from 'crypto';
+import { query, logExportEvent } from '../services/db.js';
 import { getSippySpenderAccount } from '../services/embedded-wallet.service.js';
 import { getRefuelService } from '../services/refuel.service.js';
+import { exportEventSchema } from '../types/schemas.js';
 import {
   NETWORK,
   USDC_ADDRESSES,
@@ -21,6 +23,12 @@ const router = Router();
 
 // CDP client for token validation and permission verification
 const cdp = new CdpClient();
+
+// Required for phone hashing in export audit logs
+const EXPORT_AUDIT_SECRET = process.env.EXPORT_AUDIT_SECRET;
+if (!EXPORT_AUDIT_SECRET) {
+  console.error('WARNING: EXPORT_AUDIT_SECRET is not set — POST /api/log-export-event will return 503');
+}
 
 /**
  * Verify CDP access token and extract user data
@@ -376,6 +384,7 @@ router.get('/wallet-status', async (req: Request, res: Response) => {
       return res.json({
         hasWallet: false,
         hasPermission: false,
+        phoneNumber,
       });
     }
 
@@ -385,10 +394,58 @@ router.get('/wallet-status', async (req: Request, res: Response) => {
       walletAddress: row.wallet_address,
       hasPermission: !!row.spend_permission_hash,
       dailyLimit: row.daily_limit ? parseFloat(row.daily_limit) : null,
+      phoneNumber,
     });
   } catch (error) {
     console.error('❌ Wallet status error:', error);
     res.status(401).json({ error: 'Unauthorized' });
+  }
+});
+
+/**
+ * POST /api/log-export-event
+ *
+ * Logs export audit events with HMAC-hashed phone numbers.
+ * Used by frontend during wallet private key export flow.
+ */
+router.post('/log-export-event', async (req: Request, res: Response) => {
+  try {
+    const { phoneNumber, walletAddress } = await verifyCdpSession(
+      req.headers.authorization
+    );
+
+    // Validate request body
+    const parsed = exportEventSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request body' });
+    }
+
+    // Require audit secret
+    if (!EXPORT_AUDIT_SECRET) {
+      return res.status(503).json({ error: 'Export audit unavailable' });
+    }
+
+    const { event, attemptId } = parsed.data;
+    const phoneHash = crypto
+      .createHmac('sha256', EXPORT_AUDIT_SECRET)
+      .update(phoneNumber)
+      .digest('hex');
+
+    await logExportEvent({
+      attemptId,
+      event,
+      phoneHash,
+      walletAddress,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    const isAuthError = error instanceof Error &&
+      (error.message.includes('authorization') || error.message.includes('token'));
+    console.error('❌ Log export event error:', error);
+    res.status(isAuthError ? 401 : 500).json({
+      error: isAuthError ? 'Unauthorized' : 'Internal server error',
+    });
   }
 });
 

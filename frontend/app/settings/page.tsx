@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut } from '@coinbase/cdp-hooks';
+import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useEvmKeyExportIframe } from '@coinbase/cdp-hooks';
 import { parseUnits } from 'viem';
 
 /**
@@ -38,7 +38,10 @@ interface WalletStatus {
   walletAddress?: string;
   hasPermission: boolean;
   dailyLimit?: number;
+  phoneNumber?: string;
 }
+
+type ExportStep = 'idle' | 'warning' | 'otp_sent' | 'otp_verify' | 'reauth_required' | 'export_active';
 
 function SettingsContent() {
   const searchParams = useSearchParams();
@@ -60,6 +63,21 @@ function SettingsContent() {
   const [permissionStatus, setPermissionStatus] = useState<
     'idle' | 'loading' | 'success' | 'error'
   >('idle');
+
+  // Export state machine (wallet recovery)
+  const [exportStep, setExportStep] = useState<ExportStep>('idle');
+  const [exportOtp, setExportOtp] = useState('');
+  const [exportFlowId, setExportFlowId] = useState<string | null>(null);
+  const [exportUnlockedAt, setExportUnlockedAt] = useState<number | null>(null);
+  const [exportAttemptId, setExportAttemptId] = useState<string | null>(null);
+  const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
+  const [hasCopied, setHasCopied] = useState(false);
+  const iframeContainerRef = useRef<HTMLDivElement>(null);
+  const lastEmittedStatus = useRef<string | null>(null);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+  const [otpAttempts, setOtpAttempts] = useState(0);
+  const [exportCountdown, setExportCountdown] = useState(0);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // CDP Hooks
   const { signInWithSms } = useSignInWithSms();
@@ -137,6 +155,9 @@ function SettingsContent() {
               if (status.dailyLimit) {
                 setNewLimit(status.dailyLimit.toString());
               }
+              if (status.phoneNumber) {
+                setVerifiedPhone(status.phoneNumber);
+              }
               console.log('Wallet status restored:', status);
             }
           }
@@ -171,6 +192,9 @@ function SettingsContent() {
         setWalletStatus(status);
         if (status.dailyLimit) {
           setNewLimit(status.dailyLimit.toString());
+        }
+        if (status.phoneNumber) {
+          setVerifiedPhone(status.phoneNumber);
         }
       }
     } catch (err) {
@@ -403,6 +427,155 @@ function SettingsContent() {
     setNewLimit('100');
     await handleChangeLimit();
   };
+
+  // ============================================================================
+  // Wallet Export (Recovery Feature)
+  // ============================================================================
+
+  const eoaAddress = currentUser?.evmAccounts?.[0] || '';
+  const isExportActive = exportStep === 'export_active' && eoaAddress !== '';
+
+  const { status: exportStatus, cleanup: cleanupExport } = useEvmKeyExportIframe({
+    address: eoaAddress as `0x${string}`,
+    containerRef: isExportActive ? iframeContainerRef : { current: null },
+    label: 'Copy Private Key',
+    copiedLabel: 'Copied!',
+    icon: true,
+    theme: {
+      pageBg: 'transparent',
+      buttonBg: '#059669',
+      buttonBgHover: '#047857',
+      buttonText: '#FFFFFF',
+      buttonBorderRadius: 8,
+      buttonSize: 'md',
+    },
+  });
+
+  // Fire-and-forget audit logging
+  const logExportEventFn = async (event: string, attemptIdOverride?: string) => {
+    const id = attemptIdOverride ?? exportAttemptId;
+    if (!id) return;
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken || !BACKEND_URL) return;
+      await fetch(`${BACKEND_URL}/api/log-export-event`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
+        body: JSON.stringify({ event, attemptId: id }),
+      });
+    } catch {} // Fire-and-forget
+  };
+
+  const resetExport = (reason: 'completed' | 'expired' | 'cancelled') => {
+    logExportEventFn(reason);
+    cleanupExport();
+    setExportStep('idle');
+    setExportUnlockedAt(null);
+    setExportOtp('');
+    setOtpAttempts(0);
+    setHasCopied(false);
+    setExportAttemptId(null);
+    setExportError(null);
+    lastEmittedStatus.current = null;
+  };
+
+  // Start export flow
+  const handleExportStart = () => {
+    const attemptId = crypto.randomUUID();
+    setExportAttemptId(attemptId);
+    setExportStep('warning');
+    setExportError(null);
+    logExportEventFn('initiated', attemptId);
+  };
+
+  // Send step-up OTP for export
+  const handleExportSendOtp = async () => {
+    if (!verifiedPhone) {
+      setExportError('Phone number not available. Please sign out and back in.');
+      return;
+    }
+
+    setExportError(null);
+
+    try {
+      const formattedPhone = verifiedPhone.startsWith('+') ? verifiedPhone : `+${verifiedPhone}`;
+      const result = await signInWithSms({ phoneNumber: formattedPhone });
+      setExportFlowId(result.flowId);
+      setExportStep('otp_verify');
+      setOtpCooldown(60);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('session')) {
+        setExportStep('reauth_required');
+      } else if (msg.includes('429') || msg.toLowerCase().includes('rate')) {
+        setExportError('Too many attempts. Try again later.');
+      } else {
+        setExportError(msg);
+      }
+    }
+  };
+
+  // Verify step-up OTP for export
+  const handleExportVerifyOtp = async () => {
+    if (!exportFlowId) return;
+
+    setExportError(null);
+    setOtpAttempts((prev) => prev + 1);
+
+    if (otpAttempts >= 3) {
+      setExportError('Too many attempts. Export cancelled.');
+      resetExport('cancelled');
+      return;
+    }
+
+    try {
+      await verifySmsOTP({ flowId: exportFlowId, otp: exportOtp });
+      setExportStep('export_active');
+      setExportUnlockedAt(Date.now());
+      logExportEventFn('unlocked');
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Verification failed');
+    }
+  };
+
+  // 5-minute expiry timer
+  useEffect(() => {
+    if (!exportUnlockedAt) return;
+    const remaining = 5 * 60 * 1000 - (Date.now() - exportUnlockedAt);
+    if (remaining <= 0) { resetExport('expired'); return; }
+    const timer = setTimeout(() => resetExport('expired'), remaining);
+    return () => clearTimeout(timer);
+  }, [exportUnlockedAt]);
+
+  // Countdown display
+  useEffect(() => {
+    if (!exportUnlockedAt) { setExportCountdown(0); return; }
+    const tick = () => {
+      const remaining = Math.max(0, 5 * 60 - Math.floor((Date.now() - exportUnlockedAt) / 1000));
+      setExportCountdown(remaining);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [exportUnlockedAt]);
+
+  // OTP resend cooldown
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const timer = setInterval(() => setOtpCooldown((prev) => prev - 1), 1000);
+    return () => clearInterval(timer);
+  }, [otpCooldown]);
+
+  // Deduplicated status logging + copy tracking
+  useEffect(() => {
+    if (!exportStatus || exportStatus === lastEmittedStatus.current) return;
+    lastEmittedStatus.current = exportStatus;
+    if (exportStatus === 'ready') logExportEventFn('iframe_ready');
+    if (exportStatus === 'success') {
+      setHasCopied(true);
+      logExportEventFn('copied');
+    }
+  }, [exportStatus]);
 
   // Show loading while checking for existing session
   if (isCheckingSession) {
@@ -654,14 +827,193 @@ function SettingsContent() {
           </div>
         )}
 
+        {/* Wallet Security */}
+        <div className='mt-6 pt-6 border-t'>
+          <h2 className='text-lg font-semibold mb-3 text-gray-900'>
+            Wallet Security
+          </h2>
+
+          {exportStep === 'idle' && (
+            <>
+              <div className='p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4'>
+                <p className='text-sm text-blue-800'>
+                  Your wallet is secured by your phone number. Recover access on
+                  any device by verifying at{' '}
+                  <a href='/setup' className='underline font-medium'>
+                    sippy.lat/setup
+                  </a>
+                </p>
+              </div>
+              {eoaAddress && (
+                <button
+                  onClick={handleExportStart}
+                  className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700'
+                >
+                  Export Private Key
+                </button>
+              )}
+            </>
+          )}
+
+          {exportStep === 'warning' && (
+            <div className='space-y-4'>
+              <div className='p-4 bg-red-50 border border-red-200 rounded-lg'>
+                <p className='text-sm text-red-800 font-medium mb-2'>
+                  Security Warning
+                </p>
+                <p className='text-sm text-red-700'>
+                  Your private key gives full control of your wallet. Never share
+                  it with anyone. Only export if you need to back up your wallet
+                  to an external app.
+                </p>
+              </div>
+              {exportError && (
+                <div className='p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
+                  {exportError}
+                </div>
+              )}
+              <button
+                onClick={handleExportSendOtp}
+                disabled={!verifiedPhone}
+                className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed'
+              >
+                Verify Identity to Continue
+              </button>
+              <button
+                onClick={() => resetExport('cancelled')}
+                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {exportStep === 'otp_verify' && (
+            <div className='space-y-4'>
+              <p className='text-sm text-gray-600'>
+                Enter the 6-digit code sent to your phone.
+              </p>
+              {exportError && (
+                <div className='p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
+                  {exportError}
+                </div>
+              )}
+              <input
+                type='text'
+                value={exportOtp}
+                onChange={(e) => setExportOtp(e.target.value.replace(/\D/g, ''))}
+                placeholder='123456'
+                maxLength={6}
+                className='w-full p-3 border rounded-lg text-center text-2xl tracking-widest text-gray-900'
+              />
+              <button
+                onClick={handleExportVerifyOtp}
+                disabled={exportOtp.length !== 6}
+                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+              >
+                Verify
+              </button>
+              <div className='flex justify-between items-center'>
+                <button
+                  onClick={handleExportSendOtp}
+                  disabled={otpCooldown > 0}
+                  className='text-sm text-emerald-600 hover:text-emerald-700 disabled:text-gray-400'
+                >
+                  {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : 'Resend code'}
+                </button>
+                <button
+                  onClick={() => resetExport('cancelled')}
+                  className='text-sm text-gray-500 hover:text-gray-700'
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {exportStep === 'reauth_required' && (
+            <div className='space-y-4'>
+              <div className='p-4 bg-yellow-50 border border-yellow-200 rounded-lg'>
+                <p className='text-sm text-yellow-800'>
+                  Session conflict — please sign out and sign back in to
+                  continue with the export.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  resetExport('cancelled');
+                  await signOut();
+                  setAuthStep('phone');
+                  setWalletAddress(null);
+                  setWalletStatus(null);
+                  setVerifiedPhone(null);
+                  setHasCheckedSession(false);
+                }}
+                className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700'
+              >
+                Sign Out & Restart
+              </button>
+              <button
+                onClick={() => resetExport('cancelled')}
+                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {exportStep === 'export_active' && (
+            <div className='space-y-4'>
+              <div className='flex justify-between items-center'>
+                <span className='text-sm font-medium text-gray-700'>
+                  Export Key
+                </span>
+                <span className={`text-sm font-mono ${exportCountdown <= 60 ? 'text-red-600' : 'text-gray-500'}`}>
+                  Expires in {Math.floor(exportCountdown / 60)}:{(exportCountdown % 60).toString().padStart(2, '0')}
+                </span>
+              </div>
+
+              <div
+                ref={iframeContainerRef}
+                className='min-h-[60px] rounded-lg border border-gray-200 p-2 bg-white'
+              />
+
+              {exportStatus && (
+                <div className='flex items-center gap-2'>
+                  <span className={`inline-block w-2 h-2 rounded-full ${
+                    exportStatus === 'success' ? 'bg-green-500' :
+                    exportStatus === 'error' ? 'bg-red-500' :
+                    'bg-yellow-500'
+                  }`} />
+                  <span className='text-xs text-gray-500'>
+                    {exportStatus === 'success' ? 'Key copied!' :
+                     exportStatus === 'error' ? 'Error' :
+                     exportStatus === 'ready' ? 'Ready' :
+                     exportStatus}
+                  </span>
+                </div>
+              )}
+
+              <button
+                onClick={() => resetExport(hasCopied ? 'completed' : 'cancelled')}
+                className='w-full py-3 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700'
+              >
+                Done
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Sign out for security */}
         <div className='mt-6 pt-6 border-t'>
           <button
             onClick={async () => {
+              if (exportStep !== 'idle') resetExport('cancelled');
               await signOut();
               setAuthStep('phone');
               setWalletAddress(null);
               setWalletStatus(null);
+              setVerifiedPhone(null);
               setHasCheckedSession(false);
             }}
             className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'

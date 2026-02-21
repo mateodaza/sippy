@@ -29,3 +29,22 @@ export const llmResultSchema = z.object({
 });
 
 export type LLMParseResult = z.infer<typeof llmResultSchema>;
+
+/**
+ * Schema for export audit events (wallet recovery feature).
+ * Validates event type and UUID attempt ID.
+ */
+export const exportEventSchema = z.object({
+  event: z.enum([
+    'initiated',
+    'unlocked',
+    'iframe_ready',
+    'copied',
+    'completed',
+    'expired',
+    'cancelled',
+  ]),
+  attemptId: z.string().uuid(),
+});
+
+export type ExportEvent = z.infer<typeof exportEventSchema>;
