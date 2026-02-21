@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useEvmKeyExportIframe, useEvmAddress } from '@coinbase/cdp-hooks';
+import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useEvmKeyExportIframe, useEvmAddress, useEvmAccounts } from '@coinbase/cdp-hooks';
 import { parseUnits } from 'viem';
 
 /**
@@ -428,10 +428,14 @@ function SettingsContent() {
   // ============================================================================
 
   const { evmAddress } = useEvmAddress();
-  const isExportActive = exportStep === 'export_active' && !!evmAddress;
+  const { evmAccounts } = useEvmAccounts();
+  // EOA address is needed for key export (smart accounts are contracts, no private key)
+  // useEvmAccounts returns the actual EOA accounts; evmAddress may return smart account
+  const exportAddress = (evmAccounts as Array<{ address: string }> | null)?.[0]?.address || evmAddress || '';
+  const isExportActive = exportStep === 'export_active' && !!exportAddress;
 
   const { status: exportStatus, cleanup: cleanupExport } = useEvmKeyExportIframe({
-    address: isExportActive && evmAddress ? evmAddress : '',
+    address: isExportActive ? exportAddress : '',
     containerRef: isExportActive ? iframeContainerRef : { current: null },
     label: 'Copy Private Key',
     copiedLabel: 'Copied!',
@@ -785,13 +789,17 @@ function SettingsContent() {
                   </a>
                 </p>
               </div>
-              {evmAddress && (
+              {exportAddress ? (
                 <button
                   onClick={handleExportStart}
                   className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700'
                 >
                   Export Private Key
                 </button>
+              ) : (
+                <p className='text-xs text-gray-400'>
+                  No exportable account found (evmAddress: {evmAddress || 'null'}, evmAccounts: {JSON.stringify(evmAccounts)})
+                </p>
               )}
             </>
           )}
@@ -838,6 +846,10 @@ function SettingsContent() {
                 ref={iframeContainerRef}
                 className='min-h-[60px] rounded-lg border border-gray-200 p-2 bg-white'
               />
+
+              <p className='text-[10px] text-gray-400 font-mono break-all'>
+                addr: {exportAddress || 'none'} | status: {exportStatus ?? 'null'} | active: {String(isExportActive)}
+              </p>
 
               {exportStatus && (
                 <div className='flex items-center gap-2'>
