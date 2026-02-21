@@ -72,7 +72,8 @@ WhatsApp message
 
 **Frontend**
 - Setup page: phone verification → wallet creation → spending limit
-- Settings page: daily limit, language preference
+- Settings page: daily limit, private key export with sweep-to-EOA
+- Wallet page: web fallback — balance, send USDC (to phone or 0x address), activity
 - Transaction receipts: shareable links
 - Profile pages: balance + transaction history
 - Fund page: add USDC to your wallet
@@ -138,12 +139,15 @@ sippy/
 ├── frontend/
 │   ├── app/
 │   │   ├── setup/                         # Wallet setup flow
-│   │   ├── settings/                      # User settings
+│   │   ├── settings/                      # User settings + key export + sweep
+│   │   ├── wallet/                        # Web fallback wallet (send, balance, activity)
 │   │   ├── fund/                          # Add funds
 │   │   ├── profile/[phone]/              # Public profile
 │   │   └── receipt/[txHash]/             # Transaction receipts
 │   └── lib/
 │       ├── blockscout.ts                  # Transaction data
+│       ├── usdc-transfer.ts               # USDC transfer encoding + gas helper
+│       ├── constants.ts                   # Contract addresses
 │       └── phone.ts                       # Phone utilities
 │
 ├── contracts/

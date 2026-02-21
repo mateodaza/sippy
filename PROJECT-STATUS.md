@@ -11,8 +11,8 @@
 | # | Deliverable | Status | Notes |
 |---|------------|--------|-------|
 | 1 | Onramp integration | Blocked | Waiting on Maash API response |
-| 2 | Non-custodial wallet refinements | 90% | CDP Embedded Wallets working, onboarding polish needed |
-| 3 | Security hardening | 70% | Rate limits + spam done, tx confirmation + velocity pending |
+| 2 | Non-custodial wallet refinements | 95% | CDP Embedded Wallets working, sweep-to-EOA + web wallet done |
+| 3 | Security hardening | 75% | Rate limits + spam + auth endpoints done, tx confirmation + velocity pending |
 | 4 | Dual currency display (USD + local) | 0% | Phone prefix → currency mapping designed, not built |
 | 5 | Privacy controls | 0% | Planned: phone visibility toggle |
 | 6 | User settings | 80% | Settings page working, language via WhatsApp working |
@@ -60,7 +60,8 @@
 ### Frontend — Production
 
 - Setup page: full onboarding flow (phone → wallet → permission)
-- Settings page: daily limit management, session persistence
+- Settings page: daily limit management, private key export with sweep-to-EOA, session persistence
+- Wallet page: web fallback — balance card, send USDC (to phone or 0x address), activity list
 - Fund page: add ETH/USDC to wallet
 - Profile pages: balance + transaction history (Blockscout API)
 - Receipt pages: shareable transaction details
@@ -75,7 +76,7 @@
 ### Database — Production
 
 - PostgreSQL on Railway
-- Tables: `phone_registry`, `user_preferences`, `parse_log`
+- Tables: `phone_registry`, `user_preferences`, `parse_log`, `export_audit_log`, `web_send_log`
 - Language preference persistence
 - Parse observability data
 
@@ -102,16 +103,15 @@ Summary: Inverted parsing order (regex-first), trilingual everything, Zod valida
 - Exchange rate service with 15-min cache
 - All balance/transfer messages show USD + local equivalent
 
-### Phase 4: Security Hardening — Partially Done (70%)
+### Phase 4: Security Hardening — Partially Done (75%)
 
-- Done: rate limiting, spam protection, message deduplication, daily spending limits, amount validation
-- Pending: transaction confirmation flow, webhook signature validation, velocity checks, self-send block, concurrent send protection, admin controls
+- Done: rate limiting, spam protection, message deduplication, daily spending limits, amount validation, authenticated phone resolution, IP rate limiting, web send audit logging
+- Pending: transaction confirmation flow, webhook signature validation, velocity checks, self-send block, concurrent send protection, admin controls, custom auth (Twilio+JWT)
 
-### Phase 5: Privacy Controls — Not Started
+### Phase 5: Privacy Controls + Settings — Partially Done
 
-- Phone visibility toggle
-- Language preference UI in settings
-- WhatsApp privacy command
+- Done: sweep-to-EOA in export flow, webapp fallback wallet (/wallet), cross-nav between /settings and /wallet
+- Pending: phone visibility toggle, language preference UI, WhatsApp privacy command, email recovery
 
 ### Phase 6: Onramp — BLOCKED
 
@@ -196,6 +196,7 @@ Summary: Inverted parsing order (regex-first), trilingual everything, Zod valida
 
 ## Recent Changes (Feb 2026)
 
+**Feb 21** — Sweep-to-EOA in export flow, webapp fallback wallet (/wallet), authenticated phone resolution, web send audit logging, IP rate limiting, repo cleanup (22 outdated docs removed)
 **Feb 20** — Regex greetings/social phrases, media message handling, language continuity fix
 **Feb 19** — Trilingual sanitizer fallback, recipient language in notifications
 **Feb 18** — PYUSD → USDC migration, Zod validation, parse observability logging
