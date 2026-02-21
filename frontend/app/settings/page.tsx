@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAddress } from '@coinbase/cdp-hooks';
+import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts } from '@coinbase/cdp-hooks';
 import { parseUnits } from 'viem';
 
 /**
@@ -425,7 +425,8 @@ function SettingsContent() {
   // Wallet Export (Recovery Feature)
   // ============================================================================
 
-  const { evmAddress } = useEvmAddress();
+  const { evmAccounts } = useEvmAccounts();
+  const eoaAddress = evmAccounts?.[0]?.address ?? null;
   const { exportEvmAccount } = useExportEvmAccount();
   const [exportedKey, setExportedKey] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
@@ -466,14 +467,14 @@ function SettingsContent() {
 
   // Activate export — fetch key programmatically
   const handleExportContinue = async () => {
-    if (!evmAddress) {
+    if (!eoaAddress) {
       setExportError('No account address available.');
       return;
     }
     setIsExporting(true);
     setExportError(null);
     try {
-      const { privateKey } = await exportEvmAccount({ evmAccount: evmAddress });
+      const { privateKey } = await exportEvmAccount({ evmAccount: eoaAddress as `0x${string}` });
       setExportedKey(privateKey);
       setExportStep('export_active');
       setExportUnlockedAt(Date.now());
@@ -796,7 +797,7 @@ function SettingsContent() {
                   </a>
                 </p>
               </div>
-              {evmAddress ? (
+              {eoaAddress ? (
                 <button
                   onClick={handleExportStart}
                   className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700'
