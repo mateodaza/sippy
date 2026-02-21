@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useEvmKeyExportIframe } from '@coinbase/cdp-hooks';
+import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useEvmKeyExportIframe, useEvmAddress } from '@coinbase/cdp-hooks';
 import { parseUnits } from 'viem';
 
 /**
@@ -427,11 +427,11 @@ function SettingsContent() {
   // Wallet Export (Recovery Feature)
   // ============================================================================
 
-  const eoaAddress = currentUser?.evmAccounts?.[0] || '';
-  const isExportActive = exportStep === 'export_active' && eoaAddress !== '';
+  const { evmAddress } = useEvmAddress();
+  const isExportActive = exportStep === 'export_active' && !!evmAddress;
 
   const { status: exportStatus, cleanup: cleanupExport } = useEvmKeyExportIframe({
-    address: eoaAddress as `0x${string}`,
+    address: isExportActive && evmAddress ? evmAddress : '',
     containerRef: isExportActive ? iframeContainerRef : { current: null },
     label: 'Copy Private Key',
     copiedLabel: 'Copied!',
@@ -785,7 +785,7 @@ function SettingsContent() {
                   </a>
                 </p>
               </div>
-              {eoaAddress && (
+              {evmAddress && (
                 <button
                   onClick={handleExportStart}
                   className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700'
