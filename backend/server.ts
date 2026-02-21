@@ -264,28 +264,38 @@ app.post('/webhook/whatsapp', async (req: Request, res: Response) => {
       console.log(`${statusEmoji} LLM Status: ${command.llmStatus}`);
     }
 
-    // Language detection + persistence (Step 4)
-    // 1. Check DB for persisted preference
+    // Language detection + persistence
+    // Language follows the user: if they switch languages, we update.
     let userLang = await getUserLanguage(from);
 
-    // 2. If command is explicit language switch, persist immediately
+    // Explicit language command always wins
     if (command.command === 'language' && command.detectedLanguage) {
       const lang = command.detectedLanguage as 'en' | 'es' | 'pt';
       await setUserLanguage(from, lang);
       userLang = lang;
-    }
-
-    // 3. If no persisted preference, auto-detect from message text
-    if (!userLang) {
+    } else {
+      // Auto-detect from message text (regex-based)
       const detection = detectLanguage(text);
-      if (detection && detection.confidence >= PERSIST_THRESHOLD) {
-        await setUserLanguage(from, detection.lang);
-        userLang = detection.lang;
-      } else if (detection) {
-        // Use for this message only, don't persist
+
+      // LLM detection (higher quality for natural language)
+      const llmLang = command.detectedLanguage && command.detectedLanguage !== 'ambiguous'
+        ? command.detectedLanguage as 'en' | 'es' | 'pt'
+        : null;
+
+      // Best signal: LLM (when available) > regex (when high confidence)
+      const detectedLang = llmLang
+        || (detection && detection.confidence >= PERSIST_THRESHOLD ? detection.lang : null);
+
+      if (detectedLang) {
+        // Update persisted preference if different — language follows the user
+        if (detectedLang !== userLang) {
+          await setUserLanguage(from, detectedLang);
+        }
+        userLang = detectedLang;
+      } else if (!userLang && detection) {
+        // Low confidence, no persisted preference — use for this message only
         userLang = detection.lang;
       }
-      // If detection is null, userLang stays null → default to 'en' in handlers
     }
 
     // Handle commands with resolved language
