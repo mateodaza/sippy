@@ -41,7 +41,7 @@ interface WalletStatus {
   phoneNumber?: string;
 }
 
-type ExportStep = 'idle' | 'warning' | 'otp_sent' | 'otp_verify' | 'reauth_required' | 'export_active';
+type ExportStep = 'idle' | 'warning' | 'export_active';
 
 function SettingsContent() {
   const searchParams = useSearchParams();
@@ -66,18 +66,13 @@ function SettingsContent() {
 
   // Export state machine (wallet recovery)
   const [exportStep, setExportStep] = useState<ExportStep>('idle');
-  const [exportOtp, setExportOtp] = useState('');
-  const [exportFlowId, setExportFlowId] = useState<string | null>(null);
   const [exportUnlockedAt, setExportUnlockedAt] = useState<number | null>(null);
   const [exportAttemptId, setExportAttemptId] = useState<string | null>(null);
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
   const [hasCopied, setHasCopied] = useState(false);
   const iframeContainerRef = useRef<HTMLDivElement>(null);
   const lastEmittedStatus = useRef<string | null>(null);
-  const [otpCooldown, setOtpCooldown] = useState(0);
-  const [otpAttempts, setOtpAttempts] = useState(0);
   const [exportCountdown, setExportCountdown] = useState(0);
-  const [exportError, setExportError] = useState<string | null>(null);
 
   // CDP Hooks
   const { signInWithSms } = useSignInWithSms();
@@ -471,11 +466,8 @@ function SettingsContent() {
     cleanupExport();
     setExportStep('idle');
     setExportUnlockedAt(null);
-    setExportOtp('');
-    setOtpAttempts(0);
     setHasCopied(false);
     setExportAttemptId(null);
-    setExportError(null);
     lastEmittedStatus.current = null;
   };
 
@@ -484,58 +476,14 @@ function SettingsContent() {
     const attemptId = crypto.randomUUID();
     setExportAttemptId(attemptId);
     setExportStep('warning');
-    setExportError(null);
     logExportEventFn('initiated', attemptId);
   };
 
-  // Send step-up OTP for export
-  const handleExportSendOtp = async () => {
-    if (!verifiedPhone) {
-      setExportError('Phone number not available. Please sign out and back in.');
-      return;
-    }
-
-    setExportError(null);
-
-    try {
-      const formattedPhone = verifiedPhone.startsWith('+') ? verifiedPhone : `+${verifiedPhone}`;
-      const result = await signInWithSms({ phoneNumber: formattedPhone });
-      setExportFlowId(result.flowId);
-      setExportStep('otp_verify');
-      setOtpCooldown(60);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('session')) {
-        setExportStep('reauth_required');
-      } else if (msg.includes('429') || msg.toLowerCase().includes('rate')) {
-        setExportError('Too many attempts. Try again later.');
-      } else {
-        setExportError(msg);
-      }
-    }
-  };
-
-  // Verify step-up OTP for export
-  const handleExportVerifyOtp = async () => {
-    if (!exportFlowId) return;
-
-    setExportError(null);
-    setOtpAttempts((prev) => prev + 1);
-
-    if (otpAttempts >= 3) {
-      setExportError('Too many attempts. Export cancelled.');
-      resetExport('cancelled');
-      return;
-    }
-
-    try {
-      await verifySmsOTP({ flowId: exportFlowId, otp: exportOtp });
-      setExportStep('export_active');
-      setExportUnlockedAt(Date.now());
-      logExportEventFn('unlocked');
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Verification failed');
-    }
+  // Activate export — user is already authenticated via CDP session
+  const handleExportContinue = () => {
+    setExportStep('export_active');
+    setExportUnlockedAt(Date.now());
+    logExportEventFn('unlocked');
   };
 
   // 5-minute expiry timer
@@ -558,13 +506,6 @@ function SettingsContent() {
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, [exportUnlockedAt]);
-
-  // OTP resend cooldown
-  useEffect(() => {
-    if (otpCooldown <= 0) return;
-    const timer = setInterval(() => setOtpCooldown((prev) => prev - 1), 1000);
-    return () => clearInterval(timer);
-  }, [otpCooldown]);
 
   // Deduplicated status logging + copy tracking
   useEffect(() => {
@@ -867,91 +808,11 @@ function SettingsContent() {
                   to an external app.
                 </p>
               </div>
-              {exportError && (
-                <div className='p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
-                  {exportError}
-                </div>
-              )}
               <button
-                onClick={handleExportSendOtp}
-                disabled={!verifiedPhone}
-                className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed'
-              >
-                Verify Identity to Continue
-              </button>
-              <button
-                onClick={() => resetExport('cancelled')}
-                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-
-          {exportStep === 'otp_verify' && (
-            <div className='space-y-4'>
-              <p className='text-sm text-gray-600'>
-                Enter the 6-digit code sent to your phone.
-              </p>
-              {exportError && (
-                <div className='p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
-                  {exportError}
-                </div>
-              )}
-              <input
-                type='text'
-                value={exportOtp}
-                onChange={(e) => setExportOtp(e.target.value.replace(/\D/g, ''))}
-                placeholder='123456'
-                maxLength={6}
-                className='w-full p-3 border rounded-lg text-center text-2xl tracking-widest text-gray-900'
-              />
-              <button
-                onClick={handleExportVerifyOtp}
-                disabled={exportOtp.length !== 6}
-                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
-              >
-                Verify
-              </button>
-              <div className='flex justify-between items-center'>
-                <button
-                  onClick={handleExportSendOtp}
-                  disabled={otpCooldown > 0}
-                  className='text-sm text-emerald-600 hover:text-emerald-700 disabled:text-gray-400'
-                >
-                  {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : 'Resend code'}
-                </button>
-                <button
-                  onClick={() => resetExport('cancelled')}
-                  className='text-sm text-gray-500 hover:text-gray-700'
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {exportStep === 'reauth_required' && (
-            <div className='space-y-4'>
-              <div className='p-4 bg-yellow-50 border border-yellow-200 rounded-lg'>
-                <p className='text-sm text-yellow-800'>
-                  Session conflict — please sign out and sign back in to
-                  continue with the export.
-                </p>
-              </div>
-              <button
-                onClick={async () => {
-                  resetExport('cancelled');
-                  await signOut();
-                  setAuthStep('phone');
-                  setWalletAddress(null);
-                  setWalletStatus(null);
-                  setVerifiedPhone(null);
-                  setHasCheckedSession(false);
-                }}
+                onClick={handleExportContinue}
                 className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700'
               >
-                Sign Out & Restart
+                I Understand, Continue
               </button>
               <button
                 onClick={() => resetExport('cancelled')}
