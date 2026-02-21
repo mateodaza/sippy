@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts } from '@coinbase/cdp-hooks';
+import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts, useSendUserOperation } from '@coinbase/cdp-hooks';
 import { parseUnits } from 'viem';
+import { getBalances } from '@/lib/blockscout';
+import { ensureGasReady, buildUsdcTransferCall } from '@/lib/usdc-transfer';
 
 /**
  * Settings Page for Embedded Wallets
@@ -41,7 +43,7 @@ interface WalletStatus {
   phoneNumber?: string;
 }
 
-type ExportStep = 'idle' | 'warning' | 'export_active';
+type ExportStep = 'idle' | 'warning' | 'sweep_offer' | 'sweeping' | 'export_active';
 
 function SettingsContent() {
   const searchParams = useSearchParams();
@@ -72,6 +74,11 @@ function SettingsContent() {
   const [hasCopied, setHasCopied] = useState(false);
   const [exportCountdown, setExportCountdown] = useState(0);
 
+  // Sweep state (transfer USDC from smart account → EOA before export)
+  const [smartAccountBalance, setSmartAccountBalance] = useState<string | null>(null);
+  const [sweepTxHash, setSweepTxHash] = useState<string | null>(null);
+  const [sweepError, setSweepError] = useState<string | null>(null);
+
   // CDP Hooks
   const { signInWithSms } = useSignInWithSms();
   const { verifySmsOTP } = useVerifySmsOTP();
@@ -84,6 +91,10 @@ function SettingsContent() {
   const { currentUser } = useCurrentUser();
   const { isSignedIn } = useIsSignedIn();
   const { signOut } = useSignOut();
+  const { sendUserOperation, status: sweepStatus, data: sweepData, error: sweepOpError } = useSendUserOperation();
+
+  // Smart account address — NEVER fall back to evmAccounts for UserOps
+  const smartAccountAddress = currentUser?.evmSmartAccountObjects?.[0]?.address ?? null;
 
   // Security: Phone number must match what was sent in the WhatsApp link
   const isPhoneLocked = !!phoneFromUrl;
@@ -455,15 +466,90 @@ function SettingsContent() {
     setExportAttemptId(null);
     setExportedKey(null);
     setExportError(null);
+    setSmartAccountBalance(null);
+    setSweepTxHash(null);
+    setSweepError(null);
   }, []);
 
   // Start export flow
   const handleExportStart = () => {
     const attemptId = crypto.randomUUID();
     setExportAttemptId(attemptId);
+    setSweepError(null);
+    setSweepTxHash(null);
+    setSmartAccountBalance(null);
     setExportStep('warning');
     logExportEventFn('initiated', attemptId);
   };
+
+  // After warning acknowledged — check balance and offer sweep
+  const handleWarningContinue = async () => {
+    if (!smartAccountAddress) {
+      // No smart account → skip sweep, go straight to export
+      await handleExportContinue();
+      return;
+    }
+
+    try {
+      const balances = await getBalances(smartAccountAddress);
+      const balance = balances.usdc; // Already formatted string (e.g. "10.5")
+
+      // If balance < $0.01, auto-skip sweep
+      if (parseFloat(balance) < 0.01) {
+        await handleExportContinue();
+        return;
+      }
+
+      setSmartAccountBalance(balance);
+      setExportStep('sweep_offer');
+    } catch (err) {
+      console.error('Failed to fetch balance for sweep:', err);
+      // On failure, still let user proceed to export
+      await handleExportContinue();
+    }
+  };
+
+  // Execute sweep: transfer all USDC from smart account → EOA
+  const handleSweep = async () => {
+    if (!smartAccountAddress || !eoaAddress || !smartAccountBalance) return;
+
+    setSweepError(null);
+    setExportStep('sweeping');
+
+    try {
+      // Step 1: Ensure gas
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error('Session expired. Please sign in again.');
+
+      const gasReady = await ensureGasReady(BACKEND_URL, accessToken);
+      if (!gasReady) throw new Error('Unable to prepare transaction. Try again in a few minutes.');
+
+      // Step 2: Build and send UserOperation
+      const call = buildUsdcTransferCall(eoaAddress, smartAccountBalance);
+      await sendUserOperation({
+        evmSmartAccount: smartAccountAddress as `0x${string}`,
+        network: NETWORK as 'arbitrum',
+        calls: [call],
+      });
+    } catch (err) {
+      console.error('Sweep failed:', err);
+      setSweepError(err instanceof Error ? err.message : 'Transfer failed. You can skip and export anyway.');
+    }
+  };
+
+  // Watch sweep status changes
+  useEffect(() => {
+    if (sweepStatus === 'success' && sweepData) {
+      setSweepTxHash(sweepData.transactionHash ?? null);
+      logExportEventFn('swept');
+      // Auto-proceed to export after successful sweep
+      handleExportContinue();
+    }
+    if (sweepStatus === 'error' && sweepOpError) {
+      setSweepError(sweepOpError instanceof Error ? sweepOpError.message : 'Transfer failed.');
+      setExportStep('sweeping'); // Stay on sweeping to show error + retry/skip
+    }
+  }, [sweepStatus, sweepData, sweepOpError]);
 
   // Activate export — fetch key programmatically
   const handleExportContinue = async () => {
@@ -830,11 +916,11 @@ function SettingsContent() {
                 </div>
               )}
               <button
-                onClick={handleExportContinue}
+                onClick={handleWarningContinue}
                 disabled={isExporting}
                 className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                {isExporting ? 'Exporting...' : 'I Understand, Continue'}
+                {isExporting ? 'Loading...' : 'I Understand, Continue'}
               </button>
               <button
                 onClick={() => resetExport('cancelled')}
@@ -843,6 +929,83 @@ function SettingsContent() {
               >
                 Cancel
               </button>
+            </div>
+          )}
+
+          {exportStep === 'sweep_offer' && (
+            <div className='space-y-4'>
+              <div className='p-4 bg-amber-50 border border-amber-200 rounded-lg'>
+                <p className='text-sm text-amber-800 font-medium mb-2'>
+                  Transfer Funds First
+                </p>
+                <p className='text-sm text-amber-700'>
+                  Your USDC is in your smart wallet. The exported key controls a
+                  different address. Transfer funds so they appear in MetaMask.
+                </p>
+              </div>
+
+              <div className='p-4 bg-gray-50 rounded-lg'>
+                <p className='text-sm text-gray-600'>Smart wallet balance</p>
+                <p className='text-2xl font-bold text-gray-900'>
+                  ${parseFloat(smartAccountBalance || '0').toFixed(2)} USDC
+                </p>
+                {eoaAddress && (
+                  <p className='text-xs text-gray-500 mt-2 font-mono break-all'>
+                    To: {eoaAddress}
+                  </p>
+                )}
+              </div>
+
+              <button
+                onClick={handleSweep}
+                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
+              >
+                Transfer ${parseFloat(smartAccountBalance || '0').toFixed(2)} to exportable address
+              </button>
+
+              <button
+                onClick={handleExportContinue}
+                disabled={isExporting}
+                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+              >
+                Skip, just show key
+              </button>
+              <p className='text-xs text-amber-600 text-center'>
+                If you skip, funds will NOT be accessible via this key in MetaMask.
+              </p>
+            </div>
+          )}
+
+          {exportStep === 'sweeping' && (
+            <div className='space-y-4'>
+              {!sweepError ? (
+                <div className='text-center py-6'>
+                  <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto mb-4' />
+                  <p className='text-gray-700 font-medium'>Transferring funds...</p>
+                  <p className='text-sm text-gray-500 mt-1'>
+                    Moving ${parseFloat(smartAccountBalance || '0').toFixed(2)} USDC to your exportable address
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className='p-4 bg-red-50 border border-red-200 rounded-lg'>
+                    <p className='text-sm text-red-700'>{sweepError}</p>
+                  </div>
+                  <button
+                    onClick={handleSweep}
+                    className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
+                  >
+                    Retry Transfer
+                  </button>
+                  <button
+                    onClick={handleExportContinue}
+                    disabled={isExporting}
+                    className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+                  >
+                    Skip and show key anyway
+                  </button>
+                </>
+              )}
             </div>
           )}
 
@@ -888,8 +1051,14 @@ function SettingsContent() {
           )}
         </div>
 
-        {/* Sign out for security */}
-        <div className='mt-6 pt-6 border-t'>
+        {/* Navigation + Sign out */}
+        <div className='mt-6 pt-6 border-t flex items-center justify-between'>
+          <a
+            href='/wallet'
+            className='text-sm text-emerald-600 hover:text-emerald-700 font-medium'
+          >
+            Open Wallet
+          </a>
           <button
             onClick={async () => {
               if (exportStep !== 'idle') resetExport('cancelled');
@@ -900,9 +1069,9 @@ function SettingsContent() {
               setVerifiedPhone(null);
               setHasCheckedSession(false);
             }}
-            className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+            className='text-sm text-gray-500 hover:text-gray-700'
           >
-            Sign out of this device
+            Sign out
           </button>
         </div>
 

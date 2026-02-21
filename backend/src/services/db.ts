@@ -124,6 +124,27 @@ export async function initDb(): Promise<void> {
       ON export_audit_log (created_at)
     `);
 
+    // Web send audit log (wallet fallback feature)
+    await query(`
+      CREATE TABLE IF NOT EXISTS web_send_log (
+        id SERIAL PRIMARY KEY,
+        phone_hash TEXT NOT NULL,
+        wallet_address TEXT NOT NULL,
+        to_address TEXT NOT NULL,
+        amount TEXT NOT NULL,
+        tx_hash TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await query(`
+      CREATE INDEX IF NOT EXISTS idx_web_send_created
+      ON web_send_log (created_at)
+    `);
+    await query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_web_send_tx_hash
+      ON web_send_log (tx_hash) WHERE tx_hash IS NOT NULL
+    `);
+
     // User preferences (separate from phone_registry so language can persist
     // before wallet creation)
     await query(`
@@ -218,6 +239,35 @@ export async function logExportEvent(entry: ExportAuditEntry): Promise<void> {
     );
   } catch (error) {
     console.warn('Export audit log insert failed (non-blocking):', error);
+  }
+}
+
+// ============================================================================
+// Web Send Audit Log (Wallet Fallback)
+// ============================================================================
+
+export interface WebSendLogEntry {
+  phoneHash: string;
+  walletAddress: string;
+  toAddress: string;
+  amount: string;
+  txHash: string;
+}
+
+/**
+ * Log a web send event. Non-blocking — failures never break the main flow.
+ * Uses ON CONFLICT (tx_hash) DO NOTHING to deduplicate retries.
+ */
+export async function logWebSend(entry: WebSendLogEntry): Promise<void> {
+  try {
+    await query(
+      `INSERT INTO web_send_log (phone_hash, wallet_address, to_address, amount, tx_hash)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (tx_hash) DO NOTHING`,
+      [entry.phoneHash, entry.walletAddress, entry.toAddress, entry.amount, entry.txHash]
+    );
+  } catch (error) {
+    console.warn('Web send log insert failed (non-blocking):', error);
   }
 }
 

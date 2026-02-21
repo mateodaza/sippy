@@ -43,8 +43,21 @@ export const exportEventSchema = z.object({
     'completed',
     'expired',
     'cancelled',
+    'swept',
   ]),
   attemptId: z.string().uuid(),
 });
 
 export type ExportEvent = z.infer<typeof exportEventSchema>;
+
+/**
+ * Schema for web send audit events (wallet fallback feature).
+ * Separate from export events — different payload shape.
+ */
+export const webSendEventSchema = z.object({
+  toAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  amount: z.string().regex(/^\d+(\.\d{1,6})?$/),
+  txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+});
+
+export type WebSendEvent = z.infer<typeof webSendEventSchema>;

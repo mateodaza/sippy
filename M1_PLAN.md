@@ -415,17 +415,39 @@ This is zero-friction: users never configure anything, they just see their local
   - Toggles phone_visible
   - Confirmation message in user's language
 
+- [ ] **5.6 Recovery email verification** — DB + backend + frontend
+  - Gate sensitive operations (key export, permission revoke) behind email confirmation
+  - Add `verified_email` column to user DB (hashed for storage, raw for sending codes)
+  - New endpoint: `POST /api/verify-email` — sends 6-digit code via Resend (free tier: 3K/month)
+  - New endpoint: `POST /api/confirm-email-code` — validates code (10-min expiry, 3 attempts max)
+  - Collect email during `/setup` onboarding (after SMS verify): "Add a recovery email (recommended)"
+  - Before export or revoke: if user has verified email → require email code. If no email → show warning but still allow
+  - Threat mitigated: SIM-swapper can sign in via CDP but can't export key or revoke permissions without email inbox
+  - Uses Resend transactional email (generous free tier, simple API)
+  - For M2: push CDP team (Austin/David) to support email as platform-level 2FA
+
+- [ ] **5.7 Export UX: EOA vs smart account clarity** — frontend settings
+  - Current export gives EOA private key, but user funds are in the smart account (ERC-4337)
+  - Importing EOA into MetaMask shows different address with $0 — confusing
+  - On export screen: show both addresses (EOA + smart account) with explanation
+  - Add text: "This key controls your smart wallet (0xABC...). To recover funds, use a wallet that supports account abstraction, or contact support."
+  - Long-term (M2): explore adding a "sweep to EOA" helper that moves funds from smart account to EOA before export
+
+### Files to Create
+- `backend/src/services/email.service.ts` — Resend integration + code generation/verification
+
 ### Files to Modify
-- `backend/src/services/db.ts` — phone_visible column + helpers
-- `backend/src/routes/embedded-wallet.routes.ts` — new API routes
+- `backend/src/services/db.ts` — phone_visible column + helpers, verified_email column + helpers
+- `backend/src/routes/embedded-wallet.routes.ts` — new API routes (privacy, email verify, email confirm)
 - `backend/src/utils/messageParser.ts` — privacy command regex
 - `backend/src/utils/messages.ts` — privacy confirmation messages
 - `backend/src/types/index.ts` — add 'privacy' command
 - `backend/server.ts` — privacy command handler
-- `frontend/app/settings/page.tsx` — language + privacy UI
+- `frontend/app/settings/page.tsx` — language + privacy UI, email collection, export address clarity
+- `frontend/app/setup/page.tsx` — email collection step during onboarding
 - `frontend/app/profile/[phone]/page.tsx` — visibility check
 
-### Estimate: 6-8h
+### Estimate: 10-14h
 
 ---
 
@@ -649,3 +671,5 @@ Privacy (P5) and Monitoring (P7) can parallelize with Security (P4).
 - Mobile app
 - Formal smart contract audit (GasRefuel is ~100 lines, internal review sufficient)
 - PIN/2FA for transfers (confirmation flow is sufficient for M1 limits)
+- CDP platform-level email 2FA (M2 ask for OCL — M1 uses our own email gate for sensitive ops)
+- Smart account → EOA sweep tool (M2 — for now, export screen explains the relationship)

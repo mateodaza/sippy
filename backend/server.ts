@@ -50,6 +50,12 @@ app.use(cors()); // Enable CORS for frontend requests
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Trust proxy when behind Railway or other reverse proxy
+// Guarded by env to avoid trusting spoofed X-Forwarded-For in local/direct deployments
+if (process.env.TRUST_PROXY === '1' || process.env.RAILWAY_ENVIRONMENT) {
+  app.set('trust proxy', 1);
+}
+
 // API Routes for embedded wallets
 app.use('/api', embeddedWalletRoutes);
 
@@ -396,11 +402,40 @@ async function handleCommand(
   }
 }
 
+// ============================================================================
+// IP rate limiter for public phone resolution
+// ============================================================================
+const ipResolveThrottle = new Map<string, { count: number; resetAt: number }>();
+const IP_RESOLVE_LIMIT = 10; // 10 requests per minute per IP
+const IP_RESOLVE_WINDOW = 60 * 1000; // 1 minute
+
+// Cleanup stale IP entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of ipResolveThrottle) {
+    if (entry.resetAt < now) ipResolveThrottle.delete(key);
+  }
+}, 5 * 60 * 1000);
+
 /**
  * Resolve phone number to wallet address
  * GET /resolve-phone?phone=+573001234567
  */
 app.get('/resolve-phone', async (req: Request, res: Response) => {
+  // IP rate limiting
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const ipEntry = ipResolveThrottle.get(ip);
+  if (!ipEntry || ipEntry.resetAt < now) {
+    ipResolveThrottle.set(ip, { count: 1, resetAt: now + IP_RESOLVE_WINDOW });
+  } else if (ipEntry.count >= IP_RESOLVE_LIMIT) {
+    const retryAfter = Math.ceil((ipEntry.resetAt - now) / 1000);
+    res.set('Retry-After', String(retryAfter));
+    return res.status(429).json({ error: 'Too many requests. Try again later.' });
+  } else {
+    ipEntry.count++;
+  }
+
   try {
     const phone = req.query.phone as string;
 

@@ -8,10 +8,11 @@
 import { Router, Request, Response } from 'express';
 import { CdpClient } from '@coinbase/cdp-sdk';
 import crypto from 'crypto';
-import { query, logExportEvent } from '../services/db.js';
+import { query, logExportEvent, logWebSend } from '../services/db.js';
+import { getUserWallet } from '../services/cdp-wallet.service.js';
 import { getSippySpenderAccount } from '../services/embedded-wallet.service.js';
 import { getRefuelService } from '../services/refuel.service.js';
-import { exportEventSchema } from '../types/schemas.js';
+import { exportEventSchema, webSendEventSchema } from '../types/schemas.js';
 import {
   NETWORK,
   USDC_ADDRESSES,
@@ -443,6 +444,139 @@ router.post('/log-export-event', async (req: Request, res: Response) => {
     const isAuthError = error instanceof Error &&
       (error.message.includes('authorization') || error.message.includes('token'));
     console.error('❌ Log export event error:', error);
+    res.status(isAuthError ? 401 : 500).json({
+      error: isAuthError ? 'Unauthorized' : 'Internal server error',
+    });
+  }
+});
+
+// ============================================================================
+// Per-user throttle for authenticated phone resolution
+// ============================================================================
+
+const userResolveThrottle = new Map<string, { count: number; resetAt: number }>();
+const USER_RESOLVE_LIMIT = 20; // 20 lookups per hour
+const USER_RESOLVE_WINDOW = 60 * 60 * 1000; // 1 hour
+
+// Cleanup stale entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of userResolveThrottle) {
+    if (entry.resetAt < now) userResolveThrottle.delete(key);
+  }
+}, 5 * 60 * 1000);
+
+function checkUserResolveThrottle(phoneNumber: string): boolean {
+  const now = Date.now();
+  const entry = userResolveThrottle.get(phoneNumber);
+  if (!entry || entry.resetAt < now) {
+    userResolveThrottle.set(phoneNumber, { count: 1, resetAt: now + USER_RESOLVE_WINDOW });
+    return true;
+  }
+  if (entry.count >= USER_RESOLVE_LIMIT) return false;
+  entry.count++;
+  return true;
+}
+
+/**
+ * Normalize phone number by stripping leading +
+ * Shared logic with GET /resolve-phone in server.ts
+ */
+function normalizePhone(phone: string): string {
+  return phone.replace(/^\+/, '');
+}
+
+/**
+ * POST /api/resolve-phone
+ *
+ * Authenticated phone → wallet resolution for the /wallet page.
+ * Prevents enumeration by requiring CDP auth + per-user throttle.
+ */
+router.post('/resolve-phone', async (req: Request, res: Response) => {
+  try {
+    const { phoneNumber: callerPhone } = await verifyCdpSession(req.headers.authorization);
+
+    // Per-user throttle
+    if (!checkUserResolveThrottle(callerPhone)) {
+      return res.status(429).json({ error: 'Too many lookups. Try again later.' });
+    }
+
+    const { phone } = req.body;
+    if (!phone || typeof phone !== 'string') {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+
+    const cleanPhone = normalizePhone(phone);
+
+    const wallet = await getUserWallet(cleanPhone);
+
+    if (!wallet) {
+      const sippyWhatsAppNumber = process.env.SIPPY_WHATSAPP_NUMBER;
+      const whatsappLink = sippyWhatsAppNumber
+        ? `https://wa.me/${sippyWhatsAppNumber}?text=start`
+        : undefined;
+
+      return res.status(404).json({
+        error: 'Wallet not found',
+        message: `This phone number hasn't started using Sippy yet.`,
+        phone: `+${cleanPhone}`,
+        ...(whatsappLink && { whatsappLink }),
+      });
+    }
+
+    res.json({
+      address: wallet.walletAddress,
+      phone: `+${cleanPhone}`,
+      isNew: !wallet.lastActivity || wallet.lastActivity === wallet.createdAt,
+    });
+  } catch (error) {
+    console.error('❌ Authenticated resolve-phone error:', error);
+    res.status(401).json({ error: 'Unauthorized' });
+  }
+});
+
+/**
+ * POST /api/log-web-send
+ *
+ * Logs web wallet send events for audit trail.
+ * Fire-and-forget from frontend after a successful USDC transfer.
+ */
+router.post('/log-web-send', async (req: Request, res: Response) => {
+  try {
+    const { phoneNumber, walletAddress } = await verifyCdpSession(
+      req.headers.authorization
+    );
+
+    // Validate request body with dedicated schema
+    const parsed = webSendEventSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid request body' });
+    }
+
+    // Require audit secret for phone hashing
+    if (!EXPORT_AUDIT_SECRET) {
+      return res.status(503).json({ error: 'Audit logging unavailable' });
+    }
+
+    const { toAddress, amount, txHash } = parsed.data;
+    const phoneHash = crypto
+      .createHmac('sha256', EXPORT_AUDIT_SECRET)
+      .update(phoneNumber)
+      .digest('hex');
+
+    await logWebSend({
+      phoneHash,
+      walletAddress,
+      toAddress,
+      amount,
+      txHash,
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    const isAuthError = error instanceof Error &&
+      (error.message.includes('authorization') || error.message.includes('token'));
+    console.error('❌ Log web send error:', error);
     res.status(isAuthError ? 401 : 500).json({
       error: isAuthError ? 'Unauthorized' : 'Internal server error',
     });
