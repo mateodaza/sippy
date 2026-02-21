@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useEvmKeyExportIframe, useEvmAddress, useEvmAccounts } from '@coinbase/cdp-hooks';
+import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAddress } from '@coinbase/cdp-hooks';
 import { parseUnits } from 'viem';
 
 /**
@@ -70,8 +70,6 @@ function SettingsContent() {
   const [exportAttemptId, setExportAttemptId] = useState<string | null>(null);
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
   const [hasCopied, setHasCopied] = useState(false);
-  const iframeContainerRef = useRef<HTMLDivElement>(null);
-  const lastEmittedStatus = useRef<string | null>(null);
   const [exportCountdown, setExportCountdown] = useState(0);
 
   // CDP Hooks
@@ -428,29 +426,10 @@ function SettingsContent() {
   // ============================================================================
 
   const { evmAddress } = useEvmAddress();
-  const { evmAccounts } = useEvmAccounts();
-  // EOA address is needed for key export (smart accounts are contracts, no private key)
-  // useEvmAccounts returns the actual EOA accounts; evmAddress may return smart account
-  const exportAddress = (evmAccounts as Array<{ address: string }> | null)?.[0]?.address || evmAddress || '';
-  const isExportActive = exportStep === 'export_active' && !!exportAddress;
-
-  const exportIframeTheme = useMemo(() => ({
-    pageBg: 'transparent' as const,
-    buttonBg: '#059669',
-    buttonBgHover: '#047857',
-    buttonText: '#FFFFFF',
-    buttonBorderRadius: 8,
-    buttonSize: 'md' as const,
-  }), []);
-
-  const { status: exportStatus, cleanup: cleanupExport } = useEvmKeyExportIframe({
-    address: isExportActive ? exportAddress : '',
-    containerRef: iframeContainerRef,
-    label: 'Copy Private Key',
-    copiedLabel: 'Copied!',
-    icon: true,
-    theme: exportIframeTheme,
-  });
+  const { exportEvmAccount } = useExportEvmAccount();
+  const [exportedKey, setExportedKey] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Fire-and-forget audit logging
   const logExportEventFn = async (event: string, attemptIdOverride?: string) => {
@@ -467,15 +446,15 @@ function SettingsContent() {
     } catch {} // Fire-and-forget
   };
 
-  const resetExport = (reason: 'completed' | 'expired' | 'cancelled') => {
+  const resetExport = useCallback((reason: 'completed' | 'expired' | 'cancelled') => {
     logExportEventFn(reason);
-    cleanupExport();
     setExportStep('idle');
     setExportUnlockedAt(null);
     setHasCopied(false);
     setExportAttemptId(null);
-    lastEmittedStatus.current = null;
-  };
+    setExportedKey(null);
+    setExportError(null);
+  }, []);
 
   // Start export flow
   const handleExportStart = () => {
@@ -485,11 +464,26 @@ function SettingsContent() {
     logExportEventFn('initiated', attemptId);
   };
 
-  // Activate export — user is already authenticated via CDP session
-  const handleExportContinue = () => {
-    setExportStep('export_active');
-    setExportUnlockedAt(Date.now());
-    logExportEventFn('unlocked');
+  // Activate export — fetch key programmatically
+  const handleExportContinue = async () => {
+    if (!evmAddress) {
+      setExportError('No account address available.');
+      return;
+    }
+    setIsExporting(true);
+    setExportError(null);
+    try {
+      const { privateKey } = await exportEvmAccount({ evmAccount: evmAddress });
+      setExportedKey(privateKey);
+      setExportStep('export_active');
+      setExportUnlockedAt(Date.now());
+      logExportEventFn('unlocked');
+      logExportEventFn('iframe_ready'); // Reuse event for "key ready"
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Export failed. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // 5-minute expiry timer
@@ -513,16 +507,27 @@ function SettingsContent() {
     return () => clearInterval(interval);
   }, [exportUnlockedAt]);
 
-  // Deduplicated status logging + copy tracking
-  useEffect(() => {
-    if (!exportStatus || exportStatus === lastEmittedStatus.current) return;
-    lastEmittedStatus.current = exportStatus;
-    if (exportStatus === 'ready') logExportEventFn('iframe_ready');
-    if (exportStatus === 'success') {
+  // Copy key to clipboard
+  const handleCopyKey = async () => {
+    if (!exportedKey) return;
+    try {
+      await navigator.clipboard.writeText(exportedKey);
+      setHasCopied(true);
+      logExportEventFn('copied');
+    } catch {
+      // Fallback for mobile browsers that block clipboard API
+      const textarea = document.createElement('textarea');
+      textarea.value = exportedKey;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
       setHasCopied(true);
       logExportEventFn('copied');
     }
-  }, [exportStatus]);
+  };
 
   // Show loading while checking for existing session
   if (isCheckingSession) {
@@ -791,7 +796,7 @@ function SettingsContent() {
                   </a>
                 </p>
               </div>
-              {exportAddress ? (
+              {evmAddress ? (
                 <button
                   onClick={handleExportStart}
                   className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700'
@@ -800,7 +805,7 @@ function SettingsContent() {
                 </button>
               ) : (
                 <p className='text-xs text-gray-400'>
-                  No exportable account found (evmAddress: {evmAddress || 'null'}, evmAccounts: {JSON.stringify(evmAccounts)})
+                  No exportable account found.
                 </p>
               )}
             </>
@@ -818,14 +823,21 @@ function SettingsContent() {
                   to an external app.
                 </p>
               </div>
+              {exportError && (
+                <div className='p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
+                  {exportError}
+                </div>
+              )}
               <button
                 onClick={handleExportContinue}
-                className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700'
+                disabled={isExporting}
+                className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                I Understand, Continue
+                {isExporting ? 'Exporting...' : 'I Understand, Continue'}
               </button>
               <button
                 onClick={() => resetExport('cancelled')}
+                disabled={isExporting}
                 className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
               >
                 Cancel
@@ -833,42 +845,33 @@ function SettingsContent() {
             </div>
           )}
 
-          {/* Iframe container — always in DOM so ref is stable for the hook */}
-          <div
-            ref={iframeContainerRef}
-            className={exportStep === 'export_active' ? 'min-h-[60px] rounded-lg border border-gray-200 p-2 bg-white' : 'hidden'}
-          />
-
-          {exportStep === 'export_active' && (
+          {exportStep === 'export_active' && exportedKey && (
             <div className='space-y-4'>
               <div className='flex justify-between items-center'>
                 <span className='text-sm font-medium text-gray-700'>
-                  Export Key
+                  Your Private Key
                 </span>
                 <span className={`text-sm font-mono ${exportCountdown <= 60 ? 'text-red-600' : 'text-gray-500'}`}>
-                  Expires in {Math.floor(exportCountdown / 60)}:{(exportCountdown % 60).toString().padStart(2, '0')}
+                  {Math.floor(exportCountdown / 60)}:{(exportCountdown % 60).toString().padStart(2, '0')}
                 </span>
               </div>
 
-              <p className='text-[10px] text-gray-400 font-mono break-all'>
-                addr: {exportAddress || 'none'} | status: {exportStatus ?? 'null'} | active: {String(isExportActive)}
-              </p>
+              <div className='p-3 bg-gray-100 rounded-lg'>
+                <p className='font-mono text-xs break-all text-gray-800 select-all'>
+                  {exportedKey}
+                </p>
+              </div>
 
-              {exportStatus && (
-                <div className='flex items-center gap-2'>
-                  <span className={`inline-block w-2 h-2 rounded-full ${
-                    exportStatus === 'success' ? 'bg-green-500' :
-                    exportStatus === 'error' ? 'bg-red-500' :
-                    'bg-yellow-500'
-                  }`} />
-                  <span className='text-xs text-gray-500'>
-                    {exportStatus === 'success' ? 'Key copied!' :
-                     exportStatus === 'error' ? 'Error' :
-                     exportStatus === 'ready' ? 'Ready' :
-                     exportStatus}
-                  </span>
-                </div>
-              )}
+              <button
+                onClick={handleCopyKey}
+                className={`w-full py-3 rounded-lg font-semibold ${
+                  hasCopied
+                    ? 'bg-green-600 text-white'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                }`}
+              >
+                {hasCopied ? 'Copied!' : 'Copy Private Key'}
+              </button>
 
               <button
                 onClick={() => resetExport(hasCopied ? 'completed' : 'cancelled')}
@@ -876,6 +879,10 @@ function SettingsContent() {
               >
                 Done
               </button>
+
+              <p className='text-xs text-red-500 text-center'>
+                This key will be cleared when you click Done or after 5 minutes.
+              </p>
             </div>
           )}
         </div>
