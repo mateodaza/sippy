@@ -24,6 +24,56 @@
 
 **KPIs:** Security features tested, dual currency live, monitoring dashboard active, 50 beta testers, $10K+ USDC volume.
 
+---
+
+## Developer Handoff Notes
+
+**Source of truth:** This file (`M1_PLAN.md`) is the implementation plan. `PROJECT-STATUS.md` is the external-facing progress doc.
+
+**Rule: update `PROJECT-STATUS.md` after every shipped feature.** When you finish a task, update the deliverable percentages, add a line to "Recent Changes" with the date and a one-liner, and update the "What's Working" / "What's In Progress" sections if needed. This keeps Questbook reporting and internal alignment effortless.
+
+**Our users are regular people — not crypto natives.** Every auth flow, recovery path, and error message must assume zero blockchain knowledge. If a flow would confuse your mom, simplify it. No jargon, no hex addresses in error messages, no "transaction reverted." Say "something went wrong, try again" and log the details server-side.
+
+**Key architecture context:**
+- CDP Embedded Wallets are non-custodial. Users never see private keys unless they export on `/settings`
+- Smart accounts (ERC-4337) hold the USDC. The EOA is the signer but holds no funds by default
+- `useSendUserOperation` always requires `evmSmartAccountObjects` — never fall back to `evmAccounts`
+- GasRefuel.sol on Arbitrum One sponsors gas. `/api/ensure-gas` must be called before every on-chain tx
+- USDC on Arbitrum: `0xaf88d065e77c8cC2239327C5EDb3A432268e5831`, 6 decimals
+- Web wallet sends bypass WhatsApp-side daily limits (self-custody mode)
+- CDP sessions are short-lived (minutes). This is a known pain point — see Phase 4.6 for the fix
+
+### M1 Exit Checklist — Definition of Done per Deliverable
+
+Every deliverable needs binary pass/fail criteria and a proof artifact. Don't submit M1 until every row passes.
+
+| # | Deliverable | Exit Criteria | Proof Artifact |
+|---|------------|---------------|----------------|
+| 1 | Onramp | See Path A / Path B below | Tx screenshot or mock test suite passing |
+| 2 | Wallet refinements | Setup → wallet → permission → send → sweep → export works e2e | Screen recording of full flow on mainnet |
+| 3 | Security hardening | Tx confirmation, velocity limits, webhook validation, admin block all functional | Test matrix checklist (manual), curl proof for admin endpoints |
+| 4 | Dual currency | Balance + send messages show local currency for CO/MX/AR/BR numbers | Screenshots of balance in COP, MXN, ARS, BRL |
+| 5 | Privacy controls | Phone visibility toggle works; profile hides phone when off | Screenshot: profile with visibility off shows masked phone |
+| 6 | User settings | Daily limit, language, privacy toggleable from settings page | Screen recording of each toggle |
+| 7 | Monitoring | `GET /health` returns all green; Sentry captures a test error; pino logs structured JSON | Health endpoint response + Sentry dashboard screenshot |
+| 8 | Legal entity | Entity established | Certificate or registration document |
+| 9 | WhatsApp production | Bot responds on production number | Screenshot of production conversation |
+| 10 | Closed beta | 50 testers onboarded, at least 10 completed a send | DB query: `SELECT COUNT(*) FROM phone_registry` ≥ 50; `parse_log` showing 10+ send commands |
+
+**Path B acceptance for #10:** If onramp is blocked, beta testers use crypto top-up (direct USDC transfer to wallet address) instead of fiat onramp. Acceptance: 50 testers set up, 10+ completed sends via WhatsApp or web wallet. Mock onramp demo shown separately to reviewer.
+
+### Infrastructure Decision: Single Replica (M1)
+
+**Decision:** M1 runs as a single Railway instance. All in-memory state (OTP codes, pending tx confirmations, velocity trackers, message dedup, spam protection, activeSends) is acceptable in-memory for a single process.
+
+**What this means:**
+- No Redis required for M1
+- Server restart clears all in-memory state — this is acceptable because: OTPs expire in 5 min anyway, pending tx auto-expire in 2 min, dedup misses are rare and harmless (idempotent), velocity limits reset (safe — users just get a fresh window)
+- **Do NOT scale to multiple replicas without migrating in-memory state to Redis first** — this will cause split-brain (user confirms on replica A, pending tx lives on replica B)
+- M2 scope: evaluate Redis migration if beta load requires >1 replica
+
+**Risk accepted:** A restart mid-beta clears pending confirmations. Mitigated by: short TTLs, blockchain tx state is always the source of truth (balance reconciles naturally).
+
 ### Onramp Acceptance Criteria (deliverable #1)
 
 Onramp is blocked on Maash API access. Two acceptance paths:
@@ -329,31 +379,57 @@ This is zero-friction: users never configure anything, they just see their local
 
 ### 4.4 Edge Cases — Input Hardening
 
+> Think about what a confused user, a curious kid, or a malicious actor would type. Every edge case that reaches the blockchain costs gas and could lose money. Catch everything before it hits the chain.
+
 - [ ] **Phone number edge cases** — phone.ts / send.command.ts
   - Reject phone numbers that are too short (< 10 digits after normalization)
   - Reject phone numbers that are too long (> 15 digits)
   - Reject known non-mobile prefixes if detectable
   - Handle "send 10 to myself" / "send 10 to me" → self-send block message
-  - Handle "send 10 to 0" / "send 10 to 123" → recipient not found
+  - Handle "send 10 to 0" / "send 10 to 123" → "That doesn't look like a phone number"
+  - Handle phone with spaces, dashes, dots: "+57 300-123-4567" → normalize to E.164
+  - Handle phone with parentheses: "(300) 1234567" → normalize
+  - Handle country code with double zeros: "0057..." → normalize to "+57..."
+  - Recipient has no wallet → "They haven't set up Sippy yet. Send them an invite?"
 
 - [ ] **Amount edge cases** — messageParser.ts / send.command.ts
   - "send 0 to +57..." → "Please send a positive amount."
   - "send 0.001 to +57..." → allow (valid micro-payment)
   - "send 99999999 to +57..." → hard block at $10,000
   - "send -5 to +57..." → regex won't match (negative), falls to unknown
-  - "send all to +57..." → not matched by regex → format hint
+  - "send all to +57..." → not matched by regex → format hint (future: "send all" support)
   - "send $10.5.5 to +57..." → regex won't match → format hint
+  - Amount with comma as decimal separator: "send 10,50 to..." → common in LATAM, parse as 10.50
+  - Amount with thousands separator: "send 1.000 to..." → ambiguous (1.0 or 1000?), reject with clarification
+  - Amount in local currency: "send 40000 COP to..." → not supported yet, guide to use USD
+  - Amount > user balance → clear message: "You have $X. You're trying to send $Y."
+  - Amount exactly equal to balance → allow but warn about dust (gas might fail if ETH is too low)
 
 - [ ] **Concurrent send protection** — send.command.ts
   - If user already has a send in-flight (processing), block new send
   - In-memory Set: `activeSends: Set<phoneNumber>`
   - Add before processing, remove after completion (in finally block)
   - "A transfer is already in progress. Please wait."
+  - Edge case: server crashes mid-send → `activeSends` is lost → safe (allows retry)
+  - Edge case: send takes > 30 seconds (chain congestion) → set timeout, clear from activeSends after 60s max
 
 - [ ] **Webhook replay protection**
   - Already have message dedup (processedMessages Map)
   - Add: reject messages older than 5 minutes (stale timestamp)
   - `parseInt(timestamp) * 1000 < Date.now() - 5 * 60 * 1000` → skip
+
+- [ ] **Wallet state edge cases**
+  - User's smart account exists but has 0 ETH → GasRefuel should handle, but verify it does
+  - User's smart account has USDC but GasRefuel contract is empty → must fail gracefully: "Transfers are temporarily unavailable. Try again later." (don't say "gas")
+  - User deleted their wallet externally (via CDP dashboard) → backend still has phone→wallet mapping → detect stale wallet, guide to re-setup
+  - Multiple WhatsApp messages in rapid succession while bot is processing → queue or reject, don't crash
+
+- [ ] **Network/infra edge cases**
+  - Arbitrum RPC is down → all balance checks and sends fail → show "Network issues, try again in a few minutes" (no blockchain jargon)
+  - Blockscout API is down → balance shows stale data or fails → show last known balance with "may be outdated" note
+  - WhatsApp API rate limit hit → queue outbound messages with backoff, don't drop them
+  - Database connection pool exhausted → graceful error to user, not a crash
+  - Server restart mid-send → in-memory state lost but blockchain tx may have succeeded → on next balance check, state reconciles naturally
 
 ### 4.5 Admin Controls
 
@@ -369,44 +445,67 @@ This is zero-friction: users never configure anything, they just see their local
   - All users get: "Sippy is undergoing maintenance. Please try again shortly."
   - `POST /admin/resume` — resume normal operation
 
-### 4.6 Custom Auth: Replace CDP SMS with Sippy OTP (Twilio + JWT)
+### 4.6 Custom Auth: Replace CDP SMS with Sippy-Branded Auth (Twilio + JWT)
 
-> **Why:** CDP's `useSignInWithSms` sends OTP from "Coinbase" — confusing for Sippy users. Sessions are short-lived with no control over duration. Custom auth via `useAuthenticateWithJWT` gives us full control over branding, session TTL, and re-auth policy.
+> **Why:** Right now, CDP's `useSignInWithSms` sends OTPs from "Coinbase" — users see a Coinbase-branded message, not Sippy. This is confusing and breaks trust for non-crypto users. Sessions are short-lived with no control over duration. Custom auth via `useAuthenticateWithJWT` gives us full control over branding, session TTL, and re-auth policy.
+>
+> **The user never sees "Coinbase" anywhere.** Every OTP, every message, every screen says "Sippy." CDP supports this via their custom auth integration — we provide a JWKS endpoint, they validate our JWTs. The wallet is still CDP under the hood, but the auth layer is 100% ours.
+>
+> **Our users are regular people.** The auth UX must be dead simple: phone number → OTP → done. No blockchain jargon. No confusing flows. If they lose access, recovery must be equally simple (see Phase 5.6 for recovery methods).
 
 - [ ] **Backend: Twilio OTP service** — new `backend/src/services/otp.service.ts`
   - `POST /api/auth/send-otp` — sends OTP via Twilio to phone (E.164 format)
   - `POST /api/auth/verify-otp` — verifies code, returns signed JWT
-  - SMS template: "Sippy: Tu codigo es 123456" (branded, trilingual)
+  - **SMS must say "Sippy" not "Coinbase":** template → "Sippy: Tu codigo es 123456" (branded, trilingual)
   - OTP: 6-digit, 5-min expiry, max 3 attempts, rate limit 5 OTPs/phone/hour
   - Store pending OTPs in-memory Map (same pattern as other throttles)
+  - Edge case: user requests OTP, doesn't receive it, requests again → don't invalidate the first code until expiry (either code works)
+  - Edge case: phone number changed (SIM swap) → user can't receive OTP → recovery flow (Phase 5.6)
 
 - [ ] **Backend: JWT issuer** — `backend/src/services/jwt.service.ts`
   - Generate RS256 keypair (store private key in env `JWT_PRIVATE_KEY`, publish public key via JWKS)
-  - `POST /api/auth/.well-known/jwks.json` — serves public key for CDP to validate
-  - JWT claims: `{ sub: phoneNumber, iat, exp }` — set `exp` to 30 minutes (configurable via env)
+  - `GET /api/auth/.well-known/jwks.json` — serves public key for CDP to validate
+  - JWT claims: `{ sub: phoneNumber, iat, exp }` — **short TTL: 15 min default** (configurable via `JWT_TTL_MINUTES` env)
   - Register JWKS endpoint in CDP Portal under "Custom auth" tab
+  - `POST /api/auth/refresh` — extends session if current JWT is still valid (re-issues with fresh `exp`)
+  - Refresh window: only allow refresh if JWT has < 5 min remaining (prevents infinite sessions)
 
 - [ ] **Frontend: Replace `useSignInWithSms` with `useAuthenticateWithJWT`** — all pages
   - Update `CDPHooksProvider` config with `customAuth: { getJwt }` callback
   - `getJwt` calls `POST /api/auth/verify-otp` on first auth, then `POST /api/auth/refresh` for session extension
   - Replace auth flows in `/setup`, `/settings`, `/wallet` — phone input + OTP input stays the same UI, but OTP goes to our backend instead of CDP
-  - Session TTL controlled by JWT `exp` — 30 min default, require fresh OTP for sensitive ops (export, revoke)
+  - Session TTL controlled by JWT `exp` — 15 min default
+  - If JWT expires mid-operation (mid-send, mid-sweep): catch gracefully, show "Session expired — verify again to continue", **preserve form state** so user doesn't lose input
+  - Auto-refresh: if JWT has < 3 min remaining and user is active, silently refresh in background
 
 - [ ] **Sensitive operation re-auth gate**
   - Before export key or revoke permission: check if JWT was issued < 5 min ago
-  - If stale: require fresh OTP ("Verify again to continue") before proceeding
+  - If stale: require fresh OTP ("Verify your identity to continue") before proceeding
   - Prevents session hijacking from accessing high-risk operations
+  - UX: inline OTP prompt in the same page (don't redirect away and lose context)
 
 **Prerequisites:** Twilio account + phone number, CDP Portal custom auth configuration
 **Estimate:** 10-14h
-**Dependencies:** None — can be done in parallel with other Phase 4 tasks
+**Dependencies:** None — can be done in parallel with other Phase 4 tasks. Phase 5.6 (recovery) builds on top of this.
 
 ### 4.7 Web Wallet Session Robustness
 
-- [ ] **Proactive session refresh** — frontend /wallet + /settings
-  - CDP sessions expire quickly (minutes). Before any operation (send, sweep, permission change), call `getAccessToken()` and handle null → show re-auth prompt inline instead of a broken state
-  - If session dies mid-send or mid-sweep: catch, show clear "Session expired — verify again to continue", preserve form state so user doesn't lose input
-  - Consider a `useSessionGuard()` hook that wraps `getAccessToken()` with auto-redirect to phone step on failure
+> **Sessions must die fast.** Once custom auth (4.6) is in place, JWT TTL controls everything. Default 15 min. No "remember me." Every time the user opens the webapp after their session expired, they verify with OTP again. This is intentional — our users carry money in their wallets, and short sessions protect against device theft, shared phones (common in LATAM), and session hijacking.
+
+- [ ] **`useSessionGuard()` hook** — new `frontend/lib/useSessionGuard.ts`
+  - Wraps `getAccessToken()` with automatic handling
+  - Returns `{ isAuthenticated, token, requireReauth }`
+  - Before any operation (send, sweep, permission change): call `requireReauth()` which checks token validity
+  - If token expired → show inline re-auth prompt (phone + OTP), **preserve all form state**
+  - If token valid but < 3 min remaining → silently refresh in background via `POST /api/auth/refresh`
+  - If refresh fails → graceful degradation to re-auth prompt
+  - Use this hook in `/wallet`, `/settings`, `/setup` — single source of truth for session state
+
+- [ ] **Session expiry UX** — all authenticated pages
+  - Never show a blank screen or cryptic error when session dies
+  - Show: "Your session expired. Verify your phone to continue." + inline OTP input
+  - After re-auth: resume exactly where user was (same form, same step, same data)
+  - Visual countdown indicator when session is about to expire (optional, nice-to-have)
 
 - [ ] **WhatsApp `wallet` command** — messageParser.ts + server.ts + messages.ts
   - Regex: `wallet`, `billetera`, `mi billetera`, `carteira`, `my wallet`
@@ -418,8 +517,56 @@ This is zero-friction: users never configure anything, they just see their local
   - After spend permission is registered, include wallet link in the "you're all set" WhatsApp message
   - "You can also manage your wallet anytime at sippy.lat/wallet"
 
+### 4.8 Backend General Audit
+
+> Before beta, the backend must be as tight as possible. This is a dedicated audit pass — not feature work. Read every file, question every assumption.
+
+- [ ] **Error handling audit** — all command handlers + services
+  - Every `try/catch` must: (1) log the real error server-side, (2) send a user-friendly trilingual message, (3) never leak stack traces, wallet addresses, or internal state
+  - Check: what happens if CDP SDK throws? If Blockscout is down? If DB connection drops mid-send?
+  - Check: are all async operations properly awaited? Any fire-and-forget that should be awaited?
+  - Check: are all `finally` blocks cleaning up state (activeSends, pending tx maps)?
+
+- [ ] **Input validation audit** — all API routes + webhook handler
+  - Every `req.body` and `req.params` must be validated before use (Zod or manual)
+  - Check: can a malformed WhatsApp webhook crash the server?
+  - Check: are all phone numbers normalized before DB lookup? (E.164 format)
+  - Check: are all USDC amounts validated as positive numbers with ≤ 6 decimals before on-chain tx?
+  - Check: are all wallet addresses validated as `0x` + 40 hex chars before use?
+
+- [ ] **Memory leak audit** — all in-memory Maps/Sets
+  - `processedMessages`, `spamTracker`, `activeSends`, pending tx maps — all must have TTL cleanup
+  - Check: if cleanup interval throws, does it crash the process?
+  - Check: under sustained load (100 msgs/min), do maps grow unbounded?
+  - Check: what's the maximum memory footprint with 10K active users?
+
+- [ ] **Race condition audit** — concurrent operations
+  - Two sends from same user at the exact same millisecond — what happens?
+  - User sends "confirm" twice rapidly — does the tx execute twice?
+  - Two webhook deliveries for the same message — dedup working?
+  - `/api/register-wallet` called twice concurrently — duplicate wallet?
+  - GasRefuel: two `ensure-gas` calls for same wallet simultaneously — double gas?
+
+- [ ] **Environment variable audit**
+  - List every env var used across backend — document in ENV-TEMPLATE.txt
+  - Check: which are required vs optional? What happens if an optional one is missing?
+  - Check: are there any hardcoded values that should be env vars (thresholds, limits, URLs)?
+  - Check: are secrets (API keys, private keys) ever logged, even accidentally?
+
+- [ ] **Dependency audit**
+  - `pnpm audit` — check for known vulnerabilities
+  - Check: are there unused dependencies inflating the bundle?
+  - Check: are there pinned versions that should be updated?
+
+**Required output:** `docs/AUDIT-M1.md` — table with columns: File, Finding, Severity (P0/P1/P2), Owner, Fix ETA, Status.
+**Triage rule:** All P0 findings must be fixed before beta. P1 findings must be fixed or have documented workaround. P2 findings are tracked but can ship with.
+**Estimate:** 4-6h (audit only — fixes may add more)
+
 ### Files to Create
 - `backend/src/services/velocity.service.ts` — send rate limiting + fraud checks
+- `backend/src/services/otp.service.ts` — Twilio OTP send/verify
+- `backend/src/services/jwt.service.ts` — RS256 JWT issuer + JWKS endpoint
+- `frontend/lib/useSessionGuard.ts` — session state hook for all authenticated pages
 
 ### Files to Modify
 - `backend/src/commands/send.command.ts` — confirmation flow, self-send, concurrent protection
@@ -433,7 +580,7 @@ This is zero-friction: users never configure anything, they just see their local
 - `frontend/app/wallet/page.tsx` — session guard, re-auth UX
 - `frontend/app/settings/page.tsx` — session guard for sweep/export
 
-### Estimate: 18-22h
+### Estimate: 26-34h (was 18-22h, added custom auth hardening + backend audit + expanded edge cases)
 
 ---
 
@@ -469,14 +616,60 @@ This is zero-friction: users never configure anything, they just see their local
   - Toggles phone_visible
   - Confirmation message in user's language
 
-- [ ] **5.6 Recovery email verification** — DB + backend + frontend
-  - Gate sensitive operations (key export, permission revoke) behind email confirmation
-  - Add `verified_email` column to user DB (hashed for storage, raw for sending codes)
-  - New endpoint: `POST /api/verify-email` — sends 6-digit code via Resend (free tier: 3K/month)
-  - New endpoint: `POST /api/confirm-email-code` — validates code (10-min expiry, 3 attempts max)
+- [ ] **5.6 Account Recovery + Secondary Auth** — DB + backend + frontend
+
+  > **Context:** Our users are regular people, not crypto natives. They lose phones, forget passwords, share devices. Recovery must be as simple as the signup. This is also the second factor that protects sensitive operations (key export, permission revoke) from SIM-swap attacks. Phase 4.6 (custom auth) handles primary auth (phone + OTP). This phase adds the safety net.
+
+  ---
+
+  **M1 SCOPE LOCK:** Only 5.6.1 (recovery email) and 5.6.3 (design doc) ship in M1. Passkeys (5.6.2) are **out of M1 scope** — do not start implementation. If you're reading this and thinking "passkeys would be quick to add," stop. Ship email recovery first, validate with real users, then build passkeys in M2.
+
+  ---
+
+  **5.6.1 Recovery email** (M1 — ship this)
   - Collect email during `/setup` onboarding (after SMS verify): "Add a recovery email (recommended)"
+  - Keep it optional — don't block setup if they skip, but nudge again on first `/settings` visit
+  - New endpoint: `POST /api/auth/send-email-code` — sends 6-digit code via Resend (free tier: 3K/month)
+  - New endpoint: `POST /api/auth/verify-email-code` — validates code (10-min expiry, 3 attempts max)
+  - Email template: branded "Sippy" (same as OTP — no third-party branding)
   - Before export or revoke: if user has verified email → require email code. If no email → show warning but still allow
-  - Threat mitigated: SIM-swapper can sign in via CDP but can't export key or revoke permissions without email inbox
+  - If user lost phone (SIM swap): can prove identity via email → re-link new phone number
+  - Threat mitigated: SIM-swapper can intercept OTP but can't access email inbox
+
+  **Email data model:**
+  ```
+  user_preferences table additions:
+    email_encrypted  TEXT      -- AES-256-GCM encrypted email (for sending codes)
+    email_hash       TEXT      -- SHA-256(normalized(email)) index for lookup/dedup
+    email_verified   BOOLEAN   DEFAULT false
+    email_verified_at TIMESTAMPTZ
+  ```
+  - Normalize before hashing: `trim().toLowerCase()`
+  - Encrypt at rest with `EMAIL_ENCRYPTION_KEY` env var (AES-256-GCM, unique IV per row)
+  - Decrypt only when sending a code — never return plaintext email in API responses
+  - Hash index enables "is this email already linked to another account?" check without decrypting all rows
+  - Retention: keep until user explicitly deletes or account is deactivated
+  - On account deletion (future): zero out both columns, keep hash for 30 days to prevent re-registration abuse
+
+  **5.6.2 Passkey support** (M2 ONLY — do not implement in M1)
+  - WebAuthn/passkey as alternative to OTP for returning users
+  - After first successful OTP auth, prompt: "Add Face ID / fingerprint for faster access next time"
+  - Store passkey credential ID in DB, link to phone number
+  - On subsequent visits: passkey auth → skip OTP entirely (faster, more secure)
+  - Fallback: if passkey fails (new device, cleared data), fall back to OTP
+  - This is the long-term UX win — regular users prefer biometrics over typing codes
+  - CDP supports this via `useAuthenticateWithJWT` — passkey just changes how we issue the JWT
+  - Library: `@simplewebauthn/server` + `@simplewebauthn/browser` (well-maintained, <10KB)
+
+  **5.6.3 Recovery flow for lost phone** (M1 — design doc only, M2 — implement)
+  - Deliverable: `docs/RECOVERY-DESIGN.md` documenting the full flow
+  - User contacts support (WhatsApp or email) → identity verification via recovery email
+  - Admin endpoint: `POST /admin/relink-phone` — updates phone number for existing wallet
+  - Requires: verified email match + admin approval (manual for M1, automated for M2)
+  - Edge case: user has no email and loses phone → wallet is recoverable only via exported private key
+  - This is the one scenario where we can't help — make this very clear during setup if they skip email
+
+  **Estimate:** 5.6.1 = 6-8h (M1), 5.6.2 = 8-10h (M2 only), 5.6.3 = 2-3h design doc (M1)
   - Uses Resend transactional email (generous free tier, simple API)
   - For M2: push CDP team (Austin/David) to support email as platform-level 2FA
 
@@ -520,7 +713,7 @@ This is zero-friction: users never configure anything, they just see their local
 - `frontend/app/setup/page.tsx` — email collection step during onboarding
 - `frontend/app/profile/[phone]/page.tsx` — visibility check
 
-### Estimate: 10-14h (remaining tasks 5.1-5.6)
+### Estimate: 15-20h (remaining tasks 5.1-5.6, expanded recovery/auth scope)
 
 ---
 
@@ -690,34 +883,78 @@ This is zero-friction: users never configure anything, they just see their local
 
 ## Timeline (5 weeks)
 
+**Capacity:** 2 devs, ~20-24h/week combined (60/40 split Mateo/Carlos). Total available: ~100-120h.
+**Total estimated: 85-110h** across both devs (includes all 8 phases, expanded security/auth/audit scope).
+
 ```
-Week 1 (Feb 20-26):
-  Onboarding Tightening (P2) ........... [8-10h]
-  Maash: follow up on API docs
+Week 1 (Feb 20-26):                          Mateo        Carlos
+  P2: Onboarding Tightening ................ [4-5h]       [4-5h]
+  Maash: follow up on API docs                [1h]
 
 Week 2 (Feb 27 - Mar 5):
-  Dual Currency Display (P3) ........... [6-8h]
-  Security Hardening (P4) start ........ [6-8h]
+  P3: Dual Currency Display ................             [6-8h]
+  P4: Security (4.1 tx confirm, 4.2 webhook) [6-8h]
 
 Week 3 (Mar 6-12):
-  Security Hardening (P4) finish ....... [8-10h]
-  Privacy + Settings (P5) .............. [6-8h]
+  P4: Security (4.3 velocity, 4.4 edge cases) [8-10h]
+  P4.6: Custom Auth (Twilio + JWT) .........             [8-10h]
+  Maash: Mar 10 deadline → Path B trigger?    [1h]
 
 Week 4 (Mar 13-19):
-  Monitoring Infrastructure (P7) ....... [8-10h]
-  Onramp (P6) if Maash unblocked ...... [15-20h]
-  Frontend PYUSD → USDC (P6.6) ........ [can start without Maash]
+  P4.7: Session Robustness + 4.8 Audit ..... [6-8h]
+  P5: Privacy + Settings (5.1-5.5) .........             [6-8h]
+  P5.6.1: Recovery email ................... [6-8h]
+  P7: Monitoring (Sentry, health) ..........             [4-5h]
+  P6: Onramp if unblocked, else Path B ..... [split]     [split]
 
 Week 5 (Mar 20-26):
-  Beta Launch Prep (P8) ................ [8-10h]
-  Onramp testing (if ready)
+  P4.5: Admin Controls ..................... [3-4h]
+  P6: Onramp continued / Path B mock ....... [6-8h]      [6-8h]
+  P8: Beta Launch Prep ..................... [4-5h]       [4-5h]
+  Buffer for audit fixes + edge cases ...... [4-6h]
 ```
 
-**Total estimated: 65-84h** across both devs (includes all 8 phases)
-
-**Critical path:** Onboarding (P2) → Dual Currency (P3) → Security (P4) → Beta Prep (P8).
-Privacy (P5) and Monitoring (P7) can parallelize with Security (P4).
+**Critical path:** P4.6 (Custom Auth) → P4.7 (Session Robustness) → P5.6.1 (Recovery Email) → P8 (Beta Prep).
+P2, P3, P5.1-5.5, and P7 can parallelize.
 **External dependency:** Onramp (P6) blocked on Maash. Everything else ships independently. See "Onramp Acceptance Criteria" above for fallback plan.
+
+---
+
+## Go/No-Go Gate
+
+**Date:** March 24, 2026 (2 days before deadline)
+**Who decides:** Mateo (final call), Carlos (engineering readiness input)
+
+**Go criteria — all must be true:**
+- [ ] Exit checklist: all deliverables pass or have approved Path B fallback
+- [ ] No open P0 findings in `docs/AUDIT-M1.md`
+- [ ] All P1 findings either fixed or have documented workaround
+- [ ] Backend deploys cleanly on Railway, no crash loops in last 24h
+- [ ] Frontend builds + deploys without errors
+- [ ] At least 1 successful mainnet send via WhatsApp + 1 via web wallet in last 48h
+
+**No-Go triggers (any one blocks submission):**
+- Open P0 audit finding with no fix
+- Backend crash loop on production
+- Custom auth (4.6) not functional — users still see "Coinbase" in OTP
+- Fewer than 20 testers onboarded (can't credibly claim 50-tester trajectory)
+
+**If No-Go:** Notify Questbook reviewer immediately, request 1-week extension with specific blocker list.
+
+## Escalation SLA
+
+| Severity | Example | Who Gets Paged | Response Target |
+|----------|---------|----------------|-----------------|
+| P0 — Service down | Backend crash, all sends failing, GasRefuel empty | Mateo (WhatsApp) + Carlos (WhatsApp) | 30 min |
+| P0 — Money at risk | Tx sent to wrong address, double-send, funds stuck | Mateo (WhatsApp + call) | 15 min |
+| P1 — Degraded | Blockscout down (stale balances), LLM timeout, slow sends | Carlos (WhatsApp) | 2 hours |
+| P1 — Security | Suspicious activity, velocity limit hit, blocked user appeal | Mateo (WhatsApp) | 1 hour |
+| P2 — Minor | Formatting bug, wrong language in edge case, UI glitch | Carlos (async, Telegram) | Next working day |
+
+**During beta (Week 5+):**
+- Mateo monitors WhatsApp support channel daily
+- Carlos monitors Railway logs + Sentry alerts
+- Both check GasRefuel ETH balance weekly (alert threshold: < 0.01 ETH)
 
 ---
 
