@@ -30,6 +30,8 @@
     "#transformers/*": "./app/transformers/*.js",
     "#validators/*": "./app/validators/*.js",
     "#providers/*": "./providers/*.js",
+    "#utils/*": "./app/utils/*.js",
+    "#types/*": "./app/types/*.js",
     "#policies/*": "./app/policies/*.js",
     "#abilities/*": "./app/abilities/*.js",
     "#database/*": "./database/*.js",
@@ -62,12 +64,20 @@
     "@adonisjs/lucid": "^22.0.0",
     "@adonisjs/session": "^8.0.0",
     "@adonisjs/shield": "^9.0.0",
+    "@coinbase/cdp-sdk": "^1.44.1",
     "@japa/api-client": "^3.2.1",
     "@tuyau/core": "^1.0.0",
+    "@types/cors": "^2.8.19",
     "@vinejs/vine": "^4.3.0",
-    "better-sqlite3": "^12.6.2",
+    "axios": "^1.13.6",
+    "cors": "^2.8.6",
+    "ethers": "^5.8.0",
+    "groq-sdk": "^0.37.0",
+    "jose": "^6.1.3",
     "luxon": "^3.7.2",
-    "reflect-metadata": "^0.2.2"
+    "pg": "^8.19.0",
+    "reflect-metadata": "^0.2.2",
+    "zod": "^3.25.76"
   },
   "hotHook": {
     "boundaries": [
