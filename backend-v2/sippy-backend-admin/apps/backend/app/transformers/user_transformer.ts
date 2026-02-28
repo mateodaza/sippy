@@ -1,15 +1,18 @@
-import type User from '#models/user'
-import { BaseTransformer } from '@adonisjs/core/transformers'
+// TODO: Phase 5 — Admin dashboard transformer.
+// Uncomment when AdminUser model is ready.
 
-export default class UserTransformer extends BaseTransformer<User> {
-  toObject() {
-    return this.pick(this.resource, [
-      'id',
-      'fullName',
-      'email',
-      'createdAt',
-      'updatedAt',
-      'initials',
-    ])
-  }
-}
+// import type User from '#models/user'
+// import { BaseTransformer } from '@adonisjs/core/transformers'
+//
+// export default class UserTransformer extends BaseTransformer<User> {
+//   toObject() {
+//     return this.pick(this.resource, [
+//       'id',
+//       'fullName',
+//       'email',
+//       'createdAt',
+//       'updatedAt',
+//       'initials',
+//     ])
+//   }
+// }

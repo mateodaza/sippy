@@ -8,9 +8,7 @@ const dbConfig = defineConfig({
       client: 'pg',
       connection: {
         connectionString: env.get('DATABASE_URL'),
-        ssl: env.get('NODE_ENV') === 'production'
-          ? { rejectUnauthorized: false }
-          : false,
+        ssl: env.get('NODE_ENV') === 'production' ? { rejectUnauthorized: false } : false,
       },
       migrations: {
         naturalSort: true,

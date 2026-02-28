@@ -14,10 +14,7 @@ import logger from '@adonisjs/core/services/logger'
  * Signature is intentionally identical to the Express/pg version so the 30+
  * call-sites that depend on it require zero changes.
  */
-export async function query<T = any>(
-  text: string,
-  params?: any[]
-): Promise<{ rows: T[] }> {
+export async function query<T = any>(text: string, params?: any[]): Promise<{ rows: T[] }> {
   const start = Date.now()
   try {
     const result = await db.rawQuery(text, params ?? [])
@@ -142,9 +139,7 @@ export async function logWebSend(entry: WebSendLogEntry): Promise<void> {
  * Get user's persisted language preference. Returns null if not set.
  * Checks user_preferences table (works before wallet creation).
  */
-export async function getUserLanguage(
-  phoneNumber: string
-): Promise<'en' | 'es' | 'pt' | null> {
+export async function getUserLanguage(phoneNumber: string): Promise<'en' | 'es' | 'pt' | null> {
   try {
     const result = await query<{ preferred_language: string | null }>(
       'SELECT preferred_language FROM user_preferences WHERE phone_number = $1',

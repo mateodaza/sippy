@@ -45,5 +45,8 @@ router.use([
  * the routes or the routes group.
  */
 export const middleware = router.named({
-  auth: () => import('#middleware/auth_middleware'),
+  // TODO: Phase 5 — Re-enable when AdminUser model is ready
+  // auth: () => import('#middleware/auth_middleware'),
+  cdpAuth: () => import('#middleware/cdp_auth_middleware'),
+  ipThrottle: () => import('#middleware/ip_throttle_middleware'),
 })

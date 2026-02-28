@@ -1,8 +1,9 @@
 # Project Status — Sippy
 
-**Last Updated:** February 21, 2026
+**Last Updated:** February 28, 2026
 **Current Milestone:** M1 — Production Ready (deadline Mar 26, 2026)
 **Detailed Plan:** [M1_PLAN.md](./M1_PLAN.md)
+**AdonisJS Migration:** [ADONISJS-POC-PLAN.md](./ADONISJS-POC-PLAN.md)
 
 ---
 
@@ -129,6 +130,20 @@ Summary: Inverted parsing order (regex-first), trilingual everything, Zod valida
 - 50 tester onboarding
 - Production environment hardening
 
+### AdonisJS Migration — In Progress (Phase 1 complete)
+
+Migrating Express monolith → AdonisJS v7. Full plan: [ADONISJS-POC-PLAN.md](./ADONISJS-POC-PLAN.md)
+
+| Phase | What | Status |
+|-------|------|--------|
+| 0: Scaffold | AdonisJS v7 project + DB + env (27 vars) | Done |
+| 1: Port Core | Utils (6), types (2), services (6), models (5) | Done |
+| 1.5: Cleanup | Fix broken imports, missing env, lint (1004→0) | Done |
+| 2: Middleware | RateLimitService, CdpAuth, IpThrottle | Next |
+| 3: Controllers | 6 controllers, 18 routes (exact same paths) | Pending |
+| 4: Validate | curl all routes, compare Express vs AdonisJS | Pending |
+| 5: Admin Dashboard | Inertia + React (admin_users table, separate from phone_registry) | Last |
+
 ---
 
 ## Architecture
@@ -196,6 +211,7 @@ Summary: Inverted parsing order (regex-first), trilingual everything, Zod valida
 
 ## Recent Changes (Feb 2026)
 
+**Feb 28** — AdonisJS migration Phase 0+1 complete: scaffold, env validation, DB config, 6 utils, 6 services, 5 models, 2 types ported. Lint clean (0 errors). App boots on :3333
 **Feb 21** — Sweep-to-EOA in export flow, webapp fallback wallet (/wallet), authenticated phone resolution, web send audit logging, IP rate limiting, repo cleanup (22 outdated docs removed)
 **Feb 20** — Regex greetings/social phrases, media message handling, language continuity fix
 **Feb 19** — Trilingual sanitizer fallback, recipient language in notifications

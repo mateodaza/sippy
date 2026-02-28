@@ -5,36 +5,36 @@
  * Send commands are regex-only — LLM never triggers money movement.
  */
 
-import { ParsedCommand } from '../types/index.js';
+import { type ParsedCommand } from '../types/index.js'
 import {
   isLLMEnabled,
   isRateLimited,
   parseMessageWithLLM,
   type CallMeta,
-} from '../services/llm.service.js';
-import { normalizePhoneNumber } from './phone.js';
-import { logParseResult, ParseLogEntry } from '../services/db.js';
+} from '../services/llm.service.js'
+import { normalizePhoneNumber } from './phone.js'
+import { logParseResult, type ParseLogEntry } from '../services/db.js'
 
-export { normalizePhoneNumber, verifySendAgreement } from './phone.js';
+export { normalizePhoneNumber, verifySendAgreement } from './phone.js'
 
 // ============================================================================
 // Parse context (passed from server.ts for observability)
 // ============================================================================
 
 export interface ParseContext {
-  messageId: string;
-  phoneNumber: string;
+  messageId: string
+  phoneNumber: string
 }
 
 // ============================================================================
 // Pre-LLM send attempt detector
 // ============================================================================
 
-const SEND_KEYWORDS = /\b(send|transfer|pay|enviar|transferir|pagar|envie|mande|mandar)\b/i;
-const HAS_NUMBER = /\d+/;
+const SEND_KEYWORDS = /\b(send|transfer|pay|enviar|transferir|pagar|envie|mande|mandar)\b/i
+const HAS_NUMBER = /\d+/
 
 function isAttemptedSend(text: string): boolean {
-  return SEND_KEYWORDS.test(text) && HAS_NUMBER.test(text);
+  return SEND_KEYWORDS.test(text) && HAS_NUMBER.test(text)
 }
 
 // ============================================================================
@@ -46,16 +46,8 @@ function isAttemptedSend(text: string): boolean {
  * Pattern from Camello: REGEX_INTENTS as Record<string, RegExp[]>
  */
 const COMMAND_PATTERNS: Record<string, RegExp[]> = {
-  start: [
-    /^(start|begin)$/i,
-    /^(comenzar|iniciar)$/i,
-    /^(come[cç]ar|iniciar)$/i,
-  ],
-  help: [
-    /^(help|\?)$/i,
-    /^ayuda$/i,
-    /^ajuda$/i,
-  ],
+  start: [/^(start|begin)$/i, /^(comenzar|iniciar)$/i, /^(come[cç]ar|iniciar)$/i],
+  help: [/^(help|\?)$/i, /^ayuda$/i, /^ajuda$/i],
   about: [
     /^about$/i,
     /^(what is sippy|whats sippy|what's sippy)$/i,
@@ -93,7 +85,7 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(gracias|dale|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada)$/i,
     /^(obrigado|obrigada|valeu|beleza|legal|perfeito|tchau|at[eé] logo|de nada)$/i,
   ],
-};
+}
 
 /** Trilingual send patterns — strict format, must extract amount + recipient */
 const SEND_PATTERNS: RegExp[] = [
@@ -103,43 +95,43 @@ const SEND_PATTERNS: RegExp[] = [
   /^env[ií]a?r?\s+\$?(\d+(?:\.\d+)?)\s+a\s+(.+)$/i,
   // PT: "enviar 10 para +573001234567"
   /^enviar?\s+\$?(\d+(?:\.\d+)?)\s+para\s+(.+)$/i,
-];
+]
 
 /**
  * Parse message with regex (exact matching).
  * This is the primary parser — handles 80%+ of messages at zero cost.
  */
 export function parseMessageWithRegex(text: string): ParsedCommand {
-  const normalizedText = text.trim().toLowerCase();
+  const normalizedText = text.trim().toLowerCase()
 
   // Check language command first (needs to extract the lang code)
   for (const pattern of COMMAND_PATTERNS.language) {
-    const match = normalizedText.match(pattern);
+    const match = normalizedText.match(pattern)
     if (match) {
-      const lang = match[1].toLowerCase() as 'en' | 'es' | 'pt';
-      return { command: 'language', detectedLanguage: lang };
+      const lang = match[1].toLowerCase() as 'en' | 'es' | 'pt'
+      return { command: 'language', detectedLanguage: lang }
     }
   }
 
   // Check non-send commands against trilingual patterns
   for (const [command, patterns] of Object.entries(COMMAND_PATTERNS)) {
-    if (command === 'language') continue; // Already handled above
-    if (patterns.some(p => p.test(normalizedText))) {
-      return { command: command as ParsedCommand['command'] };
+    if (command === 'language') continue // Already handled above
+    if (patterns.some((p) => p.test(normalizedText))) {
+      return { command: command as ParsedCommand['command'] }
     }
   }
 
   // Check send patterns (need to extract amount + recipient)
-  const trimmedText = text.trim();
+  const trimmedText = text.trim()
   for (const pattern of SEND_PATTERNS) {
-    const match = trimmedText.match(pattern);
+    const match = trimmedText.match(pattern)
     if (match) {
-      return parseSendMatch(match, text);
+      return parseSendMatch(match, text)
     }
   }
 
   // Unknown command
-  return { command: 'unknown', originalText: text };
+  return { command: 'unknown', originalText: text }
 }
 
 // ============================================================================
@@ -147,24 +139,24 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
 // ============================================================================
 
 function parseSendMatch(match: RegExpMatchArray, originalText: string): ParsedCommand {
-  const amount = parseFloat(match[1]);
+  const amount = Number.parseFloat(match[1])
 
   if (amount <= 0 || amount > 100000) {
-    return { command: 'unknown', originalText };
+    return { command: 'unknown', originalText }
   }
 
-  const rawRecipient = match[2].trim();
-  const normalizedRecipient = normalizePhoneNumber(rawRecipient, originalText);
+  const rawRecipient = match[2].trim()
+  const normalizedRecipient = normalizePhoneNumber(rawRecipient, originalText)
 
   if (!normalizedRecipient) {
-    const digitsOnly = rawRecipient.replace(/\D/g, '');
+    const digitsOnly = rawRecipient.replace(/\D/g, '')
     if (digitsOnly.length < 10) {
-      return { command: 'unknown', originalText };
+      return { command: 'unknown', originalText }
     }
-    return { command: 'send', amount, recipient: digitsOnly };
+    return { command: 'send', amount, recipient: digitsOnly }
   }
 
-  return { command: 'send', amount, recipient: normalizedRecipient };
+  return { command: 'send', amount, recipient: normalizedRecipient }
 }
 
 // ============================================================================
@@ -181,21 +173,18 @@ function parseSendMatch(match: RegExpMatchArray, originalText: string): ParsedCo
  *
  * Send commands are NEVER accepted from LLM for M1.
  */
-export async function parseMessage(
-  text: string,
-  ctx?: ParseContext
-): Promise<ParsedCommand> {
-  const startTime = Date.now();
+export async function parseMessage(text: string, ctx?: ParseContext): Promise<ParsedCommand> {
+  const startTime = Date.now()
 
   // Step 1: Try regex first (zero cost)
-  const regexResult = parseMessageWithRegex(text);
+  const regexResult = parseMessageWithRegex(text)
 
   if (regexResult.command !== 'unknown') {
-    const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: 'skipped' };
+    const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: 'skipped' }
     if (ctx) {
-      logParse(ctx, result, 'regex', 'regex-matched', Date.now() - startTime);
+      logParse(ctx, result, 'regex', 'regex-matched', Date.now() - startTime)
     }
-    return result;
+    return result
   }
 
   // Step 2: Check if this is a malformed send attempt
@@ -205,32 +194,32 @@ export async function parseMessage(
       originalText: text,
       usedLLM: false,
       llmStatus: 'format-hint',
-    };
-    if (ctx) {
-      logParse(ctx, result, 'regex', 'format-hint', Date.now() - startTime);
     }
-    return result;
+    if (ctx) {
+      logParse(ctx, result, 'regex', 'format-hint', Date.now() - startTime)
+    }
+    return result
   }
 
   // Step 3: LLM fallback for ambiguous messages
   if (!isLLMEnabled()) {
-    const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: 'disabled' };
+    const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: 'disabled' }
     if (ctx) {
-      logParse(ctx, result, 'regex', 'llm-disabled', Date.now() - startTime);
+      logParse(ctx, result, 'regex', 'llm-disabled', Date.now() - startTime)
     }
-    return result;
+    return result
   }
 
   if (isRateLimited()) {
-    const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: 'rate-limited' };
+    const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: 'rate-limited' }
     if (ctx) {
-      logParse(ctx, result, 'regex', 'llm-rate-limited', Date.now() - startTime);
+      logParse(ctx, result, 'regex', 'llm-rate-limited', Date.now() - startTime)
     }
-    return result;
+    return result
   }
 
   try {
-    const llmResponse = await parseMessageWithLLM(text);
+    const llmResponse = await parseMessageWithLLM(text)
 
     if (llmResponse?.parsed) {
       const result: ParsedCommand = {
@@ -238,27 +227,27 @@ export async function parseMessage(
         originalText: text,
         usedLLM: true,
         llmStatus: 'success',
-      };
-      if (ctx) {
-        logParse(ctx, result, 'llm', 'llm-success', Date.now() - startTime, llmResponse.meta);
       }
-      return result;
+      if (ctx) {
+        logParse(ctx, result, 'llm', 'llm-success', Date.now() - startTime, llmResponse.meta)
+      }
+      return result
     }
 
-    const result: ParsedCommand = { ...regexResult, usedLLM: true, llmStatus: 'low-confidence' };
+    const result: ParsedCommand = { ...regexResult, usedLLM: true, llmStatus: 'low-confidence' }
     if (ctx) {
-      logParse(ctx, result, 'llm', 'llm-rejected', Date.now() - startTime, llmResponse?.meta);
+      logParse(ctx, result, 'llm', 'llm-rejected', Date.now() - startTime, llmResponse?.meta)
     }
-    return result;
+    return result
   } catch (error) {
     const status: ParsedCommand['llmStatus'] =
-      error instanceof Error && error.message === 'Timeout' ? 'timeout' : 'error';
-    const logStatus = status === 'timeout' ? 'llm-timeout' : 'llm-error';
-    const result: ParsedCommand = { ...regexResult, usedLLM: true, llmStatus: status };
+      error instanceof Error && error.message === 'Timeout' ? 'timeout' : 'error'
+    const logStatus = status === 'timeout' ? 'llm-timeout' : 'llm-error'
+    const result: ParsedCommand = { ...regexResult, usedLLM: true, llmStatus: status }
     if (ctx) {
-      logParse(ctx, result, 'llm', logStatus, Date.now() - startTime);
+      logParse(ctx, result, 'llm', logStatus, Date.now() - startTime)
     }
-    return result;
+    return result
   }
 }
 
@@ -285,10 +274,10 @@ function logParse(
     latencyMs,
     status,
     detectedLanguage: result.detectedLanguage,
-  };
+  }
   // Fire-and-forget — never blocks message handling
-  logParseResult(entry);
+  logParseResult(entry)
 }
 
 // Help/About re-exported from message catalog for backward compatibility
-export { formatHelpMessage as getHelpText, formatAboutMessage as getAboutText } from './messages.js';
+export { formatHelpMessage as getHelpText, formatAboutMessage as getAboutText } from './messages.js'

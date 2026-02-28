@@ -4,9 +4,9 @@
  * Maps technical errors to user-friendly messages in the user's language.
  */
 
-import { Lang } from './messages.js';
+import { type Lang } from './messages.js'
 
-type ErrorMessages = Record<string, Record<Lang, string>>;
+type ErrorMessages = Record<string, Record<Lang, string>>
 
 const ERROR_MAP: ErrorMessages = {
   insufficient: {
@@ -44,20 +44,20 @@ const ERROR_MAP: ErrorMessages = {
     es: 'Ocurrio un error. Por favor intenta de nuevo o contacta soporte.',
     pt: 'Ocorreu um erro. Por favor tente novamente ou entre em contato com o suporte.',
   },
-};
+}
 
 /**
  * Convert error to user-friendly message in the user's language.
  */
 export function toUserErrorMessage(error: unknown, lang: Lang = 'en'): string {
   if (!(error instanceof Error)) {
-    return ERROR_MAP.generic[lang];
+    return ERROR_MAP.generic[lang]
   }
 
-  const message = error.message.toLowerCase();
+  const message = error.message.toLowerCase()
 
   if (message.includes('insufficient') || message.includes('balance')) {
-    return ERROR_MAP.insufficient[lang];
+    return ERROR_MAP.insufficient[lang]
   }
 
   if (
@@ -66,7 +66,7 @@ export function toUserErrorMessage(error: unknown, lang: Lang = 'en'): string {
     message.includes('connection') ||
     message.includes('fetch')
   ) {
-    return ERROR_MAP.network[lang];
+    return ERROR_MAP.network[lang]
   }
 
   if (
@@ -74,24 +74,20 @@ export function toUserErrorMessage(error: unknown, lang: Lang = 'en'): string {
     message.includes('account') ||
     message.includes('cdp')
   ) {
-    return ERROR_MAP.wallet[lang];
+    return ERROR_MAP.wallet[lang]
   }
 
   if (message.includes('whatsapp')) {
-    return ERROR_MAP.whatsapp[lang];
+    return ERROR_MAP.whatsapp[lang]
   }
 
   if (message.includes('session') || message.includes('expired')) {
-    return ERROR_MAP.session[lang];
+    return ERROR_MAP.session[lang]
   }
 
-  if (
-    message.includes('gas') ||
-    message.includes('transaction') ||
-    message.includes('revert')
-  ) {
-    return ERROR_MAP.transaction[lang];
+  if (message.includes('gas') || message.includes('transaction') || message.includes('revert')) {
+    return ERROR_MAP.transaction[lang]
   }
 
-  return ERROR_MAP.generic[lang];
+  return ERROR_MAP.generic[lang]
 }

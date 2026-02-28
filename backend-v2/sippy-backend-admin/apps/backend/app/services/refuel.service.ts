@@ -6,7 +6,7 @@
 
 import env from '#start/env'
 import logger from '@adonisjs/core/services/logger'
-import { ethers } from 'ethers';
+import { ethers } from 'ethers'
 
 // GasRefuel Contract ABI (only the functions we need)
 const REFUEL_ABI = [
@@ -15,60 +15,54 @@ const REFUEL_ABI = [
   'function contractBalance() external view returns (uint256)',
   'function paused() external view returns (bool)',
   'event Refueled(address indexed user, uint256 amount, uint256 timestamp)',
-];
+]
 
 export interface RefuelResult {
-  success: boolean;
-  txHash?: string;
-  error?: string;
+  success: boolean
+  txHash?: string
+  error?: string
 }
 
 class RefuelService {
-  private contract: ethers.Contract | null = null;
-  private provider: ethers.providers.JsonRpcProvider | null = null;
-  private signer: ethers.Wallet | null = null;
-  private contractAddress: string;
+  private contract: ethers.Contract | null = null
+  private provider: ethers.providers.JsonRpcProvider | null = null
+  private signer: ethers.Wallet | null = null
+  private contractAddress: string
 
   constructor() {
-    this.contractAddress = env.get('REFUEL_CONTRACT_ADDRESS', '');
+    this.contractAddress = env.get('REFUEL_CONTRACT_ADDRESS', '')
 
     if (!this.contractAddress) {
-      logger.warn('REFUEL_CONTRACT_ADDRESS not set in environment');
-      return;
+      logger.warn('REFUEL_CONTRACT_ADDRESS not set in environment')
+      return
     }
 
     try {
-      const rpcUrl = env.get('ARBITRUM_RPC_URL', '');
-      const adminKey = env.get('REFUEL_ADMIN_PRIVATE_KEY', '');
+      const rpcUrl = env.get('ARBITRUM_RPC_URL', '')
+      const adminKey = env.get('REFUEL_ADMIN_PRIVATE_KEY', '')
 
       if (!rpcUrl || !adminKey) {
-        logger.error(
-          'Missing required environment variables for RefuelService'
-        );
-        return;
+        logger.error('Missing required environment variables for RefuelService')
+        return
       }
 
       this.provider = new ethers.providers.JsonRpcProvider(rpcUrl, {
         chainId: 42161,
         name: 'arbitrum',
-      });
+      })
 
-      this.signer = new ethers.Wallet(adminKey, this.provider);
+      this.signer = new ethers.Wallet(adminKey, this.provider)
 
-      this.contract = new ethers.Contract(
-        this.contractAddress,
-        REFUEL_ABI,
-        this.signer
-      );
+      this.contract = new ethers.Contract(this.contractAddress, REFUEL_ABI, this.signer)
 
-      logger.info('RefuelService initialized');
-      logger.info('  Contract: %s', this.contractAddress);
-      logger.info('  Admin: %s', this.signer.address);
+      logger.info('RefuelService initialized')
+      logger.info('  Contract: %s', this.contractAddress)
+      logger.info('  Admin: %s', this.signer.address)
 
       // Log contract status on startup
-      this.logContractStatus();
+      this.logContractStatus()
     } catch (error) {
-      logger.error('Failed to initialize RefuelService: %o', error);
+      logger.error('Failed to initialize RefuelService: %o', error)
     }
   }
 
@@ -77,18 +71,20 @@ class RefuelService {
    */
   private async logContractStatus(): Promise<void> {
     try {
-      const isPaused = await this.isPaused();
-      const balance = await this.getContractBalance();
-      logger.info(`  Paused: ${isPaused ? 'YES - NEEDS UNPAUSE' : 'No'}`);
-      logger.info(`  Balance: ${balance} ETH`);
+      const isPaused = await this.isPaused()
+      const balance = await this.getContractBalance()
+      logger.info(`  Paused: ${isPaused ? 'YES - NEEDS UNPAUSE' : 'No'}`)
+      logger.info(`  Balance: ${balance} ETH`)
       if (isPaused) {
-        logger.warn('Refuel contract is PAUSED. Run: cd contracts/gas-refuel && npx hardhat run scripts/unpause.ts --network arbitrum');
+        logger.warn(
+          'Refuel contract is PAUSED. Run: cd contracts/gas-refuel && npx hardhat run scripts/unpause.ts --network arbitrum'
+        )
       }
-      if (parseFloat(balance) < 0.001) {
-        logger.warn('Refuel contract has low balance. Send ETH to: %s', this.contractAddress);
+      if (Number.parseFloat(balance) < 0.001) {
+        logger.warn('Refuel contract has low balance. Send ETH to: %s', this.contractAddress)
       }
     } catch (error) {
-      logger.error('Failed to check contract status: %o', error);
+      logger.error('Failed to check contract status: %o', error)
     }
   }
 
@@ -96,7 +92,7 @@ class RefuelService {
    * Check if refuel service is available
    */
   isAvailable(): boolean {
-    return this.contract !== null && this.signer !== null;
+    return this.contract !== null && this.signer !== null
   }
 
   /**
@@ -109,59 +105,59 @@ class RefuelService {
       return {
         success: false,
         error: 'Refuel service not available',
-      };
+      }
     }
 
     try {
       // Check if user can be refueled via contract
-      const canRefuel = await this.contract!.canRefuel(userAddress);
+      const canRefuel = await this.contract!.canRefuel(userAddress)
 
       if (!canRefuel) {
         // Diagnose why
-        const isPaused = await this.isPaused();
+        const isPaused = await this.isPaused()
         if (isPaused) {
           return {
             success: false,
             error: 'Refuel contract is paused',
-          };
+          }
         }
 
-        const userBalance = await this.getUserBalance(userAddress);
-        if (parseFloat(userBalance) >= 0.00005) {
+        const userBalance = await this.getUserBalance(userAddress)
+        if (Number.parseFloat(userBalance) >= 0.00005) {
           return {
             success: false,
             error: `User already has sufficient ETH: ${userBalance}`,
-          };
+          }
         }
 
         return {
           success: false,
           error: 'User cannot be refueled (daily limit or cooldown)',
-        };
+        }
       }
 
       // Execute refuel via contract
-      logger.info(`Refueling ${userAddress} via contract...`);
+      logger.info(`Refueling ${userAddress} via contract...`)
       const tx = await this.contract!.refuel(userAddress, {
         gasLimit: 300000, // Higher gas limit for Smart Account transfers
-      });
+      })
 
-      const receipt = await tx.wait();
+      const receipt = await tx.wait()
 
-      logger.info(`Refueled ${userAddress}`);
-      logger.info(`  TX: ${receipt.transactionHash}`);
+      logger.info(`Refueled ${userAddress}`)
+      logger.info(`  TX: ${receipt.transactionHash}`)
 
       return {
         success: true,
         txHash: receipt.transactionHash,
-      };
+      }
     } catch (error: any) {
-      logger.error('Refuel failed: %s', error.message || error);
+      logger.error('Refuel failed: %s', error.message || error)
 
       return {
         success: false,
         error: error.message || 'Unknown error',
-      };
+      }
     }
   }
 
@@ -171,15 +167,15 @@ class RefuelService {
    */
   async getContractBalance(): Promise<string> {
     if (!this.isAvailable()) {
-      return '0';
+      return '0'
     }
 
     try {
-      const balance = await this.contract!.contractBalance();
-      return ethers.utils.formatEther(balance);
+      const balance = await this.contract!.contractBalance()
+      return ethers.utils.formatEther(balance)
     } catch (error) {
-      logger.error('Failed to get contract balance: %o', error);
-      return '0';
+      logger.error('Failed to get contract balance: %o', error)
+      return '0'
     }
   }
 
@@ -189,14 +185,14 @@ class RefuelService {
    */
   async isPaused(): Promise<boolean> {
     if (!this.isAvailable()) {
-      return true;
+      return true
     }
 
     try {
-      return await this.contract!.paused();
+      return await this.contract!.paused()
     } catch (error) {
-      logger.error('Failed to check paused status: %o', error);
-      return true;
+      logger.error('Failed to check paused status: %o', error)
+      return true
     }
   }
 
@@ -207,28 +203,28 @@ class RefuelService {
    */
   async getUserBalance(userAddress: string): Promise<string> {
     if (!this.provider) {
-      return '0';
+      return '0'
     }
 
     try {
-      const balance = await this.provider.getBalance(userAddress);
-      return ethers.utils.formatEther(balance);
+      const balance = await this.provider.getBalance(userAddress)
+      return ethers.utils.formatEther(balance)
     } catch (error) {
-      logger.error('Failed to get user balance: %o', error);
-      return '0';
+      logger.error('Failed to get user balance: %o', error)
+      return '0'
     }
   }
 }
 
 // Singleton instance
-let refuelServiceInstance: RefuelService | null = null;
+let refuelServiceInstance: RefuelService | null = null
 
 /**
  * Get the RefuelService singleton instance
  */
 export function getRefuelService(): RefuelService {
   if (!refuelServiceInstance) {
-    refuelServiceInstance = new RefuelService();
+    refuelServiceInstance = new RefuelService()
   }
-  return refuelServiceInstance;
+  return refuelServiceInstance
 }

@@ -6,16 +6,16 @@
 
 import env from '#start/env'
 import logger from '@adonisjs/core/services/logger'
-import { WhatsAppAPIResponse, WhatsAppAPIError } from '#types/index'
+import { type WhatsAppAPIResponse, type WhatsAppAPIError } from '#types/index'
 import { sanitizeOutboundMessage } from '#utils/sanitize'
 
-const WHATSAPP_API_URL = 'https://graph.facebook.com/v18.0';
-const PHONE_NUMBER_ID = env.get('WHATSAPP_PHONE_NUMBER_ID');
-const ACCESS_TOKEN = env.get('WHATSAPP_ACCESS_TOKEN');
+const WHATSAPP_API_URL = 'https://graph.facebook.com/v18.0'
+const PHONE_NUMBER_ID = env.get('WHATSAPP_PHONE_NUMBER_ID')
+const ACCESS_TOKEN = env.get('WHATSAPP_ACCESS_TOKEN')
 
 interface Button {
-  id?: string;
-  title: string;
+  id?: string
+  title: string
 }
 
 /**
@@ -28,119 +28,108 @@ export async function sendTextMessage(
   retries = 2
 ): Promise<WhatsAppAPIResponse> {
   // Sanitize before sending — final safety net
-  const sanitized = sanitizeOutboundMessage(text, lang);
+  const sanitized = sanitizeOutboundMessage(text, lang)
   if (sanitized.violations.length > 0) {
-    logger.warn(`Sanitizer [${sanitized.blocked ? 'BLOCKED' : 'CLEANED'}] to +${to}: ${sanitized.violations.join(', ')}`);
+    logger.warn(
+      `Sanitizer [${sanitized.blocked ? 'BLOCKED' : 'CLEANED'}] to +${to}: ${sanitized.violations.join(', ')}`
+    )
     if (sanitized.blocked) {
-      logger.warn(`  Original length: ${text.length} chars`);
+      logger.warn(`  Original length: ${text.length} chars`)
     }
   }
-  const body = sanitized.text;
+  const body = sanitized.text
 
-  logger.info(`Sending message to +${to}: "${body}"`);
+  logger.info(`Sending message to +${to}: "${body}"`)
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const response = await fetch(
-        `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${ACCESS_TOKEN}`,
-            'Content-Type': 'application/json',
+      const response = await fetch(`${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: to,
+          type: 'text',
+          text: {
+            body: body,
           },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            to: to,
-            type: 'text',
-            text: {
-              body: body,
-            },
-          }),
-        }
-      );
+        }),
+      })
 
       // Check for 5xx errors before parsing JSON (might return plain text like "Service Unavailable")
       if (response.status >= 500 && attempt < retries) {
         logger.warn(
-          `WhatsApp API error (${response.status}), retrying... (${
-            attempt + 1
-          }/${retries})`
-        );
-        await sleep(500 * (attempt + 1)); // Exponential backoff
-        continue;
+          `WhatsApp API error (${response.status}), retrying... (${attempt + 1}/${retries})`
+        )
+        await sleep(500 * (attempt + 1)) // Exponential backoff
+        continue
       }
 
       // Try to parse JSON, handle non-JSON responses
-      let data: WhatsAppAPIResponse & WhatsAppAPIError;
+      let data: WhatsAppAPIResponse & WhatsAppAPIError
       try {
-        data = (await response.json()) as WhatsAppAPIResponse & WhatsAppAPIError;
+        data = (await response.json()) as WhatsAppAPIResponse & WhatsAppAPIError
       } catch (parseError) {
         // Response wasn't valid JSON (e.g., "Service Unavailable" plain text)
-        const responseText = await response.text().catch(() => 'Unknown response');
+        const responseText = await response.text().catch(() => 'Unknown response')
         if (attempt < retries) {
           logger.warn(
-            `WhatsApp API returned non-JSON response, retrying... (${
-              attempt + 1
-            }/${retries})`
-          );
-          await sleep(500 * (attempt + 1));
-          continue;
+            `WhatsApp API returned non-JSON response, retrying... (${attempt + 1}/${retries})`
+          )
+          await sleep(500 * (attempt + 1))
+          continue
         }
-        throw new Error(`WhatsApp API error: ${response.status} - ${responseText}`);
+        throw new Error(`WhatsApp API error: ${response.status} - ${responseText}`)
       }
 
       if (!response.ok) {
         // Retry on 5xx errors (should rarely reach here due to check above)
         if (response.status >= 500 && attempt < retries) {
           logger.warn(
-            `WhatsApp API error (${response.status}), retrying... (${
-              attempt + 1
-            }/${retries})`
-          );
-          await sleep(500 * (attempt + 1)); // Exponential backoff
-          continue;
+            `WhatsApp API error (${response.status}), retrying... (${attempt + 1}/${retries})`
+          )
+          await sleep(500 * (attempt + 1)) // Exponential backoff
+          continue
         }
 
-        logger.error('Failed to send message: %o', data);
-        throw new Error(
-          `WhatsApp API error: ${data.error?.message || 'Unknown error'}`
-        );
+        logger.error('Failed to send message: %o', data)
+        throw new Error(`WhatsApp API error: ${data.error?.message || 'Unknown error'}`)
       }
 
-      logger.info('Message sent successfully!');
+      logger.info('Message sent successfully!')
       if (data.messages && data.messages.length > 0) {
-        logger.info('   Message ID: %s', data.messages[0].id);
+        logger.info('   Message ID: %s', data.messages[0].id)
       }
-      return data;
+      return data
     } catch (error) {
       // Retry on network errors or JSON parse errors
       if (
         attempt < retries &&
         (error instanceof TypeError ||
-         error instanceof SyntaxError ||
-         (error as any).code === 'ECONNRESET')
+          error instanceof SyntaxError ||
+          (error as any).code === 'ECONNRESET')
       ) {
-        logger.warn(
-          `Network error, retrying... (${attempt + 1}/${retries})`
-        );
-        await sleep(500 * (attempt + 1));
-        continue;
+        logger.warn(`Network error, retrying... (${attempt + 1}/${retries})`)
+        await sleep(500 * (attempt + 1))
+        continue
       }
 
-      logger.error('Error sending message: %s', (error as Error).message);
-      throw error;
+      logger.error('Error sending message: %s', (error as Error).message)
+      throw error
     }
   }
 
-  throw new Error('Failed to send message after retries');
+  throw new Error('Failed to send message after retries')
 }
 
 /**
  * Sleep helper for retry backoff
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 /**
@@ -155,63 +144,59 @@ export async function sendButtonMessage(
 ): Promise<WhatsAppAPIResponse | null> {
   // Guard: only send if enabled
   if (env.get('WHATSAPP_BUTTONS') !== 'true') {
-    return null;
+    return null
   }
 
   // Sanitize button body text
-  const sanitized = sanitizeOutboundMessage(bodyText, lang);
+  const sanitized = sanitizeOutboundMessage(bodyText, lang)
   if (sanitized.violations.length > 0) {
-    logger.warn(`Sanitizer [button] to +${to}: ${sanitized.violations.join(', ')}`);
+    logger.warn(`Sanitizer [button] to +${to}: ${sanitized.violations.join(', ')}`)
   }
-  const cleanBody = sanitized.text;
+  const cleanBody = sanitized.text
 
-  logger.info(`Sending button message to +${to}`);
+  logger.info(`Sending button message to +${to}`)
 
   try {
-    const response = await fetch(
-      `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: to,
-          type: 'interactive',
-          interactive: {
-            type: 'button',
-            body: {
-              text: cleanBody,
-            },
-            action: {
-              buttons: buttons.map((btn, idx) => ({
-                type: 'reply',
-                reply: {
-                  id: btn.id || `btn_${idx}`,
-                  title: btn.title.substring(0, 20), // Max 20 chars
-                },
-              })),
-            },
+    const response = await fetch(`${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: to,
+        type: 'interactive',
+        interactive: {
+          type: 'button',
+          body: {
+            text: cleanBody,
           },
-        }),
-      }
-    );
+          action: {
+            buttons: buttons.map((btn, idx) => ({
+              type: 'reply',
+              reply: {
+                id: btn.id || `btn_${idx}`,
+                title: btn.title.substring(0, 20), // Max 20 chars
+              },
+            })),
+          },
+        },
+      }),
+    })
 
-    const data = (await response.json()) as WhatsAppAPIResponse &
-      WhatsAppAPIError;
+    const data = (await response.json()) as WhatsAppAPIResponse & WhatsAppAPIError
 
     if (!response.ok) {
-      logger.warn('Failed to send button message: %s', data.error?.message);
-      return null;
+      logger.warn('Failed to send button message: %s', data.error?.message)
+      return null
     }
 
-    logger.info('Button message sent successfully!');
-    return data;
+    logger.info('Button message sent successfully!')
+    return data
   } catch (error) {
-    logger.warn('Error sending button message: %s', (error as Error).message);
-    return null;
+    logger.warn('Error sending button message: %s', (error as Error).message)
+    return null
   }
 }
 
@@ -220,29 +205,23 @@ export async function sendButtonMessage(
  */
 export async function markAsRead(messageId: string): Promise<any> {
   try {
-    const response = await fetch(
-      `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${ACCESS_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          status: 'read',
-          message_id: messageId,
-        }),
-      }
-    );
+    const response = await fetch(`${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+      }),
+    })
 
-    return await response.json();
+    return await response.json()
   } catch (error) {
-    logger.error(
-      'Failed to mark message as read: %s',
-      (error as Error).message
-    );
+    logger.error('Failed to mark message as read: %s', (error as Error).message)
     // Non-critical error, don't throw
-    return null;
+    return null
   }
 }

@@ -20,36 +20,34 @@ const SAFE_FALLBACK: Record<string, string> = {
   en: 'Sorry, something went wrong. Please try again or type "help" for available commands.',
   es: 'Lo sentimos, algo salio mal. Intente de nuevo o escriba "ayuda" para ver los comandos disponibles.',
   pt: 'Desculpe, algo deu errado. Tente novamente ou digite "ajuda" para ver os comandos disponiveis.',
-};
+}
 
 // ============================================================================
 // Blocking patterns (no `g` flag — .test() is safe on these)
 // ============================================================================
 
 // Raw JSON that leaked from LLM or internal code
-const RAW_JSON = /^\s*[\[{][\s\S]*["'][\w]+["']\s*:/;
+const RAW_JSON = /^\s*[\[{][\s\S]*["'][\w]+["']\s*:/
 
 // Forbidden terms for a financial product (case-insensitive, no `g`)
 const FORBIDDEN_TERMS =
-  /\b(crypto(?:currency|currencies)?|blockchain|web3|defi|decentralized finance|smart contract|private key|seed phrase|mnemonic)\b/i;
+  /\b(crypto(?:currency|currencies)?|blockchain|web3|defi|decentralized finance|smart contract|private key|seed phrase|mnemonic)\b/i
 
 // Internal error stack traces
-const STACK_TRACE = /(?:at\s+\w+\s+\(|Error:\s+\w+Error|node_modules\/)/;
+const STACK_TRACE = /(?:at\s+\w+\s+\(|Error:\s+\w+Error|node_modules\/)/
 
 // ============================================================================
 // Trusted URL domains (positive allowlist with boundary checks)
 // ============================================================================
 
-const TRUSTED_DOMAINS = ['arbiscan.io', 'sippy.lat'];
+const TRUSTED_DOMAINS = ['arbiscan.io', 'sippy.lat']
 
 function isUrlTrusted(url: string): boolean {
   try {
-    const hostname = new URL(url).hostname;
-    return TRUSTED_DOMAINS.some(
-      (d) => hostname === d || hostname.endsWith(`.${d}`)
-    );
+    const hostname = new URL(url).hostname
+    return TRUSTED_DOMAINS.some((d) => hostname === d || hostname.endsWith(`.${d}`))
   } catch {
-    return false;
+    return false
   }
 }
 
@@ -58,13 +56,13 @@ function isUrlTrusted(url: string): boolean {
 // ============================================================================
 
 // WhatsApp text body limit
-const MAX_LENGTH = 4096;
+const MAX_LENGTH = 4096
 
 export interface SanitizeResult {
-  text: string;
-  modified: boolean;
-  blocked: boolean;
-  violations: string[];
+  text: string
+  modified: boolean
+  blocked: boolean
+  violations: string[]
 }
 
 // ============================================================================
@@ -82,9 +80,9 @@ function strip(
   tag: string,
   violations: string[]
 ): string {
-  const result = input.replace(pattern, replacement);
-  if (result !== input) violations.push(tag);
-  return result;
+  const result = input.replace(pattern, replacement)
+  if (result !== input) violations.push(tag)
+  return result
 }
 
 // ============================================================================
@@ -92,56 +90,62 @@ function strip(
 // ============================================================================
 
 export function sanitizeOutboundMessage(text: string, lang: string = 'en'): SanitizeResult {
-  const fallback = SAFE_FALLBACK[lang] || SAFE_FALLBACK.en;
-  const violations: string[] = [];
+  const fallback = SAFE_FALLBACK[lang] || SAFE_FALLBACK.en
+  const violations: string[] = []
 
   // --- Empty check ---
   if (!text || !text.trim()) {
-    return { text: fallback, modified: true, blocked: true, violations: ['empty-message'] };
+    return { text: fallback, modified: true, blocked: true, violations: ['empty-message'] }
   }
 
-  let cleaned = text;
+  let cleaned = text
 
   // --- Blocking checks (.test() on non-global regexes — safe) ---
 
   if (RAW_JSON.test(cleaned)) {
-    violations.push('raw-json');
-    return { text: fallback, modified: true, blocked: true, violations };
+    violations.push('raw-json')
+    return { text: fallback, modified: true, blocked: true, violations }
   }
 
   if (STACK_TRACE.test(cleaned)) {
-    violations.push('stack-trace');
-    return { text: fallback, modified: true, blocked: true, violations };
+    violations.push('stack-trace')
+    return { text: fallback, modified: true, blocked: true, violations }
   }
 
   if (FORBIDDEN_TERMS.test(cleaned)) {
-    violations.push('forbidden-terms');
-    return { text: fallback, modified: true, blocked: true, violations };
+    violations.push('forbidden-terms')
+    return { text: fallback, modified: true, blocked: true, violations }
   }
 
   // --- Cleaning checks (replace-and-compare, no .test() on g regexes) ---
 
   // Strip LLM thinking tags
-  cleaned = strip(cleaned, /<\/?(?:think|thinking|reasoning|reflection|scratchpad)>/gi, '', 'thinking-tags', violations);
+  cleaned = strip(
+    cleaned,
+    /<\/?(?:think|thinking|reasoning|reflection|scratchpad)>/gi,
+    '',
+    'thinking-tags',
+    violations
+  )
 
   // Strip code blocks (extract inner content)
-  cleaned = strip(cleaned, /```\w*\n?/g, '', 'code-blocks', violations);
+  cleaned = strip(cleaned, /```\w*\n?/g, '', 'code-blocks', violations)
 
   // Strip inline code markers
-  cleaned = strip(cleaned, /`([^`]+)`/g, '$1', 'inline-code', violations);
+  cleaned = strip(cleaned, /`([^`]+)`/g, '$1', 'inline-code', violations)
 
   // Strip markdown headers
-  cleaned = strip(cleaned, /^#{1,6}\s+/gm, '', 'markdown-headers', violations);
+  cleaned = strip(cleaned, /^#{1,6}\s+/gm, '', 'markdown-headers', violations)
 
   // Simplify markdown bold to WhatsApp bold (single *)
-  cleaned = strip(cleaned, /\*{2,3}([^*]+)\*{2,3}/g, '*$1*', 'markdown-emphasis', violations);
+  cleaned = strip(cleaned, /\*{2,3}([^*]+)\*{2,3}/g, '*$1*', 'markdown-emphasis', violations)
 
   // Replace untrusted URLs (positive allowlist with proper hostname parsing)
-  const before = cleaned;
+  const before = cleaned
   cleaned = cleaned.replace(/https?:\/\/[^\s)]+/gi, (url) => {
-    return isUrlTrusted(url) ? url : '[link removed]';
-  });
-  if (cleaned !== before) violations.push('untrusted-url');
+    return isUrlTrusted(url) ? url : '[link removed]'
+  })
+  if (cleaned !== before) violations.push('untrusted-url')
 
   // Strip emojis
   cleaned = strip(
@@ -150,26 +154,32 @@ export function sanitizeOutboundMessage(text: string, lang: string = 'en'): Sani
     '',
     'emojis',
     violations
-  );
+  )
 
   // Strip control characters (except newline, tab)
-  cleaned = strip(cleaned, /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '', 'control-chars', violations);
+  // eslint-disable-next-line no-control-regex
+  cleaned = strip(cleaned, /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '', 'control-chars', violations)
 
   // Collapse excessive newlines (max 2 consecutive)
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n')
 
   // Trim
-  cleaned = cleaned.trim();
+  cleaned = cleaned.trim()
 
   // Truncate if too long
   if (cleaned.length > MAX_LENGTH) {
-    cleaned = cleaned.substring(0, MAX_LENGTH - 3) + '...';
-    violations.push('truncated');
+    cleaned = cleaned.substring(0, MAX_LENGTH - 3) + '...'
+    violations.push('truncated')
   }
 
   // Final empty check after cleaning
   if (!cleaned) {
-    return { text: fallback, modified: true, blocked: true, violations: [...violations, 'empty-after-clean'] };
+    return {
+      text: fallback,
+      modified: true,
+      blocked: true,
+      violations: [...violations, 'empty-after-clean'],
+    }
   }
 
   return {
@@ -177,5 +187,5 @@ export function sanitizeOutboundMessage(text: string, lang: string = 'en'): Sani
     modified: cleaned !== text,
     blocked: false,
     violations,
-  };
+  }
 }
