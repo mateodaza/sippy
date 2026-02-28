@@ -51,7 +51,7 @@ export default class CdpAuthMiddleware {
     const token = authHeader?.replace('Bearer ', '')
 
     if (!token) {
-      return ctx.response.unauthorized({ error: 'Missing authorization token' })
+      return ctx.response.unauthorized({ error: 'Unauthorized' })
     }
 
     try {

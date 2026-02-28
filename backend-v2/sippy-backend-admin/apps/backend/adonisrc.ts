@@ -51,7 +51,8 @@ export default defineConfig({
     () => import('@adonisjs/shield/shield_provider'),
     () => import('@adonisjs/lucid/database_provider'),
     () => import('@adonisjs/cors/cors_provider'),
-    () => import('@adonisjs/auth/auth_provider'),
+    // TODO: Phase 5 — Re-enable when AdminUser model + admin_users table are ready
+    // () => import('@adonisjs/auth/auth_provider'),
     () => import('#providers/api_provider'),
     () => import('#providers/rate_limit_provider'),
   ],

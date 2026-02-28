@@ -12,6 +12,8 @@ export default class RateLimitProvider {
 
   async boot() {
     const rateLimitService = await this.app.container.make('rateLimitService')
+    const { default: logger } = await import('@adonisjs/core/services/logger')
+    rateLimitService.setLogger(logger)
     rateLimitService.startCleanupTimers()
   }
 

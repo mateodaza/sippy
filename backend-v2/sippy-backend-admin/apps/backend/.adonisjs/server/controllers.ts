@@ -5,6 +5,12 @@
 
 export const controllers = {
   AccessToken: () => import('#controllers/access_token_controller'),
+  Debug: () => import('#controllers/debug_controller'),
+  EmbeddedWallet: () => import('#controllers/embedded_wallet_controller'),
+  Health: () => import('#controllers/health_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
+  Notify: () => import('#controllers/notify_controller'),
   Profile: () => import('#controllers/profile_controller'),
+  Resolve: () => import('#controllers/resolve_controller'),
+  Webhook: () => import('#controllers/webhook_controller'),
 }

@@ -16,6 +16,7 @@ import { ethers } from 'ethers'
 import { query } from '#services/db'
 import {
   NETWORK,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   USDC_ADDRESSES,
   SIPPY_SPENDER_ADDRESS,
   USDC_DECIMALS,

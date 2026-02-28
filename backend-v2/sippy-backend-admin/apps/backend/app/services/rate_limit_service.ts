@@ -12,7 +12,7 @@
  *  4. userResolveThrottle — per-user phone-resolution throttle (20/hr)
  */
 
-import logger from '@adonisjs/core/services/logger'
+import type { Logger } from '@adonisjs/core/logger'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -41,6 +41,8 @@ interface ThrottleBucket {
 // ── Service ────────────────────────────────────────────────────────────────────
 
 export default class RateLimitService {
+  private logger?: Logger
+
   /**
    * Map 1: Message deduplication
    * messageId → timestamp when it was first seen
@@ -68,18 +70,31 @@ export default class RateLimitService {
   /** Interval handles so we can stop them on shutdown */
   private cleanupTimers: ReturnType<typeof setInterval>[] = []
 
+  /**
+   * Inject logger after construction (provider calls this at boot time
+   * when the AdonisJS logger service is available).
+   */
+  setLogger(log: Logger): void {
+    this.logger = log
+  }
+
   // ── Map 1: Message Deduplication ───────────────────────────────────────────
 
   /**
    * Returns `true` if the message has already been processed (duplicate).
-   * Otherwise marks it as processed and returns `false`.
+   * Does NOT mark the message — call markProcessed() after successful handling.
+   * This matches Express behavior: only mark after success so Meta can retry on failure.
    */
   isDuplicate(messageId: string): boolean {
-    if (this.processedMessages.has(messageId)) {
-      return true
-    }
+    return this.processedMessages.has(messageId)
+  }
+
+  /**
+   * Marks a message as processed. Call this AFTER successful handling
+   * (or when deliberately blocking spam). Allows Meta retries on failure.
+   */
+  markProcessed(messageId: string): void {
     this.processedMessages.set(messageId, Date.now())
-    return false
   }
 
   // ── Map 2: User Spam Protection ────────────────────────────────────────────
@@ -183,7 +198,7 @@ export default class RateLimitService {
       }
 
       if (msgCleaned > 0 || spamCleaned > 0) {
-        logger.debug(
+        this.logger?.debug(
           `RateLimitService cleanup: ${msgCleaned} messages, ${spamCleaned} spam entries`
         )
       }
@@ -210,14 +225,14 @@ export default class RateLimitService {
       }
 
       if (ipCleaned > 0 || userCleaned > 0) {
-        logger.debug(
+        this.logger?.debug(
           `RateLimitService cleanup: ${ipCleaned} IP entries, ${userCleaned} user-resolve entries`
         )
       }
     }, 5 * 60_000)
 
     this.cleanupTimers.push(msgTimer, resolveTimer)
-    logger.info('RateLimitService: cleanup timers started')
+    this.logger?.info('RateLimitService: cleanup timers started')
   }
 
   /**
@@ -228,6 +243,6 @@ export default class RateLimitService {
       clearInterval(timer)
     }
     this.cleanupTimers = []
-    logger.info('RateLimitService: cleanup timers stopped')
+    this.logger?.info('RateLimitService: cleanup timers stopped')
   }
 }
