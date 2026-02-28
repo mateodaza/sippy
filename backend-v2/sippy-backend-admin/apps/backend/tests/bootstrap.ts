@@ -4,7 +4,8 @@ import app from '@adonisjs/core/services/app'
 import type { Config } from '@japa/runner/types'
 import { pluginAdonisJS } from '@japa/plugin-adonisjs'
 import testUtils from '@adonisjs/core/services/test_utils'
-import { authApiClient } from '@adonisjs/auth/plugins/api_client'
+// TODO: Phase 5 — Re-enable when AdminUser model + admin_users table are ready
+// import { authApiClient } from '@adonisjs/auth/plugins/api_client'
 import { sessionApiClient } from '@adonisjs/session/plugins/api_client'
 import type { Registry } from '../.adonisjs/client/registry/schema.d.ts'
 
@@ -28,7 +29,7 @@ export const plugins: Config['plugins'] = [
   pluginAdonisJS(app),
   apiClient(),
   sessionApiClient(app),
-  authApiClient(app),
+  // TODO: Phase 5 — authApiClient(app),
 ]
 
 /**

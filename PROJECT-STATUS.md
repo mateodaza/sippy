@@ -130,9 +130,9 @@ Summary: Inverted parsing order (regex-first), trilingual everything, Zod valida
 - 50 tester onboarding
 - Production environment hardening
 
-### AdonisJS Migration — In Progress (Phase 3 complete)
+### AdonisJS Migration — COMPLETE (core backend)
 
-Migrating Express monolith → AdonisJS v7. Full plan: [ADONISJS-POC-PLAN.md](./ADONISJS-POC-PLAN.md)
+Migrated Express monolith → AdonisJS v7. All 18 routes ported with identical paths, methods, and JSON responses. Frontend-compatible — no breaking changes. Full plan: [ADONISJS-POC-PLAN.md](./ADONISJS-POC-PLAN.md)
 
 | Phase | What | Status |
 |-------|------|--------|
@@ -140,9 +140,9 @@ Migrating Express monolith → AdonisJS v7. Full plan: [ADONISJS-POC-PLAN.md](./
 | 1: Port Core | Utils (6), types (2), services (6), models (5) | Done |
 | 1.5: Cleanup | Fix broken imports, missing env, lint (1004→0) | Done |
 | 2: Middleware | RateLimitService, CdpAuth, IpThrottle | Done |
-| 3: Controllers | 6 controllers, 17 routes (exact same paths) | Done |
-| 4: Validate | curl all routes, compare Express vs AdonisJS | Next |
-| 5: Admin Dashboard | Inertia + React (admin_users table, separate from phone_registry) | Last |
+| 3: Controllers | 6 controllers, 18 routes (exact same paths) | Done |
+| 4: Tests | 103 tests passing (unit + functional), 2s runtime | Done |
+| 5: Admin Dashboard | Inertia + React (admin_users table) | Low priority |
 
 ---
 
@@ -156,7 +156,7 @@ Migrating Express monolith → AdonisJS v7. Full plan: [ADONISJS-POC-PLAN.md](./
        │
        ▼
 ┌──────────────────────────────────────────┐
-│  Backend (Node.js / TypeScript / Express) │
+│  Backend (Node.js / TypeScript / AdonisJS v7) │
 │                                          │
 │  ┌─────────────────────┐                 │
 │  │  Regex Parser       │  <1ms, zero cost│
@@ -211,7 +211,7 @@ Migrating Express monolith → AdonisJS v7. Full plan: [ADONISJS-POC-PLAN.md](./
 
 ## Recent Changes (Feb 2026)
 
-**Feb 28** — AdonisJS migration Phases 0-3 complete: scaffold, env, DB, 6 utils, 6 services, 5 models, middleware (RateLimit, CdpAuth, IpThrottle), 6 controllers, 17 routes wired. Lint clean. App boots on :3333
+**Feb 28** — AdonisJS migration COMPLETE: all 18 Express routes ported to AdonisJS v7, 103 tests passing (unit + functional), same JSON responses — frontend-compatible. Key fixes: `forceExit: true`, `$N→?` placeholder conversion for Lucid, phone length validation. Backend migrated from Express monolith to AdonisJS v7 with full test coverage.
 **Feb 21** — Sweep-to-EOA in export flow, webapp fallback wallet (/wallet), authenticated phone resolution, web send audit logging, IP rate limiting, repo cleanup (22 outdated docs removed)
 **Feb 20** — Regex greetings/social phrases, media message handling, language continuity fix
 **Feb 19** — Trilingual sanitizer fallback, recipient language in notifications

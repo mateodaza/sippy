@@ -156,6 +156,12 @@ function parseSendMatch(match: RegExpMatchArray, originalText: string): ParsedCo
     return { command: 'send', amount, recipient: digitsOnly }
   }
 
+  // Validate minimum phone length (at least 7 digits for valid international numbers)
+  const recipientDigits = normalizedRecipient.replace(/\D/g, '')
+  if (recipientDigits.length < 7) {
+    return { command: 'unknown', originalText }
+  }
+
   return { command: 'send', amount, recipient: normalizedRecipient }
 }
 

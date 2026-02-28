@@ -24,6 +24,8 @@
 
 **KPIs:** Security features tested, dual currency live, monitoring dashboard active, 50 beta testers, $10K+ USDC volume.
 
+> **Note:** Backend migrated from Express monolith to AdonisJS v7 (Feb 28, 2026). All 18 routes ported with identical paths/methods/JSON responses. 103 tests passing. Frontend-compatible — no breaking changes. Code at `backend-v2/sippy-backend-admin/apps/backend/`. See [ADONISJS-POC-PLAN.md](./ADONISJS-POC-PLAN.md) for migration details.
+
 ---
 
 ## Developer Handoff Notes

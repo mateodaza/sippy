@@ -11,6 +11,7 @@
 */
 
 process.env.NODE_ENV = 'test'
+process.env.USE_LLM = 'false' // Disable LLM in tests — regex-only, fast and deterministic
 
 import 'reflect-metadata'
 import { Ignitor, prettyPrintError } from '@adonisjs/core'

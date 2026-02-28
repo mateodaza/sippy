@@ -17,7 +17,10 @@ import logger from '@adonisjs/core/services/logger'
 export async function query<T = any>(text: string, params?: any[]): Promise<{ rows: T[] }> {
   const start = Date.now()
   try {
-    const result = await db.rawQuery(text, params ?? [])
+    // Lucid rawQuery uses ? placeholders (knex convention), not PostgreSQL $1 syntax.
+    // Convert $1, $2, ... to ? for compatibility with migrated Express queries.
+    const knexText = text.replace(/\$\d+/g, '?')
+    const result = await db.rawQuery(knexText, params ?? [])
     const duration = Date.now() - start
     logger.info(`Query executed in ${duration}ms`)
     return { rows: result.rows }

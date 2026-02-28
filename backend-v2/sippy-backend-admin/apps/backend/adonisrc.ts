@@ -53,7 +53,6 @@ export default defineConfig({
     () => import('@adonisjs/cors/cors_provider'),
     // TODO: Phase 5 — Re-enable when AdminUser model + admin_users table are ready
     // () => import('@adonisjs/auth/auth_provider'),
-    () => import('#providers/api_provider'),
     () => import('#providers/rate_limit_provider'),
   ],
 
@@ -69,6 +68,7 @@ export default defineConfig({
     () => import('#start/routes'),
     () => import('#start/kernel'),
     () => import('#start/validator'),
+    () => import('#providers/api_provider'),
   ],
 
   /*
@@ -93,7 +93,7 @@ export default defineConfig({
         timeout: 30000,
       },
     ],
-    forceExit: false,
+    forceExit: true,
   },
 
   /*

@@ -9,6 +9,8 @@ session-summaries
 .env.test.local
 .env.production.local
 .env.*
+.agents
+.claude
 
 # Build output
 dist/
