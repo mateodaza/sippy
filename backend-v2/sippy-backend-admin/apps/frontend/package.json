@@ -1,0 +1,14 @@
+{
+  "name": "frontend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Empty frontend starter - choose your own framework",
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'Setup your frontend framework first. See README.md'",
+    "build": "echo 'Setup your frontend framework first. See README.md'",
+    "test": "echo 'No tests configured yet'",
+    "lint": "echo 'No linting configured yet'",
+    "typecheck": "echo 'No typecheck configured yet'"
+  }
+}
