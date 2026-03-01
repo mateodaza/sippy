@@ -4,52 +4,177 @@
  * Run "node ace migration:run" command to re-generate this file
  */
 
-// TODO: Phase 5 — Admin dashboard auth.
-// Uncomment when building admin_users + access_tokens tables.
+import { BaseModel, column } from '@adonisjs/lucid/orm'
+import { DateTime } from 'luxon'
 
-// import { BaseModel, column } from '@adonisjs/lucid/orm'
-// import { DateTime } from 'luxon'
-//
-// export class AuthAccessTokenSchema extends BaseModel {
-//   static table = 'auth_access_tokens'
-//   static $columns = ['id', 'tokenableId', 'type', 'name', 'hash', 'abilities', 'createdAt', 'updatedAt', 'lastUsedAt', 'expiresAt'] as const
-//   $columns = AuthAccessTokenSchema.$columns
-//   @column({ isPrimary: true })
-//   declare id: number
-//   @column()
-//   declare tokenableId: number
-//   @column()
-//   declare type: string
-//   @column()
-//   declare name: string | null
-//   @column()
-//   declare hash: string
-//   @column()
-//   declare abilities: string
-//   @column.dateTime({ autoCreate: true })
-//   declare createdAt: DateTime | null
-//   @column.dateTime({ autoCreate: true, autoUpdate: true })
-//   declare updatedAt: DateTime | null
-//   @column.dateTime()
-//   declare lastUsedAt: DateTime | null
-//   @column.dateTime()
-//   declare expiresAt: DateTime | null
-// }
-//
-// export class AdminUserSchema extends BaseModel {
-//   static table = 'admin_users'
-//   static $columns = ['id', 'fullName', 'email', 'password', 'createdAt', 'updatedAt'] as const
-//   $columns = AdminUserSchema.$columns
-//   @column({ isPrimary: true })
-//   declare id: number
-//   @column()
-//   declare fullName: string | null
-//   @column()
-//   declare email: string
-//   @column({ serializeAs: null })
-//   declare password: string
-//   @column.dateTime({ autoCreate: true })
-//   declare createdAt: DateTime
-//   @column.dateTime({ autoCreate: true, autoUpdate: true })
-//   declare updatedAt: DateTime | null
-// }
+export class AdminUserSchema extends BaseModel {
+  static $columns = ['id', 'fullName', 'email', 'password', 'role', 'createdAt', 'updatedAt'] as const
+  $columns = AdminUserSchema.$columns
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare fullName: string | null
+  @column()
+  declare email: string
+  @column({ serializeAs: null })
+  declare password: string
+  @column()
+  declare role: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
+export class ExportAuditLogSchema extends BaseModel {
+  static $columns = ['id', 'attemptId', 'event', 'phoneHash', 'walletAddress', 'createdAt'] as const
+  $columns = ExportAuditLogSchema.$columns
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare attemptId: string
+  @column()
+  declare event: string
+  @column()
+  declare phoneHash: string
+  @column()
+  declare walletAddress: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+}
+
+export class ParseLogSchema extends BaseModel {
+  static $columns = ['id', 'messageId', 'phoneNumber', 'parseSource', 'intent', 'model', 'promptTokens', 'completionTokens', 'latencyMs', 'status', 'detectedLanguage', 'createdAt'] as const
+  $columns = ParseLogSchema.$columns
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare messageId: string
+  @column()
+  declare phoneNumber: string | null
+  @column()
+  declare parseSource: string
+  @column()
+  declare intent: string
+  @column()
+  declare model: string | null
+  @column()
+  declare promptTokens: number | null
+  @column()
+  declare completionTokens: number | null
+  @column()
+  declare latencyMs: number
+  @column()
+  declare status: string
+  @column()
+  declare detectedLanguage: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+}
+
+export class PhoneRegistrySchema extends BaseModel {
+  static $columns = ['phoneNumber', 'cdpWalletName', 'walletAddress', 'createdAt', 'lastActivity', 'dailySpent', 'lastResetDate', 'spendPermissionHash', 'dailyLimit', 'permissionCreatedAt'] as const
+  $columns = PhoneRegistrySchema.$columns
+  @column()
+  declare phoneNumber: string
+  @column()
+  declare cdpWalletName: string
+  @column()
+  declare walletAddress: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare lastActivity: bigint | number
+  @column()
+  declare dailySpent: string
+  @column()
+  declare lastResetDate: string
+  @column()
+  declare spendPermissionHash: string | null
+  @column()
+  declare dailyLimit: string | null
+  @column()
+  declare permissionCreatedAt: bigint | number | null
+}
+
+export class TransactionSchema extends BaseModel {
+  static $columns = ['id', 'createdAt', 'updatedAt'] as const
+  $columns = TransactionSchema.$columns
+  @column({ isPrimary: true })
+  declare id: number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class UserPreferenceSchema extends BaseModel {
+  static $columns = ['phoneNumber', 'preferredLanguage', 'updatedAt'] as const
+  $columns = UserPreferenceSchema.$columns
+  @column()
+  declare phoneNumber: string
+  @column()
+  declare preferredLanguage: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class UserSchema extends BaseModel {
+  static $columns = ['id', 'phoneNumber', 'cdpWalletName', 'walletAddress', 'status', 'kycStatus', 'kycLevel', 'displayName', 'language', 'notificationsEnabled', 'isPublic', 'dailyLimit', 'transactionLimit', 'dailySpent', 'lastResetDate', 'createdAt', 'updatedAt', 'lastActivity'] as const
+  $columns = UserSchema.$columns
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare phoneNumber: string
+  @column()
+  declare cdpWalletName: string
+  @column()
+  declare walletAddress: string
+  @column()
+  declare status: string | null
+  @column()
+  declare kycStatus: string | null
+  @column()
+  declare kycLevel: number | null
+  @column()
+  declare displayName: string | null
+  @column()
+  declare language: string | null
+  @column()
+  declare notificationsEnabled: boolean | null
+  @column()
+  declare isPublic: boolean | null
+  @column()
+  declare dailyLimit: string | null
+  @column()
+  declare transactionLimit: string | null
+  @column()
+  declare dailySpent: string | null
+  @column.dateTime()
+  declare lastResetDate: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column.dateTime()
+  declare lastActivity: DateTime | null
+}
+
+export class WebSendLogSchema extends BaseModel {
+  static $columns = ['id', 'phoneHash', 'walletAddress', 'toAddress', 'amount', 'txHash', 'createdAt'] as const
+  $columns = WebSendLogSchema.$columns
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare phoneHash: string
+  @column()
+  declare walletAddress: string
+  @column()
+  declare toAddress: string
+  @column()
+  declare amount: string
+  @column()
+  declare txHash: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+}

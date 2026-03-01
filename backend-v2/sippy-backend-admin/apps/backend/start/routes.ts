@@ -52,4 +52,27 @@ router
   .prefix('/api')
   .use(middleware.cdpAuth())
 
-// TODO: Phase 5 — Add admin dashboard routes
+// ── Admin dashboard ─────────────────────────────────────────────────────────
+const AdminAuthController = () => import('#controllers/admin/auth_controller')
+const DashboardController = () => import('#controllers/admin/dashboard_controller')
+const AdminUsersController = () => import('#controllers/admin/users_controller')
+const AnalyticsController = () => import('#controllers/admin/analytics_controller')
+const RolesController = () => import('#controllers/admin/roles_controller')
+
+// Public admin routes
+router.get('/admin/login', [AdminAuthController, 'showLogin'])
+router.post('/admin/login', [AdminAuthController, 'login'])
+
+// Auth-protected admin routes
+router
+  .group(() => {
+    router.post('/logout', [AdminAuthController, 'logout'])
+    router.get('/', [DashboardController, 'index'])
+    router.get('/users', [AdminUsersController, 'index'])
+    router.get('/users/:phone', [AdminUsersController, 'show'])
+    router.get('/analytics', [AnalyticsController, 'index'])
+    router.get('/roles', [RolesController, 'index'])
+    router.put('/roles/:id', [RolesController, 'update'])
+  })
+  .prefix('/admin')
+  .use(middleware.auth({ guards: ['web'] }))

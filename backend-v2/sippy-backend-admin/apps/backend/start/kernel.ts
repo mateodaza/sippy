@@ -26,6 +26,7 @@ server.use([
   () => import('#middleware/force_json_response_middleware'),
   () => import('#middleware/container_bindings_middleware'),
   () => import('@adonisjs/cors/cors_middleware'),
+  () => import('@adonisjs/vite/vite_middleware'),
 ])
 
 /**
@@ -36,9 +37,8 @@ router.use([
   () => import('@adonisjs/core/bodyparser_middleware'),
   () => import('@adonisjs/session/session_middleware'),
   () => import('@adonisjs/shield/shield_middleware'),
-  // TODO: Phase 5 — Re-enable when AdminUser model + admin_users table are ready
-  // () => import('@adonisjs/auth/initialize_auth_middleware'),
-  // () => import('#middleware/silent_auth_middleware'),
+  () => import('@adonisjs/auth/initialize_auth_middleware'),
+  () => import('#middleware/inertia_middleware'),
 ])
 
 /**
@@ -46,8 +46,7 @@ router.use([
  * the routes or the routes group.
  */
 export const middleware = router.named({
-  // TODO: Phase 5 — Re-enable when AdminUser model is ready
-  // auth: () => import('#middleware/auth_middleware'),
+  auth: () => import('#middleware/auth_middleware'),
   cdpAuth: () => import('#middleware/cdp_auth_middleware'),
   ipThrottle: () => import('#middleware/ip_throttle_middleware'),
 })

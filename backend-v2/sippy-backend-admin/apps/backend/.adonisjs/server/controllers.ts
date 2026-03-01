@@ -4,13 +4,17 @@
  */
 
 export const controllers = {
-  AccessToken: () => import('#controllers/access_token_controller'),
+  admin: {
+    Analytics: () => import('#controllers/admin/analytics_controller'),
+    Auth: () => import('#controllers/admin/auth_controller'),
+    Dashboard: () => import('#controllers/admin/dashboard_controller'),
+    Roles: () => import('#controllers/admin/roles_controller'),
+    Users: () => import('#controllers/admin/users_controller'),
+  },
   Debug: () => import('#controllers/debug_controller'),
   EmbeddedWallet: () => import('#controllers/embedded_wallet_controller'),
   Health: () => import('#controllers/health_controller'),
-  NewAccount: () => import('#controllers/new_account_controller'),
   Notify: () => import('#controllers/notify_controller'),
-  Profile: () => import('#controllers/profile_controller'),
   Resolve: () => import('#controllers/resolve_controller'),
   Webhook: () => import('#controllers/webhook_controller'),
 }

@@ -194,4 +194,103 @@ export interface Registry {
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/embedded_wallet_controller').default['logWebSend']>>>
     }
   }
+  'admin_auth.show_login': {
+    methods: ["GET","HEAD"]
+    pattern: '/admin/login'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/auth_controller').default['showLogin']>>>
+    }
+  }
+  'admin_auth.login': {
+    methods: ["POST"]
+    pattern: '/admin/login'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/user').loginValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/user').loginValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/auth_controller').default['login']>>>
+    }
+  }
+  'admin_auth.logout': {
+    methods: ["POST"]
+    pattern: '/admin/logout'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/auth_controller').default['logout']>>>
+    }
+  }
+  'dashboard.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/admin'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/dashboard_controller').default['index']>>>
+    }
+  }
+  'admin_users.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/admin/users'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/users_controller').default['index']>>>
+    }
+  }
+  'admin_users.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/admin/users/:phone'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { phone: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/users_controller').default['show']>>>
+    }
+  }
+  'analytics.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/admin/analytics'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/analytics_controller').default['index']>>>
+    }
+  }
+  'roles.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/admin/roles'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/roles_controller').default['index']>>>
+    }
+  }
+  'roles.update': {
+    methods: ["PUT"]
+    pattern: '/admin/roles/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin/roles_controller').default['update']>>>
+    }
+  }
 }

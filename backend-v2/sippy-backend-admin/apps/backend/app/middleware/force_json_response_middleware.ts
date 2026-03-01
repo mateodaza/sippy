@@ -3,7 +3,10 @@ import type { NextFn } from '@adonisjs/core/types/http'
 
 export default class ForceJsonResponseMiddleware {
   handle(ctx: HttpContext, next: NextFn) {
-    ctx.request.request.headers.accept = 'application/json'
+    const url = ctx.request.url()
+    if (!url.startsWith('/admin')) {
+      ctx.request.request.headers.accept = 'application/json'
+    }
     return next()
   }
 }

@@ -108,6 +108,60 @@ const routes = {
     tokens: [{"old":"/api/log-web-send","type":0,"val":"api","end":""},{"old":"/api/log-web-send","type":0,"val":"log-web-send","end":""}],
     types: placeholder as Registry['embedded_wallet.log_web_send']['types'],
   },
+  'admin_auth.show_login': {
+    methods: ["GET","HEAD"],
+    pattern: '/admin/login',
+    tokens: [{"old":"/admin/login","type":0,"val":"admin","end":""},{"old":"/admin/login","type":0,"val":"login","end":""}],
+    types: placeholder as Registry['admin_auth.show_login']['types'],
+  },
+  'admin_auth.login': {
+    methods: ["POST"],
+    pattern: '/admin/login',
+    tokens: [{"old":"/admin/login","type":0,"val":"admin","end":""},{"old":"/admin/login","type":0,"val":"login","end":""}],
+    types: placeholder as Registry['admin_auth.login']['types'],
+  },
+  'admin_auth.logout': {
+    methods: ["POST"],
+    pattern: '/admin/logout',
+    tokens: [{"old":"/admin/logout","type":0,"val":"admin","end":""},{"old":"/admin/logout","type":0,"val":"logout","end":""}],
+    types: placeholder as Registry['admin_auth.logout']['types'],
+  },
+  'dashboard.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/admin',
+    tokens: [{"old":"/admin","type":0,"val":"admin","end":""}],
+    types: placeholder as Registry['dashboard.index']['types'],
+  },
+  'admin_users.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/admin/users',
+    tokens: [{"old":"/admin/users","type":0,"val":"admin","end":""},{"old":"/admin/users","type":0,"val":"users","end":""}],
+    types: placeholder as Registry['admin_users.index']['types'],
+  },
+  'admin_users.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/admin/users/:phone',
+    tokens: [{"old":"/admin/users/:phone","type":0,"val":"admin","end":""},{"old":"/admin/users/:phone","type":0,"val":"users","end":""},{"old":"/admin/users/:phone","type":1,"val":"phone","end":""}],
+    types: placeholder as Registry['admin_users.show']['types'],
+  },
+  'analytics.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/admin/analytics',
+    tokens: [{"old":"/admin/analytics","type":0,"val":"admin","end":""},{"old":"/admin/analytics","type":0,"val":"analytics","end":""}],
+    types: placeholder as Registry['analytics.index']['types'],
+  },
+  'roles.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/admin/roles',
+    tokens: [{"old":"/admin/roles","type":0,"val":"admin","end":""},{"old":"/admin/roles","type":0,"val":"roles","end":""}],
+    types: placeholder as Registry['roles.index']['types'],
+  },
+  'roles.update': {
+    methods: ["PUT"],
+    pattern: '/admin/roles/:id',
+    tokens: [{"old":"/admin/roles/:id","type":0,"val":"admin","end":""},{"old":"/admin/roles/:id","type":0,"val":"roles","end":""},{"old":"/admin/roles/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['roles.update']['types'],
+  },
 } as const satisfies Record<string, AdonisEndpoint>
 
 export { routes }

@@ -30,4 +30,23 @@ export interface ApiDefinition {
     resolvePhone: typeof routes['embedded_wallet.resolve_phone']
     logWebSend: typeof routes['embedded_wallet.log_web_send']
   }
+  adminAuth: {
+    showLogin: typeof routes['admin_auth.show_login']
+    login: typeof routes['admin_auth.login']
+    logout: typeof routes['admin_auth.logout']
+  }
+  dashboard: {
+    index: typeof routes['dashboard.index']
+  }
+  adminUsers: {
+    index: typeof routes['admin_users.index']
+    show: typeof routes['admin_users.show']
+  }
+  analytics: {
+    index: typeof routes['analytics.index']
+  }
+  roles: {
+    index: typeof routes['roles.index']
+    update: typeof routes['roles.update']
+  }
 }
