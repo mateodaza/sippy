@@ -11,6 +11,10 @@ session-summaries
 .env.*
 .agents
 .claude
+skills-lock.json
+
+# AdonisJS generated
+.adonisjs/
 
 # Build output
 dist/
