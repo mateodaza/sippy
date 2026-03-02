@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["ponder.config.ts", "ponder.schema.ts", "offchain.ts"],
+  "exclude": ["node_modules", "src/index.ts", "src/api"]
+}
