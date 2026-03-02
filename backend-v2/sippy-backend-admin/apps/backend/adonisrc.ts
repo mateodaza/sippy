@@ -71,6 +71,10 @@ export default defineConfig({
     () => import('#start/kernel'),
     () => import('#start/validator'),
     () => import('#providers/api_provider'),
+    {
+      file: () => import('#start/indexer_sync'),
+      environment: ['web'],
+    },
   ],
 
   /*

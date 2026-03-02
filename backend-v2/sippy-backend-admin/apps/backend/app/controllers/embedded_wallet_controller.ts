@@ -20,6 +20,7 @@ import { query, logExportEvent, logWebSend } from '#services/db'
 import { getSippySpenderAccount } from '#services/embedded_wallet.service'
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
+import { registerWalletWithIndexer } from '#services/indexer.service'
 import { exportEventSchema, webSendEventSchema } from '#types/schemas'
 import { NETWORK, USDC_ADDRESSES, USDC_DECIMALS } from '#config/network'
 
@@ -81,6 +82,9 @@ export default class EmbeddedWalletController {
       } else {
         logger.warn('Refuel service not available - user will need ETH for gas')
       }
+
+      // Register with indexer (fire-and-forget — never blocks signup)
+      registerWalletWithIndexer(walletAddress, normalizedPhone).catch(() => {})
 
       return response.json({ success: true, network: NETWORK })
     } catch (error) {

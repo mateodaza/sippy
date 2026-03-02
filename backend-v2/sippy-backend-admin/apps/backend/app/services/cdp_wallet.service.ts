@@ -10,6 +10,7 @@ import { CdpClient } from '@coinbase/cdp-sdk'
 import { ethers } from 'ethers'
 import { type UserWallet, type SecurityLimits, type TransferResult } from '#types/index'
 import { query } from '#services/db'
+import { registerWalletWithIndexer } from '#services/indexer.service'
 
 // USDC contract on Arbitrum (native USDC)
 const USDC_CONTRACT = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
@@ -90,6 +91,10 @@ export async function createUserWallet(phoneNumber: string): Promise<UserWallet>
     )
 
     logger.info(`User wallet registered in database for +${phoneNumber}`)
+
+    // Register with indexer (fire-and-forget — never blocks wallet creation)
+    registerWalletWithIndexer(walletAddress, phoneNumber).catch(() => {})
+
     return userWallet
   } catch (error) {
     logger.error(`Failed to create wallet for +${phoneNumber}: %o`, error)

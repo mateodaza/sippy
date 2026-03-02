@@ -6,9 +6,7 @@ import { GasRefuelAbi } from './abis/GasRefuel'
 const START_BLOCK = Number(process.env.START_BLOCK || 290_000_000)
 
 export default createConfig({
-  database: process.env.DATABASE_URL
-    ? { kind: 'postgres' as const }
-    : { kind: 'pglite' as const },
+  database: { kind: 'postgres' as const },
   chains: {
     arbitrum: {
       id: 42161,
