@@ -64,6 +64,11 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // Indexer
   INDEXER_URL: Env.schema.string.optional(),
+  INDEXER_DB_HOST: Env.schema.string.optional(),
+  INDEXER_DB_PORT: Env.schema.number.optional(),
+  INDEXER_DB_USER: Env.schema.string.optional(),
+  INDEXER_DB_PASSWORD: Env.schema.string.optional(),
+  INDEXER_DB_DATABASE: Env.schema.string.optional(),
 
   // Infrastructure
   TRUST_PROXY: Env.schema.string.optional(),

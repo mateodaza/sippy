@@ -1,7 +1,7 @@
 # Ponder On-Chain Indexer — M1 Plan
 
 **Parent:** [M1_PLAN.md](./M1_PLAN.md) → Phase 7.6
-**Location:** `apps/indexer/` (inside `backend-v2/sippy-backend-admin/`)
+**Location:** `apps/indexer/` (inside `sippy-backend-admin/`)
 **Purpose:** Real-time on-chain monitoring of all Sippy wallets — balances, transfers, gas sponsorship, **registered user tracking**, and **admin dashboard analytics**
 **Inspired by:** [Galeon indexer](../galeon/apps/indexer/) — 14-table schema, Hono API, upsert patterns
 
@@ -1158,7 +1158,7 @@ Copy from `contracts/gas-refuel/GasRefuel.abi.json` — export as typed const.
 ## File Structure
 
 ```
-backend-v2/sippy-backend-admin/
+sippy-backend-admin/
 ├── apps/
 │   ├── backend/              # AdonisJS backend (existing)
 │   ├── frontend/             # (existing)
@@ -1272,6 +1272,31 @@ backend-v2/sippy-backend-admin/
 | **Upserts for on-chain tables** | Idempotent handlers survive re-indexing | Galeon uses `onConflictDoUpdate` everywhere |
 | **Hono for API layer** | Lightweight, type-safe, built into Ponder | Same as Galeon |
 | **Sync status endpoint** | Monitor indexer health and lag | Galeon's `/sync-status` pattern |
+
+---
+
+## Security — Deferred to M2
+
+The following security hardening items are out of scope for M1 (50 beta users, internal-only dashboard) and should be addressed before public/production use:
+
+### 1. API Authentication for Write Endpoints
+- `POST /wallets/register` and `POST /wallets/sync` are unauthenticated
+- **Fix:** Add a shared API key (`X-API-Key` header) validated against `INDEXER_API_KEY` env var, checked via Hono middleware
+- Only the AdonisJS backend should be able to call these endpoints
+
+### 2. Auth on Dashboard Endpoints
+- All `/dashboard/*` routes are public — anyone with the URL can view analytics
+- **Fix:** Either proxy through the AdonisJS admin auth layer, or add a separate `DASHBOARD_API_KEY` for direct access
+- Consider IP allowlisting for Railway internal networking
+
+### 3. Rate Limiting
+- Dashboard endpoints (`/dashboard/flow`, `/dashboard/retention`, `/dashboard/top-users`) do heavy SQL aggregation
+- `/dashboard/users` has an N+1 per-user account lookup (acceptable for 50 users, not for 500+)
+- **Fix:** Add Hono rate-limit middleware, and batch the N+1 into a single `inArray` query at scale
+
+### 4. Wallet Set Caching
+- `loadWalletSet()` queries the offchain DB on every dashboard request
+- For 50 beta users this is a trivial query, but at scale it should be cached in-memory with a short TTL (e.g. 60s)
 
 ---
 
