@@ -97,5 +97,11 @@
       "./app/middleware/*.ts"
     ]
   },
-  "prettier": "@adonisjs/prettier-config"
+  "prettier": "@adonisjs/prettier-config",
+  "pnpm": {
+    "overrides": {
+      "jest-diff": "29.7.0",
+      "pretty-format": "29.7.0"
+    }
+  }
 }
