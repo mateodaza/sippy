@@ -16,8 +16,6 @@ import { ethers } from 'ethers'
 import { query } from '#services/db'
 import {
   NETWORK,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  USDC_ADDRESSES,
   SIPPY_SPENDER_ADDRESS,
   USDC_DECIMALS,
   getRpcUrl,
@@ -35,6 +33,23 @@ const SPEND_PERMISSION_MANAGER_ABI = [
 ]
 
 const ERC20_TRANSFER_ABI = ['function transfer(address to, uint256 amount) returns (bool)']
+
+/** Shape of a spend permission entry returned by CDP listSpendPermissions */
+interface SpendPermissionEntry {
+  permissionHash: string
+  network: string
+  permission: {
+    account: string
+    spender: string
+    token: string
+    allowance: bigint | string
+    period: bigint | number
+    start: bigint | number
+    end: bigint | number
+    salt: bigint | string
+    extraData: string
+  }
+}
 
 /**
  * Extended transfer result with remaining allowance info
@@ -57,9 +72,11 @@ function getCdpClient(): CdpClient {
 
 // Sippy's spender smart account (uses spend permissions)
 
-let sippySpenderAccount: any = null
+type SmartAccount = Awaited<ReturnType<CdpClient['evm']['getOrCreateSmartAccount']>>
 
-export async function getSippySpenderAccount() {
+let sippySpenderAccount: SmartAccount | null = null
+
+export async function getSippySpenderAccount(): Promise<SmartAccount> {
   if (!sippySpenderAccount) {
     const cdp = getCdpClient()
 
@@ -70,15 +87,14 @@ export async function getSippySpenderAccount() {
 
     // Get or create Sippy's spender smart account
     // This smart account will be granted spend permissions by users
-    const smartAccount = await cdp.evm.getOrCreateSmartAccount({
+    sippySpenderAccount = await cdp.evm.getOrCreateSmartAccount({
       name: 'sippy-spender',
       owner: ownerAccount,
     })
 
-    sippySpenderAccount = smartAccount
-    logger.info(`Sippy spender wallet: ${smartAccount.address}`)
+    logger.info(`Sippy spender wallet: ${sippySpenderAccount.address}`)
   }
-  return sippySpenderAccount
+  return sippySpenderAccount!
 }
 
 // USDC ABI for balance queries
@@ -196,7 +212,7 @@ export async function sendWithSpendPermission(
     const usdcAddress = getUsdcAddress()
 
     const matchingPermissions =
-      (allPermissions.spendPermissions as any[])?.filter(
+      ((allPermissions.spendPermissions ?? []) as SpendPermissionEntry[])?.filter(
         (p) =>
           p.permission?.spender?.toLowerCase() === spenderAccount.address.toLowerCase() &&
           p.permission?.token?.toLowerCase() === usdcAddress.toLowerCase() &&
@@ -228,7 +244,6 @@ export async function sendWithSpendPermission(
     const allowanceInfo = await getRemainingAllowance(fromPhoneNumber)
     if (allowanceInfo) {
       if (amount > allowanceInfo.remaining) {
-        const resetTime = new Date(allowanceInfo.periodEndsAt)
         const hoursUntilReset = Math.ceil(
           (allowanceInfo.periodEndsAt - Date.now()) / (1000 * 60 * 60)
         )
@@ -304,7 +319,8 @@ export async function sendWithSpendPermission(
       userOpHash: receipt.userOpHash,
     })
 
-    logger.info(`Transfer complete! Hash: ${userOp.transactionHash}`)
+    const txHash = userOp.transactionHash ?? receipt.userOpHash
+    logger.info(`Transfer complete! Hash: ${txHash}`)
 
     // Update last activity
     await query('UPDATE phone_registry SET last_activity = $1 WHERE phone_number = $2', [
@@ -316,7 +332,7 @@ export async function sendWithSpendPermission(
     const postTransferAllowance = await getRemainingAllowance(fromPhoneNumber)
 
     return {
-      transactionHash: userOp.transactionHash,
+      transactionHash: txHash,
       amount,
       recipient: toAddress,
       timestamp: Date.now(),
@@ -404,7 +420,7 @@ export async function getRemainingAllowance(phoneNumber: string): Promise<{
     const usdcAddress = getUsdcAddress()
 
     const matchingPermissions =
-      (allPermissions.spendPermissions as any[])?.filter(
+      ((allPermissions.spendPermissions ?? []) as SpendPermissionEntry[])?.filter(
         (p) =>
           p.permission?.spender?.toLowerCase() === spenderAccount.address.toLowerCase() &&
           p.permission?.token?.toLowerCase() === usdcAddress.toLowerCase() &&
@@ -437,7 +453,7 @@ export async function getRemainingAllowance(phoneNumber: string): Promise<{
       provider
     )
 
-    const [periodStart, periodEnd, periodSpend] = await spendPermissionManager.getCurrentPeriod({
+    const [, periodEnd, periodSpend] = await spendPermissionManager.getCurrentPeriod({
       account: permission.account,
       spender: permission.spender,
       token: permission.token,

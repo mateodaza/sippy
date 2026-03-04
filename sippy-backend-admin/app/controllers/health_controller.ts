@@ -5,6 +5,7 @@
  */
 
 import type { HttpContext } from '@adonisjs/core/http'
+import logger from '@adonisjs/core/services/logger'
 import { getAllWallets } from '#services/cdp_wallet.service'
 
 export default class HealthController {
@@ -23,10 +24,11 @@ export default class HealthController {
         timestamp: new Date().toISOString(),
         registeredWallets: wallets.length,
       })
-    } catch {
+    } catch (error) {
+      logger.error('Health check failed (DB unreachable): %o', error)
       return response.status(503).json({
-        status: 'initializing',
-        message: 'Wallet service starting up...',
+        status: 'error',
+        message: 'Database unreachable',
         timestamp: new Date().toISOString(),
       })
     }
@@ -47,12 +49,13 @@ export default class HealthController {
         timestamp: new Date().toISOString(),
         wallets: wallets.length,
       })
-    } catch {
+    } catch (error) {
+      logger.error('API health check failed (DB unreachable): %o', error)
       return response.status(503).json({
-        status: 'initializing',
+        status: 'error',
         service: 'Sippy CDP Server Wallet',
         timestamp: new Date().toISOString(),
-        message: 'Wallet service starting up...',
+        message: 'Database unreachable',
       })
     }
   }

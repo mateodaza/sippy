@@ -151,12 +151,13 @@ class RefuelService {
         success: true,
         txHash: receipt.transactionHash,
       }
-    } catch (error: any) {
-      logger.error('Refuel failed: %s', error.message || error)
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error)
+      logger.error('Refuel failed: %s', msg)
 
       return {
         success: false,
-        error: error.message || 'Unknown error',
+        error: msg,
       }
     }
   }

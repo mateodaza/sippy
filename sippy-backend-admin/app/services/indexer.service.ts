@@ -15,6 +15,7 @@ import { query } from '#services/db'
 import crypto from 'node:crypto'
 
 const INDEXER_URL = env.get('INDEXER_URL', '')
+const INDEXER_API_SECRET = env.get('INDEXER_API_SECRET', '')
 const EXPORT_AUDIT_SECRET = env.get('EXPORT_AUDIT_SECRET', '')
 
 function isAvailable(): boolean {
@@ -41,7 +42,7 @@ export async function registerWalletWithIndexer(
 
     const res = await fetch(`${INDEXER_URL}/wallets/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-indexer-secret': INDEXER_API_SECRET },
       body: JSON.stringify({ address: walletAddress, phoneHash }),
     })
 
@@ -85,7 +86,7 @@ export async function syncAllWalletsWithIndexer(): Promise<void> {
 
     const res = await fetch(`${INDEXER_URL}/wallets/sync`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-indexer-secret': INDEXER_API_SECRET },
       body: JSON.stringify({ wallets }),
     })
 

@@ -9,6 +9,7 @@
 */
 
 import router from '@adonisjs/core/services/router'
+import app from '@adonisjs/core/services/app'
 import { middleware } from '#start/kernel'
 
 const HealthController = () => import('#controllers/health_controller')
@@ -28,14 +29,16 @@ router.post('/webhook/whatsapp', [WebhookController, 'handle'])
 
 // ── Public resolution ───────────────────────────────────────────────────────
 router.get('/resolve-phone', [ResolveController, 'byPhone']).use(middleware.ipThrottle())
-router.get('/resolve-address', [ResolveController, 'byAddress'])
+router.get('/resolve-address', [ResolveController, 'byAddress']).use(middleware.ipThrottle())
 
-// ── Notifications ───────────────────────────────────────────────────────────
+// ── Notifications (require shared secret) ───────────────────────────────────
 router.post('/notify-fund', [NotifyController, 'fund'])
 
-// ── Debug ───────────────────────────────────────────────────────────────────
-router.get('/debug/wallets', [DebugController, 'wallets'])
-router.get('/debug/parse-stats', [DebugController, 'parseStats'])
+// ── Debug (disabled in production) ──────────────────────────────────────────
+if (app.inDev || app.inTest) {
+  router.get('/debug/wallets', [DebugController, 'wallets'])
+  router.get('/debug/parse-stats', [DebugController, 'parseStats'])
+}
 
 // ── CDP-authenticated API routes ────────────────────────────────────────────
 router

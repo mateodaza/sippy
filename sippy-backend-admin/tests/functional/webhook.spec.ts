@@ -11,7 +11,7 @@ test.group('Webhook | GET /webhook/whatsapp (Verification)', () => {
   test('valid verify_token returns 200 with challenge', async ({ client }) => {
     const response = await client.get('/webhook/whatsapp').qs({
       'hub.mode': 'subscribe',
-      'hub.verify_token': 'sippy_hackathon_2025',
+      'hub.verify_token': 'test-verify-token',
       'hub.challenge': 'test_challenge_123',
     })
 
@@ -31,7 +31,7 @@ test.group('Webhook | GET /webhook/whatsapp (Verification)', () => {
 
   test('missing mode returns 403', async ({ client }) => {
     const response = await client.get('/webhook/whatsapp').qs({
-      'hub.verify_token': 'sippy_hackathon_2025',
+      'hub.verify_token': 'test-verify-token',
       'hub.challenge': 'test_challenge',
     })
 
@@ -41,7 +41,7 @@ test.group('Webhook | GET /webhook/whatsapp (Verification)', () => {
   test('wrong mode returns 403', async ({ client }) => {
     const response = await client.get('/webhook/whatsapp').qs({
       'hub.mode': 'unsubscribe',
-      'hub.verify_token': 'sippy_hackathon_2025',
+      'hub.verify_token': 'test-verify-token',
       'hub.challenge': 'test_challenge',
     })
 

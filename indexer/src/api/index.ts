@@ -13,6 +13,23 @@ import { Hono } from 'hono'
 const app = new Hono()
 
 // ══════════════════════════════════════════════════════════════
+// AUTH MIDDLEWARE (shared secret for write endpoints)
+// ══════════════════════════════════════════════════════════════
+
+const INDEXER_API_SECRET = process.env.INDEXER_API_SECRET || ''
+
+async function requireSecret(c: any, next: () => Promise<void>) {
+  if (!INDEXER_API_SECRET) {
+    return c.json({ error: 'Indexer API secret not configured' }, 503)
+  }
+  const token = c.req.header('x-indexer-secret')
+  if (token !== INDEXER_API_SECRET) {
+    return c.json({ error: 'Unauthorized' }, 401)
+  }
+  await next()
+}
+
+// ══════════════════════════════════════════════════════════════
 // VALIDATION HELPERS
 // ══════════════════════════════════════════════════════════════
 
@@ -33,7 +50,7 @@ function isValidPhoneHash(value: unknown): boolean {
 // ══════════════════════════════════════════════════════════════
 
 // Register a single wallet (called on each new user signup)
-app.post('/wallets/register', async (c) => {
+app.post('/wallets/register', requireSecret, async (c) => {
   const { address, phoneHash } = await c.req.json()
 
   if (!isValidAddress(address)) {
@@ -62,7 +79,7 @@ app.post('/wallets/register', async (c) => {
 })
 
 // Bulk sync all wallets from backend (call on demand)
-app.post('/wallets/sync', async (c) => {
+app.post('/wallets/sync', requireSecret, async (c) => {
   const { wallets } = await c.req.json()
 
   if (!Array.isArray(wallets)) {

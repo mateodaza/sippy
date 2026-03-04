@@ -16,8 +16,18 @@ const shieldConfig = defineConfig({
    * to learn more
    */
   csrf: {
-    enabled: false,
-    exceptRoutes: [],
+    enabled: true,
+    exceptRoutes: (ctx) => {
+      const pattern = ctx.route?.pattern || ''
+      return (
+        pattern.startsWith('/api/') ||
+        pattern.startsWith('/debug/') ||
+        pattern === '/webhook/whatsapp' ||
+        pattern === '/notify-fund' ||
+        pattern === '/resolve-phone' ||
+        pattern === '/resolve-address'
+      )
+    },
     enableXsrfCookie: true,
     methods: ['POST', 'PUT', 'PATCH', 'DELETE'],
   },

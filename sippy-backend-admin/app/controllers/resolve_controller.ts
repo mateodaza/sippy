@@ -65,7 +65,6 @@ export default class ResolveController {
       logger.error('Error resolving phone: %o', error)
       return response.status(500).json({
         error: 'Failed to resolve phone number',
-        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   }
@@ -115,7 +114,6 @@ export default class ResolveController {
       logger.error('Error resolving address: %o', error)
       return response.status(500).json({
         error: 'Failed to resolve address',
-        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   }

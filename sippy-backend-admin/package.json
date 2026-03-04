@@ -1,5 +1,5 @@
 {
-  "name": "@api-starter-kit/backend",
+  "name": "@sippy/backend",
   "version": "0.0.0",
   "private": true,
   "type": "module",

@@ -9,6 +9,7 @@
  */
 
 import type { HttpContext } from '@adonisjs/core/http'
+import { createHmac, timingSafeEqual } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import app from '@adonisjs/core/services/app'
@@ -51,25 +52,16 @@ export default class WebhookController {
     const token = request.qs()['hub.verify_token']
     const challenge = request.qs()['hub.challenge']
 
-    const verifyToken = env.get('WHATSAPP_VERIFY_TOKEN') || 'sippy_hackathon_2025'
+    const verifyToken = env.get('WHATSAPP_VERIFY_TOKEN')
 
-    logger.info(
-      'Webhook verification request — mode: %s, token: %s, challenge: %s',
-      mode,
-      token,
-      challenge
-    )
+    logger.info('Webhook verification request — mode: %s, challenge present: %s', mode, !!challenge)
 
     if (mode === 'subscribe' && token === verifyToken) {
       logger.info('Webhook verified successfully by Meta')
       return response.status(200).send(challenge)
     }
 
-    logger.warn(
-      'Webhook verification failed — expected token: %s, received: %s',
-      verifyToken,
-      token
-    )
+    logger.warn('Webhook verification failed — received token does not match')
     return response.status(403).send('')
   }
 
@@ -83,6 +75,17 @@ export default class WebhookController {
   async handle({ request, response }: HttpContext) {
     const body = request.body() as WebhookPayload
 
+    // Verify X-Hub-Signature-256 when app secret is configured
+    const appSecret = env.get('WHATSAPP_APP_SECRET')
+    if (appSecret) {
+      const signature = request.header('x-hub-signature-256')
+      const rawBody = request.raw()
+      if (!signature || !rawBody || !this.verifySignature(rawBody, appSecret, signature)) {
+        logger.warn('Webhook signature verification failed')
+        return response.status(401).send('')
+      }
+    }
+
     logger.info('Webhook event received')
 
     // Respond 200 immediately — Meta requires this
@@ -90,6 +93,24 @@ export default class WebhookController {
 
     // Process asynchronously after response
     this.processWebhook(body).catch((err) => logger.error('Webhook processing error: %o', err))
+  }
+
+  /**
+   * Verify Meta's X-Hub-Signature-256 header against the raw request body.
+   * Uses the original bytes from the wire (via request.raw()) so the HMAC
+   * matches regardless of JSON key ordering or whitespace differences.
+   * Uses constant-time comparison to prevent timing attacks.
+   */
+  private verifySignature(
+    rawBody: string,
+    secret: string,
+    headerSignature: string
+  ): boolean {
+    const expected = 'sha256=' + createHmac('sha256', secret).update(rawBody).digest('hex')
+
+    if (expected.length !== headerSignature.length) return false
+
+    return timingSafeEqual(Buffer.from(expected), Buffer.from(headerSignature))
   }
 
   /**

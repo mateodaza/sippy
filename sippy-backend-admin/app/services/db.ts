@@ -7,6 +7,7 @@
 
 import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
+import type { ExportEvent } from '#types/schemas'
 
 /**
  * Execute a query against the database.
@@ -83,7 +84,7 @@ export async function logParseResult(entry: ParseLogEntry): Promise<void> {
 
 export interface ExportAuditEntry {
   attemptId: string
-  event: string
+  event: ExportEvent['event']
   phoneHash: string
   walletAddress: string
 }
@@ -151,7 +152,8 @@ export async function getUserLanguage(phoneNumber: string): Promise<'en' | 'es' 
     const lang = result.rows[0]?.preferred_language
     if (lang === 'en' || lang === 'es' || lang === 'pt') return lang
     return null
-  } catch {
+  } catch (error) {
+    logger.warn('getUserLanguage failed (falling back to null): %o', error)
     return null
   }
 }

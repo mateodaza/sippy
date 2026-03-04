@@ -16,7 +16,8 @@ export default await Env.create(new URL('../', import.meta.url), {
   // WhatsApp
   WHATSAPP_PHONE_NUMBER_ID: Env.schema.string(),
   WHATSAPP_ACCESS_TOKEN: Env.schema.string(),
-  WHATSAPP_VERIFY_TOKEN: Env.schema.string.optional(),
+  WHATSAPP_VERIFY_TOKEN: Env.schema.string(),
+  WHATSAPP_APP_SECRET: Env.schema.string.optional(),
   WHATSAPP_BUTTONS: Env.schema.string.optional(),
   SIPPY_WHATSAPP_NUMBER: Env.schema.string.optional(),
 
@@ -58,12 +59,14 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // Security
   EXPORT_AUDIT_SECRET: Env.schema.string.optional(),
+  NOTIFY_SECRET: Env.schema.string.optional(),
 
   // Feature flags
   DEMO_SHOW_REFUEL: Env.schema.string.optional(),
 
   // Indexer
   INDEXER_URL: Env.schema.string.optional(),
+  INDEXER_API_SECRET: Env.schema.string.optional(),
   INDEXER_DB_HOST: Env.schema.string.optional(),
   INDEXER_DB_PORT: Env.schema.number.optional(),
   INDEXER_DB_USER: Env.schema.string.optional(),

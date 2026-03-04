@@ -26,7 +26,7 @@ test.group('Parity | All Express routes exist', () => {
   test('GET /webhook/whatsapp (verify)', async ({ client }) => {
     const response = await client.get('/webhook/whatsapp').qs({
       'hub.mode': 'subscribe',
-      'hub.verify_token': 'sippy_hackathon_2025',
+      'hub.verify_token': 'test-verify-token',
       'hub.challenge': 'parity_check',
     })
     response.assertStatus(200)
@@ -48,9 +48,9 @@ test.group('Parity | All Express routes exist', () => {
     response.assertStatus(400)
   })
 
-  test('POST /notify-fund without body → 400', async ({ client }) => {
+  test('POST /notify-fund without secret → 401', async ({ client }) => {
     const response = await client.post('/notify-fund').json({})
-    response.assertStatus(400)
+    response.assertStatus(401)
   })
 
   test('GET /debug/wallets exists', async ({ client, assert }) => {

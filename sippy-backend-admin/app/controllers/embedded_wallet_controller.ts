@@ -84,12 +84,15 @@ export default class EmbeddedWalletController {
       }
 
       // Register with indexer (fire-and-forget — never blocks signup)
-      registerWalletWithIndexer(walletAddress, normalizedPhone).catch(() => {})
+      registerWalletWithIndexer(walletAddress, normalizedPhone).catch((err) =>
+        logger.warn('Indexer registration failed (non-blocking): %o', err)
+      )
 
       return response.json({ success: true, network: NETWORK })
     } catch (error) {
       logger.error('Register wallet error: %o', error)
-      return response.status(401).json({ error: 'Unauthorized' })
+      const isAuth = error instanceof Error && (error.message.includes('authorization') || error.message.includes('token'))
+      return response.status(isAuth ? 401 : 500).json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
     }
   }
 
@@ -124,12 +127,12 @@ export default class EmbeddedWalletController {
 
       // Find all matching permissions and select the most recent one (highest start time)
       const matchingPermissions =
-        (allPermissions.spendPermissions as any[])?.filter(
+        ((allPermissions.spendPermissions ?? []) as unknown as Array<{ permissionHash: string; network: string; permission: { spender: string; token: string; allowance: bigint | string; start: number } }>).filter(
           (p) =>
             p.permission?.spender?.toLowerCase() === spenderAddress.toLowerCase() &&
             p.permission?.token?.toLowerCase() === usdcAddress.toLowerCase() &&
             p.network === NETWORK
-        ) || []
+        )
 
       if (matchingPermissions.length === 0) {
         logger.error(
@@ -183,7 +186,8 @@ export default class EmbeddedWalletController {
       return response.json({ success: true, permissionHash, dailyLimit: onchainAllowance })
     } catch (error) {
       logger.error('Register permission error: %o', error)
-      return response.status(401).json({ error: 'Unauthorized' })
+      const isAuth = error instanceof Error && (error.message.includes('authorization') || error.message.includes('token'))
+      return response.status(isAuth ? 401 : 500).json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
     }
   }
 
@@ -214,7 +218,8 @@ export default class EmbeddedWalletController {
       return response.json({ success: true })
     } catch (error) {
       logger.error('Revoke permission error: %o', error)
-      return response.status(401).json({ error: 'Unauthorized' })
+      const isAuth = error instanceof Error && (error.message.includes('authorization') || error.message.includes('token'))
+      return response.status(isAuth ? 401 : 500).json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
     }
   }
 
@@ -321,7 +326,8 @@ export default class EmbeddedWalletController {
       })
     } catch (error) {
       logger.error('Wallet status error: %o', error)
-      return response.status(401).json({ error: 'Unauthorized' })
+      const isAuth = error instanceof Error && (error.message.includes('authorization') || error.message.includes('token'))
+      return response.status(isAuth ? 401 : 500).json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
     }
   }
 
@@ -417,7 +423,8 @@ export default class EmbeddedWalletController {
       })
     } catch (error) {
       logger.error('Authenticated resolve-phone error: %o', error)
-      return response.status(401).json({ error: 'Unauthorized' })
+      const isAuth = error instanceof Error && (error.message.includes('authorization') || error.message.includes('token'))
+      return response.status(isAuth ? 401 : 500).json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
     }
   }
 

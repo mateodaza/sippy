@@ -7,6 +7,7 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
+import env from '#start/env'
 import { getUserLanguage } from '#services/db'
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { sendTextMessage } from '#services/whatsapp.service'
@@ -22,6 +23,13 @@ export default class NotifyController {
    */
   async fund({ request, response }: HttpContext) {
     try {
+      // Verify dedicated notify secret to prevent unauthenticated notification spam
+      const notifySecret = env.get('NOTIFY_SECRET', '')
+      const secret = request.header('x-notify-secret')
+      if (!notifySecret || secret !== notifySecret) {
+        return response.status(401).json({ error: 'Unauthorized' })
+      }
+
       const { phone, type, amount, txHash } = request.body()
 
       if (!phone || !type || !amount || !txHash) {
@@ -34,7 +42,7 @@ export default class NotifyController {
       if (type !== 'eth' && type !== 'usdc' && type !== 'pyusd') {
         return response.status(400).json({
           error: 'Invalid type',
-          message: 'type must be either "eth" or "usdc"',
+          message: 'type must be "eth", "usdc", or "pyusd"',
         })
       }
 
@@ -74,7 +82,6 @@ export default class NotifyController {
       logger.error('Error sending Fund notification: %o', error)
       return response.status(500).json({
         error: 'Failed to send notification',
-        message: error instanceof Error ? error.message : 'Unknown error',
       })
     }
   }

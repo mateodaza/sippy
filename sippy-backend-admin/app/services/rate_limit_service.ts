@@ -26,6 +26,9 @@ const IP_RESOLVE_WINDOW = 60 * 1000 // 1 minute
 const USER_RESOLVE_LIMIT = 20 // lookups per window
 const USER_RESOLVE_WINDOW = 60 * 60 * 1000 // 1 hour
 
+const LOGIN_LIMIT = 5 // attempts per window
+const LOGIN_WINDOW = 15 * 60 * 1000 // 15 minutes
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface CountBucket {
@@ -66,6 +69,12 @@ export default class RateLimitService {
    * phoneNumber → { count, resetAt }
    */
   private userResolveThrottle: Map<string, ThrottleBucket> = new Map()
+
+  /**
+   * Map 5: Login brute-force protection
+   * IP → { count, resetAt }
+   */
+  private loginThrottle: Map<string, ThrottleBucket> = new Map()
 
   /** Interval handles so we can stop them on shutdown */
   private cleanupTimers: ReturnType<typeof setInterval>[] = []
@@ -142,6 +151,50 @@ export default class RateLimitService {
     }
 
     return { allowed: true }
+  }
+
+  // ── Map 5: Login Brute-Force Protection ────────────────────────────────────
+
+  /**
+   * Checks whether an IP has exceeded the login failure limit (5 failures / 15 min).
+   * Does NOT increment — call recordLoginFailure() on failed attempts only.
+   */
+  checkLoginThrottle(ip: string): { allowed: boolean; retryAfter?: number } {
+    const now = Date.now()
+    const entry = this.loginThrottle.get(ip)
+
+    if (!entry || now > entry.resetAt) {
+      return { allowed: true }
+    }
+
+    if (entry.count >= LOGIN_LIMIT) {
+      const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
+      return { allowed: false, retryAfter }
+    }
+
+    return { allowed: true }
+  }
+
+  /**
+   * Record a failed login attempt for the given IP.
+   */
+  recordLoginFailure(ip: string): void {
+    const now = Date.now()
+    const entry = this.loginThrottle.get(ip)
+
+    if (!entry || now > entry.resetAt) {
+      this.loginThrottle.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW })
+      return
+    }
+
+    entry.count++
+  }
+
+  /**
+   * Reset login throttle for an IP after a successful login.
+   */
+  resetLoginThrottle(ip: string): void {
+    this.loginThrottle.delete(ip)
   }
 
   // ── Map 4: Per-User Phone Resolution Throttle ──────────────────────────────
@@ -224,9 +277,17 @@ export default class RateLimitService {
         }
       }
 
-      if (ipCleaned > 0 || userCleaned > 0) {
+      let loginCleaned = 0
+      for (const [ip, entry] of this.loginThrottle) {
+        if (entry.resetAt < now) {
+          this.loginThrottle.delete(ip)
+          loginCleaned++
+        }
+      }
+
+      if (ipCleaned > 0 || userCleaned > 0 || loginCleaned > 0) {
         this.logger?.debug(
-          `RateLimitService cleanup: ${ipCleaned} IP entries, ${userCleaned} user-resolve entries`
+          `RateLimitService cleanup: ${ipCleaned} IP, ${userCleaned} user-resolve, ${loginCleaned} login entries`
         )
       }
     }, 5 * 60_000)

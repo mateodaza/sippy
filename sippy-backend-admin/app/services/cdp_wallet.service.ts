@@ -93,7 +93,7 @@ export async function createUserWallet(phoneNumber: string): Promise<UserWallet>
     logger.info(`User wallet registered in database for +${phoneNumber}`)
 
     // Register with indexer (fire-and-forget — never blocks wallet creation)
-    registerWalletWithIndexer(walletAddress, phoneNumber).catch(() => {})
+    registerWalletWithIndexer(walletAddress, phoneNumber).catch((err) => logger.warn('Indexer registration failed (non-blocking): %o', err))
 
     return userWallet
   } catch (error) {
@@ -351,7 +351,7 @@ export async function getAllWallets(): Promise<
     }))
   } catch (error) {
     logger.error('Failed to get all wallets: %o', error)
-    return []
+    throw error
   }
 }
 

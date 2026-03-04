@@ -242,6 +242,7 @@ async function callModel(client: Groq, modelId: string, text: string): Promise<L
   const limiter = getLimiter(modelId)
 
   if (!limiter.canMakeRequest()) {
+    logger.warn('LLM rate limit reached for model %s, skipping call', modelId)
     return { parsed: null, model: modelId }
   }
 

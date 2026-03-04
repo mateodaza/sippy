@@ -119,10 +119,10 @@ export function sanitizeOutboundMessage(text: string, lang: string = 'en'): Sani
 
   // --- Cleaning checks (replace-and-compare, no .test() on g regexes) ---
 
-  // Strip LLM thinking tags
+  // Strip LLM thinking tags and their content
   cleaned = strip(
     cleaned,
-    /<\/?(?:think|thinking|reasoning|reflection|scratchpad)>/gi,
+    /<(?:think|thinking|reasoning|reflection|scratchpad)>[\s\S]*?<\/(?:think|thinking|reasoning|reflection|scratchpad)>/gi,
     '',
     'thinking-tags',
     violations

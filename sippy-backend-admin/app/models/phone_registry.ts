@@ -14,13 +14,14 @@ export default class PhoneRegistry extends BaseModel {
   declare walletAddress: string
 
   @column()
-  declare createdAt: number
+  declare createdAt: bigint | number
 
   @column()
-  declare lastActivity: number
+  declare lastActivity: bigint | number
 
+  /** NUMERIC(18,6) — pg driver returns string to preserve precision */
   @column()
-  declare dailySpent: number
+  declare dailySpent: string
 
   @column()
   declare lastResetDate: string
@@ -28,9 +29,10 @@ export default class PhoneRegistry extends BaseModel {
   @column()
   declare spendPermissionHash: string | null
 
+  /** DECIMAL(18,6) — pg driver returns string to preserve precision */
   @column()
-  declare dailyLimit: number | null
+  declare dailyLimit: string | null
 
   @column()
-  declare permissionCreatedAt: number | null
+  declare permissionCreatedAt: bigint | number | null
 }
