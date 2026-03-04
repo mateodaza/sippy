@@ -144,6 +144,11 @@
     animation: shimmer 2s ease-in-out infinite;
   }
 
+  /* Shared card shadow */
+  .shadow-card-section {
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+  }
+
   /* Marquee animations */
   .animate-marquee {
     animation: marquee var(--duration) linear infinite;
@@ -151,6 +156,22 @@
 
   .animate-marquee-vertical {
     animation: marquee-vertical var(--duration) linear infinite;
+  }
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up,
+  .animate-gradient,
+  .animate-pulse-glow,
+  .animate-float,
+  .animate-float-delay,
+  .animate-shimmer,
+  .animate-marquee,
+  .animate-marquee-vertical {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 

@@ -5,7 +5,6 @@
 
 import Image from 'next/image';
 import {
-  CheckCircle2,
   Send,
   MessageSquare,
   Zap,
@@ -56,11 +55,7 @@ export default function HomePage() {
             <div className='space-y-8'>
               {/* Badges */}
               <div className='flex flex-wrap gap-3 items-center'>
-                <div className='inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#dcfce7] border border-[#bbf7d0] rounded-full text-sm text-[#15803d] shadow-sm animate-fade-in-up'>
-                  <CheckCircle2 className='w-4 h-4' />
-                  <span className='font-medium'>ETH Online 2025</span>
-                </div>
-                <div className='inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#dbeafe] border border-[#93c5fd] rounded-full text-sm text-[#1e40af] shadow-sm animate-fade-in-up animation-delay-100'>
+                <div className='inline-flex items-center gap-2 px-3.5 py-1.5 bg-[#dbeafe] border border-[#93c5fd] rounded-full text-sm text-[#1e40af] shadow-sm animate-fade-in-up'>
                   <Zap className='w-4 h-4' />
                   <span className='font-medium'>Live on Arbitrum</span>
                 </div>
