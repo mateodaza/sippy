@@ -151,7 +151,7 @@ Migrated Express monolith → AdonisJS v7. All 18 routes ported with identical p
 
 ### Ponder On-Chain Indexer — COMPLETE (deploy pending)
 
-Standalone Ponder v0.15 indexer at `indexer/`. Watches Arbitrum for USDC transfers and GasRefuel events, stores in PostgreSQL, exposes Hono API. Full plan: [PONDER_M1_PLAN.md](./PONDER_M1_PLAN.md)
+Ponder v0.15 indexer at `apps/indexer/`. Watches Arbitrum for USDC transfers and GasRefuel events, stores in PostgreSQL, exposes Hono API. Full plan: [PONDER_M1_PLAN.md](./PONDER_M1_PLAN.md)
 
 | Phase | What | Status |
 |-------|------|--------|
@@ -168,12 +168,17 @@ Standalone Ponder v0.15 indexer at `indexer/`. Watches Arbitrum for USDC transfe
 ## Architecture
 
 ```
-sippy/
-  sippy-backend-admin/    ← AdonisJS v7 (plain, no Turborepo)
-  indexer/                ← Ponder v0.15 (standalone)
-  backend/                ← Legacy Express (being replaced)
-  frontend/               ← Next.js
-  contracts/              ← Hardhat (GasRefuel.sol)
+sippy/                      ← Turborepo + pnpm workspaces
+  apps/
+    backend/                ← AdonisJS v7
+    web/                    ← Next.js 16
+    indexer/                ← Ponder v0.15
+  packages/
+    shared/                 ← @sippy/shared (constants, ABIs, types)
+  contracts/
+    gas-refuel/             ← Hardhat (GasRefuel.sol)
+  archive/
+    express-backend/        ← Legacy Express (archived)
 ```
 
 ```
@@ -247,7 +252,7 @@ sippy/
 
 ## Recent Changes
 
-**Mar 2** — Ponder on-chain indexer built (phases 7.6.1–7.6.8): 5 on-chain tables, 6 event handlers, 15+ Hono API routes, backend integration with fire-and-forget wallet registration. Repo restructured: removed Turborepo, flattened AdonisJS to `sippy-backend-admin/`, moved indexer to standalone `indexer/` at root. Admin dashboard COMPLETE (Inertia.js + React + Tailwind CSS v4, 6 pages).
+**Mar 2** — Ponder on-chain indexer built (phases 7.6.1–7.6.8): 5 on-chain tables, 6 event handlers, 15+ Hono API routes, backend integration with fire-and-forget wallet registration. Repo now runs as a Turborepo/pnpm workspace with apps under `apps/backend`, `apps/web`, and `apps/indexer`. Admin dashboard COMPLETE (Inertia.js + React + Tailwind CSS v4, 6 pages).
 **Feb 28** — AdonisJS migration COMPLETE: all 18 Express routes ported to AdonisJS v7, 103 tests passing (unit + functional), same JSON responses — frontend-compatible. Key fixes: `forceExit: true`, `$N→?` placeholder conversion for Lucid, phone length validation.
 **Feb 21** — Sweep-to-EOA in export flow, webapp fallback wallet (/wallet), authenticated phone resolution, web send audit logging, IP rate limiting, repo cleanup (22 outdated docs removed)
 **Feb 20** — Regex greetings/social phrases, media message handling, language continuity fix

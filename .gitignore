@@ -16,6 +16,9 @@ skills-lock.json
 # AdonisJS generated
 .adonisjs/
 
+# Turborepo
+.turbo/
+
 # Build output
 dist/
 build/

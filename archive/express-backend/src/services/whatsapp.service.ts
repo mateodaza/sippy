@@ -1,0 +1,248 @@
+/**
+ * WhatsApp Service
+ *
+ * Handles sending messages via Meta WhatsApp Cloud API
+ */
+
+import 'dotenv/config';
+import { WhatsAppAPIResponse, WhatsAppAPIError } from '../types/index.js';
+import { sanitizeOutboundMessage } from '../utils/sanitize.js';
+
+const WHATSAPP_API_URL = 'https://graph.facebook.com/v18.0';
+const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
+
+interface Button {
+  id?: string;
+  title: string;
+}
+
+/**
+ * Send a text message to a WhatsApp number with retry logic
+ */
+export async function sendTextMessage(
+  to: string,
+  text: string,
+  lang = 'en',
+  retries = 2
+): Promise<WhatsAppAPIResponse> {
+  // Sanitize before sending — final safety net
+  const sanitized = sanitizeOutboundMessage(text, lang);
+  if (sanitized.violations.length > 0) {
+    console.warn(`Sanitizer [${sanitized.blocked ? 'BLOCKED' : 'CLEANED'}] to +${to}:`, sanitized.violations.join(', '));
+    if (sanitized.blocked) {
+      console.warn(`  Original length: ${text.length} chars`);
+    }
+  }
+  const body = sanitized.text;
+
+  console.log(`\nSending message to +${to}:`);
+  console.log(`   "${body}"`);
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(
+        `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messaging_product: 'whatsapp',
+            to: to,
+            type: 'text',
+            text: {
+              body: body,
+            },
+          }),
+        }
+      );
+
+      // Check for 5xx errors before parsing JSON (might return plain text like "Service Unavailable")
+      if (response.status >= 500 && attempt < retries) {
+        console.warn(
+          `⚠️  WhatsApp API error (${response.status}), retrying... (${
+            attempt + 1
+          }/${retries})`
+        );
+        await sleep(500 * (attempt + 1)); // Exponential backoff
+        continue;
+      }
+
+      // Try to parse JSON, handle non-JSON responses
+      let data: WhatsAppAPIResponse & WhatsAppAPIError;
+      try {
+        data = (await response.json()) as WhatsAppAPIResponse & WhatsAppAPIError;
+      } catch (parseError) {
+        // Response wasn't valid JSON (e.g., "Service Unavailable" plain text)
+        const responseText = await response.text().catch(() => 'Unknown response');
+        if (attempt < retries) {
+          console.warn(
+            `⚠️  WhatsApp API returned non-JSON response, retrying... (${
+              attempt + 1
+            }/${retries})`
+          );
+          await sleep(500 * (attempt + 1));
+          continue;
+        }
+        throw new Error(`WhatsApp API error: ${response.status} - ${responseText}`);
+      }
+
+      if (!response.ok) {
+        // Retry on 5xx errors (should rarely reach here due to check above)
+        if (response.status >= 500 && attempt < retries) {
+          console.warn(
+            `⚠️  WhatsApp API error (${response.status}), retrying... (${
+              attempt + 1
+            }/${retries})`
+          );
+          await sleep(500 * (attempt + 1)); // Exponential backoff
+          continue;
+        }
+
+        console.error('❌ Failed to send message:', data);
+        throw new Error(
+          `WhatsApp API error: ${data.error?.message || 'Unknown error'}`
+        );
+      }
+
+      console.log('✅ Message sent successfully!');
+      if (data.messages && data.messages.length > 0) {
+        console.log('   Message ID:', data.messages[0].id);
+      }
+      return data;
+    } catch (error) {
+      // Retry on network errors or JSON parse errors
+      if (
+        attempt < retries &&
+        (error instanceof TypeError ||
+         error instanceof SyntaxError ||
+         (error as any).code === 'ECONNRESET')
+      ) {
+        console.warn(
+          `⚠️  Network error, retrying... (${attempt + 1}/${retries})`
+        );
+        await sleep(500 * (attempt + 1));
+        continue;
+      }
+
+      console.error('❌ Error sending message:', (error as Error).message);
+      throw error;
+    }
+  }
+
+  throw new Error('Failed to send message after retries');
+}
+
+/**
+ * Sleep helper for retry backoff
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Send a message with buttons (interactive message)
+ * Best-effort: failures are logged but don't throw
+ */
+export async function sendButtonMessage(
+  to: string,
+  bodyText: string,
+  buttons: Button[],
+  lang = 'en'
+): Promise<WhatsAppAPIResponse | null> {
+  // Guard: only send if enabled
+  if (process.env.WHATSAPP_BUTTONS !== 'true') {
+    return null;
+  }
+
+  // Sanitize button body text
+  const sanitized = sanitizeOutboundMessage(bodyText, lang);
+  if (sanitized.violations.length > 0) {
+    console.warn(`Sanitizer [button] to +${to}:`, sanitized.violations.join(', '));
+  }
+  const cleanBody = sanitized.text;
+
+  console.log(`\nSending button message to +${to}:`);
+
+  try {
+    const response = await fetch(
+      `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: to,
+          type: 'interactive',
+          interactive: {
+            type: 'button',
+            body: {
+              text: cleanBody,
+            },
+            action: {
+              buttons: buttons.map((btn, idx) => ({
+                type: 'reply',
+                reply: {
+                  id: btn.id || `btn_${idx}`,
+                  title: btn.title.substring(0, 20), // Max 20 chars
+                },
+              })),
+            },
+          },
+        }),
+      }
+    );
+
+    const data = (await response.json()) as WhatsAppAPIResponse &
+      WhatsAppAPIError;
+
+    if (!response.ok) {
+      console.warn('⚠️  Failed to send button message:', data.error?.message);
+      return null;
+    }
+
+    console.log('✅ Button message sent successfully!');
+    return data;
+  } catch (error) {
+    console.warn('⚠️  Error sending button message:', (error as Error).message);
+    return null;
+  }
+}
+
+/**
+ * Mark a message as read
+ */
+export async function markAsRead(messageId: string): Promise<any> {
+  try {
+    const response = await fetch(
+      `${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          status: 'read',
+          message_id: messageId,
+        }),
+      }
+    );
+
+    return await response.json();
+  } catch (error) {
+    console.error(
+      '⚠️  Failed to mark message as read:',
+      (error as Error).message
+    );
+    // Non-critical error, don't throw
+    return null;
+  }
+}

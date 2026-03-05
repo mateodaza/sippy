@@ -1,0 +1,35 @@
+{
+  "name": "sippy",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.6.1",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@sippy/web",
+    "dev:backend": "turbo run dev --filter=@sippy/backend",
+    "dev:indexer": "turbo run dev --filter=@sippy/indexer",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "jest-diff": "29.7.0",
+      "pretty-format": "29.7.0"
+    },
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "bufferutil",
+      "esbuild",
+      "keccak",
+      "sharp",
+      "unrs-resolver",
+      "utf-8-validate"
+    ]
+  }
+}

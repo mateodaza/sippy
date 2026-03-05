@@ -1,0 +1,9 @@
+# Ponder generated files
+.ponder/
+
+# Dependencies (covered by root, but explicit)
+node_modules/
+
+# Environment
+.env
+.env.local
