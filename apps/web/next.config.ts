@@ -3,7 +3,7 @@ import path from 'path';
 
 const nextConfig: NextConfig = {
   // Set the correct workspace root for pnpm
-  outputFileTracingRoot: path.join(__dirname, '..'),
+  outputFileTracingRoot: path.join(__dirname, '../..'),
 
   env: {
     NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:

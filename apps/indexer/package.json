@@ -1,0 +1,27 @@
+{
+  "name": "@sippy/indexer",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "ponder dev",
+    "start": "ponder start",
+    "serve": "ponder serve",
+    "codegen": "ponder codegen",
+    "typecheck": "tsc --noEmit",
+    "build": "echo 'no build step'"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.38.0",
+    "hono": "^4.11.3",
+    "pg": "^8.13.0",
+    "ponder": "^0.15.17",
+    "viem": "^2.21.58",
+    "@sippy/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.7.2"
+  }
+}

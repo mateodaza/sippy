@@ -1,7 +1,7 @@
 # Dependencies
 node_modules/
 .pnpm-store/
-
+session-summaries
 # Environment variables
 .env
 .env.local
@@ -9,6 +9,15 @@ node_modules/
 .env.test.local
 .env.production.local
 .env.*
+.agents
+.claude
+skills-lock.json
+
+# AdonisJS generated
+.adonisjs/
+
+# Turborepo
+.turbo/
 
 # Build output
 dist/

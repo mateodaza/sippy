@@ -90,14 +90,14 @@ WhatsApp message
 | Layer | Technology |
 |-------|-----------|
 | Runtime | Node.js 20 + TypeScript |
-| Framework | Express.js |
+| Framework | AdonisJS v7 |
 | Wallets | Coinbase CDP Embedded Wallets (non-custodial) |
 | LLM | Groq (Llama 3.3 70B, free tier) |
 | Validation | Zod |
 | Blockchain | Arbitrum One (USDC) |
 | Smart Contract | GasRefuel.sol (gasless transfers) |
 | Database | PostgreSQL (Railway) |
-| Frontend | Next.js 15 + Tailwind CSS |
+| Frontend | Next.js 16 + Tailwind CSS |
 | Messaging | WhatsApp Business API (Meta) |
 
 ---
@@ -106,55 +106,40 @@ WhatsApp message
 
 ```
 sippy/
-├── backend/
-│   ├── server.ts                          # Express server + webhook handler
-│   ├── src/
-│   │   ├── commands/
-│   │   │   ├── start.command.ts           # Wallet creation + onboarding
-│   │   │   ├── balance.command.ts         # Balance queries
-│   │   │   └── send.command.ts            # USDC transfers
-│   │   ├── services/
-│   │   │   ├── cdp-wallet.service.ts      # Coinbase CDP SDK
-│   │   │   ├── embedded-wallet.service.ts # Embedded wallet management
-│   │   │   ├── whatsapp.service.ts        # WhatsApp API client
-│   │   │   ├── llm.service.ts             # Groq LLM (Zod-validated)
-│   │   │   ├── refuel.service.ts          # Gas refueling
-│   │   │   └── db.ts                      # PostgreSQL + parse_log
-│   │   ├── utils/
-│   │   │   ├── messageParser.ts           # Regex-first, LLM fallback
-│   │   │   ├── messages.ts                # Trilingual message catalog
-│   │   │   ├── errors.ts                  # Trilingual error messages
-│   │   │   ├── language.ts                # Language detection + confidence
-│   │   │   ├── sanitize.ts                # Output sanitizer
-│   │   │   └── phone.ts                   # Phone normalization
-│   │   ├── types/
-│   │   │   ├── index.ts                   # Core types
-│   │   │   └── schemas.ts                 # Zod schemas
-│   │   └── routes/
-│   │       └── embedded-wallet.routes.ts  # Setup API routes
-│   └── tests/
-│       └── unit/
-│           └── message-parser.test.ts     # Parser tests
+├── apps/
+│   ├── backend/                           # AdonisJS v7 (WhatsApp bot + admin dashboard)
+│   │   ├── app/
+│   │   │   ├── controllers/               # Route handlers
+│   │   │   ├── services/                  # CDP wallets, WhatsApp, LLM, refuel
+│   │   │   ├── models/                    # Lucid ORM models
+│   │   │   └── utils/                     # Regex parser, messages, phone
+│   │   └── tests/                         # 172 tests (unit + functional)
+│   │
+│   ├── web/                               # Next.js 16 frontend
+│   │   ├── app/
+│   │   │   ├── setup/                     # Wallet setup flow
+│   │   │   ├── settings/                  # User settings + key export + sweep
+│   │   │   ├── wallet/                    # Web fallback wallet
+│   │   │   ├── fund/                      # Add funds
+│   │   │   ├── profile/[phone]/           # Public profile
+│   │   │   └── receipt/[txHash]/          # Transaction receipts
+│   │   └── components/                    # Shared UI components
+│   │
+│   └── indexer/                           # Ponder v0.15 on-chain indexer
+│       ├── src/                           # Event handlers + API routes
+│       └── abis/                          # Contract ABIs
 │
-├── frontend/
-│   ├── app/
-│   │   ├── setup/                         # Wallet setup flow
-│   │   ├── settings/                      # User settings + key export + sweep
-│   │   ├── wallet/                        # Web fallback wallet (send, balance, activity)
-│   │   ├── fund/                          # Add funds
-│   │   ├── profile/[phone]/              # Public profile
-│   │   └── receipt/[txHash]/             # Transaction receipts
-│   └── lib/
-│       ├── blockscout.ts                  # Transaction data
-│       ├── usdc-transfer.ts               # USDC transfer encoding + gas helper
-│       ├── constants.ts                   # Contract addresses
-│       └── phone.ts                       # Phone utilities
+├── packages/
+│   └── shared/                            # @sippy/shared: constants, ABIs, types
 │
 ├── contracts/
-│   └── gas-refuel/
-│       └── contracts/
-│           └── GasRefuel.sol              # Deployed on Arbitrum One
+│   └── gas-refuel/                        # Hardhat (GasRefuel.sol on Arbitrum One)
 │
+├── archive/
+│   └── express-backend/                   # Legacy Express backend (archived)
+│
+├── turbo.json                             # Turborepo build orchestration
+├── pnpm-workspace.yaml                    # pnpm workspace config
 ├── M1_PLAN.md                             # Milestone 1 implementation plan
 ├── PROJECT-STATUS.md                      # Current status + progress
 └── README.md                              # This file
@@ -172,11 +157,16 @@ sippy/
 - WhatsApp Business API access
 - PostgreSQL database
 
+### Install (from repo root)
+
+```bash
+pnpm install
+```
+
 ### Backend
 
 ```bash
-cd backend
-pnpm install
+cd apps/backend
 cp ENV-TEMPLATE.txt .env
 # Fill in environment variables (see ENV-TEMPLATE.txt for details)
 pnpm dev
@@ -185,11 +175,19 @@ pnpm dev
 ### Frontend
 
 ```bash
-cd frontend
-pnpm install
+cd apps/web
 cp ENV-TEMPLATE.txt .env.local
 # Fill in environment variables
 pnpm dev
+```
+
+### All services (via Turborepo)
+
+```bash
+pnpm dev          # start all services
+pnpm dev:backend  # backend only
+pnpm dev:web      # frontend only
+pnpm dev:indexer  # indexer only
 ```
 
 ---
@@ -241,9 +239,7 @@ See [M1_PLAN.md](./M1_PLAN.md) for detailed implementation plan.
 
 - [M1 Plan](./M1_PLAN.md) — Implementation roadmap for Milestone 1
 - [Project Status](./PROJECT-STATUS.md) — Current status and progress
-- [Backend Setup](./backend/QUICK-START.md) — Deployment guide
-- [Gas Refuel](./backend/REFUEL_SETUP.md) — Smart contract setup
-- [Frontend Env](./frontend/ENV-SETUP.md) — Frontend configuration
+- [Frontend Env](./apps/web/ENV-SETUP.md) — Frontend configuration
 
 ---
 

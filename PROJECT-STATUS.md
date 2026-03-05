@@ -1,8 +1,10 @@
 # Project Status — Sippy
 
-**Last Updated:** February 21, 2026
+**Last Updated:** March 2, 2026
 **Current Milestone:** M1 — Production Ready (deadline Mar 26, 2026)
 **Detailed Plan:** [M1_PLAN.md](./M1_PLAN.md)
+**AdonisJS Migration:** [ADONISJS-POC-PLAN.md](./ADONISJS-POC-PLAN.md)
+**Ponder Indexer:** [PONDER_M1_PLAN.md](./PONDER_M1_PLAN.md)
 
 ---
 
@@ -16,7 +18,7 @@
 | 4 | Dual currency display (USD + local) | 0% | Phone prefix → currency mapping designed, not built |
 | 5 | Privacy controls | 0% | Planned: phone visibility toggle |
 | 6 | User settings | 80% | Settings page working, language via WhatsApp working |
-| 7 | Monitoring infrastructure | 20% | Parse logging done, Sentry + structured logging pending |
+| 7 | Monitoring infrastructure | 60% | Parse logging done, Ponder indexer built (deploy pending), Sentry pending |
 | 8 | Legal entity | External | In progress separately |
 | 9 | WhatsApp production number | 100% | Active, approved |
 | 10 | Closed beta: 50 testers | 0% | Depends on security + onramp completion |
@@ -121,7 +123,11 @@ Summary: Inverted parsing order (regex-first), trilingual everything, Zod valida
 ### Phase 7: Monitoring — Partially Done
 
 - Parse logging done (parse_log table)
-- Sentry, structured logging (pino), health endpoint pending
+- Ponder on-chain indexer built (USDC transfers + GasRefuel events on Arbitrum)
+- 15+ API endpoints for analytics, dashboard, wallet stats
+- Backend integration done (fire-and-forget wallet registration)
+- Deploy on Railway pending (after PR merge)
+- Sentry, structured logging (pino) pending
 
 ### Phase 8: Beta Launch Prep — Not Started
 
@@ -129,9 +135,51 @@ Summary: Inverted parsing order (regex-first), trilingual everything, Zod valida
 - 50 tester onboarding
 - Production environment hardening
 
+### AdonisJS Migration — COMPLETE (core backend + admin dashboard)
+
+Migrated Express monolith → AdonisJS v7. All 18 routes ported with identical paths, methods, and JSON responses. Frontend-compatible — no breaking changes. Full plan: [ADONISJS-POC-PLAN.md](./ADONISJS-POC-PLAN.md)
+
+| Phase | What | Status |
+|-------|------|--------|
+| 0: Scaffold | AdonisJS v7 project + DB + env (27 vars) | Done |
+| 1: Port Core | Utils (6), types (2), services (6), models (5) | Done |
+| 1.5: Cleanup | Fix broken imports, missing env, lint (1004→0) | Done |
+| 2: Middleware | RateLimitService, CdpAuth, IpThrottle | Done |
+| 3: Controllers | 6 controllers, 18 routes (exact same paths) | Done |
+| 4: Tests | 103 tests passing (unit + functional), 3s runtime | Done |
+| 5: Admin Dashboard | Inertia + React + Tailwind CSS v4 (6 pages) | Done |
+
+### Ponder On-Chain Indexer — COMPLETE (deploy pending)
+
+Ponder v0.15 indexer at `apps/indexer/`. Watches Arbitrum for USDC transfers and GasRefuel events, stores in PostgreSQL, exposes Hono API. Full plan: [PONDER_M1_PLAN.md](./PONDER_M1_PLAN.md)
+
+| Phase | What | Status |
+|-------|------|--------|
+| 7.6.1: Scaffold | ponder.config.ts, ABIs, workspace | Done |
+| 7.6.2: On-chain schema | 5 tables (account, transfer, refuelEvent, gasRefuelStatus, dailyVolume) | Done |
+| 7.6.3: Off-chain schema | sippy_wallet table (Drizzle pgSchema) | Done |
+| 7.6.4: Indexing handlers | 6 event handlers (USDC:Transfer, GasRefuel events) | Done |
+| 7.6.5-7: API layer | 15+ Hono routes (wallet mgmt, stats, dashboard, gas refuel) | Done |
+| 7.6.8: Backend integration | indexer.service.ts, fire-and-forget hooks, boot sync | Done |
+| 7.6.9: Deploy | Railway deployment | Pending (after PR merge) |
+
 ---
 
 ## Architecture
+
+```
+sippy/                      ← Turborepo + pnpm workspaces
+  apps/
+    backend/                ← AdonisJS v7
+    web/                    ← Next.js 16
+    indexer/                ← Ponder v0.15
+  packages/
+    shared/                 ← @sippy/shared (constants, ABIs, types)
+  contracts/
+    gas-refuel/             ← Hardhat (GasRefuel.sol)
+  archive/
+    express-backend/        ← Legacy Express (archived)
+```
 
 ```
 ┌──────────────┐
@@ -141,7 +189,7 @@ Summary: Inverted parsing order (regex-first), trilingual everything, Zod valida
        │
        ▼
 ┌──────────────────────────────────────────┐
-│  Backend (Node.js / TypeScript / Express) │
+│  Backend (AdonisJS v7)                   │
 │                                          │
 │  ┌─────────────────────┐                 │
 │  │  Regex Parser       │  <1ms, zero cost│
@@ -174,6 +222,14 @@ Summary: Inverted parsing order (regex-first), trilingual everything, Zod valida
       ┌───────────────────────────────┐
       │        Arbitrum One           │
       │        (USDC transfers)       │
+      └──────────────┬────────────────┘
+                     │
+                     ▼
+      ┌───────────────────────────────┐
+      │  Ponder Indexer               │
+      │  (USDC + GasRefuel events)    │
+      │  → 15+ Hono API endpoints    │
+      │  → Dashboard analytics        │
       └───────────────────────────────┘
 ```
 
@@ -194,8 +250,10 @@ Summary: Inverted parsing order (regex-first), trilingual everything, Zod valida
 
 ---
 
-## Recent Changes (Feb 2026)
+## Recent Changes
 
+**Mar 2** — Ponder on-chain indexer built (phases 7.6.1–7.6.8): 5 on-chain tables, 6 event handlers, 15+ Hono API routes, backend integration with fire-and-forget wallet registration. Repo now runs as a Turborepo/pnpm workspace with apps under `apps/backend`, `apps/web`, and `apps/indexer`. Admin dashboard COMPLETE (Inertia.js + React + Tailwind CSS v4, 6 pages).
+**Feb 28** — AdonisJS migration COMPLETE: all 18 Express routes ported to AdonisJS v7, 103 tests passing (unit + functional), same JSON responses — frontend-compatible. Key fixes: `forceExit: true`, `$N→?` placeholder conversion for Lucid, phone length validation.
 **Feb 21** — Sweep-to-EOA in export flow, webapp fallback wallet (/wallet), authenticated phone resolution, web send audit logging, IP rate limiting, repo cleanup (22 outdated docs removed)
 **Feb 20** — Regex greetings/social phrases, media message handling, language continuity fix
 **Feb 19** — Trilingual sanitizer fallback, recipient language in notifications
@@ -217,4 +275,5 @@ Summary: Inverted parsing order (regex-first), trilingual everything, Zod valida
 | LLM | Groq (free tier) | Active |
 | Smart contract | GasRefuel.sol | Deployed |
 | Domain | sippy.lat | Active |
+| On-chain indexer | Ponder v0.15 + PostgreSQL | Built (deploy pending) |
 | Onramp | Maash | Blocked (waiting on API) |

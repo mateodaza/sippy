@@ -24,6 +24,8 @@
 
 **KPIs:** Security features tested, dual currency live, monitoring dashboard active, 50 beta testers, $10K+ USDC volume.
 
+> **Note:** Backend migrated from Express monolith to AdonisJS v7 (Feb 28, 2026). All 18 routes ported with identical paths/methods/JSON responses. 103 tests passing. Frontend-compatible — no breaking changes. Code at `sippy-backend-admin/apps/backend/`. See [ADONISJS-POC-PLAN.md](./ADONISJS-POC-PLAN.md) for migration details.
+
 ---
 
 ## Developer Handoff Notes
@@ -821,8 +823,16 @@ This is zero-friction: users never configure anything, they just see their local
   - Track: settings page errors, setup flow failures, fund page errors
   - Source maps upload for readable stack traces
 
+- [ ] **7.6 Ponder on-chain indexer** — `packages/indexer/` → **[Full plan: PONDER_M1_PLAN.md](./PONDER_M1_PLAN.md)**
+  - Real-time indexer watching USDC transfers + GasRefuel events on Arbitrum
+  - Tracks balances, transfer history, gas sponsorship, daily volume for all Sippy wallets
+  - Custom API endpoints: balance, transfers, stats, gas-refuel status
+  - Replaces Blockscout dependency for internal data
+  - Deploys as separate Railway service, same Postgres
+
 ### Files to Create
 - `backend/src/utils/logger.ts` — pino logger wrapper
+- `packages/indexer/` — full Ponder indexer (see [PONDER_M1_PLAN.md](./PONDER_M1_PLAN.md))
 
 ### Files to Modify
 - `backend/server.ts` — Sentry init, health endpoint, replace console.log
@@ -832,7 +842,7 @@ This is zero-friction: users never configure anything, they just see their local
 - `frontend/package.json` — add @sentry/nextjs
 - `frontend/next.config.js` — Sentry config
 
-### Estimate: 8-10h
+### Estimate: 16-20h (was 8-10h, added Ponder indexer)
 
 ---
 
@@ -884,7 +894,7 @@ This is zero-friction: users never configure anything, they just see their local
 ## Timeline (5 weeks)
 
 **Capacity:** 2 devs, ~20-24h/week combined (60/40 split Mateo/Carlos). Total available: ~100-120h.
-**Total estimated: 85-110h** across both devs (includes all 8 phases, expanded security/auth/audit scope).
+**Total estimated: 93-120h** across both devs (includes all 8 phases + Ponder indexer).
 
 ```
 Week 1 (Feb 20-26):                          Mateo        Carlos
@@ -905,6 +915,7 @@ Week 4 (Mar 13-19):
   P5: Privacy + Settings (5.1-5.5) .........             [6-8h]
   P5.6.1: Recovery email ................... [6-8h]
   P7: Monitoring (Sentry, health) ..........             [4-5h]
+  P7.6: Ponder indexer setup + deploy ......             [8-10h]
   P6: Onramp if unblocked, else Path B ..... [split]     [split]
 
 Week 5 (Mar 20-26):

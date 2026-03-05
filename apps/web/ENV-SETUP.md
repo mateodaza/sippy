@@ -2,7 +2,7 @@
 
 ## Required Environment Variables
 
-Create a `.env.local` file in the `frontend/` directory:
+Create a `.env.local` file in the `apps/web/` directory:
 
 ```bash
 cp ENV-TEMPLATE.txt .env.local
@@ -37,7 +37,7 @@ NEXT_PUBLIC_BLOCKSCOUT_BASE_URL=https://arbitrum.blockscout.com/api/v2
 ## Important Notes
 
 - The frontend API route (`/api/refuel`) uses these variables
-- The admin private key should be the **same** as in backend/.env
+- The admin private key should be the **same** as in apps/backend/.env
 - This allows the Next.js API to execute Avail Nexus SDK calls
 - The API runs in the Next.js server, not the browser
 

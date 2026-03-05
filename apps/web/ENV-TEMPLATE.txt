@@ -9,7 +9,7 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
 # In production: NEXT_PUBLIC_BASE_URL=https://www.sippy.lat
 
 # Refuel Admin Wallet (has ETH on Base to fund user refuels)
-# Should match the REFUEL_ADMIN_PRIVATE_KEY in backend/.env
+# Should match the REFUEL_ADMIN_PRIVATE_KEY in apps/backend/.env
 REFUEL_ADMIN_PRIVATE_KEY=0x...your_admin_private_key
 
 # RPC URLs (get free keys from https://www.alchemy.com/)
