@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "node bin/server.js",
-    "build": "node ace build",
+    "build": "vite build && node ace build && cp -r public build/public",
     "dev": "node ace serve --hmr",
     "test": "node ace test",
     "lint": "eslint .",
