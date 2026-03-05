@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "node bin/server.js",
-    "build": "vite build && node ace build && rm -rf build/public && cp -r public build/public",
+    "build": "vite build && echo '=== VITE MANIFEST ===' && ls -la public/assets/.vite/ && node ace build && echo '=== ACE BUILD PUBLIC ===' && ls -la build/public/ 2>&1 && rm -rf build/public && cp -r public build/public && echo '=== FINAL CHECK ===' && ls -la build/public/assets/.vite/",
     "dev": "node ace serve --hmr",
     "test": "node ace test",
     "lint": "eslint .",
