@@ -56,6 +56,7 @@ export default defineConfig({
     () => import('@adonisjs/vite/vite_provider'),
     () => import('@adonisjs/inertia/inertia_provider'),
     () => import('#providers/rate_limit_provider'),
+    () => import('@adonisjs/static/static_provider')
   ],
 
   /*
@@ -116,6 +117,10 @@ export default defineConfig({
       pattern: 'resources/views/**/*.edge',
       reloadServer: false,
     },
+    {
+      pattern: 'public/**',
+      reloadServer: false,
+    }
   ],
 
   hooks: {
