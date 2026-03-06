@@ -24,7 +24,7 @@
 
 **KPIs:** Security features tested, dual currency live, monitoring dashboard active, 50 beta testers, $10K+ USDC volume.
 
-> **Note:** Backend migrated from Express monolith to AdonisJS v7 (Feb 28, 2026). All 18 routes ported with identical paths/methods/JSON responses. **173 tests passing** (as of Mar 5). Frontend-compatible — no breaking changes. Admin panel with analytics dashboard deployed. Code at `sippy-backend-admin/apps/backend/`. See [ADONISJS-POC-PLAN.md](./ADONISJS-POC-PLAN.md) for migration details.
+> **Note:** Backend migrated from Express monolith to AdonisJS v7 (Feb 28, 2026). All 18 routes ported with identical paths/methods/JSON responses. **173 tests passing** (as of Mar 5). Frontend-compatible — no breaking changes. Admin panel with analytics dashboard deployed. Code at `apps/backend/`.
 
 ---
 
@@ -45,7 +45,7 @@
 - Web wallet sends bypass WhatsApp-side daily limits (self-custody mode)
 - CDP sessions are short-lived (minutes). This is a known pain point — see Phase 4.6 for the fix
 
-### Carlos Handoff (updated Mar 5, 2026)
+### Carlos Handoff (updated Mar 6, 2026)
 
 **What's done and deployed:**
 - AdonisJS backend (173 tests passing) — `apps/backend/`
@@ -59,10 +59,23 @@
 - Railway services: `sippy-backend`, `sippy-indexer`, shared Postgres
 
 **What to pick up next (priority order):**
-1. **P2: Onboarding Tightening** — quick wins, improves beta experience
-2. **P3: Dual Currency Display** — no dependencies, standalone
-3. **P4.1-4.2: Tx Confirmation + Webhook Security** — needed before beta
-4. **Fix indexer restart mechanism** — replace `process.exit(0)` with Railway API redeploy (see Indexer Known Issues #1)
+1. **P4.6: Custom Auth — Sippy-branded OTP (CRITICAL PATH)**
+   - Users currently see "Coinbase" in OTP messages — must say "Sippy"
+   - Replace CDP's `useSignInWithSms` with Twilio OTP + `useAuthenticateWithJWT`
+   - Backend: `otp.service.ts` (Twilio send/verify) + `jwt.service.ts` (RS256 keypair + JWKS endpoint)
+   - Frontend: swap auth flows in `/setup`, `/settings`, `/wallet`
+   - SMS template: "Sippy: Tu codigo es 123456" (branded, Spanish-first)
+   - This is a No-Go item — M1 cannot ship with Coinbase branding in OTPs
+   - Full spec: see Phase 4.6 below (~10-14h)
+2. **P4.7: Web Wallet Session Robustness** — depends on P4.6 completing first
+   - `useSessionGuard()` hook, JWT TTL, inline re-auth UX
+3. **P2: Onboarding Tightening** — quick wins, improves beta experience
+4. **P3: Dual Currency Display** — no dependencies, standalone
+   - Currency derived from phone country code (+57 → COP, +52 → MXN, etc.)
+   - Skip conversion for USD-using countries: +1 (US), +507 (Panama), +593 (Ecuador), +503 (El Salvador)
+   - See Phase 3 below for full mapping
+5. **P4.1-4.2: Tx Confirmation + Webhook Security** — needed before beta
+6. **Fix indexer restart mechanism** — replace `process.exit(0)` with Railway API redeploy (see Indexer Known Issues #1)
 
 **Key files to know:**
 - `apps/indexer/src/api/index.ts` — Hono API routes, `writeDb` for offchain writes, backfill logic
@@ -76,6 +89,26 @@
 - Indexer URL: `sippy-indexer-production.up.railway.app` (has `x-indexer-secret` auth)
 - Backend env vars `INDEXER_DB_*` point to the shared DB
 - Indexer env var `INDEXER_API_SECRET` must match backend's `INDEXER_API_SECRET`
+
+**Path mapping — Express → AdonisJS:**
+Phases 2-8 were written before the AdonisJS migration (Feb 28). File paths reference the old Express monolith structure. Use this table to find the actual files:
+
+| Express path (in plan) | AdonisJS path (actual) |
+|------------------------|----------------------|
+| `backend/server.ts` | Logic split: `apps/backend/app/controllers/webhook_controller.ts` (WhatsApp handler), `apps/backend/start/routes.ts` (route defs), `apps/backend/app/middleware/` (IP throttle, auth) |
+| `backend/src/commands/send.command.ts` | Send logic in `apps/backend/app/controllers/webhook_controller.ts` + `apps/backend/app/services/` |
+| `backend/src/commands/balance.command.ts` | Same — command logic lives in controllers/services, no `commands/` dir |
+| `backend/src/commands/start.command.ts` | Same pattern |
+| `backend/src/services/*.ts` | `apps/backend/app/services/*.ts` (same names: `db.ts`, `llm.service.ts`, `whatsapp.service.ts`, etc.) |
+| `backend/src/utils/*.ts` | `apps/backend/app/utils/*.ts` (same names but snake_case: `message_parser.ts`, `messages.ts`, `errors.ts`, etc.) |
+| `backend/src/types/*.ts` | `apps/backend/app/types/*.ts` |
+| `backend/src/routes/embedded-wallet.routes.ts` | `apps/backend/app/controllers/embedded_wallet_controller.ts` + routes in `apps/backend/start/routes.ts` |
+| `frontend/app/*.tsx` | `apps/web/app/*.tsx` |
+| `frontend/lib/*.ts` | `apps/web/lib/*.ts` |
+| `frontend/package.json` | `apps/web/package.json` |
+| `backend/package.json` | `apps/backend/package.json` |
+
+Key differences: AdonisJS uses `app/` not `src/`, snake_case filenames (e.g., `messageParser.ts` → `message_parser.ts`), no `commands/` directory (command handling is in `webhook_controller.ts` which calls services), routes defined in `start/routes.ts` not inline in server file.
 
 ### M1 Exit Checklist — Definition of Done per Deliverable
 
@@ -176,6 +209,8 @@ This fallback demonstrates that the only missing piece is Maash flipping the API
 ---
 
 ## Phase 2: Onboarding Tightening
+
+> **⚠ Path note:** Phases 2-8 file paths use Express-era conventions (`backend/src/...`, `backend/server.ts`, `frontend/...`). See **"Path mapping — Express → AdonisJS"** in the Carlos Handoff section above for the actual file locations.
 
 > The first 60 seconds determine if a user stays. Setup → wallet → spend permission must be bulletproof.
 > Affects deliverables #2, #3, #10.
@@ -281,14 +316,17 @@ This fallback demonstrates that the only missing piece is Maash flipping the API
 Currency is derived from the user's phone number, not a manual preference:
 
 ```
-+57 → COP (Colombia)
-+52 → MXN (Mexico)
-+54 → ARS (Argentina)
-+55 → BRL (Brazil)
-+51 → PEN (Peru)
-+56 → CLP (Chile)
-+1  → USD (US — no conversion needed, skip)
-All others → no local currency shown
++57  → COP (Colombia)
++52  → MXN (Mexico)
++54  → ARS (Argentina)
++55  → BRL (Brazil)
++51  → PEN (Peru)
++56  → CLP (Chile)
++1   → USD (US — skip, already in dollars)
++507 → USD (Panama — skip, already in dollars)
++593 → USD (Ecuador — skip, already in dollars)
++503 → USD (El Salvador — skip, already in dollars)
+All others → no local currency shown (USD only)
 ```
 
 This is zero-friction: users never configure anything, they just see their local currency automatically.
@@ -303,7 +341,8 @@ This is zero-friction: users never configure anything, they just see their local
   - Export: `getCurrencyForPhone(phoneNumber: string): string | null`
     - Extract country code from phone prefix
     - Map: `{ '57': 'COP', '52': 'MXN', '54': 'ARS', '55': 'BRL', '51': 'PEN', '56': 'CLP' }`
-    - Return null for US (+1) or unknown prefixes → no conversion
+    - USD countries (skip conversion): `'1'`, `'507'`, `'593'`, `'503'` (US, Panama, Ecuador, El Salvador)
+    - Return null for USD countries or unknown prefixes → no conversion, show USD only
 
 - [ ] **3.2 Dual amount formatter** — messages.ts
   - New helper: `formatDualAmount(usd: number, rate: number | null, currency: string | null): string`
@@ -855,7 +894,7 @@ This is zero-friction: users never configure anything, they just see their local
   - Track: settings page errors, setup flow failures, fund page errors
   - Source maps upload for readable stack traces
 
-- [x] **7.6 Ponder on-chain indexer** — `apps/indexer/` → **[Full plan: PONDER_M1_PLAN.md](./PONDER_M1_PLAN.md)** — DEPLOYED
+- [x] **7.6 Ponder on-chain indexer** — `apps/indexer/` — DEPLOYED
   - Real-time indexer watching USDC transfers + GasRefuel events on Arbitrum
   - **Scoped to registered wallets only** — loads wallets from `offchain.sippy_wallet` at boot, uses Ponder `filter` config (OR semantics: `from` OR `to` in wallet list). Fail-closed: burn-address self-transfer if no wallets loaded.
   - Tracks balances, transfer history, gas sponsorship, daily volume for Sippy wallets
@@ -867,7 +906,7 @@ This is zero-friction: users never configure anything, they just see their local
 
 ### Files to Create
 - `backend/src/utils/logger.ts` — pino logger wrapper
-- `packages/indexer/` — full Ponder indexer (see [PONDER_M1_PLAN.md](./PONDER_M1_PLAN.md))
+- `apps/indexer/` — Ponder on-chain indexer (USDC transfers + GasRefuel events)
 
 ### Files to Modify
 - `backend/server.ts` — Sentry init, health endpoint, replace console.log
@@ -992,20 +1031,20 @@ UNPLANNED WORK (ate ~8h):
 
 ```
 Week 3 (Mar 6-12):                           Mateo        Carlos
-  P2: Onboarding Tightening ................              [4-5h]
-  P3: Dual Currency Display ................              [6-8h]
+  P4.6: Custom Auth (Twilio + JWT) .........              [8-10h] ← CRITICAL PATH
   P4: Security (4.1 tx confirm, 4.2 webhook) [6-8h]
   Fix: indexer restart mechanism (#1 above)   [2-3h]
   Maash: Mar 10 deadline → Path B trigger?    [1h]
 
 Week 4 (Mar 13-19):
+  P4.7: Session Robustness .................              [6-8h] (depends on P4.6)
   P4: Security (4.3-4.4 velocity, edges) ... [8-10h]
-  P4.6: Custom Auth (Twilio + JWT) .........              [8-10h]
-  P5: Privacy + Settings (5.1-5.5) .........              [6-8h]
+  P2: Onboarding Tightening ................              [4-5h]
   P7: Monitoring (Sentry, health, logging) .. [4-5h]
 
 Week 5 (Mar 20-26):
-  P4.7: Session Robustness + 4.8 Audit ..... [6-8h]
+  P3: Dual Currency Display ................              [6-8h]
+  P5: Privacy + Settings (5.1-5.5) .........              [6-8h]
   P5.6.1: Recovery email ................... [6-8h]
   P4.5: Admin Controls ..................... [3-4h]
   P6: Onramp if unblocked, else Path B ..... [split]      [split]
@@ -1077,7 +1116,7 @@ P2, P3, P5.1-5.5, and P7 can parallelize.
 - Multi-country launch (Colombia focus, LATAM infrastructure ready)
 - DeFi integrations / yield / savings
 - Telegram or other messaging platforms
-- Admin dashboard UI (API-only for now)
+- ~~Admin dashboard UI (API-only for now)~~ **DONE** — Inertia.js + React + Tailwind CSS v4, 3 pages: analytics, users, user detail
 - Mobile app
 - Formal smart contract audit (GasRefuel is ~100 lines, internal review sufficient)
 - PIN/2FA for transfers (confirmation flow is sufficient for M1 limits)
