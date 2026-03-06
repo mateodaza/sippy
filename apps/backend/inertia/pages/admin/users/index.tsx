@@ -1,13 +1,20 @@
 import { Head, Link } from '@inertiajs/react'
 import AdminLayout from '../../../layouts/admin_layout.js'
 
+interface OnchainData {
+  totalSent: string
+  totalReceived: string
+  txCount: number
+  lastActivity: number
+}
+
 interface User {
   phone_number: string
   wallet_address: string
   created_at: string
   last_activity: string
-  daily_spent: string
   daily_limit: string | null
+  onchain: OnchainData | null
 }
 
 interface PaginatedUsers {
@@ -18,6 +25,11 @@ interface PaginatedUsers {
     current_page: number
     last_page: number
   }
+}
+
+function formatUSDC(raw: string): string {
+  const num = Number(raw) / 1_000_000
+  return num.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export default function UsersIndex({ users }: { users: PaginatedUsers }) {
@@ -42,8 +54,9 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
             <tr className="border-b border-gray-100 bg-gray-50/50">
               <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Phone</th>
               <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Wallet</th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Daily Spent</th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Daily Limit</th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Total Sent</th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Total Received</th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Txs</th>
               <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Last Activity</th>
             </tr>
           </thead>
@@ -63,18 +76,25 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
                     ? `${user.wallet_address.slice(0, 6)}...${user.wallet_address.slice(-4)}`
                     : <span className="text-gray-300">---</span>}
                 </td>
-                <td className="px-5 py-4 font-medium text-slate-700">${user.daily_spent}</td>
+                <td className="px-5 py-4 font-medium text-slate-700">
+                  {user.onchain ? formatUSDC(user.onchain.totalSent) : <span className="text-gray-300">---</span>}
+                </td>
+                <td className="px-5 py-4 font-medium text-slate-700">
+                  {user.onchain ? formatUSDC(user.onchain.totalReceived) : <span className="text-gray-300">---</span>}
+                </td>
                 <td className="px-5 py-4 text-gray-500">
-                  {user.daily_limit ? `$${user.daily_limit}` : <span className="text-gray-300">---</span>}
+                  {user.onchain ? user.onchain.txCount : <span className="text-gray-300">0</span>}
                 </td>
                 <td className="px-5 py-4 text-gray-400">
-                  {new Date(Number(user.last_activity)).toLocaleDateString()}
+                  {user.onchain?.lastActivity
+                    ? new Date(user.onchain.lastActivity * 1000).toLocaleDateString()
+                    : new Date(Number(user.last_activity)).toLocaleDateString()}
                 </td>
               </tr>
             ))}
             {users.data.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-5 py-12 text-center text-gray-400">
+                <td colSpan={6} className="px-5 py-12 text-center text-gray-400">
                   No users registered yet.
                 </td>
               </tr>

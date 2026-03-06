@@ -1,13 +1,19 @@
 import { Head, Link } from '@inertiajs/react'
 import AdminLayout from '../../../layouts/admin_layout.js'
 
+interface OnchainData {
+  totalSent: string
+  totalReceived: string
+  txCount: number
+  lastActivity: number
+}
+
 interface User {
   phone_number: string
   wallet_address: string
   cdp_wallet_name: string
   created_at: string
   last_activity: string
-  daily_spent: string
   daily_limit: string | null
   spend_permission_hash: string | null
 }
@@ -21,7 +27,12 @@ interface Activity {
   created_at: string
 }
 
-export default function UserShow({ user, activity }: { user: User | null; activity: Activity[] }) {
+function formatUSDC(raw: string): string {
+  const num = Number(raw) / 1_000_000
+  return num.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+export default function UserShow({ user, activity, onchain }: { user: User | null; activity: Activity[]; onchain: OnchainData | null }) {
   if (!user) {
     return (
       <AdminLayout>
@@ -47,8 +58,23 @@ export default function UserShow({ user, activity }: { user: User | null; activi
     { label: 'Wallet Address', value: user.wallet_address, mono: true },
     { label: 'CDP Wallet', value: user.cdp_wallet_name, mono: false },
     {
-      label: 'Daily Spent / Limit',
-      value: `$${user.daily_spent} / ${user.daily_limit ? `$${user.daily_limit}` : 'No limit'}`,
+      label: 'Total Sent',
+      value: onchain ? formatUSDC(onchain.totalSent) : '---',
+      mono: false,
+    },
+    {
+      label: 'Total Received',
+      value: onchain ? formatUSDC(onchain.totalReceived) : '---',
+      mono: false,
+    },
+    {
+      label: 'Transactions',
+      value: onchain ? String(onchain.txCount) : '0',
+      mono: false,
+    },
+    {
+      label: 'Daily Limit',
+      value: user.daily_limit ? `$${Number(user.daily_limit).toLocaleString()}` : 'No limit',
       mono: false,
     },
     {
@@ -59,7 +85,13 @@ export default function UserShow({ user, activity }: { user: User | null; activi
       badgeActive: !!user.spend_permission_hash,
     },
     { label: 'Registered', value: new Date(Number(user.created_at)).toLocaleDateString(), mono: false },
-    { label: 'Last Activity', value: new Date(Number(user.last_activity)).toLocaleDateString(), mono: false },
+    {
+      label: 'Last Activity',
+      value: onchain?.lastActivity
+        ? new Date(onchain.lastActivity * 1000).toLocaleDateString()
+        : new Date(Number(user.last_activity)).toLocaleDateString(),
+      mono: false,
+    },
   ]
 
   return (
