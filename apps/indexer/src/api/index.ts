@@ -8,8 +8,14 @@ import {
 } from 'ponder:schema'
 import * as offchainSchema from '../../offchain'
 import { eq, or, and, desc, sql, inArray, gte } from 'drizzle-orm'
+import { drizzle } from 'drizzle-orm/node-postgres'
+import pg from 'pg'
 import { Hono } from 'hono'
 import { timingSafeEqual } from 'node:crypto'
+
+// Writable DB connection for offchain tables (ponder:api db is read-only)
+const writePool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 3 })
+const writeDb = drizzle(writePool)
 
 const app = new Hono()
 
@@ -291,7 +297,7 @@ app.post('/wallets/register', requireSecret, async (c) => {
   const normalized = address.toLowerCase()
 
   // Step 1: Try insert — only returns a row if wallet is genuinely new
-  const inserted = await db
+  const inserted = await writeDb
     .insert(offchainSchema.sippyWallet)
     .values({
       address: normalized,
@@ -306,7 +312,7 @@ app.post('/wallets/register', requireSecret, async (c) => {
 
   // Step 2: If not inserted, check if wallet needs reactivation
   if (!isNewOrReactivated) {
-    const reactivated = await db
+    const reactivated = await writeDb
       .update(offchainSchema.sippyWallet)
       .set({ isActive: true, phoneHash: phoneHash ?? null })
       .where(
@@ -324,7 +330,9 @@ app.post('/wallets/register', requireSecret, async (c) => {
     try {
       await backfillWallet(normalized)
     } catch (err) {
-      console.error(`Backfill failed for ${normalized}:`, err)
+      // Backfill may fail (ponder:api db is read-only for onchain tables).
+      // This is acceptable — Ponder re-indexes natively after restart.
+      console.warn(`Backfill skipped for ${normalized} (will index after restart):`, (err as Error).message)
     }
     scheduleRestart()
   }
@@ -356,7 +364,7 @@ app.post('/wallets/sync', requireSecret, async (c) => {
     const normalized = w.address.toLowerCase()
 
     // Step 1: Try insert (new wallet)
-    const inserted = await db
+    const inserted = await writeDb
       .insert(offchainSchema.sippyWallet)
       .values({
         address: normalized,
@@ -374,7 +382,7 @@ app.post('/wallets/sync', requireSecret, async (c) => {
     }
 
     // Step 2: If not inserted, reactivate if currently inactive
-    const reactivated = await db
+    const reactivated = await writeDb
       .update(offchainSchema.sippyWallet)
       .set({ isActive: true, phoneHash: w.phoneHash ?? null })
       .where(
