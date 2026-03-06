@@ -17,7 +17,7 @@
 | 4 | Dual currency display (USD + local) | 0% | P3 |
 | 5 | Privacy controls (phone visibility) | 0% | P5 |
 | 6 | User settings (daily limits via settings page) | 80% | P5 |
-| 7 | Monitoring infrastructure (error tracking, uptime) | 60% | P7 (indexer deployed + admin analytics live) |
+| 7 | Monitoring infrastructure (error tracking, uptime) | 70% | P7 (indexer deployed, admin analytics + users showing real on-chain data) |
 | 8 | Legal entity establishment | External | — |
 | 9 | WhatsApp production number active | 100% | Done |
 | 10 | Closed beta: 50 testers + onramp | 0% | P8 |
@@ -45,18 +45,18 @@
 - Web wallet sends bypass WhatsApp-side daily limits (self-custody mode)
 - CDP sessions are short-lived (minutes). This is a known pain point — see Phase 4.6 for the fix
 
-### Carlos Handoff (Mar 5, 2026)
+### Carlos Handoff (updated Mar 5, 2026)
 
 **What's done and deployed:**
 - AdonisJS backend (173 tests passing) — `apps/backend/`
 - Ponder indexer with wallet-scoped USDC filter — `apps/indexer/`
-- Admin analytics dashboard — `/admin/analytics`
+- Admin panel fully working:
+  - `/admin/analytics` — Total volume, fund flow, top users by volume, daily chart, gas refuels
+  - `/admin/users` — Users table with real on-chain data (Total Sent, Total Received, Txs)
+  - `/admin/users/:phone` — User detail with on-chain stats + activity log
 - Wallet sync (backend → indexer) — `indexer.service.ts` with retry + backoff
 - `offchain.sippy_wallet` table populated (3 wallets)
 - Railway services: `sippy-backend`, `sippy-indexer`, shared Postgres
-
-**What's committed but needs verification after deploy:**
-- `searchPath` fix in `apps/backend/config/database.ts` (commit `0b9cbae`) — verify admin analytics page works
 
 **What to pick up next (priority order):**
 1. **P2: Onboarding Tightening** — quick wins, improves beta experience
