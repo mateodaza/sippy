@@ -2,6 +2,9 @@
 node_modules/
 .pnpm-store/
 session-summaries
+# MCP config (contains API keys)
+.mcp.json
+
 # Environment variables
 .env
 .env.local
