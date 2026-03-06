@@ -4,7 +4,8 @@ import { GasRefuelAbi } from './abis/GasRefuel'
 import pg from 'pg'
 
 // Start block: ~1 week before first Sippy wallet activity — adjust as needed
-const START_BLOCK = Number(process.env.START_BLOCK || 290_000_000)
+const MIN_BLOCK = 400_000_000
+const START_BLOCK = Math.max(Number(process.env.START_BLOCK || 437_000_000), MIN_BLOCK)
 
 // ── Load registered wallets for USDC filter ─────────────────
 
