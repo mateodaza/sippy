@@ -266,9 +266,10 @@ export default function Analytics({
         </h2>
 
         {dailyVolumes.length > 0 ? (
-          <div className="flex items-end gap-2" style={{ height: 200 }}>
+          <div className="flex items-end gap-2">
             {dailyVolumes.map((row) => {
               const pct = (Number(row.totalUsdcVolume) / maxVolume) * 100
+              const barHeight = Math.max(Math.round((pct / 100) * 180), 8)
               return (
                 <div key={row.date} className="group flex flex-1 flex-col items-center gap-1" style={{ minWidth: 40, maxWidth: 80 }}>
                   <span className="text-xs font-semibold text-slate-700 opacity-0 transition-opacity group-hover:opacity-100">
@@ -276,7 +277,7 @@ export default function Analytics({
                   </span>
                   <div
                     className="w-full rounded-t-lg bg-gradient-to-t from-sippy to-sippy-light transition-all duration-300 group-hover:from-sippy-dark group-hover:to-sippy"
-                    style={{ height: `${Math.max(pct, 4)}%` }}
+                    style={{ height: barHeight }}
                   />
                   <span className="mt-1 text-[10px] text-gray-400">
                     {new Date(row.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
