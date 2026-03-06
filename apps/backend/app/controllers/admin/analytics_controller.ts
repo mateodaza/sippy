@@ -13,7 +13,7 @@ export default class AnalyticsController {
         // 1. Total USDC volume (all-time)
         idx
           .from('daily_volume')
-          .select(db.raw('COALESCE(SUM("totalUsdcVolume"), 0)::text as total'))
+          .select(db.raw('COALESCE(SUM(total_usdc_volume), 0)::text as total'))
           .first(),
 
         // 2. Registered users count
@@ -56,14 +56,14 @@ export default class AnalyticsController {
         idx
           .from('account')
           .whereIn('address', idx.from('offchain.sippy_wallet').select('address'))
-          .select('address', db.raw('"totalSent"::text as "totalSent"'), db.raw('"totalReceived"::text as "totalReceived"'), db.raw('"txCount"'))
-          .orderBy(db.raw('"totalSent"'), 'desc')
+          .select('address', db.raw('total_sent::text as "totalSent"'), db.raw('total_received::text as "totalReceived"'), db.raw('tx_count as "txCount"'))
+          .orderBy(db.raw('total_sent'), 'desc')
           .limit(10),
 
         // 7. Daily volumes (last 30 days)
         idx
           .from('daily_volume')
-          .select('date', db.raw('"totalUsdcVolume"::text as "totalUsdcVolume"'), db.raw('"transferCount"'))
+          .select('date', db.raw('total_usdc_volume::text as "totalUsdcVolume"'), db.raw('transfer_count as "transferCount"'))
           .orderBy('date', 'desc')
           .limit(30),
       ])

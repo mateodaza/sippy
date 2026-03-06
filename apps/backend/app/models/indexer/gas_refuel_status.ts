@@ -8,15 +8,15 @@ export default class GasRefuelStatus extends BaseModel {
   @column({ isPrimary: true })
   declare id: string
 
-  @column({ columnName: 'totalRefuels' })
+  @column({ columnName: 'total_refuels' })
   declare totalRefuels: number
 
-  @column({ columnName: 'totalEthSpent' })
+  @column({ columnName: 'total_eth_spent' })
   declare totalEthSpent: bigint
 
-  @column({ columnName: 'isPaused' })
+  @column({ columnName: 'is_paused' })
   declare isPaused: boolean
 
-  @column({ columnName: 'lastRefuelAt' })
+  @column({ columnName: 'last_refuel_at' })
   declare lastRefuelAt: number
 }

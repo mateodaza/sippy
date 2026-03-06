@@ -17,14 +17,14 @@
 | 4 | Dual currency display (USD + local) | 0% | P3 |
 | 5 | Privacy controls (phone visibility) | 0% | P5 |
 | 6 | User settings (daily limits via settings page) | 80% | P5 |
-| 7 | Monitoring infrastructure (error tracking, uptime) | 20% | P7 |
+| 7 | Monitoring infrastructure (error tracking, uptime) | 60% | P7 (indexer deployed + admin analytics live) |
 | 8 | Legal entity establishment | External | — |
 | 9 | WhatsApp production number active | 100% | Done |
 | 10 | Closed beta: 50 testers + onramp | 0% | P8 |
 
 **KPIs:** Security features tested, dual currency live, monitoring dashboard active, 50 beta testers, $10K+ USDC volume.
 
-> **Note:** Backend migrated from Express monolith to AdonisJS v7 (Feb 28, 2026). All 18 routes ported with identical paths/methods/JSON responses. 103 tests passing. Frontend-compatible — no breaking changes. Code at `sippy-backend-admin/apps/backend/`. See [ADONISJS-POC-PLAN.md](./ADONISJS-POC-PLAN.md) for migration details.
+> **Note:** Backend migrated from Express monolith to AdonisJS v7 (Feb 28, 2026). All 18 routes ported with identical paths/methods/JSON responses. **173 tests passing** (as of Mar 5). Frontend-compatible — no breaking changes. Admin panel with analytics dashboard deployed. Code at `sippy-backend-admin/apps/backend/`. See [ADONISJS-POC-PLAN.md](./ADONISJS-POC-PLAN.md) for migration details.
 
 ---
 
@@ -44,6 +44,38 @@
 - USDC on Arbitrum: `0xaf88d065e77c8cC2239327C5EDb3A432268e5831`, 6 decimals
 - Web wallet sends bypass WhatsApp-side daily limits (self-custody mode)
 - CDP sessions are short-lived (minutes). This is a known pain point — see Phase 4.6 for the fix
+
+### Carlos Handoff (Mar 5, 2026)
+
+**What's done and deployed:**
+- AdonisJS backend (173 tests passing) — `apps/backend/`
+- Ponder indexer with wallet-scoped USDC filter — `apps/indexer/`
+- Admin analytics dashboard — `/admin/analytics`
+- Wallet sync (backend → indexer) — `indexer.service.ts` with retry + backoff
+- `offchain.sippy_wallet` table populated (3 wallets)
+- Railway services: `sippy-backend`, `sippy-indexer`, shared Postgres
+
+**What's committed but needs verification after deploy:**
+- `searchPath` fix in `apps/backend/config/database.ts` (commit `0b9cbae`) — verify admin analytics page works
+
+**What to pick up next (priority order):**
+1. **P2: Onboarding Tightening** — quick wins, improves beta experience
+2. **P3: Dual Currency Display** — no dependencies, standalone
+3. **P4.1-4.2: Tx Confirmation + Webhook Security** — needed before beta
+4. **Fix indexer restart mechanism** — replace `process.exit(0)` with Railway API redeploy (see Indexer Known Issues #1)
+
+**Key files to know:**
+- `apps/indexer/src/api/index.ts` — Hono API routes, `writeDb` for offchain writes, backfill logic
+- `apps/indexer/ponder.config.ts` — wallet filter loading, `pollingInterval: 20_000`
+- `apps/backend/app/services/indexer.service.ts` — `syncAllWalletsWithIndexer()` retry logic
+- `apps/backend/config/database.ts` — indexer DB connection with `searchPath`
+- `apps/backend/app/controllers/admin/analytics_controller.ts` — admin dashboard queries
+
+**Railway access:**
+- Both services share `crossover.proxy.rlwy.net:43347/railway`
+- Indexer URL: `sippy-indexer-production.up.railway.app` (has `x-indexer-secret` auth)
+- Backend env vars `INDEXER_DB_*` point to the shared DB
+- Indexer env var `INDEXER_API_SECRET` must match backend's `INDEXER_API_SECRET`
 
 ### M1 Exit Checklist — Definition of Done per Deliverable
 
@@ -823,12 +855,15 @@ This is zero-friction: users never configure anything, they just see their local
   - Track: settings page errors, setup flow failures, fund page errors
   - Source maps upload for readable stack traces
 
-- [ ] **7.6 Ponder on-chain indexer** — `packages/indexer/` → **[Full plan: PONDER_M1_PLAN.md](./PONDER_M1_PLAN.md)**
+- [x] **7.6 Ponder on-chain indexer** — `apps/indexer/` → **[Full plan: PONDER_M1_PLAN.md](./PONDER_M1_PLAN.md)** — DEPLOYED
   - Real-time indexer watching USDC transfers + GasRefuel events on Arbitrum
-  - Tracks balances, transfer history, gas sponsorship, daily volume for all Sippy wallets
-  - Custom API endpoints: balance, transfers, stats, gas-refuel status
-  - Replaces Blockscout dependency for internal data
-  - Deploys as separate Railway service, same Postgres
+  - **Scoped to registered wallets only** — loads wallets from `offchain.sippy_wallet` at boot, uses Ponder `filter` config (OR semantics: `from` OR `to` in wallet list). Fail-closed: burn-address self-transfer if no wallets loaded.
+  - Tracks balances, transfer history, gas sponsorship, daily volume for Sippy wallets
+  - Custom API endpoints: balance, transfers, stats, gas-refuel status, wallet sync/register
+  - Deploys as separate Railway service (`sippy-indexer`), same Postgres DB
+  - Admin analytics page (`/admin/analytics`) wired to indexer DB via `searchPath: ['ponder', 'offchain', 'public']`
+  - **Wallet sync**: backend calls `/wallets/sync` on boot to push `phone_registry` → `offchain.sippy_wallet`
+  - **Known issues — see "Indexer Known Issues" section below**
 
 ### Files to Create
 - `backend/src/utils/logger.ts` — pino logger wrapper
@@ -843,6 +878,43 @@ This is zero-friction: users never configure anything, they just see their local
 - `frontend/next.config.js` — Sentry config
 
 ### Estimate: 16-20h (was 8-10h, added Ponder indexer)
+
+### Indexer Known Issues (for Carlos)
+
+> These were discovered during Railway deployment on Mar 5, 2026. The indexer is live and indexing, but these need fixing before beta.
+
+**1. `process.exit(0)` restart mechanism is broken**
+- The `scheduleRestart()` function in `apps/indexer/src/api/index.ts` calls `process.exit(0)` after 60s to reload the wallet filter when new wallets register.
+- Ponder uses PostgreSQL advisory locks. `process.exit(0)` doesn't cleanly release them, causing `"Schema is locked by a different Ponder app"` crash loops on Railway.
+- **Current workaround**: New wallets require manual Railway redeploy (Dashboard → sippy-indexer → Redeploy).
+- **Fix needed**: Replace `process.exit(0)` with a Railway API redeploy trigger, or use Ponder's built-in config reload if available. Alternatively, use `railway service redeploy` via Railway CLI or their REST API (`POST /v2/deployments` with service ID).
+
+**2. Ponder `db` from `ponder:api` is strictly read-only**
+- ALL tables (onchain AND offchain) are read-only through the `db` object Ponder provides to API handlers.
+- **Already fixed**: Added `writeDb` (separate `pg.Pool` + Drizzle connection) for offchain writes (wallet register, sync, deactivate).
+- Backfill writes to Ponder-managed tables (`transfer`, `account`, `daily_volume`) will fail silently — this is acceptable because Ponder re-indexes natively after restart.
+
+**3. `offchain` schema must be manually created on new DB**
+- Ponder only manages its own `ponder` schema. The `offchain.sippy_wallet` table is not auto-created.
+- On fresh Railway DB: run `CREATE SCHEMA IF NOT EXISTS offchain; CREATE TABLE IF NOT EXISTS offchain.sippy_wallet (address TEXT PRIMARY KEY, phone_hash TEXT, registered_at INTEGER NOT NULL, is_active BOOLEAN NOT NULL DEFAULT true);`
+- Consider adding a migration script or startup check.
+
+**4. Config changes require schema drop**
+- Any change to `ponder.config.ts` (filter, pollingInterval, contracts) changes Ponder's app fingerprint.
+- This causes `MigrationError: Schema "ponder" was previously used by a different Ponder app`.
+- **Fix**: `DROP SCHEMA ponder CASCADE; DROP SCHEMA ponder_sync CASCADE;` on Railway DB, then redeploy. Ponder re-indexes from `startBlock`.
+
+**5. Admin analytics `searchPath` fix not yet deployed**
+- `apps/backend/config/database.ts` was updated to add `searchPath: ['ponder', 'offchain', 'public']` for the indexer DB connection.
+- This is committed (`0b9cbae`) but Carlos should verify the admin analytics page (`/admin/analytics`) works after deploy.
+- Required Railway env vars on `sippy-backend`: `INDEXER_DB_HOST`, `INDEXER_DB_PORT`, `INDEXER_DB_USER`, `INDEXER_DB_PASSWORD`, `INDEXER_DB_DATABASE` — these were already set to `crossover.proxy.rlwy.net:43347/railway`.
+
+**6. Alchemy CU budget monitoring**
+- `pollingInterval: 20_000` (20s) targets ~27M CU/month out of 30M free tier.
+- Monitor Alchemy dashboard for 24h after any redeploy. If pace exceeds 28M/month, bump to `pollingInterval: 30_000` in `ponder.config.ts` (will require schema drop — see #4).
+
+**7. Indexer public domain exposure**
+- `sippy-indexer-production.up.railway.app` was created for testing. Consider removing the public domain if not needed — it exposes `/wallets/register`, `/wallets/sync`, etc. These are protected by `x-indexer-secret` header but minimizing attack surface is better.
 
 ---
 
@@ -896,38 +968,55 @@ This is zero-friction: users never configure anything, they just see their local
 **Capacity:** 2 devs, ~20-24h/week combined (60/40 split Mateo/Carlos). Total available: ~100-120h.
 **Total estimated: 93-120h** across both devs (includes all 8 phases + Ponder indexer).
 
+### Actual Progress (as of Mar 5, 2026)
+
 ```
-Week 1 (Feb 20-26):                          Mateo        Carlos
-  P2: Onboarding Tightening ................ [4-5h]       [4-5h]
-  Maash: follow up on API docs                [1h]
+Week 1 (Feb 20-26):  DONE
+  - AdonisJS migration (Mateo) — backend fully ported, 103 tests
+  - P5.7 Sweep + Wallet (already done before M1 started)
 
-Week 2 (Feb 27 - Mar 5):
-  P3: Dual Currency Display ................             [6-8h]
+Week 2 (Feb 27 - Mar 5):  DONE
+  - AdonisJS admin panel + analytics dashboard (Mateo)
+  - P7.6 Ponder indexer: built, deployed to Railway, wallet filter working (Mateo)
+  - Backend tests: 173 passing
+  - Indexer wallet sync working (3 wallets registered)
+  - Admin analytics wired to indexer DB (searchPath fix committed)
+
+UNPLANNED WORK (ate ~8h):
+  - Railway deployment debugging (Ponder schema conflicts, advisory locks, read-only DB)
+  - Manual DB ops (schema creation, schema drops × 3)
+  - writeDb workaround for Ponder read-only API
+```
+
+### Remaining Plan (3 weeks left)
+
+```
+Week 3 (Mar 6-12):                           Mateo        Carlos
+  P2: Onboarding Tightening ................              [4-5h]
+  P3: Dual Currency Display ................              [6-8h]
   P4: Security (4.1 tx confirm, 4.2 webhook) [6-8h]
-
-Week 3 (Mar 6-12):
-  P4: Security (4.3 velocity, 4.4 edge cases) [8-10h]
-  P4.6: Custom Auth (Twilio + JWT) .........             [8-10h]
+  Fix: indexer restart mechanism (#1 above)   [2-3h]
   Maash: Mar 10 deadline → Path B trigger?    [1h]
 
 Week 4 (Mar 13-19):
-  P4.7: Session Robustness + 4.8 Audit ..... [6-8h]
-  P5: Privacy + Settings (5.1-5.5) .........             [6-8h]
-  P5.6.1: Recovery email ................... [6-8h]
-  P7: Monitoring (Sentry, health) ..........             [4-5h]
-  P7.6: Ponder indexer setup + deploy ......             [8-10h]
-  P6: Onramp if unblocked, else Path B ..... [split]     [split]
+  P4: Security (4.3-4.4 velocity, edges) ... [8-10h]
+  P4.6: Custom Auth (Twilio + JWT) .........              [8-10h]
+  P5: Privacy + Settings (5.1-5.5) .........              [6-8h]
+  P7: Monitoring (Sentry, health, logging) .. [4-5h]
 
 Week 5 (Mar 20-26):
+  P4.7: Session Robustness + 4.8 Audit ..... [6-8h]
+  P5.6.1: Recovery email ................... [6-8h]
   P4.5: Admin Controls ..................... [3-4h]
-  P6: Onramp continued / Path B mock ....... [6-8h]      [6-8h]
-  P8: Beta Launch Prep ..................... [4-5h]       [4-5h]
+  P6: Onramp if unblocked, else Path B ..... [split]      [split]
+  P8: Beta Launch Prep ..................... [4-5h]        [4-5h]
   Buffer for audit fixes + edge cases ...... [4-6h]
 ```
 
 **Critical path:** P4.6 (Custom Auth) → P4.7 (Session Robustness) → P5.6.1 (Recovery Email) → P8 (Beta Prep).
 P2, P3, P5.1-5.5, and P7 can parallelize.
 **External dependency:** Onramp (P6) blocked on Maash. Everything else ships independently. See "Onramp Acceptance Criteria" above for fallback plan.
+**Indexer**: Deployed and live. See "Indexer Known Issues" in Phase 7 for items Carlos should be aware of.
 
 ---
 
