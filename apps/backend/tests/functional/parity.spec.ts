@@ -7,6 +7,12 @@
  */
 
 import { test } from '@japa/runner'
+import { createHmac } from 'node:crypto'
+
+function signPayload(payload: object): string {
+  const raw = JSON.stringify(payload)
+  return 'sha256=' + createHmac('sha256', 'test-app-secret').update(raw).digest('hex')
+}
 
 test.group('Parity | All Express routes exist', () => {
   test('GET / (health)', async ({ client, assert }) => {
@@ -34,7 +40,11 @@ test.group('Parity | All Express routes exist', () => {
   })
 
   test('POST /webhook/whatsapp (receive)', async ({ client }) => {
-    const response = await client.post('/webhook/whatsapp').json({ entry: [] })
+    const payload = { entry: [] }
+    const response = await client
+      .post('/webhook/whatsapp')
+      .header('x-hub-signature-256', signPayload(payload))
+      .json(payload)
     response.assertStatus(200)
   })
 

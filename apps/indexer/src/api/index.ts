@@ -14,6 +14,30 @@ import { timingSafeEqual } from 'node:crypto'
 const app = new Hono()
 
 // ══════════════════════════════════════════════════════════════
+// CAPPED DEBOUNCE RESTART
+// ══════════════════════════════════════════════════════════════
+
+let restartScheduledAt: number | null = null
+const RESTART_DELAY_MS = 60_000
+const MAX_DEFERRAL_MS = 5 * 60_000
+
+function scheduleRestart() {
+  const now = Date.now()
+  if (restartScheduledAt !== null) {
+    if (now - restartScheduledAt > MAX_DEFERRAL_MS) {
+      console.log('Max deferral reached, scheduling immediate restart')
+      setTimeout(() => process.exit(0), 100)
+    }
+    return
+  }
+  restartScheduledAt = now
+  setTimeout(() => {
+    console.log('Restarting to reload wallet filter...')
+    process.exit(0)
+  }, RESTART_DELAY_MS)
+}
+
+// ══════════════════════════════════════════════════════════════
 // AUTH MIDDLEWARE (shared secret for write endpoints)
 // ══════════════════════════════════════════════════════════════
 
@@ -51,6 +75,205 @@ function isValidPhoneHash(value: unknown): boolean {
 }
 
 // ══════════════════════════════════════════════════════════════
+// RPC HELPERS (for backfill)
+// ══════════════════════════════════════════════════════════════
+
+const RPC_TIMEOUT_MS = 30_000
+const RPC_MAX_RETRIES = 3
+const INITIAL_CHUNK_SIZE = 50_000
+const MIN_CHUNK_SIZE = 1_000
+
+const USDC_ADDRESS = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
+const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+
+async function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<any> {
+  for (let attempt = 0; attempt < RPC_MAX_RETRIES; attempt++) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), RPC_TIMEOUT_MS)
+    try {
+      const res = await fetch(rpcUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+        signal: controller.signal,
+      })
+      clearTimeout(timeout)
+      const data = await res.json() as any
+      if (data.error) throw new Error(`${method} error: ${data.error.message}`)
+      return data.result
+    } catch (err: any) {
+      clearTimeout(timeout)
+      if (attempt === RPC_MAX_RETRIES - 1) throw err
+      const delay = 1000 * Math.pow(2, attempt)
+      console.warn(`RPC ${method} attempt ${attempt + 1} failed, retrying in ${delay}ms`)
+      await new Promise(r => setTimeout(r, delay))
+    }
+  }
+}
+
+function isRangeTooLargeError(err: any): boolean {
+  const msg = (err.message || '').toLowerCase()
+  return msg.includes('too many') || msg.includes('query returned more than') ||
+    msg.includes('response size') || msg.includes('block range') ||
+    msg.includes('log response size exceeded')
+}
+
+async function fetchLatestBlock(rpcUrl: string): Promise<number> {
+  const result = await rpcCall(rpcUrl, 'eth_blockNumber', [])
+  return parseInt(result, 16)
+}
+
+async function fetchBlockTimestamp(rpcUrl: string, blockNumHex: string): Promise<number> {
+  const block = await rpcCall(rpcUrl, 'eth_getBlockByNumber', [blockNumHex, false])
+  return parseInt(block.timestamp, 16)
+}
+
+async function fetchLogsChunked(rpcUrl: string, filter: any): Promise<any[]> {
+  const latestBlock = await fetchLatestBlock(rpcUrl)
+  const fromBlock = parseInt(filter.fromBlock, 16)
+  const allLogs: any[] = []
+  let chunkSize = INITIAL_CHUNK_SIZE
+
+  let start = fromBlock
+  while (start <= latestBlock) {
+    const end = Math.min(start + chunkSize - 1, latestBlock)
+    try {
+      const logs = await rpcCall(rpcUrl, 'eth_getLogs', [{
+        ...filter,
+        fromBlock: '0x' + start.toString(16),
+        toBlock: '0x' + end.toString(16),
+      }])
+      allLogs.push(...logs)
+      start = end + 1
+      chunkSize = Math.min(chunkSize * 2, INITIAL_CHUNK_SIZE)
+    } catch (err: any) {
+      if (isRangeTooLargeError(err) && chunkSize > MIN_CHUNK_SIZE) {
+        chunkSize = Math.floor(chunkSize / 2)
+        console.warn(`eth_getLogs range too large, halving to ${chunkSize} blocks`)
+        continue
+      }
+      throw err
+    }
+  }
+  return allLogs
+}
+
+function deduplicateLogs(logs: any[]): any[] {
+  const seen = new Set<string>()
+  return logs.filter((log) => {
+    const key = `${log.transactionHash}-${log.logIndex}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+// ══════════════════════════════════════════════════════════════
+// BACKFILL (idempotent, batch block timestamps)
+// ══════════════════════════════════════════════════════════════
+
+async function backfillWallet(address: string) {
+  const rpcUrl = process.env.PONDER_RPC_URL_42161
+  const startBlock = process.env.START_BLOCK || '290000000'
+  if (!rpcUrl) return
+
+  const startBlockHex = '0x' + parseInt(startBlock).toString(16)
+  const paddedAddr = '0x' + address.slice(2).padStart(64, '0')
+
+  const sent = await fetchLogsChunked(rpcUrl, {
+    address: USDC_ADDRESS,
+    topics: [TRANSFER_TOPIC, paddedAddr, null],
+    fromBlock: startBlockHex,
+  })
+  const received = await fetchLogsChunked(rpcUrl, {
+    address: USDC_ADDRESS,
+    topics: [TRANSFER_TOPIC, null, paddedAddr],
+    fromBlock: startBlockHex,
+  })
+
+  const allLogs = deduplicateLogs([...sent, ...received])
+  if (allLogs.length === 0) return
+
+  // Batch-fetch block timestamps for all unique blocks
+  const uniqueBlockNums = [...new Set(allLogs.map((l: any) => l.blockNumber as string))]
+  const blockTimestamps = new Map<string, number>()
+  for (const blockNum of uniqueBlockNums) {
+    const ts = await fetchBlockTimestamp(rpcUrl, blockNum)
+    blockTimestamps.set(blockNum, ts)
+  }
+
+  let skippedNoTimestamp = 0
+  for (const log of allLogs) {
+    const from = ('0x' + log.topics[1].slice(26)).toLowerCase() as `0x${string}`
+    const to = ('0x' + log.topics[2].slice(26)).toLowerCase() as `0x${string}`
+    const amount = BigInt(log.data)
+    const blockNumber = parseInt(log.blockNumber, 16)
+    const logIndex = parseInt(log.logIndex, 16)
+    const txHash = log.transactionHash.toLowerCase() as `0x${string}`
+    const transferId = `${txHash}-${logIndex}`
+
+    const timestamp = blockTimestamps.get(log.blockNumber)
+    if (timestamp === undefined) {
+      skippedNoTimestamp++
+      continue
+    }
+    const day = new Date(timestamp * 1000).toISOString().slice(0, 10)
+
+    // Insert transfer — returning() gates aggregate updates
+    const inserted = await db.insert(transfer).values({
+      id: transferId, from, to, amount, timestamp, blockNumber, txHash,
+    }).onConflictDoNothing().returning({ id: transfer.id })
+
+    if (inserted.length === 0) continue
+
+    // Upsert sender account
+    await db.insert(account).values({
+      address: from, balance: -amount, totalSent: amount,
+      totalReceived: 0n, txCount: 1, lastActivity: timestamp,
+    }).onConflictDoUpdate({
+      target: account.address,
+      set: {
+        balance: sql`${account.balance} - ${amount}`,
+        totalSent: sql`${account.totalSent} + ${amount}`,
+        txCount: sql`${account.txCount} + 1`,
+        lastActivity: sql`GREATEST(${account.lastActivity}, ${timestamp})`,
+      },
+    })
+
+    // Upsert receiver account
+    await db.insert(account).values({
+      address: to, balance: amount, totalSent: 0n,
+      totalReceived: amount, txCount: 1, lastActivity: timestamp,
+    }).onConflictDoUpdate({
+      target: account.address,
+      set: {
+        balance: sql`${account.balance} + ${amount}`,
+        totalReceived: sql`${account.totalReceived} + ${amount}`,
+        txCount: sql`${account.txCount} + 1`,
+        lastActivity: sql`GREATEST(${account.lastActivity}, ${timestamp})`,
+      },
+    })
+
+    // Upsert daily volume
+    await db.insert(dailyVolume).values({
+      id: day, date: day, totalUsdcVolume: amount,
+      transferCount: 1, gasRefuelCount: 0, gasEthSpent: 0n,
+    }).onConflictDoUpdate({
+      target: dailyVolume.id,
+      set: {
+        totalUsdcVolume: sql`${dailyVolume.totalUsdcVolume} + ${amount}`,
+        transferCount: sql`${dailyVolume.transferCount} + 1`,
+      },
+    })
+  }
+
+  if (skippedNoTimestamp > 0) {
+    console.warn(`Backfill ${address}: skipped ${skippedNoTimestamp} transfers (missing block timestamps)`)
+  }
+  console.log(`Backfilled ${allLogs.length - skippedNoTimestamp} transfers for ${address}`)
+}
+
+// ══════════════════════════════════════════════════════════════
 // WALLET REGISTRATION (called by AdonisJS backend)
 // ══════════════════════════════════════════════════════════════
 
@@ -67,7 +290,8 @@ app.post('/wallets/register', requireSecret, async (c) => {
 
   const normalized = address.toLowerCase()
 
-  await db
+  // Step 1: Try insert — only returns a row if wallet is genuinely new
+  const inserted = await db
     .insert(offchainSchema.sippyWallet)
     .values({
       address: normalized,
@@ -75,24 +299,51 @@ app.post('/wallets/register', requireSecret, async (c) => {
       registeredAt: Math.floor(Date.now() / 1000),
       isActive: true,
     })
-    .onConflictDoUpdate({
-      target: offchainSchema.sippyWallet.address,
-      set: { isActive: true },
-    })
+    .onConflictDoNothing()
+    .returning({ address: offchainSchema.sippyWallet.address })
 
-  return c.json({ ok: true, address: normalized })
+  let isNewOrReactivated = inserted.length > 0
+
+  // Step 2: If not inserted, check if wallet needs reactivation
+  if (!isNewOrReactivated) {
+    const reactivated = await db
+      .update(offchainSchema.sippyWallet)
+      .set({ isActive: true, phoneHash: phoneHash ?? null })
+      .where(
+        and(
+          eq(offchainSchema.sippyWallet.address, normalized),
+          eq(offchainSchema.sippyWallet.isActive, false)
+        )
+      )
+      .returning({ address: offchainSchema.sippyWallet.address })
+    isNewOrReactivated = reactivated.length > 0
+  }
+
+  // Only backfill + restart if filter membership actually changed
+  if (isNewOrReactivated) {
+    try {
+      await backfillWallet(normalized)
+    } catch (err) {
+      console.error(`Backfill failed for ${normalized}:`, err)
+    }
+    scheduleRestart()
+  }
+
+  return c.json({ ok: true, address: normalized, isNew: isNewOrReactivated })
 })
 
 // Bulk sync all wallets from backend (call on demand)
 app.post('/wallets/sync', requireSecret, async (c) => {
   const { wallets } = await c.req.json()
-
   if (!Array.isArray(wallets)) {
     return c.json({ error: 'wallets must be an array' }, 400)
   }
 
-  let synced = 0
+  let newInserts = 0
+  let reactivations = 0
+  let processed = 0
   const skipped: string[] = []
+
   for (const w of wallets) {
     if (!isValidAddress(w.address)) {
       skipped.push(w.address ?? '(missing)')
@@ -103,7 +354,9 @@ app.post('/wallets/sync', requireSecret, async (c) => {
       continue
     }
     const normalized = w.address.toLowerCase()
-    await db
+
+    // Step 1: Try insert (new wallet)
+    const inserted = await db
       .insert(offchainSchema.sippyWallet)
       .values({
         address: normalized,
@@ -112,10 +365,34 @@ app.post('/wallets/sync', requireSecret, async (c) => {
         isActive: true,
       })
       .onConflictDoNothing()
-    synced++
+      .returning({ address: offchainSchema.sippyWallet.address })
+
+    processed++
+    if (inserted.length > 0) {
+      newInserts++
+      continue
+    }
+
+    // Step 2: If not inserted, reactivate if currently inactive
+    const reactivated = await db
+      .update(offchainSchema.sippyWallet)
+      .set({ isActive: true, phoneHash: w.phoneHash ?? null })
+      .where(
+        and(
+          eq(offchainSchema.sippyWallet.address, normalized),
+          eq(offchainSchema.sippyWallet.isActive, false)
+        )
+      )
+      .returning({ address: offchainSchema.sippyWallet.address })
+
+    if (reactivated.length > 0) reactivations++
   }
 
-  return c.json({ ok: true, synced, skipped })
+  // Only restart if filter membership actually changed
+  const filterChanged = newInserts + reactivations
+  if (filterChanged > 0) scheduleRestart()
+
+  return c.json({ ok: true, processed, newInserts, reactivations, skipped })
 })
 
 // List all registered wallets (phoneHash excluded from response)
@@ -250,6 +527,7 @@ app.get('/stats', async (c) => {
     .where(eq(gasRefuelStatus.id, 'singleton'))
 
   return c.json({
+    scope: 'sippy_wallets',
     registeredUsers: registeredWallets[0]?.count || 0,
     accounts: totalAccounts[0]?.count || 0,
     transfers: {
@@ -280,6 +558,7 @@ app.get('/stats/daily', async (c) => {
     .limit(days)
 
   return c.json({
+    scope: 'sippy_wallets',
     days: results.map((d) => ({
       date: d.date,
       usdcVolume: d.totalUsdcVolume.toString(),

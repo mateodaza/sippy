@@ -14,6 +14,20 @@ ponder.on('USDC:Transfer', async ({ event, context }) => {
   const timestamp = Number(event.block.timestamp)
   const day = new Date(timestamp * 1000).toISOString().slice(0, 10)
 
+  // Insert transfer — gate aggregates on success
+  const inserted = await context.db.insert(transfer).values({
+    id: `${event.transaction.hash}-${event.log.logIndex}`,
+    from,
+    to,
+    amount: value,
+    timestamp,
+    blockNumber: Number(event.block.number),
+    txHash: event.transaction.hash,
+  }).onConflictDoNothing()
+
+  // If transfer already existed (backfill or replay), skip all aggregates
+  if (!inserted) return
+
   // Update sender account
   await context.db
     .insert(account)
@@ -50,18 +64,7 @@ ponder.on('USDC:Transfer', async ({ event, context }) => {
       lastActivity: timestamp,
     }))
 
-  // Insert transfer record (raw — no classification)
-  await context.db.insert(transfer).values({
-    id: `${event.transaction.hash}-${event.log.logIndex}`,
-    from,
-    to,
-    amount: value,
-    timestamp,
-    blockNumber: Number(event.block.number),
-    txHash: event.transaction.hash,
-  })
-
-  // Update daily volume (global only)
+  // Update daily volume
   await context.db
     .insert(dailyVolume)
     .values({

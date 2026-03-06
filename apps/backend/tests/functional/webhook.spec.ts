@@ -6,6 +6,12 @@
  */
 
 import { test } from '@japa/runner'
+import { createHmac } from 'node:crypto'
+
+function signPayload(payload: object): string {
+  const raw = JSON.stringify(payload)
+  return 'sha256=' + createHmac('sha256', 'test-app-secret').update(raw).digest('hex')
+}
 
 test.group('Webhook | GET /webhook/whatsapp (Verification)', () => {
   test('valid verify_token returns 200 with challenge', async ({ client }) => {
@@ -51,22 +57,36 @@ test.group('Webhook | GET /webhook/whatsapp (Verification)', () => {
 
 test.group('Webhook | POST /webhook/whatsapp (Message Receive)', () => {
   test('returns 200 immediately (Meta requirement)', async ({ client }) => {
-    const response = await client.post('/webhook/whatsapp').json({
-      object: 'whatsapp_business_account',
-      entry: [],
-    })
+    const payload = { object: 'whatsapp_business_account', entry: [] }
+    const response = await client
+      .post('/webhook/whatsapp')
+      .header('x-hub-signature-256', signPayload(payload))
+      .json(payload)
 
     response.assertStatus(200)
   })
 
   test('returns 200 even with empty body', async ({ client }) => {
-    const response = await client.post('/webhook/whatsapp').json({})
+    const payload = {}
+    const response = await client
+      .post('/webhook/whatsapp')
+      .header('x-hub-signature-256', signPayload(payload))
+      .json(payload)
 
     response.assertStatus(200)
   })
 
+  test('returns 401 without valid signature', async ({ client }) => {
+    const response = await client
+      .post('/webhook/whatsapp')
+      .header('x-hub-signature-256', 'sha256=invalid')
+      .json({ entry: [] })
+
+    response.assertStatus(401)
+  })
+
   test('returns 200 with valid message payload', async ({ client }) => {
-    const response = await client.post('/webhook/whatsapp').json({
+    const payload = {
       object: 'whatsapp_business_account',
       entry: [
         {
@@ -86,7 +106,11 @@ test.group('Webhook | POST /webhook/whatsapp (Message Receive)', () => {
           ],
         },
       ],
-    })
+    }
+    const response = await client
+      .post('/webhook/whatsapp')
+      .header('x-hub-signature-256', signPayload(payload))
+      .json(payload)
 
     // Meta requires immediate 200 — processing is async
     response.assertStatus(200)
