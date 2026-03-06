@@ -52,12 +52,12 @@ export default class AnalyticsController {
           ORDER BY volume DESC
         `),
 
-        // 6. Top users by volume (only sippy wallets)
+        // 6. Top users by volume (only sippy wallets, ranked by total volume)
         idx
           .from('account')
           .whereIn('address', idx.from('offchain.sippy_wallet').select('address'))
-          .select('address', db.raw('total_sent::text as "totalSent"'), db.raw('total_received::text as "totalReceived"'), db.raw('tx_count as "txCount"'))
-          .orderBy(db.raw('total_sent'), 'desc')
+          .select('address', db.raw('total_sent::text as "totalSent"'), db.raw('total_received::text as "totalReceived"'), db.raw('tx_count as "txCount"'), db.raw('(total_sent + total_received)::text as "totalVolume"'))
+          .orderBy(db.raw('total_sent + total_received'), 'desc')
           .limit(10),
 
         // 7. Daily volumes (last 30 days)
@@ -77,10 +77,11 @@ export default class AnalyticsController {
         }
       : null
 
-    const topUsersData = (topUsers as { address: string; totalSent: string; totalReceived: string; txCount: number }[]).map((u) => ({
+    const topUsersData = (topUsers as { address: string; totalSent: string; totalReceived: string; txCount: number; totalVolume: string }[]).map((u) => ({
       address: u.address,
       totalSent: String(u.totalSent),
       totalReceived: String(u.totalReceived),
+      totalVolume: String(u.totalVolume),
       txCount: Number(u.txCount),
     }))
 

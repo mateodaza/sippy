@@ -11,6 +11,7 @@ interface TopUser {
   address: string
   totalSent: string
   totalReceived: string
+  totalVolume: string
   txCount: number
 }
 
@@ -245,7 +246,7 @@ export default function Analytics({
                   </span>
                   <div className="text-right">
                     <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
-                      {formatUSDC(user.totalSent)}
+                      {formatUSDC(user.totalVolume)}
                     </span>
                     <div className="mt-0.5 text-[10px] text-gray-400">{user.txCount} txs</div>
                   </div>
@@ -269,7 +270,7 @@ export default function Analytics({
             {dailyVolumes.map((row) => {
               const pct = (Number(row.totalUsdcVolume) / maxVolume) * 100
               return (
-                <div key={row.date} className="group flex flex-1 flex-col items-center gap-1">
+                <div key={row.date} className="group flex flex-1 flex-col items-center gap-1" style={{ minWidth: 40, maxWidth: 80 }}>
                   <span className="text-xs font-semibold text-slate-700 opacity-0 transition-opacity group-hover:opacity-100">
                     {formatUSDC(row.totalUsdcVolume)}
                   </span>
@@ -278,7 +279,7 @@ export default function Analytics({
                     style={{ height: `${Math.max(pct, 4)}%` }}
                   />
                   <span className="mt-1 text-[10px] text-gray-400">
-                    {new Date(row.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    {new Date(row.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </span>
                 </div>
               )
