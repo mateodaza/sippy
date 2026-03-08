@@ -1,0 +1,13 @@
+[build]
+dockerfilePath = "apps/x-agent/Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 10
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+numReplicas = 1
+
+[[services]]
+name = "x-agent"
+port = 3002
