@@ -6,7 +6,7 @@
 
 ## Status Legend
 - [ ] Queued — ready for agent
-- [~] In Progress
+- [ ] In Progress
 - [x] Completed
 - [!] Blocked — needs manual human action, skip and move to next
 
