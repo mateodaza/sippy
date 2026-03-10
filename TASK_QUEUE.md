@@ -107,7 +107,7 @@
 - **Dependencies:** NC-008
 - **Files:** `apps/web/app/providers/cdp-provider.tsx`
 
-#### NC-010 [ ] Migrate setup page to JWT auth
+#### NC-010 [x] Migrate setup page to JWT auth
 - **What:** Replace `useSignInWithSms` / `useVerifySmsOTP` with our OTP + `useAuthenticateWithJWT`.
 - **Acceptance criteria:**
   - `signInWithSms()` replaced with `sendOtp()` from auth utility
