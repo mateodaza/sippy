@@ -2,3 +2,4 @@
 - **NC-002** — 2026-03-10 — `6d6e8c2` — Session: 20260310-203844-sippy — ⚠ DEGRADED MODE: Codex was unavailable — no independent audit/review performed.
 - **NC-003** — 2026-03-10 — `9168938` — Session: 20260310-203844-sippy — ⚠ DEGRADED MODE: Codex was unavailable — no independent audit/review performed.
 - **NC-004** — 2026-03-10 — `d2083f8` — Session: 20260310-203844-sippy — ⚠ DEGRADED MODE: Codex was unavailable — no independent audit/review performed.
+- **NC-004** — 2026-03-10 — `cb1c856` — Session: 20260310-203844-sippy
