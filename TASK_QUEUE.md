@@ -5,7 +5,7 @@
 
 ## Status Legend
 - [ ] Queued
-- [~] In Progress
+- [ ] In Progress
 - [x] Completed
 - [!] Blocked — needs manual action
 
