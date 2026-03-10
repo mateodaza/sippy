@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts, useSendUserOperation } from '@coinbase/cdp-hooks';
+import { useAuthenticateWithJWT, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts, useSendUserOperation } from '@coinbase/cdp-hooks';
+import { sendOtp, verifyOtp, storeToken, getStoredToken } from '@/lib/auth';
 import { parseUnits } from 'viem';
 import { getBalances } from '@/lib/blockscout';
 import { ensureGasReady, buildUsdcTransferCall } from '@/lib/usdc-transfer';
@@ -52,7 +53,6 @@ function SettingsContent() {
   const [authStep, setAuthStep] = useState<AuthStep>('phone');
   const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl);
   const [otp, setOtp] = useState('');
-  const [flowId, setFlowId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -80,9 +80,7 @@ function SettingsContent() {
   const [sweepError, setSweepError] = useState<string | null>(null);
 
   // CDP Hooks
-  const { signInWithSms } = useSignInWithSms();
-  const { verifySmsOTP } = useVerifySmsOTP();
-  const { getAccessToken } = useGetAccessToken();
+  const { authenticateWithJWT } = useAuthenticateWithJWT();
   const { createSpendPermission } = useCreateSpendPermission();
   const { revokeSpendPermission } = useRevokeSpendPermission();
   const { refetch: refetchPermissions, data: permissionsData } = useListSpendPermissions({
@@ -143,28 +141,39 @@ function SettingsContent() {
         setWalletAddress(smartAccountAddress);
         console.log('Restored wallet:', smartAccountAddress);
 
-        // Fetch wallet status from backend
+        // Validate the stored JWT against the backend before restoring session.
+        // An expired token returns 401; treat any non-ok response as invalid.
         if (BACKEND_URL) {
-          const accessToken = await getAccessToken();
-          if (accessToken) {
-            const response = await fetch(`${BACKEND_URL}/api/wallet-status`, {
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-              },
-            });
-
-            if (response.ok) {
-              const status = await response.json();
-              setWalletStatus(status);
-              if (status.dailyLimit) {
-                setNewLimit(status.dailyLimit.toString());
-              }
-              if (status.phoneNumber) {
-                setVerifiedPhone(status.phoneNumber);
-              }
-              console.log('Wallet status restored:', status);
-            }
+          const accessToken = getStoredToken();
+          if (!accessToken) {
+            await signOut();
+            setIsCheckingSession(false);
+            return;
           }
+
+          const response = await fetch(`${BACKEND_URL}/api/wallet-status`, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          });
+
+          if (!response.ok) {
+            // Token rejected by backend (expired or invalid) — force re-auth
+            console.warn('Stored JWT rejected by backend, signing out');
+            await signOut();
+            setIsCheckingSession(false);
+            return;
+          }
+
+          const status = await response.json();
+          setWalletStatus(status);
+          if (status.dailyLimit) {
+            setNewLimit(status.dailyLimit.toString());
+          }
+          if (status.phoneNumber) {
+            setVerifiedPhone(status.phoneNumber);
+          }
+          console.log('Wallet status restored:', status);
         }
 
         // Session restored - go directly to authenticated view
@@ -177,12 +186,12 @@ function SettingsContent() {
     };
 
     checkExistingSession();
-  }, [isSignedIn, currentUser, hasCheckedSession, getAccessToken]);
+  }, [isSignedIn, currentUser, hasCheckedSession]);
 
   // Fetch wallet status from backend after authentication
   const fetchWalletStatus = async () => {
     try {
-      const accessToken = await getAccessToken();
+      const accessToken = getStoredToken();
       if (!accessToken || !BACKEND_URL) return;
 
       const response = await fetch(`${BACKEND_URL}/api/wallet-status`, {
@@ -230,28 +239,14 @@ function SettingsContent() {
 
       // Phone number must be in E.164 format (e.g., +573001234567)
       const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+      setPhoneNumber(formattedPhone);
 
       console.log('Sending OTP to:', formattedPhone);
-      const result = await signInWithSms({ phoneNumber: formattedPhone });
-
-      setFlowId(result.flowId);
+      await sendOtp(formattedPhone);
       setAuthStep('otp');
     } catch (err) {
       console.error('Failed to send OTP:', err);
-      // Handle "already signed in" error from CDP
       const errorMsg = err instanceof Error ? err.message : 'Failed to send verification code';
-      if (errorMsg.toLowerCase().includes('already') || errorMsg.toLowerCase().includes('session')) {
-        // Try to restore the existing session
-        if (currentUser) {
-          const smartAccountAddress = currentUser.evmSmartAccounts?.[0] || currentUser.evmAccounts?.[0];
-          if (smartAccountAddress) {
-            setWalletAddress(smartAccountAddress);
-            await fetchWalletStatus();
-            setAuthStep('authenticated');
-            return;
-          }
-        }
-      }
       setError(errorMsg);
     } finally {
       setIsLoading(false);
@@ -264,12 +259,10 @@ function SettingsContent() {
     setError(null);
 
     try {
-      if (!flowId) {
-        throw new Error('No flow ID. Please restart the process.');
-      }
-
       console.log('Verifying OTP...');
-      const { user, isNewUser } = await verifySmsOTP({ flowId, otp });
+      const token = await verifyOtp(phoneNumber, otp);
+      storeToken(token);
+      const { user } = await authenticateWithJWT();
 
       console.log('User authenticated:', user.userId);
 
@@ -330,7 +323,7 @@ function SettingsContent() {
 
       // Update backend - this MUST succeed to keep state in sync
       if (BACKEND_URL) {
-        const accessToken = await getAccessToken();
+        const accessToken = getStoredToken();
         if (!accessToken) {
           throw new Error('Failed to get access token. Please try again.');
         }
@@ -386,7 +379,7 @@ function SettingsContent() {
 
       // Register permission with backend - this MUST succeed for transfers to work
       if (BACKEND_URL) {
-        const accessToken = await getAccessToken();
+        const accessToken = getStoredToken();
         if (!accessToken) {
           throw new Error('Failed to get access token. Please try again.');
         }
@@ -448,7 +441,7 @@ function SettingsContent() {
     const id = attemptIdOverride ?? exportAttemptId;
     if (!id) return;
     try {
-      const accessToken = await getAccessToken();
+      const accessToken = getStoredToken();
       if (!accessToken || !BACKEND_URL) return;
       await fetch(`${BACKEND_URL}/api/log-export-event`, {
         method: 'POST',
@@ -518,7 +511,7 @@ function SettingsContent() {
 
     try {
       // Step 1: Ensure gas
-      const accessToken = await getAccessToken();
+      const accessToken = getStoredToken();
       if (!accessToken) throw new Error('Session expired. Please sign in again.');
 
       const gasReady = await ensureGasReady(BACKEND_URL, accessToken);
