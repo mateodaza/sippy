@@ -66,4 +66,4 @@ yarn.lock
 # Temporary files
 *.tsbuildinfo
 .eslintcache
-.stylelintcache
+.stylelintcache.claude/
