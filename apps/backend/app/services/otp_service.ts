@@ -58,7 +58,7 @@ class OtpService {
 
     const code = String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0')
 
-    if (this.otpStore.size >= MAX_MAP_ENTRIES) {
+    if (!this.otpStore.has(phone) && this.otpStore.size >= MAX_MAP_ENTRIES) {
       this.purgeExpiredOtpEntries()
       if (this.otpStore.size >= MAX_MAP_ENTRIES) {
         // All entries unexpired — evict oldest (Map insertion order)
