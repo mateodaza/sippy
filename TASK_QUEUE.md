@@ -179,7 +179,7 @@
 - **Context:** `apps/web/app/setup/page.tsx` (NC-010 already done — use as reference for the exact pattern)
 - **Files:** `apps/web/app/wallet/page.tsx`
 
-#### NC-012 [ ] Migrate settings page to JWT auth
+#### NC-012 [x] Migrate settings page to JWT auth
 - **What:** Same auth swap — most complex page (has permissions, revoke, export, send).
 - **Acceptance criteria:**
   - Remove imports: `useSignInWithSms`, `useVerifySmsOTP` from `@coinbase/cdp-hooks`
