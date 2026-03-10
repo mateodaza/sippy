@@ -36,7 +36,7 @@
 - **Dependencies:** NC-001
 - **Files:** `apps/backend/app/services/jwt_service.ts` (new)
 
-#### NC-003 [ ] Create OTP service with Twilio raw SMS
+#### NC-003 [x] Create OTP service with Twilio raw SMS
 - **What:** In-memory OTP store + Twilio Messages API for branded SMS delivery.
 - **Acceptance criteria:**
   - `sendOtp(phone, lang?)` generates 6-digit code, stores with 5-min TTL, sends via Twilio REST API
