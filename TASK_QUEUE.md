@@ -69,7 +69,7 @@
 - **Dependencies:** NC-002
 - **Files:** `apps/backend/app/middleware/jwt_auth_middleware.ts` (new)
 
-#### NC-006 [ ] Register auth routes and swap middleware
+#### NC-006 [x] Register auth routes and swap middleware
 - **What:** Wire up auth endpoints, register JWT middleware, swap API group from CDP to JWT auth.
 - **Acceptance criteria:**
   - Auth routes added: `send-otp`, `verify-otp`, `jwks` (public, with ipThrottle on OTP routes)
