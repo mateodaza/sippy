@@ -164,7 +164,7 @@
 - **Dependencies:** NC-008, NC-009
 - **Files:** `apps/web/app/setup/page.tsx`
 
-#### NC-011 [ ] Migrate wallet page to JWT auth
+#### NC-011 [x] Migrate wallet page to JWT auth
 - **What:** Same auth swap as NC-010 but on the wallet page.
 - **Acceptance criteria:**
   - Remove imports: `useSignInWithSms`, `useVerifySmsOTP` from `@coinbase/cdp-hooks`

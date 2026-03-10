@@ -3,14 +3,13 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  useSignInWithSms,
-  useVerifySmsOTP,
-  useGetAccessToken,
+  useAuthenticateWithJWT,
   useCurrentUser,
   useIsSignedIn,
   useSignOut,
   useSendUserOperation,
 } from '@coinbase/cdp-hooks';
+import { sendOtp, verifyOtp, storeToken, getStoredToken } from '@/lib/auth';
 import {
   getBalances,
   getActivity,
@@ -37,8 +36,7 @@ function WalletContent() {
   const [authStep, setAuthStep] = useState<AuthStep>('phone');
   const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl);
   const [otp, setOtp] = useState('');
-  const [flowId, setFlowId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [hasCheckedSession, setHasCheckedSession] = useState(false);
@@ -57,9 +55,7 @@ function WalletContent() {
   const [sendTxHash, setSendTxHash] = useState<string | null>(null);
 
   // CDP Hooks
-  const { signInWithSms } = useSignInWithSms();
-  const { verifySmsOTP } = useVerifySmsOTP();
-  const { getAccessToken } = useGetAccessToken();
+  const { authenticateWithJWT } = useAuthenticateWithJWT();
   const { currentUser } = useCurrentUser();
   const { isSignedIn } = useIsSignedIn();
   const { signOut } = useSignOut();
@@ -131,6 +127,14 @@ function WalletContent() {
         return;
       }
 
+      // A stored JWT is required for the send flow (getStoredToken() calls).
+      // If none exists the user must re-authenticate via OTP to get one.
+      if (!getStoredToken()) {
+        await signOut();
+        setIsCheckingSession(false);
+        return;
+      }
+
       setAuthStep('authenticated');
       setIsCheckingSession(false);
     };
@@ -153,8 +157,8 @@ function WalletContent() {
       const formattedPhone = phoneNumber.startsWith('+')
         ? phoneNumber
         : `+${phoneNumber}`;
-      const result = await signInWithSms({ phoneNumber: formattedPhone });
-      setFlowId(result.flowId);
+      setPhoneNumber(formattedPhone);
+      await sendOtp(formattedPhone);
       setAuthStep('otp');
     } catch (err) {
       const msg =
@@ -178,12 +182,10 @@ function WalletContent() {
     setIsLoading(true);
     setError(null);
     try {
-      if (!flowId)
-        throw new Error('No flow ID. Please restart the process.');
-
-      const { user } = await verifySmsOTP({ flowId, otp });
-      const addr =
-        user.evmSmartAccounts?.[0] || user.evmAccounts?.[0];
+      const token = await verifyOtp(phoneNumber, otp);
+      storeToken(token);
+      const { user } = await authenticateWithJWT();
+      const addr = user.evmSmartAccounts?.[0] || user.evmAccounts?.[0];
       if (!addr)
         throw new Error(
           'No wallet found. Set up your wallet first at sippy.lat/setup'
@@ -228,7 +230,7 @@ function WalletContent() {
     } else if (isPhoneNumber(trimmed)) {
       // Resolve phone via authenticated endpoint
       try {
-        const accessToken = await getAccessToken();
+        const accessToken = getStoredToken();
         if (!accessToken) {
           setSendError('Session expired. Please sign in again.');
           return;
@@ -276,7 +278,7 @@ function WalletContent() {
     setSendStep('sending');
 
     try {
-      const accessToken = await getAccessToken();
+      const accessToken = getStoredToken();
       if (!accessToken)
         throw new Error('Session expired. Please sign in again.');
 
@@ -311,7 +313,7 @@ function WalletContent() {
       // Fire-and-forget audit log
       (async () => {
         try {
-          const accessToken = await getAccessToken();
+          const accessToken = getStoredToken();
           if (!accessToken || !BACKEND_URL || !txHash || !resolvedAddress)
             return;
           await fetch(`${BACKEND_URL}/api/log-web-send`, {
