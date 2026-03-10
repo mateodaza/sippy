@@ -205,13 +205,6 @@ class OtpService {
       if (now > entry.expiresAt) this.otpStore.delete(phone)
     }
   }
-
-  private purgeExpiredRateLimitBuckets(): void {
-    const now = Date.now()
-    for (const [phone, bucket] of this.sendRateLimitMap) {
-      if (now > bucket.resetAt) this.sendRateLimitMap.delete(phone)
-    }
-  }
 }
 
 export const otpService = new OtpService()
