@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuthenticateWithJWT, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts, useSendUserOperation } from '@coinbase/cdp-hooks';
-import { sendOtp, verifyOtp, storeToken, getStoredToken } from '@/lib/auth';
+import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '@/lib/auth';
 import { parseUnits } from 'viem';
 import { getBalances } from '@/lib/blockscout';
 import { ensureGasReady, buildUsdcTransferCall } from '@/lib/usdc-transfer';
@@ -146,6 +146,7 @@ function SettingsContent() {
         if (BACKEND_URL) {
           const accessToken = getStoredToken();
           if (!accessToken) {
+            clearToken();
             await signOut();
             setIsCheckingSession(false);
             return;
@@ -160,6 +161,7 @@ function SettingsContent() {
           if (!response.ok) {
             // Token rejected by backend (expired or invalid) — force re-auth
             console.warn('Stored JWT rejected by backend, signing out');
+            clearToken();
             await signOut();
             setIsCheckingSession(false);
             return;
@@ -1046,6 +1048,7 @@ function SettingsContent() {
           <button
             onClick={async () => {
               if (exportStep !== 'idle') resetExport('cancelled');
+              clearToken();
               await signOut();
               setAuthStep('phone');
               setWalletAddress(null);
