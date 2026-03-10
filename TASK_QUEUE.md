@@ -58,7 +58,7 @@
 - **Dependencies:** NC-002, NC-003
 - **Files:** `apps/backend/app/controllers/auth_api_controller.ts` (new)
 
-#### NC-005 [ ] Create JWT auth middleware
+#### NC-005 [~] Create JWT auth middleware
 - **What:** Replace CDP token validation with our JWT. Same `ctx.cdpUser` shape — zero controller changes.
 - **Acceptance criteria:**
   - Extracts `Authorization: Bearer <token>`, verifies via `jwtService.verifyToken()`

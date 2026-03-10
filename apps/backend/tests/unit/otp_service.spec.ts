@@ -559,6 +559,26 @@ test.group('OtpService | otpStore capacity cap', () => {
     await svc.sendOtp('+573001234567')
     assert.equal(store.size, 1)
   })
+
+  test('resend for existing phone at capacity — no eviction of unrelated entries', async ({ assert }) => {
+    const mock = makeMockSender()
+    const svc = new OtpService(mock.sender)
+    const store = (svc as any).otpStore as Map<string, { code: string; expiresAt: number; attempts: number }>
+    const future = Date.now() + 999_999
+    // Pre-fill 99,999 unexpired entries
+    for (let i = 0; i < 99_999; i++) {
+      store.set(`+1${String(i).padStart(10, '0')}`, { code: '123456', expiresAt: future, attempts: 0 })
+    }
+    // First send creates the entry — store is now at 100,000
+    await svc.sendOtp('+573001234567')
+    assert.equal(store.size, 100_000)
+    const oldestKey = store.keys().next().value
+    // Resend for same phone — overwrite in place, oldest must NOT be evicted
+    await svc.sendOtp('+573001234567')
+    assert.equal(store.size, 100_000)
+    assert.isTrue(store.has(oldestKey), 'oldest entry must not be evicted on resend')
+    assert.isTrue(store.has('+573001234567'))
+  })
 })
 
 // ── sendRateLimitMap capacity cap ─────────────────────────────────────────────
