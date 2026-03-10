@@ -99,7 +99,7 @@
 - **Dependencies:** NC-006
 - **Files:** `apps/web/lib/auth.ts` (new)
 
-#### NC-009 [ ] Update CDPHooksProvider with custom auth
+#### NC-009 [x] Update CDPHooksProvider with custom auth
 - **What:** Add `customAuth.getJwt` callback so CDP uses our JWT instead of its own SMS.
 - **Acceptance criteria:**
   - `customAuth: { getJwt: async () => getFreshToken() ?? undefined }` added to provider config
