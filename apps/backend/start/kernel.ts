@@ -50,4 +50,5 @@ export const middleware = router.named({
   auth: () => import('#middleware/auth_middleware'),
   cdpAuth: () => import('#middleware/cdp_auth_middleware'),
   ipThrottle: () => import('#middleware/ip_throttle_middleware'),
+  jwtAuth: () => import('#middleware/jwt_auth_middleware'),
 })
