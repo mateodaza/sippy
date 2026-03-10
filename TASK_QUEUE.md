@@ -16,7 +16,7 @@
 > **Goal:** Users see "Sippy: Tu código es 123456" instead of "Coinbase: Your code is..."
 > **Estimate:** 10-14h
 
-#### NC-001 [ ] Add JWT and Twilio env variables
+#### NC-001 [x] Add JWT and Twilio env variables
 - **What:** Add Twilio + JWT env vars to AdonisJS env schema and `.env`. Generate RS256 keypair.
 - **Acceptance criteria:**
   - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` added to `env.ts` (optional strings)
