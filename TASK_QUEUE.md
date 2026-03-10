@@ -49,7 +49,7 @@
 - **Constraints:** Use axios with Basic Auth, no `twilio` npm package
 - **Files:** `apps/backend/app/services/otp_service.ts` (new)
 
-#### NC-004 [ ] Create auth API controller
+#### NC-004 [x] Create auth API controller
 - **What:** Three endpoints: send-otp, verify-otp, JWKS.
 - **Acceptance criteria:**
   - `POST /api/auth/send-otp` — body `{ phone }`, normalizes to E.164, returns `{ success: true }` or 429
