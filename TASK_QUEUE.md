@@ -204,7 +204,7 @@
 - **Dependencies:** NC-010, NC-011, NC-012
 - **Files:** `apps/web/app/setup/page.tsx`, `apps/web/app/wallet/page.tsx`, `apps/web/app/settings/page.tsx`
 
-#### NC-014 [ ] Run tests and verify build
+#### NC-014 [~] Run tests and verify build
 - **What:** Ensure backend tests pass and both apps compile after all changes.
 - **Acceptance criteria:**
   - `cd apps/backend && node ace test` — all tests pass
