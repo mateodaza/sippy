@@ -1,13 +1,24 @@
 # Task Queue — Sippy
 
-> Tasks are executed in order, respecting dependencies.
+> This file is consumed by an AI agent. Tasks are executed in order, respecting dependencies.
+> Only Mateo adds or reorders tasks. The agent marks completion status.
 > Tasks use stable IDs (NC-001, etc.) that never change when tasks are reordered.
 
 ## Status Legend
-- [ ] Queued
-- [ ] In Progress
+- [ ] Queued — ready for agent
+- [~] In Progress
 - [x] Completed
-- [!] Blocked — needs manual action
+- [!] Blocked — needs manual human action, skip and move to next
+
+## Agent Rules
+1. Pick the first `[ ]` task whose dependencies are all `[x]`. Skip `[!]` blocked tasks.
+2. Read all files listed in **Files** before writing any code.
+3. Follow existing patterns — check sibling files in the same directory for style, imports, and conventions.
+4. Do NOT install new npm packages unless explicitly stated.
+5. Do NOT modify files not listed in **Files** unless the change is a direct consequence (e.g. fixing an import).
+6. After completing a task, run the **Verify** command. If it fails, fix before marking `[x]`.
+7. Commit each task separately with message: `feat(auth): NC-XXX — {task title}`.
+8. If a task is ambiguous, read the referenced pattern files in **Context** before asking for clarification.
 
 ---
 
@@ -19,163 +30,216 @@
 #### NC-001 [x] Add JWT and Twilio env variables
 - **What:** Add Twilio + JWT env vars to AdonisJS env schema and `.env`. Generate RS256 keypair.
 - **Acceptance criteria:**
-  - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` added to `env.ts` (optional strings)
-  - `JWT_PRIVATE_KEY_PEM`, `JWT_PUBLIC_KEY_PEM` added (optional, base64-encoded PEM)
-  - `JWT_KEY_ID` (default "sippy-1"), `JWT_ISSUER` (default "sippy") added
-  - RS256 keypair generated and base64-encoded values added to `.env`
+  - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` added to `env.ts` as optional strings
+  - `JWT_PRIVATE_KEY_PEM`, `JWT_PUBLIC_KEY_PEM` added as optional strings (base64-encoded PEM)
+  - `JWT_KEY_ID`, `JWT_ISSUER` added as optional strings
+  - RS256 keypair generated via `openssl genrsa 2048` and base64-encoded values added to `.env`
+- **Verify:** `cd apps/backend && node ace check:env` exits 0
 - **Dependencies:** None
 - **Files:** `apps/backend/start/env.ts`, `apps/backend/.env`
 
 #### NC-002 [x] Create JWT service
-- **What:** RS256 JWT signing, verification, and JWKS export using `jose` v6.
+- **What:** RS256 JWT signing, verification, and JWKS export using `jose` v6 (already installed).
 - **Acceptance criteria:**
-  - `signToken(sub)` returns RS256 JWT with `{ sub, iss, iat, exp(1h), jti }`
-  - `verifyToken(token)` validates signature + expiry, returns payload
-  - `getJwks()` returns `{ keys: [{ kty, n, e, kid, alg: "RS256", use: "sig" }] }`
-  - Singleton pattern with lazy init from base64 PEM env vars
+  - Exports singleton with lazy init: decodes base64 PEM env vars → `jose.importPKCS8` / `jose.importSPKI`
+  - `signToken(sub: string)` → RS256 JWT with claims `{ sub, iss, iat, exp(1h), jti(crypto.randomUUID()) }`
+  - `verifyToken(token: string)` → validates signature + expiry, returns `JWTPayload`
+  - `getJwks()` → exports public key via `jose.exportJWK`, returns `{ keys: [{ ...jwk, kid, alg: "RS256", use: "sig" }] }`
+  - Uses `env.get('JWT_KEY_ID', 'sippy-1')` and `env.get('JWT_ISSUER', 'sippy')` for defaults
+- **Verify:** Write a quick smoke test or `node -e` that imports the service and calls `signToken` + `verifyToken`
 - **Dependencies:** NC-001
+- **Context:** `apps/backend/app/services/` for service patterns
 - **Files:** `apps/backend/app/services/jwt_service.ts` (new)
 
 #### NC-003 [x] Create OTP service with Twilio raw SMS
-- **What:** In-memory OTP store + Twilio Messages API for branded SMS delivery.
+- **What:** In-memory OTP store + Twilio Messages API for branded, trilingual SMS delivery.
 - **Acceptance criteria:**
-  - `sendOtp(phone, lang?)` generates 6-digit code, stores with 5-min TTL, sends via Twilio REST API
-  - SMS body is trilingual: "Sippy: Tu código es {code}" / "Your code is" / "Seu código é"
-  - Language resolved from `user_preferences` or phone prefix fallback
-  - Rate limit: max 3 sends per phone per minute
-  - `verifyOtp(phone, code)` checks match + expiry, max 5 wrong attempts = lockout
-  - In-memory Map with MAX_MAP_ENTRIES cap and 60s cleanup timer (follows `rate_limit_service.ts`)
+  - `sendOtp(phone: string, lang?: string)` →
+    - Rate limit: max 3 sends per phone per 60s window
+    - Generate 6-digit code via `crypto.randomInt(100000, 999999)`
+    - Store in Map with 5-min TTL, reset attempts to 0
+    - Send via `POST https://api.twilio.com/2010-04-01/Accounts/{SID}/Messages.json` using axios + Basic Auth
+    - SMS body by language: ES `"Sippy: Tu código es {code}"` / EN `"Sippy: Your code is {code}"` / PT `"Sippy: Seu código é {code}"`
+    - Language resolution: check `user_preferences.preferred_language` from DB, fallback to phone prefix (`+55`→PT, `+1`→EN, else→ES)
+  - `verifyOtp(phone: string, code: string)` →
+    - Check code exists and not expired
+    - Wrong code: increment attempts, max 5 = delete entry (lockout)
+    - Correct: delete entry, return `true`
+  - In-memory `Map<string, OtpEntry>` with `MAX_MAP_ENTRIES = 100_000` cap
+  - 60s cleanup timer for expired entries (same pattern as `rate_limit_service.ts`)
+- **Verify:** `cd apps/backend && npx tsc --noEmit` compiles without errors
 - **Dependencies:** NC-001
-- **Constraints:** Use axios with Basic Auth, no `twilio` npm package
+- **Constraints:** Use axios with Basic Auth. Do NOT install `twilio` npm package.
+- **Context:** `apps/backend/app/services/rate_limit_service.ts` (follow Map + cleanup timer pattern)
 - **Files:** `apps/backend/app/services/otp_service.ts` (new)
 
 #### NC-004 [x] Create auth API controller
-- **What:** Three endpoints: send-otp, verify-otp, JWKS.
+- **What:** Controller with 3 methods: `sendOtp`, `verifyOtp`, `jwks`.
 - **Acceptance criteria:**
-  - `POST /api/auth/send-otp` — body `{ phone }`, normalizes to E.164, returns `{ success: true }` or 429
-  - `POST /api/auth/verify-otp` — body `{ phone, code }`, returns `{ token, expiresIn: 3600 }` or 401
-  - `GET /api/auth/.well-known/jwks.json` — public, returns JWKS, `Cache-Control: public, max-age=3600`
+  - `sendOtp({ request, response })` — reads `{ phone }` from body, normalizes via `normalizePhoneNumber()` from `app/utils/phone.ts`, calls `otpService.sendOtp(phone)`, returns `{ success: true }`. On rate limit: 429 with `{ error: "Too many requests" }`.
+  - `verifyOtp({ request, response })` — reads `{ phone, code }`, normalizes phone, calls `otpService.verifyOtp()`. On success: `jwtService.signToken(phone)` → return `{ token, expiresIn: 3600 }`. On failure: 401 `{ error: "Invalid or expired code" }`.
+  - `jwks({ response })` — returns `jwtService.getJwks()` with header `Cache-Control: public, max-age=3600`.
+- **Verify:** `cd apps/backend && npx tsc --noEmit`
 - **Dependencies:** NC-002, NC-003
+- **Context:** `apps/backend/app/controllers/embedded_wallet_controller.ts` (follow controller pattern)
 - **Files:** `apps/backend/app/controllers/auth_api_controller.ts` (new)
 
 #### NC-005 [x] Create JWT auth middleware
-- **What:** Replace CDP token validation with our JWT. Same `ctx.cdpUser` shape — zero controller changes.
+- **What:** Middleware that validates our JWT and sets `ctx.cdpUser` — same shape as CDP middleware, zero controller changes.
 - **Acceptance criteria:**
-  - Extracts `Authorization: Bearer <token>`, verifies via `jwtService.verifyToken()`
-  - Looks up `walletAddress` from `phone_registry` by phone (JWT `sub`)
-  - Sets `ctx.cdpUser = { phoneNumber, walletAddress }` — identical shape to CDP middleware
-  - Allows `/api/register-wallet` through without walletAddress (first-time user)
-  - Returns 401 on missing/invalid/expired token
+  - Extracts `Authorization: Bearer <token>` from request header
+  - Calls `jwtService.verifyToken(token)` — on failure returns 401
+  - Reads `sub` from JWT payload (this is the phone number)
+  - Queries DB: `SELECT wallet_address FROM phone_registry WHERE phone_number = ?` using Lucid
+  - Sets `ctx.cdpUser = { phoneNumber: sub, walletAddress }` — MUST match shape in `apps/backend/app/types/cdp_auth.ts`
+  - Special case: if route is `/api/register-wallet` AND no wallet found, allow through with `walletAddress = ''`
+  - On missing/invalid/expired token: return `ctx.response.unauthorized({ error: 'Unauthorized' })`
+- **Verify:** `cd apps/backend && npx tsc --noEmit`
 - **Dependencies:** NC-002
+- **Context:** `apps/backend/app/middleware/cdp_auth_middleware.ts` (replaces this — study its `ctx.cdpUser` shape), `apps/backend/app/types/cdp_auth.ts` (type declaration to match)
 - **Files:** `apps/backend/app/middleware/jwt_auth_middleware.ts` (new)
 
 #### NC-006 [x] Register auth routes and swap middleware
-- **What:** Wire up auth endpoints, register JWT middleware, swap API group from CDP to JWT auth.
+- **What:** Wire up auth endpoints in routes, register JWT middleware in kernel, swap API group from CDP to JWT.
 - **Acceptance criteria:**
-  - Auth routes added: `send-otp`, `verify-otp`, `jwks` (public, with ipThrottle on OTP routes)
-  - API group middleware changed from `cdpAuth()` to `jwtAuth()`
-  - `jwtAuth` registered in `kernel.ts` named middleware
-  - Existing tests still pass
+  - In `routes.ts`, add before the CDP-authenticated group:
+    ```
+    router.post('/api/auth/send-otp', [AuthApiController, 'sendOtp']).use(middleware.ipThrottle())
+    router.post('/api/auth/verify-otp', [AuthApiController, 'verifyOtp']).use(middleware.ipThrottle())
+    router.get('/api/auth/.well-known/jwks.json', [AuthApiController, 'jwks'])
+    ```
+  - In `routes.ts`, change `.use(middleware.cdpAuth())` → `.use(middleware.jwtAuth())` on the API group
+  - In `kernel.ts`, add `jwtAuth: () => import('#middleware/jwt_auth_middleware')` to `router.named({})`
+- **Verify:** `cd apps/backend && node ace test` — all existing tests pass
 - **Dependencies:** NC-004, NC-005
 - **Files:** `apps/backend/start/routes.ts`, `apps/backend/start/kernel.ts`
 
 #### NC-007 [!] CDP Portal: Configure Custom Auth
-- **What:** Manual step — register JWKS URL in CDP Portal so CDP validates our JWTs.
+- **What:** MANUAL STEP — human must register JWKS URL in CDP Portal so CDP validates our JWTs. Agent cannot do this.
 - **Acceptance criteria:**
-  - JWKS URL set to `https://sippy-backend-production.up.railway.app/api/auth/.well-known/jwks.json`
-  - Expected issuer set to `sippy`
-  - CDP can fetch and parse the JWKS endpoint
-- **Dependencies:** NC-006 (JWKS endpoint must be deployed first)
-- **Constraints:** Manual action in portal.cdp.coinbase.com
+  - Go to portal.cdp.coinbase.com → project → Embedded Wallets → Custom Auth tab
+  - Set JWKS URL: `https://sippy-backend-production.up.railway.app/api/auth/.well-known/jwks.json`
+  - Set expected issuer: `sippy`
+  - Save and verify CDP can fetch the endpoint
+- **Dependencies:** NC-006 deployed to production
+- **Constraints:** Requires browser login to CDP portal. Agent MUST skip this task.
 
 #### NC-008 [x] Create frontend auth utility
-- **What:** Client-side helpers for OTP flow and JWT token management in localStorage.
+- **What:** Client-side module with OTP API calls and JWT localStorage management.
 - **Acceptance criteria:**
-  - `sendOtp(phone)` calls backend send-otp endpoint
-  - `verifyOtp(phone, code)` calls backend verify-otp, returns JWT token
-  - `storeToken(token)` / `getStoredToken()` / `clearToken()` manage `sippy_jwt` in localStorage
-  - `isTokenExpired(token)` decodes base64 payload, checks `exp`
-  - `getFreshToken()` returns stored token if valid, null if expired
+  - `sendOtp(phone: string): Promise<void>` → `POST /api/auth/send-otp` with `{ phone }`
+  - `verifyOtp(phone: string, code: string): Promise<string>` → `POST /api/auth/verify-otp`, returns `token` from response
+  - `storeToken(token: string): void` → saves to `localStorage.setItem('sippy_jwt', token)`
+  - `getStoredToken(): string | null` → reads from localStorage
+  - `clearToken(): void` → `localStorage.removeItem('sippy_jwt')`
+  - `isTokenExpired(token: string): boolean` → base64-decode JWT payload, check `exp < Date.now() / 1000`
+  - `getFreshToken(): string | null` → returns stored token if not expired, else null
+  - Uses `process.env.NEXT_PUBLIC_BACKEND_URL` for API base URL
+- **Verify:** `cd apps/web && npx tsc --noEmit`
 - **Dependencies:** NC-006
+- **Context:** `apps/web/lib/` for existing utility patterns
 - **Files:** `apps/web/lib/auth.ts` (new)
 
 #### NC-009 [x] Update CDPHooksProvider with custom auth
-- **What:** Add `customAuth.getJwt` callback so CDP uses our JWT instead of its own SMS.
+- **What:** Add `customAuth.getJwt` callback to CDPHooksProvider config so CDP uses our JWT.
 - **Acceptance criteria:**
-  - `customAuth: { getJwt: async () => getFreshToken() ?? undefined }` added to provider config
-  - CDP calls this callback to get our JWT, validates it via JWKS
+  - Import `getFreshToken` from `@/lib/auth`
+  - Add to CDPHooksProvider config object: `customAuth: { getJwt: async () => getFreshToken() ?? undefined }`
+  - Keep existing `projectId`, `ethereum.createOnLogin`, `ethereum.enableSpendPermissions` unchanged
+- **Verify:** `cd apps/web && npx tsc --noEmit`
 - **Dependencies:** NC-008
 - **Files:** `apps/web/app/providers/cdp-provider.tsx`
 
 #### NC-010 [x] Migrate setup page to JWT auth
-- **What:** Replace `useSignInWithSms` / `useVerifySmsOTP` with our OTP + `useAuthenticateWithJWT`.
+- **What:** Replace CDP SMS auth hooks with our OTP + `useAuthenticateWithJWT`.
 - **Acceptance criteria:**
-  - `signInWithSms()` replaced with `sendOtp()` from auth utility
-  - `verifySmsOTP()` replaced with `verifyOtp()` → `storeToken()` → `authenticateWithJWT()`
-  - All `getAccessToken()` calls replaced with `getStoredToken()`
-  - Wallet hooks unchanged (`useCreateSpendPermission`, `useCurrentUser`, etc.)
-  - Full setup flow works: phone → OTP → permission → done
+  - Remove imports: `useSignInWithSms`, `useVerifySmsOTP` from `@coinbase/cdp-hooks`
+  - Add imports: `useAuthenticateWithJWT` from `@coinbase/cdp-hooks`; `sendOtp`, `verifyOtp`, `storeToken`, `getStoredToken` from `@/lib/auth`
+  - In `handleSendOtp`: replace `signInWithSms({ phoneNumber })` → `await sendOtp(phone)`
+  - In `handleVerifyOtp`: replace `verifySmsOTP({ flowId, otp })` → `const token = await verifyOtp(phone, code); storeToken(token); const { user, isNewUser } = await authenticateWithJWT()`
+  - Replace every `getAccessToken()` call → `getStoredToken()` (search for all occurrences)
+  - Remove `flowId` state variable if it exists (no longer needed)
+  - DO NOT touch wallet hooks: `useCreateSpendPermission`, `useCurrentUser`, `useIsSignedIn`, `useSignOut`
+- **Verify:** `cd apps/web && npx tsc --noEmit`
 - **Dependencies:** NC-008, NC-009
 - **Files:** `apps/web/app/setup/page.tsx`
 
 #### NC-011 [ ] Migrate wallet page to JWT auth
-- **What:** Same auth swap as setup page — replace CDP SMS hooks with JWT auth.
+- **What:** Same auth swap as NC-010 but on the wallet page.
 - **Acceptance criteria:**
-  - Same replacements as NC-010
-  - Send USDC flow still works end-to-end
+  - Remove imports: `useSignInWithSms`, `useVerifySmsOTP` from `@coinbase/cdp-hooks`
+  - Add imports: `useAuthenticateWithJWT` from `@coinbase/cdp-hooks`; `sendOtp`, `verifyOtp`, `storeToken`, `getStoredToken` from `@/lib/auth`
+  - In `handleSendOtp`: replace `signInWithSms({ phoneNumber })` → `await sendOtp(phone)`
+  - In `handleVerifyOtp`: replace `verifySmsOTP({ flowId, otp })` → `verifyOtp()` → `storeToken()` → `authenticateWithJWT()`
+  - Replace every `getAccessToken()` → `getStoredToken()`
+  - Remove `flowId` state if it exists
+  - DO NOT touch: `useSendUserOperation`, `useCurrentUser`, or any wallet hooks
+- **Verify:** `cd apps/web && npx tsc --noEmit`
 - **Dependencies:** NC-008, NC-009
+- **Context:** `apps/web/app/setup/page.tsx` (NC-010 already done — use as reference for the exact pattern)
 - **Files:** `apps/web/app/wallet/page.tsx`
 
 #### NC-012 [ ] Migrate settings page to JWT auth
-- **What:** Same auth swap — most complex page (permissions, revoke, export).
+- **What:** Same auth swap — most complex page (has permissions, revoke, export, send).
 - **Acceptance criteria:**
-  - Same replacements as NC-010
-  - All wallet hooks unchanged (`useRevokeSpendPermission`, `useExportEvmAccount`, etc.)
-  - Export key, revoke permission, send USDC all still work
+  - Remove imports: `useSignInWithSms`, `useVerifySmsOTP` from `@coinbase/cdp-hooks`
+  - Add imports: `useAuthenticateWithJWT` from `@coinbase/cdp-hooks`; `sendOtp`, `verifyOtp`, `storeToken`, `getStoredToken` from `@/lib/auth`
+  - In `handleSendOtp`: replace `signInWithSms({ phoneNumber })` → `await sendOtp(phone)`
+  - In `handleVerifyOtp`: replace `verifySmsOTP({ flowId, otp })` → `verifyOtp()` → `storeToken()` → `authenticateWithJWT()`
+  - Replace every `getAccessToken()` → `getStoredToken()`
+  - Remove `flowId` state if it exists
+  - DO NOT touch: `useCreateSpendPermission`, `useRevokeSpendPermission`, `useExportEvmAccount`, `useSendUserOperation`, or any other wallet hooks
+- **Verify:** `cd apps/web && npx tsc --noEmit`
 - **Dependencies:** NC-008, NC-009
+- **Context:** `apps/web/app/setup/page.tsx` (NC-010 already done — use as reference)
 - **Files:** `apps/web/app/settings/page.tsx`
 
 #### NC-013 [ ] Add sign-out token cleanup
-- **What:** Clear stored JWT from localStorage on sign-out across all pages.
+- **What:** On every sign-out, clear our JWT from localStorage alongside CDP `signOut()`.
 - **Acceptance criteria:**
-  - `clearToken()` called alongside CDP `signOut()` on all 3 pages
-  - After sign-out, `getStoredToken()` returns null
+  - In each page that calls `signOut()`, add `clearToken()` from `@/lib/auth` immediately before or after
+  - Affected pages: `setup/page.tsx`, `wallet/page.tsx`, `settings/page.tsx`
+  - After sign-out, `getStoredToken()` must return `null`
+- **Verify:** `cd apps/web && npx tsc --noEmit && grep -r "clearToken" apps/web/app/ | wc -l` shows 3+ occurrences
 - **Dependencies:** NC-010, NC-011, NC-012
 - **Files:** `apps/web/app/setup/page.tsx`, `apps/web/app/wallet/page.tsx`, `apps/web/app/settings/page.tsx`
 
-#### NC-014 [ ] Verify end-to-end and cleanup
-- **What:** Full integration test and cleanup of old CDP auth.
+#### NC-014 [ ] Run tests and verify build
+- **What:** Ensure backend tests pass and both apps compile after all changes.
 - **Acceptance criteria:**
-  - JWKS endpoint returns valid RSA public key
-  - SMS arrives from Twilio saying "Sippy: Tu código es..."
-  - `authenticateWithJWT()` creates CDP session with wallet
-  - Wallet ops work: spend permission, send USDC, export account
-  - Backend API calls with JWT auth work
-  - `node ace test` passes
-  - `cdp_auth_middleware.ts` kept as rollback (delete after 1 week stable)
+  - `cd apps/backend && node ace test` — all tests pass
+  - `cd apps/web && npx tsc --noEmit` — no type errors
+  - `cdp_auth_middleware.ts` still exists (kept as rollback, do NOT delete)
+  - `ctx.cdpUser` property name unchanged across all controllers
+- **Verify:** Both commands above exit 0
 - **Dependencies:** NC-013
-- **Constraints:** Keep `ctx.cdpUser` property name (zero controller changes), keep `@coinbase/cdp-sdk` (used for spend permissions)
+- **Constraints:** Do NOT delete `cdp_auth_middleware.ts`. Do NOT remove `@coinbase/cdp-sdk` from dependencies.
+- **Files:** (read-only verification, no new files)
 
 ---
 
 ## VPS Setup (Hetzner)
 
 #### VPS-001 [ ] Auto-setup PostgreSQL databases
-- **What:** Script to install PostgreSQL, create databases, run migrations on VPS.
+- **What:** Bash script to install PostgreSQL, create databases, run migrations on VPS.
 - **Acceptance criteria:**
-  - Installs PostgreSQL if missing
-  - Creates `sippy_test` and `sippy_indexer` databases
-  - Creates postgres user with password
+  - Checks if PostgreSQL is installed, installs via `apt-get` if missing
+  - Creates `sippy_test` and `sippy_indexer` databases if they don't exist
+  - Creates postgres user with password if not present
   - Runs backend migrations against `sippy_test`
-  - Idempotent (safe to re-run)
+  - Prints connection strings on completion
+  - Idempotent — safe to re-run without errors
+- **Verify:** `bash scripts/vps-setup-db.sh` exits 0 on second run (idempotent)
 - **Dependencies:** None
 - **Files:** `scripts/vps-setup-db.sh` (new)
 
 #### VPS-002 [ ] Auto-generate .env files for VPS
-- **What:** Script to generate env files for backend, indexer, and web on VPS.
+- **What:** Bash script to generate env files for all apps on VPS.
 - **Acceptance criteria:**
   - Generates `apps/backend/.env.test`, `apps/indexer/.env`, `apps/web/.env.local`
-  - Accepts DB password and Alchemy RPC key as args
-  - Skips existing files without `--force` flag
+  - Accepts args: `--db-password`, `--alchemy-key`
+  - Skips files that already exist unless `--force` is passed
+  - Each generated file has correct DATABASE_URL for local PostgreSQL
+- **Verify:** `bash scripts/vps-setup-env.sh --db-password test --alchemy-key test` creates files without error
 - **Dependencies:** VPS-001
 - **Files:** `scripts/vps-setup-env.sh` (new)
