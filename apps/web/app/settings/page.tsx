@@ -3,10 +3,10 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuthenticateWithJWT, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts, useSendUserOperation } from '@coinbase/cdp-hooks';
-import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '@/lib/auth';
+import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '../../lib/auth';
 import { parseUnits } from 'viem';
-import { getBalances } from '@/lib/blockscout';
-import { ensureGasReady, buildUsdcTransferCall } from '@/lib/usdc-transfer';
+import { getBalances } from '../../lib/blockscout';
+import { ensureGasReady, buildUsdcTransferCall } from '../../lib/usdc-transfer';
 
 /**
  * Settings Page for Embedded Wallets
@@ -225,18 +225,6 @@ function SettingsContent() {
     try {
       if (!isCdpConfigured) {
         throw new Error('CDP not configured. Please set NEXT_PUBLIC_CDP_PROJECT_ID.');
-      }
-
-      // Check if already signed in - if so, just restore session
-      if (isSignedIn && currentUser) {
-        console.log('Already signed in, restoring session...');
-        const smartAccountAddress = currentUser.evmSmartAccounts?.[0] || currentUser.evmAccounts?.[0];
-        if (smartAccountAddress) {
-          setWalletAddress(smartAccountAddress);
-          await fetchWalletStatus();
-          setAuthStep('authenticated');
-          return;
-        }
       }
 
       // Phone number must be in E.164 format (e.g., +573001234567)
