@@ -40,6 +40,12 @@ if (app.inDev || app.inTest) {
   router.get('/debug/parse-stats', [DebugController, 'parseStats'])
 }
 
+// ── Auth (OTP + JWKS) ─ NC-006 adds ipThrottle middleware ──────────────────
+const AuthApiController = () => import('#controllers/auth_api_controller')
+router.post('/api/auth/send-otp', [AuthApiController, 'sendOtp'])
+router.post('/api/auth/verify-otp', [AuthApiController, 'verifyOtp'])
+router.get('/api/auth/.well-known/jwks.json', [AuthApiController, 'jwks'])
+
 // ── CDP-authenticated API routes ────────────────────────────────────────────
 router
   .group(() => {
