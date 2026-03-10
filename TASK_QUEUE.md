@@ -26,7 +26,7 @@
 - **Dependencies:** None
 - **Files:** `apps/backend/start/env.ts`, `apps/backend/.env`
 
-#### NC-002 [ ] Create JWT service
+#### NC-002 [x] Create JWT service
 - **What:** RS256 JWT signing, verification, and JWKS export using `jose` v6.
 - **Acceptance criteria:**
   - `signToken(sub)` returns RS256 JWT with `{ sub, iss, iat, exp(1h), jti }`
