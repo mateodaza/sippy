@@ -4,3 +4,4 @@
 - **NC-004** — 2026-03-10 — `d2083f8` — Session: 20260310-203844-sippy — ⚠ DEGRADED MODE: Codex was unavailable — no independent audit/review performed.
 - **NC-003** — 2026-03-10 — `f5e7973` — Session: 20260310-204908-sippy
 - **NC-005** — 2026-03-10 — `e82f1ed` — Session: 20260310-210929-sippy — ⚠ Committed after soft review rejections cap; local verification passed.
+- **NC-005** — 2026-03-10 — `1539ce5` — Session: 20260310-212929-sippy — ⚠ Committed after soft review rejections cap; local verification passed.
