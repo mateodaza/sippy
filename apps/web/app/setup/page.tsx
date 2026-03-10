@@ -3,7 +3,7 @@
 import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuthenticateWithJWT, useCreateSpendPermission, useCurrentUser, useIsSignedIn, useSignOut } from '@coinbase/cdp-hooks';
-import { sendOtp, verifyOtp, storeToken, getStoredToken } from '../../lib/auth';
+import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '../../lib/auth';
 import { parseUnits } from 'viem';
 
 /**
@@ -89,6 +89,7 @@ function SetupContent() {
         const smartAccountAddress = currentUser.evmSmartAccounts?.[0] || currentUser.evmAccounts?.[0];
         if (!smartAccountAddress) {
           console.log('No wallet in session, starting fresh');
+          clearToken();
           await signOut();
           setIsCheckingSession(false);
           return;
@@ -149,6 +150,7 @@ function SetupContent() {
         console.error('Session recovery failed:', err);
         // On error, let user start fresh
         try {
+          clearToken();
           await signOut();
         } catch {}
       } finally {

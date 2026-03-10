@@ -9,7 +9,7 @@ import {
   useSignOut,
   useSendUserOperation,
 } from '@coinbase/cdp-hooks';
-import { sendOtp, verifyOtp, storeToken, getStoredToken } from '@/lib/auth';
+import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '@/lib/auth';
 import {
   getBalances,
   getActivity,
@@ -130,6 +130,7 @@ const [error, setError] = useState<string | null>(null);
       // A stored JWT is required for the send flow (getStoredToken() calls).
       // If none exists the user must re-authenticate via OTP to get one.
       if (!getStoredToken()) {
+        clearToken();
         await signOut();
         setIsCheckingSession(false);
         return;
@@ -682,6 +683,7 @@ const [error, setError] = useState<string | null>(null);
           </a>
           <button
             onClick={async () => {
+              clearToken();
               await signOut();
               setAuthStep('phone');
               setBalances(null);

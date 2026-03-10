@@ -194,7 +194,7 @@
 - **Context:** `apps/web/app/setup/page.tsx` (NC-010 already done — use as reference)
 - **Files:** `apps/web/app/settings/page.tsx`
 
-#### NC-013 [ ] Add sign-out token cleanup
+#### NC-013 [x] Add sign-out token cleanup
 - **What:** On every sign-out, clear our JWT from localStorage alongside CDP `signOut()`.
 - **Acceptance criteria:**
   - In each page that calls `signOut()`, add `clearToken()` from `@/lib/auth` immediately before or after
