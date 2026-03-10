@@ -60,6 +60,11 @@ class OtpService {
 
     if (this.otpStore.size >= MAX_MAP_ENTRIES) {
       this.purgeExpiredOtpEntries()
+      if (this.otpStore.size >= MAX_MAP_ENTRIES) {
+        // All entries unexpired — evict oldest (Map insertion order)
+        const oldest = this.otpStore.keys().next().value
+        if (oldest !== undefined) this.otpStore.delete(oldest)
+      }
     }
 
     this.otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL, attempts: 0 })
@@ -111,9 +116,7 @@ class OtpService {
       for (const [phone, entry] of this.otpStore) {
         if (now > entry.expiresAt) this.otpStore.delete(phone)
       }
-      for (const [phone, bucket] of this.sendRateLimitMap) {
-        if (now > bucket.resetAt) this.sendRateLimitMap.delete(phone)
-      }
+      this.purgeExpiredRateLimitBuckets()
     }, CLEANUP_INTERVAL)
   }
 
@@ -133,6 +136,14 @@ class OtpService {
     const bucket = this.sendRateLimitMap.get(phone)
 
     if (!bucket || now > bucket.resetAt) {
+      if (this.sendRateLimitMap.size >= MAX_MAP_ENTRIES) {
+        this.purgeExpiredRateLimitBuckets()
+        if (this.sendRateLimitMap.size >= MAX_MAP_ENTRIES) {
+          // All buckets unexpired — evict oldest
+          const oldest = this.sendRateLimitMap.keys().next().value
+          if (oldest !== undefined) this.sendRateLimitMap.delete(oldest)
+        }
+      }
       this.sendRateLimitMap.set(phone, { count: 1, resetAt: now + SEND_RATE_WINDOW })
       return { allowed: true }
     }
