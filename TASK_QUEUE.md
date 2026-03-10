@@ -88,7 +88,7 @@
 - **Dependencies:** NC-006 (JWKS endpoint must be deployed first)
 - **Constraints:** Manual action in portal.cdp.coinbase.com
 
-#### NC-008 [ ] Create frontend auth utility
+#### NC-008 [x] Create frontend auth utility
 - **What:** Client-side helpers for OTP flow and JWT token management in localStorage.
 - **Acceptance criteria:**
   - `sendOtp(phone)` calls backend send-otp endpoint
