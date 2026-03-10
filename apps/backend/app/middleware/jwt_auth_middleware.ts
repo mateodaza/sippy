@@ -32,27 +32,27 @@ export default class JwtAuthMiddleware {
       const isRegisterWallet = ctx.request.url() === REGISTER_WALLET_PATH
 
       if (isRegisterWallet) {
+        // DB is always queried first — DB is the source of truth
+        const record = await PhoneRegistry.findBy('phoneNumber', dbPhone)
+
+        if (record) {
+          // Tier 1: DB record exists (returning user) — DB wins unconditionally
+          ctx.cdpUser = { phoneNumber, walletAddress: record.walletAddress }
+          return await next()
+        }
+
+        // No DB record — check request body for first-time registration
         const { walletAddress: bodyWalletAddress } = ctx.request.body() as Record<string, unknown>
 
-        // Tier 1: Body address present and valid → use it directly (forward-compatible with NC-010)
         if (bodyWalletAddress && ETH_ADDRESS_REGEX.test(bodyWalletAddress as string)) {
+          // Tier 2: No DB record, valid body address (first-time registration)
           ctx.cdpUser = { phoneNumber, walletAddress: bodyWalletAddress as string }
           return await next()
         }
 
-        // Tier 2: Body address present but invalid → reject (security: not an absent field)
-        if (bodyWalletAddress && !ETH_ADDRESS_REGEX.test(bodyWalletAddress as string)) {
-          logger.warn('JWT auth: invalid walletAddress format in register-wallet body')
-          return ctx.response.unauthorized({ error: 'Unauthorized' })
-        }
-
-        // Tier 3: Body address absent/empty → look up DB (handles returning users)
-        // If no DB record, first-time user: allow through with '' per AC
-        const record = await PhoneRegistry.findBy('phoneNumber', dbPhone)
-        const walletAddress = record?.walletAddress ?? ''
-
-        ctx.cdpUser = { phoneNumber, walletAddress }
-        return await next()
+        // Tier 3: No DB record AND no valid body address — cannot proceed
+        logger.warn('JWT auth: register-wallet — no registry row and no valid body address')
+        return ctx.response.unauthorized({ error: 'Unauthorized' })
       }
 
       // Branch B — all other routes
