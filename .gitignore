@@ -66,4 +66,11 @@ yarn.lock
 # Temporary files
 *.tsbuildinfo
 .eslintcache
-.stylelintcache.claude/
+.stylelintcache
+
+# Agent tooling
+.nightcrawler/
+.cursor/
+
+# VPS scripts (agent-generated, env-specific)
+scripts/vps-setup-*.sh
