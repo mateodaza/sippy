@@ -233,7 +233,7 @@
 - **Dependencies:** None
 - **Files:** `scripts/vps-setup-db.sh` (new)
 
-#### VPS-002 [ ] Auto-generate .env files for VPS
+#### VPS-002 [x] Auto-generate .env files for VPS
 - **What:** Bash script to generate env files for all apps on VPS.
 - **Acceptance criteria:**
   - Generates `apps/backend/.env.test`, `apps/indexer/.env`, `apps/web/.env.local`
