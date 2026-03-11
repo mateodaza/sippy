@@ -220,7 +220,7 @@
 
 ## VPS Setup (Hetzner)
 
-#### VPS-001 [ ] Auto-setup PostgreSQL databases
+#### VPS-001 [x] Auto-setup PostgreSQL databases
 - **What:** Bash script to install PostgreSQL, create databases, run migrations on VPS.
 - **Acceptance criteria:**
   - Checks if PostgreSQL is installed, installs via `apt-get` if missing
