@@ -28,6 +28,17 @@ export default await Env.create(new URL('../', import.meta.url), {
   CDP_API_KEY_SECRET: Env.schema.string.optional(),
   CDP_WALLET_SECRET: Env.schema.string.optional(),
 
+  // Twilio
+  TWILIO_ACCOUNT_SID: Env.schema.string.optional(),
+  TWILIO_AUTH_TOKEN: Env.schema.string.optional(),
+  TWILIO_FROM_NUMBER: Env.schema.string.optional(),
+
+  // JWT (RS256)
+  JWT_PRIVATE_KEY_PEM: Env.schema.string.optional(), // base64-encoded PEM
+  JWT_PUBLIC_KEY_PEM: Env.schema.string.optional(),  // base64-encoded PEM
+  JWT_KEY_ID: Env.schema.string.optional(),          // default "sippy-1" applied at call site
+  JWT_ISSUER: Env.schema.string.optional(),          // default "sippy" applied at call site
+
   // LLM
   GROQ_API_KEY: Env.schema.string(),
   USE_LLM: Env.schema.string.optional(),

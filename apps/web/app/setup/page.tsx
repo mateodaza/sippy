@@ -2,7 +2,8 @@
 
 import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useSignInWithSms, useVerifySmsOTP, useGetAccessToken, useCreateSpendPermission, useCurrentUser, useIsSignedIn, useSignOut } from '@coinbase/cdp-hooks';
+import { useAuthenticateWithJWT, useCreateSpendPermission, useCurrentUser, useIsSignedIn, useSignOut } from '@coinbase/cdp-hooks';
+import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '../../lib/auth';
 import { parseUnits } from 'viem';
 
 /**
@@ -40,7 +41,6 @@ function SetupContent() {
   const [step, setStep] = useState<Step>('phone');
   const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl);
   const [otp, setOtp] = useState('');
-  const [flowId, setFlowId] = useState<string | null>(null);
   const [dailyLimit, setDailyLimit] = useState('100'); // Default $100/day
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -51,9 +51,7 @@ function SetupContent() {
   const [hasCheckedSession, setHasCheckedSession] = useState(false); // Only check once on mount
 
   // CDP Hooks
-  const { signInWithSms } = useSignInWithSms();
-  const { verifySmsOTP } = useVerifySmsOTP();
-  const { getAccessToken } = useGetAccessToken();
+  const { authenticateWithJWT } = useAuthenticateWithJWT();
   const { createSpendPermission, status: permissionStatus } = useCreateSpendPermission();
   const { currentUser } = useCurrentUser();
   const { isSignedIn } = useIsSignedIn();
@@ -91,6 +89,7 @@ function SetupContent() {
         const smartAccountAddress = currentUser.evmSmartAccounts?.[0] || currentUser.evmAccounts?.[0];
         if (!smartAccountAddress) {
           console.log('No wallet in session, starting fresh');
+          clearToken();
           await signOut();
           setIsCheckingSession(false);
           return;
@@ -101,7 +100,7 @@ function SetupContent() {
 
         // Check backend status
         if (BACKEND_URL) {
-          const accessToken = await getAccessToken();
+          const accessToken = getStoredToken();
           if (accessToken) {
             // First ensure wallet is registered (this also triggers refuel)
             const registerResponse = await fetch(`${BACKEND_URL}/api/register-wallet`, {
@@ -151,6 +150,7 @@ function SetupContent() {
         console.error('Session recovery failed:', err);
         // On error, let user start fresh
         try {
+          clearToken();
           await signOut();
         } catch {}
       } finally {
@@ -169,7 +169,7 @@ function SetupContent() {
     setError(null);
 
     try {
-      const accessToken = await getAccessToken();
+      const accessToken = getStoredToken();
       if (!accessToken) {
         throw new Error('No access token');
       }
@@ -214,17 +214,13 @@ function SetupContent() {
     setError(null);
 
     try {
-      if (!isCdpConfigured) {
-        throw new Error('CDP not configured. Please set NEXT_PUBLIC_CDP_PROJECT_ID.');
-      }
-
       // Phone number must be in E.164 format (e.g., +573001234567)
       const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
+      setPhoneNumber(formattedPhone);
 
       console.log('Sending OTP to:', formattedPhone);
-      const result = await signInWithSms({ phoneNumber: formattedPhone });
+      await sendOtp(formattedPhone);
 
-      setFlowId(result.flowId);
       setStep('otp');
     } catch (err) {
       console.error('Failed to send OTP:', err);
@@ -242,15 +238,12 @@ function SetupContent() {
     setError(null);
 
     try {
-      if (!flowId) {
-        throw new Error('No flow ID. Please restart the process.');
-      }
-
       console.log('Verifying OTP...');
-      const { user, isNewUser } = await verifySmsOTP({ flowId, otp });
+      const token = await verifyOtp(phoneNumber, otp);
+      storeToken(token);
 
-      console.log('User authenticated:', user.userId);
-      console.log('Is new user:', isNewUser);
+      console.log('Authenticating with JWT...');
+      const { user } = await authenticateWithJWT();
 
       // Get the user's smart account address
       // CDP embedded wallets use evmSmartAccounts, not evmAccounts
@@ -264,7 +257,7 @@ function SetupContent() {
       // Register wallet with backend
       if (BACKEND_URL) {
         try {
-          const accessToken = await getAccessToken();
+          const accessToken = getStoredToken();
           if (accessToken) {
             const response = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
@@ -340,7 +333,7 @@ function SetupContent() {
       // Register permission with backend - this MUST succeed for transfers to work
       // Backend will verify and fetch the actual permissionHash from CDP
       if (BACKEND_URL) {
-        const accessToken = await getAccessToken();
+        const accessToken = getStoredToken();
         if (!accessToken) {
           throw new Error('Failed to get access token. Please try again.');
         }
@@ -378,7 +371,7 @@ function SetupContent() {
         // Trigger a re-registration to attempt refuel again
         if (BACKEND_URL && walletAddress) {
           try {
-            const accessToken = await getAccessToken();
+            const accessToken = getStoredToken();
             if (accessToken) {
               await fetch(`${BACKEND_URL}/api/register-wallet`, {
                 method: 'POST',

@@ -67,3 +67,11 @@ yarn.lock
 *.tsbuildinfo
 .eslintcache
 .stylelintcache
+
+# Agent tooling
+.nightcrawler/
+.cursor/
+PROGRESS.md
+
+# VPS scripts (agent-generated, env-specific)
+scripts/vps-setup-*.sh
