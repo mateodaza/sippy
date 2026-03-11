@@ -1,6 +1,6 @@
 # Project Status — Sippy
 
-**Last Updated:** March 6, 2026
+**Last Updated:** March 11, 2026
 **Current Milestone:** M1 — Production Ready (deadline Mar 26, 2026)
 **Detailed Plan:** [M1_PLAN.md](./M1_PLAN.md)
 
@@ -12,7 +12,7 @@
 |---|------------|--------|-------|
 | 1 | Onramp integration | Blocked | Waiting on Maash API response |
 | 2 | Non-custodial wallet refinements | 95% | CDP Embedded Wallets working, sweep-to-EOA + web wallet done |
-| 3 | Security hardening | 75% | Rate limits + spam + auth endpoints done, tx confirmation + velocity pending |
+| 3 | Security hardening | 85% | Rate limits + spam + auth endpoints + custom auth (Twilio+JWT) done, tx confirmation + velocity pending |
 | 4 | Dual currency display (USD + local) | 0% | Phone prefix → currency mapping designed, not built |
 | 5 | Privacy controls | 0% | Planned: phone visibility toggle |
 | 6 | User settings | 80% | Settings page working, language via WhatsApp working |
@@ -59,9 +59,10 @@
 
 ### Frontend — Production
 
-- Setup page: full onboarding flow (phone → wallet → permission)
+- Setup page: full onboarding flow (phone → OTP → wallet → permission) — custom auth via Twilio+JWT
 - Settings page: daily limit management, private key export with sweep-to-EOA, session persistence
 - Wallet page: web fallback — balance card, send USDC (to phone or 0x address), activity list
+- All pages: Sippy-branded SMS OTP (not Coinbase), JWT-based auth with CDP `authenticateWithJWT`
 - Fund page: add ETH/USDC to wallet
 - Profile pages: balance + transaction history (Blockscout API)
 - Receipt pages: shareable transaction details
@@ -79,7 +80,7 @@
 - `/admin/analytics` — Total USDC volume, fund flow breakdown, top users by volume, daily volume chart, gas refuel stats
 - `/admin/users` — Users table with real on-chain data (Total Sent, Total Received, Txs, Last Activity)
 - `/admin/users/:phone` — User detail with on-chain stats + activity log
-- 173 tests passing (unit + functional)
+- 276 tests passing (unit + functional)
 
 ### Ponder On-Chain Indexer — Deployed
 
@@ -101,13 +102,12 @@
 
 ## What's In Progress
 
-### Phase 4.6: Custom Auth (CRITICAL PATH — next up)
+### Phase 4.6: Custom Auth — DONE
 
-- Replace CDP's `useSignInWithSms` with Twilio OTP + JWT
-- Users currently see "Coinbase" in OTP messages — must say "Sippy"
-- Backend: `otp.service.ts` + `jwt.service.ts` + JWKS endpoint
-- Frontend: swap auth flows in `/setup`, `/settings`, `/wallet`
-- This is a No-Go item for M1 submission
+- Replaced CDP's `useSignInWithSms` with Twilio OTP + `useAuthenticateWithJWT`
+- Backend: `otp_service.ts` (Twilio raw SMS, trilingual) + `jwt_service.ts` (RS256 + JWKS) + `jwt_auth_middleware.ts`
+- Frontend: all 3 pages migrated (`/setup`, `/settings`, `/wallet`), CDP provider configured with `customAuth.getJwt`
+- Pending: CDP Portal configuration (manual step — register JWKS URL)
 
 ### Phase 2: Onboarding Tightening — Not Started
 
@@ -124,8 +124,8 @@
 
 ### Phase 4: Security Hardening — Partially Done (75%)
 
-- Done: rate limiting, spam protection, message deduplication, daily spending limits, amount validation, authenticated phone resolution, IP rate limiting, web send audit logging
-- Pending: transaction confirmation flow, webhook signature validation, velocity checks, self-send block, concurrent send protection, admin controls, custom auth (Twilio+JWT)
+- Done: rate limiting, spam protection, message deduplication, daily spending limits, amount validation, authenticated phone resolution, IP rate limiting, web send audit logging, custom auth (Twilio+JWT)
+- Pending: transaction confirmation flow, webhook signature validation, velocity checks, self-send block, concurrent send protection, admin controls
 
 ### Phase 5: Privacy Controls + Settings — Partially Done
 
@@ -227,12 +227,13 @@ sippy/                      ← Turborepo + pnpm workspaces
 | User-facing strings | 35+ (all trilingual) |
 | WhatsApp capacity | 2K bot-initiated + unlimited user-initiated |
 | Smart contract | GasRefuel.sol deployed on Arbitrum One |
-| Backend tests | 173 passing (unit + functional) |
+| Backend tests | 276 passing (unit + functional) |
 
 ---
 
 ## Recent Changes
 
+**Mar 11** — P4.6 Custom Auth COMPLETE: Twilio raw SMS OTP (trilingual) + RS256 JWT + JWKS endpoint. Backend: jwt_service, otp_service, jwt_auth_middleware replacing CDP auth. Frontend: all 3 pages migrated to `authenticateWithJWT()`. CDP Portal config pending (manual).
 **Mar 6** — Doc cleanup: removed stale planning docs (ADONISJS-POC-PLAN, PONDER plans, loyalty-network). M1_PLAN.md updated with Carlos handoff priorities — custom auth (P4.6) is now #1.
 **Mar 5** — Admin analytics fixes: Top Users now ranks by total volume (sent + received), daily volume chart renders with pixel-based bar heights. Users page shows real on-chain data from indexer.
 **Mar 2** — Ponder on-chain indexer built (phases 7.6.1–7.6.8): 5 on-chain tables, 6 event handlers, 15+ Hono API routes, backend integration with fire-and-forget wallet registration. Repo now runs as a Turborepo/pnpm workspace with apps under `apps/backend`, `apps/web`, and `apps/indexer`. Admin dashboard COMPLETE (Inertia.js + React + Tailwind CSS v4, 6 pages).
@@ -259,4 +260,5 @@ sippy/                      ← Turborepo + pnpm workspaces
 | Smart contract | GasRefuel.sol | Deployed |
 | Domain | sippy.lat | Active |
 | On-chain indexer | Ponder v0.15 + Railway | Deployed |
+| SMS OTP | Twilio (raw SMS API) | Configured |
 | Onramp | Maash | Blocked (waiting on API) |

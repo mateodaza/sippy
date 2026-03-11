@@ -204,7 +204,7 @@
 - **Dependencies:** NC-010, NC-011, NC-012
 - **Files:** `apps/web/app/setup/page.tsx`, `apps/web/app/wallet/page.tsx`, `apps/web/app/settings/page.tsx`
 
-#### NC-014 [~] Run tests and verify build
+#### NC-014 [x] Run tests and verify build
 - **What:** Ensure backend tests pass and both apps compile after all changes.
 - **Acceptance criteria:**
   - `cd apps/backend && node ace test` — all tests pass
@@ -215,6 +215,15 @@
 - **Dependencies:** NC-013
 - **Constraints:** Do NOT delete `cdp_auth_middleware.ts`. Do NOT remove `@coinbase/cdp-sdk` from dependencies.
 - **Files:** (read-only verification, no new files)
+
+#### NC-015 [x] Fix OTP cleanup timer initialization
+- **What:** OTP service cleanup timer was never started — memory leak risk. Created `otp_provider.ts` and registered it in `adonisrc.ts`.
+- **Acceptance criteria:**
+  - `apps/backend/providers/otp_provider.ts` exists with `boot()` calling `otpService.startCleanupTimer()` and `shutdown()` calling `stopCleanupTimer()`
+  - Provider registered in `adonisrc.ts` providers array
+- **Verify:** `cd apps/backend && npx tsc --noEmit`
+- **Dependencies:** NC-003
+- **Files:** `apps/backend/providers/otp_provider.ts` (new), `apps/backend/adonisrc.ts`
 
 ---
 
