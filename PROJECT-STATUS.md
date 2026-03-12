@@ -107,7 +107,7 @@
 - Replaced CDP's `useSignInWithSms` with Twilio OTP + `useAuthenticateWithJWT`
 - Backend: `otp_service.ts` (Twilio raw SMS, trilingual) + `jwt_service.ts` (RS256 + JWKS) + `jwt_auth_middleware.ts`
 - Frontend: all 3 pages migrated (`/setup`, `/settings`, `/wallet`), CDP provider configured with `customAuth.getJwt`
-- Pending: CDP Portal configuration (manual step — register JWKS URL)
+- CDP Portal configured (JWKS URL + issuer registered, verified live Mar 12)
 
 ### Phase 2: Onboarding Tightening — Not Started
 
@@ -235,7 +235,7 @@ sippy/                      ← Turborepo + pnpm workspaces
 
 ## Recent Changes
 
-**Mar 12** — Dual currency COMPLETE (26 LATAM currencies, 24h cache). Email recovery infrastructure COMPLETE (collection, verification, gate tokens, Resend integration). Security fixes: email bypass vulnerability patched, email squatting blocked via partial unique index. 437 tests passing.
+**Mar 12** — Dual-wallet web UI: WhatsApp EOA wallet + smart account shown as selectable cards, auto-selects funded wallet, `POST /api/send` for EOA sends via SpendPermission. CDP Portal configured (JWKS URL + issuer live). Dual currency COMPLETE (26 LATAM currencies, 24h cache). Email recovery infrastructure COMPLETE (collection, verification, gate tokens, Resend integration). Security fixes: email bypass vulnerability patched, email squatting blocked via partial unique index. 437 tests passing.
 **Mar 11** — P4.6 Custom Auth COMPLETE: Twilio raw SMS OTP (trilingual) + RS256 JWT + JWKS endpoint. Backend: jwt_service, otp_service, jwt_auth_middleware replacing CDP auth. Frontend: all 3 pages migrated to `authenticateWithJWT()`. CDP Portal config pending (manual).
 **Mar 6** — Doc cleanup: removed stale planning docs (ADONISJS-POC-PLAN, PONDER plans, loyalty-network). M1_PLAN.md updated with Carlos handoff priorities — custom auth (P4.6) is now #1.
 **Mar 5** — Admin analytics fixes: Top Users now ranks by total volume (sent + received), daily volume chart renders with pixel-based bar heights. Users page shows real on-chain data from indexer.
