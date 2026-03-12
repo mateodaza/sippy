@@ -388,6 +388,338 @@ test.group('revokePermission gate enforcement', (group) => {
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
+// sendEmailCode — code generation
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('sendEmailCode | code generation', (group) => {
+  group.each.teardown(() => {})
+
+  test('returns { success: true } on first send', async ({ assert }) => {
+    const calls: { to: string; subject: string; text: string }[] = []
+    const svc = new EmailService(async (to, subject, text) => { calls.push({ to, subject, text }) })
+    const result = await svc.sendEmailCode('user@example.com')
+    assert.deepEqual(result, { success: true })
+  })
+
+  test('code stored in codeStore is exactly 6 digits', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    const entry = (svc as any).codeStore.get('user@example.com')
+    assert.match(entry.code, /^\d{6}$/)
+    const n = Number(entry.code)
+    assert.isAtLeast(n, 100000)
+    assert.isAtMost(n, 999999)
+  })
+
+  test('TTL is ~10 minutes', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    const before = Date.now()
+    await svc.sendEmailCode('user@example.com')
+    const entry = (svc as any).codeStore.get('user@example.com')
+    const expected = before + 10 * 60 * 1000
+    assert.isAtMost(Math.abs(entry.expiresAt - expected), 1000)
+  })
+
+  test('attempts initialised to 0', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    const entry = (svc as any).codeStore.get('user@example.com')
+    assert.equal(entry.attempts, 0)
+  })
+
+  test('sender called with correct to and body containing 6-digit code', async ({ assert }) => {
+    const calls: { to: string; subject: string; text: string }[] = []
+    const svc = new EmailService(async (to, subject, text) => { calls.push({ to, subject, text }) })
+    await svc.sendEmailCode('user@example.com')
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].to, 'user@example.com')
+    assert.match(calls[0].text, /\d{6}/)
+  })
+
+  test('default lang (undefined) resolves to es — subject contains Tu código', async ({ assert }) => {
+    const calls: { to: string; subject: string; text: string }[] = []
+    const svc = new EmailService(async (to, subject, text) => { calls.push({ to, subject, text }) })
+    await svc.sendEmailCode('user@example.com', undefined)
+    assert.equal(calls[0].subject, 'Sippy: Tu código de verificación')
+  })
+
+  test('lang=en subject is English', async ({ assert }) => {
+    const calls: { to: string; subject: string; text: string }[] = []
+    const svc = new EmailService(async (to, subject, text) => { calls.push({ to, subject, text }) })
+    await svc.sendEmailCode('user@example.com', 'en')
+    assert.equal(calls[0].subject, 'Sippy: Your verification code')
+  })
+
+  test('lang=pt subject is Portuguese', async ({ assert }) => {
+    const calls: { to: string; subject: string; text: string }[] = []
+    const svc = new EmailService(async (to, subject, text) => { calls.push({ to, subject, text }) })
+    await svc.sendEmailCode('user@example.com', 'pt')
+    assert.equal(calls[0].subject, 'Sippy: Seu código de verificação')
+  })
+
+  test('sender throws → returns { error: message }, codeStore NOT updated', async ({ assert }) => {
+    const svc = new EmailService(async () => { throw new Error('network failure') })
+    const result = await svc.sendEmailCode('fail@example.com')
+    assert.isTrue('error' in result)
+    assert.equal((result as any).error, 'network failure')
+    assert.isFalse((svc as any).codeStore.has('fail@example.com'))
+  })
+
+  test('re-send for same email replaces entry, attempts reset to 0', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    // Capture a property of the first entry to prove it was replaced
+    const entry1 = (svc as any).codeStore.get('user@example.com')
+    entry1.attempts = 2
+    // Send again — must produce a new entry (new code, attempts = 0)
+    await svc.sendEmailCode('user@example.com')
+    const entry2 = (svc as any).codeStore.get('user@example.com')
+    // The stored object must be a new entry with attempts reset (code may coincidentally repeat)
+    assert.notStrictEqual(entry2, entry1, 'entry should be a new object, not the same reference')
+    assert.equal(entry2.attempts, 0)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// sendEmailCode — rate limiting
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('sendEmailCode | rate limiting', () => {
+  test('first 3 sends for same email all return { success: true }', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    const r1 = await svc.sendEmailCode('a@example.com')
+    const r2 = await svc.sendEmailCode('a@example.com')
+    const r3 = await svc.sendEmailCode('a@example.com')
+    assert.deepEqual(r1, { success: true })
+    assert.deepEqual(r2, { success: true })
+    assert.deepEqual(r3, { success: true })
+  })
+
+  test('4th send returns { error: rate_limited }', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('b@example.com')
+    await svc.sendEmailCode('b@example.com')
+    await svc.sendEmailCode('b@example.com')
+    const result = await svc.sendEmailCode('b@example.com')
+    assert.equal((result as { error: string }).error, 'rate_limited')
+  })
+
+  test('sender NOT called on 4th (rate check fires before send)', async ({ assert }) => {
+    const calls: number[] = []
+    const svc = new EmailService(async () => { calls.push(1) })
+    await svc.sendEmailCode('c@example.com')
+    await svc.sendEmailCode('c@example.com')
+    await svc.sendEmailCode('c@example.com')
+    await svc.sendEmailCode('c@example.com')
+    assert.equal(calls.length, 3)
+  })
+
+  test('different emails are independent', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    // Exhaust rate limit for emailA
+    await svc.sendEmailCode('emailA@example.com')
+    await svc.sendEmailCode('emailA@example.com')
+    await svc.sendEmailCode('emailA@example.com')
+    const resultA4 = await svc.sendEmailCode('emailA@example.com') // 4th for A — must be rate limited
+    assert.equal((resultA4 as { error: string }).error, 'rate_limited', 'emailA must be rate limited on 4th send')
+    // emailB is on first send — should still succeed independently
+    const resultB = await svc.sendEmailCode('emailB@example.com')
+    assert.deepEqual(resultB, { success: true })
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// verifyEmailCode — correct code
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('verifyEmailCode | correct code', () => {
+  test('correct code returns { valid: true }', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    const entry = (svc as any).codeStore.get('user@example.com')
+    const result = await svc.verifyEmailCode('user@example.com', entry.code)
+    assert.deepEqual(result, { valid: true })
+  })
+
+  test('entry deleted from codeStore after success', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    const entry = (svc as any).codeStore.get('user@example.com')
+    await svc.verifyEmailCode('user@example.com', entry.code)
+    assert.isFalse((svc as any).codeStore.has('user@example.com'))
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// verifyEmailCode — wrong code
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('verifyEmailCode | wrong code', () => {
+  test('1st wrong attempt returns { valid: false }', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    const result = await svc.verifyEmailCode('user@example.com', '000000')
+    assert.equal(result.valid, false)
+  })
+
+  test('attempts counter increments after first wrong', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    await svc.verifyEmailCode('user@example.com', '000000')
+    const entry = (svc as any).codeStore.get('user@example.com')
+    assert.equal(entry.attempts, 1)
+  })
+
+  test('2nd wrong attempt increments to 2', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    await svc.verifyEmailCode('user@example.com', '000000')
+    await svc.verifyEmailCode('user@example.com', '000000')
+    const entry = (svc as any).codeStore.get('user@example.com')
+    assert.equal(entry.attempts, 2)
+  })
+
+  test('3rd wrong attempt (= MAX_VERIFY_ATTEMPTS) deletes entry', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    await svc.verifyEmailCode('user@example.com', '000000')
+    await svc.verifyEmailCode('user@example.com', '000000')
+    await svc.verifyEmailCode('user@example.com', '000000')
+    assert.isFalse((svc as any).codeStore.has('user@example.com'))
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// verifyEmailCode — expired code
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('verifyEmailCode | expired code', () => {
+  test('expired entry returns { valid: false }', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    const entry = (svc as any).codeStore.get('user@example.com')
+    entry.expiresAt = Date.now() - 1
+    const result = await svc.verifyEmailCode('user@example.com', entry.code)
+    assert.equal(result.valid, false)
+  })
+
+  test('expired entry is deleted', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    const entry = (svc as any).codeStore.get('user@example.com')
+    entry.expiresAt = Date.now() - 1
+    await svc.verifyEmailCode('user@example.com', entry.code)
+    assert.isFalse((svc as any).codeStore.has('user@example.com'))
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// verifyEmailCode — unknown email
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('verifyEmailCode | unknown email', () => {
+  test('no entry → { valid: false }', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    const result = await svc.verifyEmailCode('noone@example.com', '123456')
+    assert.deepEqual(result, { valid: false })
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// cleanup timer
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('cleanup timer', () => {
+  test('expired codeStore entries are purged by cleanup()', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    const entry = (svc as any).codeStore.get('user@example.com')
+    entry.expiresAt = Date.now() - 1
+    ;(svc as any).cleanup()
+    assert.isFalse((svc as any).codeStore.has('user@example.com'))
+  })
+
+  test('expired sendRateLimitMap entries are purged by cleanup()', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    const bucket = (svc as any).sendRateLimitMap.get('user@example.com')
+    bucket.resetAt = Date.now() - 1
+    ;(svc as any).cleanup()
+    assert.isFalse((svc as any).sendRateLimitMap.has('user@example.com'))
+  })
+
+  test('active entries are preserved after cleanup', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    await svc.sendEmailCode('user@example.com')
+    ;(svc as any).cleanup()
+    assert.isTrue((svc as any).codeStore.has('user@example.com'))
+  })
+
+  test('startCleanupTimer / stopCleanupTimer do not throw', ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    assert.doesNotThrow(() => svc.startCleanupTimer())
+    assert.doesNotThrow(() => svc.stopCleanupTimer())
+  })
+
+  test('stopCleanupTimer is idempotent', ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    svc.startCleanupTimer()
+    assert.doesNotThrow(() => svc.stopCleanupTimer())
+    assert.doesNotThrow(() => svc.stopCleanupTimer())
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// codeStore capacity cap
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('codeStore capacity cap', () => {
+  const MAX_MAP_ENTRIES = 50_000
+
+  test('at 50,000 all unexpired → oldest evicted, new entry added', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    const store: Map<string, { code: string; expiresAt: number; attempts: number }> = (svc as any).codeStore
+    const oldestEmail = 'oldest@example.com'
+    store.set(oldestEmail, { code: '111111', expiresAt: Date.now() + 99999, attempts: 0 })
+    for (let i = 1; i < MAX_MAP_ENTRIES; i++) {
+      store.set(`fill${i}@example.com`, { code: '222222', expiresAt: Date.now() + 99999, attempts: 0 })
+    }
+    const newEmail = 'newentry@example.com'
+    await svc.sendEmailCode(newEmail)
+    assert.isAtMost(store.size, MAX_MAP_ENTRIES)
+    assert.isTrue(store.has(newEmail))
+    assert.isFalse(store.has(oldestEmail))
+  })
+
+  test('at 50,000 all expired → expired purged, store size = 1', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    const store: Map<string, { code: string; expiresAt: number; attempts: number }> = (svc as any).codeStore
+    for (let i = 0; i < MAX_MAP_ENTRIES; i++) {
+      store.set(`expired${i}@example.com`, { code: '333333', expiresAt: Date.now() - 1, attempts: 0 })
+    }
+    const newEmail = 'newonly@example.com'
+    await svc.sendEmailCode(newEmail)
+    assert.equal(store.size, 1)
+    assert.isTrue(store.has(newEmail))
+  })
+
+  test('re-send for existing email at capacity → no eviction of unrelated entries', async ({ assert }) => {
+    const svc = new EmailService(async () => {})
+    const store: Map<string, { code: string; expiresAt: number; attempts: number }> = (svc as any).codeStore
+    const existingEmail = 'existing@example.com'
+    store.set(existingEmail, { code: '444444', expiresAt: Date.now() + 99999, attempts: 0 })
+    const oldestEmail = 'oldest2@example.com'
+    store.set(oldestEmail, { code: '555555', expiresAt: Date.now() + 99999, attempts: 0 })
+    for (let i = 2; i < MAX_MAP_ENTRIES; i++) {
+      store.set(`fill2-${i}@example.com`, { code: '666666', expiresAt: Date.now() + 99999, attempts: 0 })
+    }
+    // Re-send for existing email — codeStore already has it, no eviction needed
+    await svc.sendEmailCode(existingEmail)
+    assert.isTrue(store.has(oldestEmail))
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
 // validateExportGate controller tests
 // ══════════════════════════════════════════════════════════════════════════════
 
