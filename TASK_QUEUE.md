@@ -115,7 +115,7 @@
 > **Estimate:** 6-8h
 > **Constraint:** Install `resend` npm package (free tier: 3K emails/month). Do NOT implement passkeys (M2 only).
 
-#### ER-001 [ ] Add email columns to user_preferences
+#### ER-001 [x] Add email columns to user_preferences
 - **What:** Database migration adding encrypted email storage columns.
 - **Acceptance criteria:**
   - New migration adding to `user_preferences`:
