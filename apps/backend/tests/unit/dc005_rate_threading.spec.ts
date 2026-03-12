@@ -346,6 +346,72 @@ test.group('AC2 routeCommand | rate values threaded to send handler', () => {
   })
 })
 
+// ── AC2b: routeCommand threads context to generateResponse on greeting/social
+
+test.group('AC2b routeCommand | context forwarded to generateResponse', () => {
+  test('greeting command: non-empty context array reaches generateResponse', async ({ assert }) => {
+    let capturedContext: unknown = undefined
+
+    const fakeGenerateResponse = async (
+      _text: string,
+      _lang: string,
+      ctx: unknown
+    ): Promise<string | null> => {
+      capturedContext = ctx
+      return 'hi'
+    }
+
+    const incomingContext = [{ role: 'user' as const, content: 'hola' }]
+    const rateCtx: RateContext = { senderRate: null, senderCurrency: null, recipientRate: null, recipientCurrency: null }
+    const cmd: ParsedCommand = { command: 'greeting', originalText: 'buenos días' }
+
+    await routeCommand('573001234567', cmd, 'es', rateCtx, incomingContext, undefined, undefined, fakeGenerateResponse)
+
+    assert.deepEqual(capturedContext, incomingContext, 'context must be forwarded to generateResponse unchanged')
+  })
+
+  test('social command: non-empty context array reaches generateResponse', async ({ assert }) => {
+    let capturedContext: unknown = undefined
+
+    const fakeGenerateResponse = async (
+      _text: string,
+      _lang: string,
+      ctx: unknown
+    ): Promise<string | null> => {
+      capturedContext = ctx
+      return 'ok'
+    }
+
+    const incomingContext = [{ role: 'user' as const, content: 'previous message' }]
+    const rateCtx: RateContext = { senderRate: null, senderCurrency: null, recipientRate: null, recipientCurrency: null }
+    const cmd: ParsedCommand = { command: 'social', originalText: 'gracias' }
+
+    await routeCommand('573001234567', cmd, 'es', rateCtx, incomingContext, undefined, undefined, fakeGenerateResponse)
+
+    assert.deepEqual(capturedContext, incomingContext, 'context must be forwarded to generateResponse unchanged')
+  })
+
+  test('greeting command: empty context passes through (zero-value baseline)', async ({ assert }) => {
+    let capturedContext: unknown = 'not-set'
+
+    const fakeGenerateResponse = async (
+      _text: string,
+      _lang: string,
+      ctx: unknown
+    ): Promise<string | null> => {
+      capturedContext = ctx
+      return null
+    }
+
+    const rateCtx: RateContext = { senderRate: null, senderCurrency: null, recipientRate: null, recipientCurrency: null }
+    const cmd: ParsedCommand = { command: 'greeting', originalText: 'hi' }
+
+    await routeCommand('13105551234', cmd, 'en', rateCtx, [], undefined, undefined, fakeGenerateResponse)
+
+    assert.deepEqual(capturedContext, [], 'empty context must still be forwarded, not replaced with undefined')
+  })
+})
+
 // ── AC4: non-blocking fallback — never throws ─────────────────────────────
 //
 // USD-country and unknown-prefix phones return null from getCurrencyForPhone

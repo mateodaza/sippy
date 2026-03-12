@@ -9,7 +9,7 @@ import {
   useSignOut,
   useSendUserOperation,
 } from '@coinbase/cdp-hooks';
-import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '@/lib/auth';
+import { sendOtp, verifyOtp, storeToken, getStoredToken, getFreshToken, clearToken } from '@/lib/auth';
 import {
   getBalances,
   getActivity,
@@ -127,9 +127,10 @@ const [error, setError] = useState<string | null>(null);
         return;
       }
 
-      // A stored JWT is required for the send flow (getStoredToken() calls).
-      // If none exists the user must re-authenticate via OTP to get one.
-      if (!getStoredToken()) {
+      // A valid, non-expired JWT is required for the send flow. getFreshToken()
+      // returns null for both absent and expired tokens, so an expired JWT will
+      // force re-auth rather than leaving the UI looking authenticated.
+      if (!getFreshToken()) {
         clearToken();
         await signOut();
         setIsCheckingSession(false);

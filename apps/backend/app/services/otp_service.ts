@@ -67,12 +67,13 @@ class OtpService {
       }
     }
 
-    this.otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL, attempts: 0 })
-
     const resolvedLang = await this.resolveLanguage(phone, lang)
     const body = SMS_TEMPLATES[resolvedLang](code)
 
+    // Write to store only after the SMS send succeeds. If smsSender throws,
+    // no OTP entry is left behind and the rate-limit slot is the only cost.
     await this.smsSender(phone, body)
+    this.otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL, attempts: 0 })
 
     return { success: true }
   }

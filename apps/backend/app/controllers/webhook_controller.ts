@@ -104,7 +104,8 @@ export async function routeCommand(
   rateCtx: RateContext,
   context: import('#services/db').ContextMessage[] = [],
   balanceHandler: typeof handleBalanceCommand = handleBalanceCommand,
-  sendHandler: typeof handleSendCommand = handleSendCommand
+  sendHandler: typeof handleSendCommand = handleSendCommand,
+  generateResponseFn: typeof generateResponse = generateResponse
 ): Promise<void> {
   try {
     switch (command.command) {
@@ -151,14 +152,14 @@ export async function routeCommand(
 
       case 'greeting': {
         const text = command.originalText ?? ''
-        const reply = text ? await generateResponse(text, lang, context) : null
+        const reply = text ? await generateResponseFn(text, lang, context) : null
         await sendTextMessage(phoneNumber, reply ?? formatGreetingMessage(lang), lang)
         break
       }
 
       case 'social': {
         const text = command.originalText ?? ''
-        const reply = text ? await generateResponse(text, lang, context) : null
+        const reply = text ? await generateResponseFn(text, lang, context) : null
         await sendTextMessage(phoneNumber, reply ?? formatSocialReplyMessage(lang), lang)
         break
       }

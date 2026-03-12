@@ -65,7 +65,8 @@ class JwtService {
 
   async verifyToken(token: string): Promise<JwtPayload> {
     await this.init()
-    const { payload } = await jwtVerify(token, this.publicKey!)
+    const issuer = process.env.JWT_ISSUER ?? 'sippy'
+    const { payload } = await jwtVerify(token, this.publicKey!, { issuer })
     return payload as unknown as JwtPayload
   }
 
