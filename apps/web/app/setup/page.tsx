@@ -30,7 +30,7 @@ const USDC_ADDRESSES: Record<string, string> = {
 };
 const USDC_ADDRESS = USDC_ADDRESSES[NETWORK] || USDC_ADDRESSES.arbitrum;
 
-type Step = 'phone' | 'otp' | 'permission' | 'done';
+type Step = 'phone' | 'otp' | 'email' | 'permission' | 'done';
 
 function SetupContent() {
   const searchParams = useSearchParams();
@@ -49,6 +49,10 @@ function SetupContent() {
   const [isPreparingWallet, setIsPreparingWallet] = useState(false); // Waiting for gas
   const [gasReady, setGasReady] = useState(false);
   const [hasCheckedSession, setHasCheckedSession] = useState(false); // Only check once on mount
+  const [email, setEmail] = useState('');
+  const [emailCode, setEmailCode] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
 
   // CDP Hooks
   const { authenticateWithJWT } = useAuthenticateWithJWT();
@@ -133,12 +137,15 @@ function SetupContent() {
                 console.log('User already has permission, going to done');
                 setStep('done');
               } else {
-                // Wallet registered but no permission
-                console.log('Wallet registered but no permission, going to permission step');
+                // Wallet registered but no permission — resume at permission step.
+                // Email step is only shown in the initial fresh flow, not on recovery.
+                // This covers skipped-email and mid-email recovery without re-prompting.
+                console.log('Wallet registered but no permission, resuming at permission step');
                 setStep('permission');
               }
             } else {
-              // No status = go to permission step
+              // wallet-status returned non-OK — resume at permission step (safe default).
+              console.log('Wallet status unavailable, resuming at permission step');
               setStep('permission');
             }
           }
@@ -276,7 +283,7 @@ function SetupContent() {
         }
       }
 
-      setStep('permission');
+      setStep('email');
     } catch (err) {
       console.error('OTP verification failed:', err);
       setError(err instanceof Error ? err.message : 'Verification failed');
@@ -285,7 +292,67 @@ function SetupContent() {
     }
   };
 
-  // Step 3: Create Spend Permission
+  // Step 3a: Send email verification code
+  const handleSendEmailCode = async () => {
+    if (!email) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const accessToken = getStoredToken();
+      const response = await fetch(`${BACKEND_URL}/api/auth/send-email-code`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+      if (response.ok) {
+        setEmailSent(true);
+      } else {
+        setError(await response.text());
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send email code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Step 3b: Verify email code
+  const handleVerifyEmailCode = async () => {
+    if (!emailCode) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const accessToken = getStoredToken();
+      const response = await fetch(`${BACKEND_URL}/api/auth/verify-email-code`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, code: emailCode }),
+      });
+      if (response.ok) {
+        setEmailVerified(true);
+        setTimeout(() => setStep('permission'), 1500);
+      } else {
+        setError(await response.text());
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to verify email code');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Step 3c: Skip email
+  const handleSkipEmail = () => {
+    setStep('permission');
+  };
+
+  // Step 4: Create Spend Permission
   const handleApprovePermission = async () => {
     setIsLoading(true);
     setError(null);
@@ -412,13 +479,13 @@ function SetupContent() {
       <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
         {/* Progress indicator */}
         <div className='flex justify-between mb-8'>
-          {['phone', 'otp', 'permission', 'done'].map((s, i) => (
+          {['phone', 'otp', 'email', 'permission', 'done'].map((s, i) => (
             <div
               key={s}
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                 step === s
                   ? 'bg-emerald-600 text-white'
-                  : ['phone', 'otp', 'permission', 'done'].indexOf(step) > i
+                  : ['phone', 'otp', 'email', 'permission', 'done'].indexOf(step) > i
                     ? 'bg-emerald-200 text-emerald-800'
                     : 'bg-gray-200 text-gray-500'
               }`}
@@ -509,7 +576,76 @@ function SetupContent() {
           </div>
         )}
 
-        {/* Step 3: Spend Permission */}
+        {/* Step 3: Email (optional) */}
+        {step === 'email' && (
+          <div>
+            <h1 className='text-2xl font-bold mb-4 text-gray-900'>
+              Add a recovery email (recommended)
+            </h1>
+            <p className='text-gray-600 mb-6'>
+              Helps you recover your wallet if you lose your phone.
+            </p>
+
+            {!emailSent && (
+              <>
+                <input
+                  type='email'
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder='you@example.com'
+                  className='w-full p-3 border rounded-lg mb-4 text-gray-900'
+                />
+                <button
+                  onClick={handleSendEmailCode}
+                  disabled={isLoading || !email}
+                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                >
+                  {isLoading ? 'Sending...' : 'Send code'}
+                </button>
+              </>
+            )}
+
+            {emailSent && !emailVerified && (
+              <>
+                <p className='text-gray-600 mb-4'>Code sent to {email}</p>
+                <input
+                  type='text'
+                  value={emailCode}
+                  onChange={(e) => setEmailCode(e.target.value)}
+                  placeholder='Enter 6-digit code'
+                  maxLength={6}
+                  className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-gray-900'
+                />
+                <button
+                  onClick={handleVerifyEmailCode}
+                  disabled={isLoading || !emailCode}
+                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                >
+                  {isLoading ? 'Verifying...' : 'Verify'}
+                </button>
+              </>
+            )}
+
+            {emailVerified && (
+              <div className='text-center py-4'>
+                <div className='text-4xl mb-2'>✅</div>
+                <p className='text-emerald-700 font-semibold'>Email verified</p>
+                <p className='text-sm text-gray-500 mt-1'>Continuing setup...</p>
+              </div>
+            )}
+
+            {!emailVerified && (
+              <button
+                onClick={handleSkipEmail}
+                className='w-full mt-4 text-gray-500 py-2 text-sm'
+              >
+                Skip for now
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Step 4: Spend Permission */}
         {step === 'permission' && (
           <div>
             <h1 className='text-2xl font-bold mb-4 text-gray-900'>
@@ -582,7 +718,7 @@ function SetupContent() {
           </div>
         )}
 
-        {/* Step 4: Done */}
+        {/* Step 5: Done */}
         {step === 'done' && (
           <div className='text-center'>
             <div className='text-6xl mb-4'>🎉</div>
