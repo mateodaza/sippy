@@ -192,12 +192,7 @@ test.group('Webhook | GET /admin/parse-patterns (Auth Guard)', () => {
     assert.isTrue(found, '/admin/parse-patterns should be a registered route')
   })
 
-  test.skip(
-    // TODO: configure SESSION_DRIVER / session store in .env.test so the AdonisJS
-    // auth middleware activates during functional tests. Until then, the middleware
-    // is a no-op here and the route returns 200, making the assertion meaningless.
-    // Once the session store is wired up, remove this skip and the test will enforce
-    // that unauthenticated callers receive 302/401/403.
+  test(
     'unauthenticated request returns an auth rejection (302 or 401 or 403)',
     async ({ client, assert }) => {
       const response = await client.get('/admin/parse-patterns')
@@ -213,5 +208,7 @@ test.group('Webhook | GET /admin/parse-patterns (Auth Guard)', () => {
           `check your test environment session configuration.`
       )
     }
-  )
+  // TODO: configure SESSION_DRIVER / session store in .env.test so the AdonisJS
+  // auth middleware activates. Until then it is a no-op and the route returns 200.
+  ).skip(true, 'session store not configured in .env.test yet')
 })
