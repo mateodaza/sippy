@@ -8,6 +8,10 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import { otpService } from '#services/otp_service'
 import { jwtService } from '#services/jwt_service'
+import { emailService } from '#services/email_service'
+import { normalizeEmail, hashEmail, encryptEmail } from '#utils/email_crypto'
+import UserPreference from '#models/user_preference'
+import { DateTime } from 'luxon'
 
 // ── Phone normalization ────────────────────────────────────────────────────────
 
@@ -83,6 +87,129 @@ export default class AuthApiController {
 
       const token = await jwtService.signToken(normalizedPhone)
       return response.status(200).json({ token, expiresIn: 3600 })
+    } catch {
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * POST /api/auth/send-email-code
+   *
+   * Sends an email verification code to the provided address.
+   */
+  async sendEmailCode(ctx: HttpContext) {
+    const { request, response } = ctx
+    try {
+      const email = request.body()?.email
+      if (!email || typeof email !== 'string') {
+        return response.status(422).json({ error: 'Invalid email' })
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return response.status(422).json({ error: 'Invalid email' })
+      }
+
+      const normalized = normalizeEmail(email)
+      const hash = hashEmail(normalized)
+
+      // Strip leading '+' to match the DB phone format used by user_preferences
+      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
+
+      const duplicate = await UserPreference.query()
+        .whereNotNull('emailHash')
+        .where('emailHash', hash)
+        .whereNot('phoneNumber', dbPhone)
+        .first()
+      if (duplicate) {
+        return response.status(409).json({ error: 'email_already_linked' })
+      }
+
+      const existingPref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const lang = existingPref?.preferredLanguage ?? undefined
+
+      const { encrypted, iv } = encryptEmail(normalized)
+      const combined = `${iv}:${encrypted}`
+
+      const result = await emailService.sendEmailCode(normalized, lang ?? undefined)
+      if ('error' in result) {
+        if (result.error === 'rate_limited') {
+          return response.status(429).json({ error: 'rate_limited' })
+        }
+        return response.status(500).json({ error: 'Internal server error' })
+      }
+
+      await UserPreference.updateOrCreate(
+        { phoneNumber: dbPhone },
+        { emailEncrypted: combined, emailHash: hash, emailVerified: false, emailVerifiedAt: null }
+      )
+
+      return response.status(200).json({ success: true })
+    } catch {
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * POST /api/auth/verify-email-code
+   *
+   * Verifies an email code and marks the address as verified.
+   */
+  async verifyEmailCode(ctx: HttpContext) {
+    const { request, response } = ctx
+    try {
+      const email = request.body()?.email
+      if (!email || typeof email !== 'string') {
+        return response.status(422).json({ error: 'Invalid email' })
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return response.status(422).json({ error: 'Invalid email' })
+      }
+
+      const normalized = normalizeEmail(email)
+
+      const code = request.body()?.code
+      if (!code || typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+        return response.status(422).json({ error: 'Invalid code' })
+      }
+
+      // Strip leading '+' to match the DB phone format used by user_preferences
+      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
+
+      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const submittedHash = hashEmail(normalized)
+      if (!pref || pref.emailHash !== submittedHash) {
+        return response.status(409).json({ error: 'email_mismatch' })
+      }
+
+      const result = await emailService.verifyEmailCode(normalized, code)
+      if (!result.valid) {
+        return response.status(401).json({ error: 'invalid_or_expired_code' })
+      }
+
+      pref.emailVerified = true
+      pref.emailVerifiedAt = DateTime.now()
+      await pref.save()
+
+      return response.status(200).json({ success: true })
+    } catch {
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * GET /api/auth/email-status
+   *
+   * Returns whether the authenticated user has a verified email.
+   */
+  async emailStatus(ctx: HttpContext) {
+    const { response } = ctx
+    try {
+      // Strip leading '+' to match the DB phone format used by user_preferences
+      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
+      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      return response.status(200).json({
+        hasEmail: pref?.emailHash != null,
+        verified: pref?.emailVerified ?? false,
+      })
     } catch {
       return response.status(500).json({ error: 'Internal server error' })
     }

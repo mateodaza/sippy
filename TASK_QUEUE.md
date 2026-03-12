@@ -167,7 +167,7 @@
 - **Context:** `apps/backend/app/services/otp_service.ts` (follow Map + cleanup pattern)
 - **Files:** `apps/backend/app/services/email_service.ts` (new), `apps/backend/start/env.ts`
 
-#### ER-004 [ ] Create email auth controller endpoints
+#### ER-004 [x] Create email auth controller endpoints
 - **What:** API endpoints for email verification flow.
 - **Acceptance criteria:**
   - `POST /api/auth/send-email-code` — reads `{ email }` from body, normalizes, checks not already linked to another account (hash lookup), encrypts + stores, sends code. Requires JWT auth.
