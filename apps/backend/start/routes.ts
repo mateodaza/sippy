@@ -60,6 +60,7 @@ router
     router.get('/wallet-status', [EmbeddedWalletController, 'walletStatus'])
     router.post('/log-export-event', [EmbeddedWalletController, 'logExportEvent'])
     router.post('/resolve-phone', [EmbeddedWalletController, 'resolvePhone'])
+    router.post('/send', [EmbeddedWalletController, 'sendFromWeb'])
     router.post('/log-web-send', [EmbeddedWalletController, 'logWebSend'])
     router.post('/auth/send-email-code', [AuthApiController, 'sendEmailCode'])
     router.post('/auth/verify-email-code', [AuthApiController, 'verifyEmailCode'])

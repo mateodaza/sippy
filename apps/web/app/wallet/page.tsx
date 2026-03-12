@@ -27,6 +27,7 @@ const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
 
 type AuthStep = 'phone' | 'otp' | 'authenticated';
 type SendStep = 'form' | 'confirm' | 'sending' | 'success' | 'error';
+type SendFrom = 'whatsapp' | 'web';
 
 function WalletContent() {
   const searchParams = useSearchParams();
@@ -36,18 +37,21 @@ function WalletContent() {
   const [authStep, setAuthStep] = useState<AuthStep>('phone');
   const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl);
   const [otp, setOtp] = useState('');
-const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [hasCheckedSession, setHasCheckedSession] = useState(false);
 
-  // Wallet state
-  const [balances, setBalances] = useState<Balance | null>(null);
+  // Wallet state — two wallets
+  const [eoaAddress, setEoaAddress] = useState<string | null>(null);
+  const [eoaBalances, setEoaBalances] = useState<Balance | null>(null);
+  const [smartBalances, setSmartBalances] = useState<Balance | null>(null);
   const [activity, setActivity] = useState<NormalizedTransaction[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
   // Send state
   const [sendStep, setSendStep] = useState<SendStep>('form');
+  const [sendFrom, setSendFrom] = useState<SendFrom>('whatsapp');
   const [recipient, setRecipient] = useState('');
   const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
   const [amount, setAmount] = useState('');
@@ -66,44 +70,71 @@ const [error, setError] = useState<string | null>(null);
     error: sendOpError,
   } = useSendUserOperation();
 
-  // Smart account address — NEVER fall back to evmAccounts for UserOps
   const smartAccountAddress =
     currentUser?.evmSmartAccountObjects?.[0]?.address ?? null;
 
   const isPhoneLocked = !!phoneFromUrl;
   const isCdpConfigured = !!CDP_PROJECT_ID;
 
+  // Active balance based on selected send-from wallet
+  const activeBalance = sendFrom === 'whatsapp' ? eoaBalances : smartBalances;
+
   // ============================================================================
   // Data fetching
   // ============================================================================
 
   const fetchWalletData = useCallback(async () => {
-    if (!smartAccountAddress) return;
+    const token = getStoredToken();
+    if (!token) return;
     setIsLoadingData(true);
     try {
-      const [bal, act] = await Promise.all([
-        getBalances(smartAccountAddress),
-        getActivity(smartAccountAddress, 10),
-      ]);
-      setBalances(bal);
-      setActivity(act);
+      // Fetch EOA address from backend
+      const statusRes = await fetch(`${BACKEND_URL}/api/wallet-status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (statusRes.ok) {
+        const status = await statusRes.json();
+        if (status.walletAddress) {
+          setEoaAddress(status.walletAddress);
+          const [eoaBal, act] = await Promise.all([
+            getBalances(status.walletAddress),
+            getActivity(status.walletAddress, 10),
+          ]);
+          setEoaBalances(eoaBal);
+          setActivity(act);
+          // Auto-select whichever wallet has funds
+          if (parseFloat(eoaBal?.usdc ?? '0') > 0) setSendFrom('whatsapp');
+        }
+      }
+
+      // Fetch smart account balance in parallel if available
+      if (smartAccountAddress) {
+        const smartBal = await getBalances(smartAccountAddress);
+        setSmartBalances(smartBal);
+        // If EOA is empty but smart account has funds, auto-select smart
+        if (
+          parseFloat(eoaBalances?.usdc ?? '0') === 0 &&
+          parseFloat(smartBal?.usdc ?? '0') > 0
+        ) {
+          setSendFrom('web');
+        }
+      }
     } catch (err) {
       console.error('Failed to fetch wallet data:', err);
     } finally {
       setIsLoadingData(false);
     }
-  }, [smartAccountAddress]);
+  }, [smartAccountAddress, BACKEND_URL]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Fetch data on auth and auto-refresh every 30s
   useEffect(() => {
-    if (authStep !== 'authenticated' || !smartAccountAddress) return;
+    if (authStep !== 'authenticated') return;
     fetchWalletData();
     const interval = setInterval(fetchWalletData, 30000);
     return () => clearInterval(interval);
-  }, [authStep, smartAccountAddress, fetchWalletData]);
+  }, [authStep, fetchWalletData]);
 
   // ============================================================================
-  // Auth (same pattern as /settings)
+  // Auth
   // ============================================================================
 
   useEffect(() => {
@@ -127,9 +158,6 @@ const [error, setError] = useState<string | null>(null);
         return;
       }
 
-      // A valid, non-expired JWT is required for the send flow. getFreshToken()
-      // returns null for both absent and expired tokens, so an expired JWT will
-      // force re-auth rather than leaving the UI looking authenticated.
       if (!getFreshToken()) {
         clearToken();
         await signOut();
@@ -148,8 +176,7 @@ const [error, setError] = useState<string | null>(null);
     setIsLoading(true);
     setError(null);
     try {
-      if (!isCdpConfigured)
-        throw new Error('CDP not configured.');
+      if (!isCdpConfigured) throw new Error('CDP not configured.');
 
       if (isSignedIn && currentUser) {
         setAuthStep('authenticated');
@@ -213,24 +240,21 @@ const [error, setError] = useState<string | null>(null);
   const handleSendReview = async () => {
     setSendError(null);
 
-    // Validate amount
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       setSendError('Enter a valid amount.');
       return;
     }
-    if (balances && numAmount > parseFloat(balances.usdc)) {
+    if (activeBalance && numAmount > parseFloat(activeBalance.usdc)) {
       setSendError('Insufficient balance.');
       return;
     }
 
-    // Validate and resolve recipient
     const trimmed = recipient.trim();
     if (isAddress(trimmed)) {
       setResolvedAddress(trimmed);
       setSendStep('confirm');
     } else if (isPhoneNumber(trimmed)) {
-      // Resolve phone via authenticated endpoint
       try {
         const accessToken = getStoredToken();
         if (!accessToken) {
@@ -274,77 +298,76 @@ const [error, setError] = useState<string | null>(null);
   };
 
   const handleSendConfirm = async () => {
-    if (!smartAccountAddress || !resolvedAddress) return;
+    if (!resolvedAddress) return;
 
     setSendError(null);
     setSendStep('sending');
 
     try {
-      const accessToken = getStoredToken();
-      if (!accessToken)
-        throw new Error('Session expired. Please sign in again.');
+      if (sendFrom === 'whatsapp') {
+        // EOA send via backend SpendPermission
+        const accessToken = getStoredToken();
+        if (!accessToken) throw new Error('Session expired. Please sign in again.');
 
-      const gasReady = await ensureGasReady(BACKEND_URL, accessToken);
-      if (!gasReady)
-        throw new Error(
-          'Unable to prepare transaction. Try again in a few minutes.'
-        );
+        const res = await fetch(`${BACKEND_URL}/api/send`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ to: resolvedAddress, amount }),
+        });
 
-      const call = buildUsdcTransferCall(resolvedAddress, amount);
-      await sendUserOperation({
-        evmSmartAccount: smartAccountAddress as `0x${string}`,
-        network: NETWORK as 'arbitrum',
-        calls: [call],
-      });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || 'Send failed');
+        }
+
+        const data = await res.json();
+        setSendTxHash(data.txHash ?? null);
+        setSendStep('success');
+        fetchWalletData();
+      } else {
+        // Smart account UserOp
+        if (!smartAccountAddress) throw new Error('Smart account not found.');
+
+        const accessToken = getStoredToken();
+        if (!accessToken) throw new Error('Session expired. Please sign in again.');
+
+        const gasReady = await ensureGasReady(BACKEND_URL, accessToken);
+        if (!gasReady)
+          throw new Error('Unable to prepare transaction. Try again in a few minutes.');
+
+        const call = buildUsdcTransferCall(resolvedAddress, amount);
+        await sendUserOperation({
+          evmSmartAccount: smartAccountAddress as `0x${string}`,
+          network: NETWORK as 'arbitrum',
+          calls: [call],
+        });
+        // success handled by useEffect watching sendOpStatus
+      }
     } catch (err) {
       console.error('Send failed:', err);
-      setSendError(
-        err instanceof Error ? err.message : 'Transaction failed.'
-      );
+      setSendError(err instanceof Error ? err.message : 'Transaction failed.');
       setSendStep('error');
     }
   };
 
-  // Watch send UserOp status
+  // Watch smart account UserOp status
   useEffect(() => {
+    if (sendFrom !== 'web') return;
     if (sendOpStatus === 'success' && sendOpData) {
-      const txHash = sendOpData.transactionHash ?? null;
-      setSendTxHash(txHash);
+      setSendTxHash(sendOpData.transactionHash ?? null);
       setSendStep('success');
-
-      // Fire-and-forget audit log
-      (async () => {
-        try {
-          const accessToken = getStoredToken();
-          if (!accessToken || !BACKEND_URL || !txHash || !resolvedAddress)
-            return;
-          await fetch(`${BACKEND_URL}/api/log-web-send`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({
-              toAddress: resolvedAddress,
-              amount,
-              txHash,
-            }),
-          });
-        } catch {} // Fire-and-forget
-      })();
-
-      // Refresh data after send
       fetchWalletData();
     }
     if (sendOpStatus === 'error' && sendOpError) {
       setSendError(
-        sendOpError instanceof Error
-          ? sendOpError.message
-          : 'Transaction failed.'
+        sendOpError instanceof Error ? sendOpError.message : 'Transaction failed.'
       );
       setSendStep('error');
     }
-  }, [sendOpStatus, sendOpData, sendOpError]);
+  }, [sendOpStatus, sendOpData, sendOpError, sendFrom, fetchWalletData]);
 
   const resetSend = () => {
     setSendStep('form');
@@ -356,11 +379,11 @@ const [error, setError] = useState<string | null>(null);
   };
 
   const handleMax = () => {
-    if (balances) setAmount(balances.usdc);
+    if (activeBalance) setAmount(activeBalance.usdc);
   };
 
   // ============================================================================
-  // Render
+  // Render helpers
   // ============================================================================
 
   if (isCheckingSession) {
@@ -376,22 +399,18 @@ const [error, setError] = useState<string | null>(null);
     );
   }
 
-  // Auth screens
   if (authStep !== 'authenticated') {
     return (
       <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
         <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
-          <h1 className='text-2xl font-bold mb-6 text-gray-900'>
-            Sippy Wallet
-          </h1>
+          <h1 className='text-2xl font-bold mb-6 text-gray-900'>Sippy Wallet</h1>
           <p className='text-gray-600 mb-6'>
             Verify your phone number to access your wallet.
           </p>
 
           {!isCdpConfigured && (
             <div className='mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm'>
-              <strong>Configuration Required:</strong> Set
-              NEXT_PUBLIC_CDP_PROJECT_ID in your environment.
+              <strong>Configuration Required:</strong> Set NEXT_PUBLIC_CDP_PROJECT_ID.
             </div>
           )}
 
@@ -406,9 +425,7 @@ const [error, setError] = useState<string | null>(null);
               <input
                 type='tel'
                 value={phoneNumber}
-                onChange={(e) =>
-                  !isPhoneLocked && setPhoneNumber(e.target.value)
-                }
+                onChange={(e) => !isPhoneLocked && setPhoneNumber(e.target.value)}
                 placeholder='+573001234567'
                 disabled={isPhoneLocked}
                 className={`w-full p-3 border rounded-lg mb-4 text-gray-900 ${
@@ -416,9 +433,7 @@ const [error, setError] = useState<string | null>(null);
                 }`}
               />
               {isPhoneLocked && (
-                <p className='text-sm text-gray-500 mb-4'>
-                  Phone number from your WhatsApp link
-                </p>
+                <p className='text-sm text-gray-500 mb-4'>Phone number from your WhatsApp link</p>
               )}
               <button
                 onClick={handleSendOtp}
@@ -463,75 +478,95 @@ const [error, setError] = useState<string | null>(null);
     );
   }
 
+  // ============================================================================
   // Authenticated wallet view
+  // ============================================================================
+
   return (
     <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 p-4'>
       <div className='max-w-md mx-auto space-y-4'>
-        {/* Balance Card */}
-        <div className='bg-white rounded-2xl shadow-xl p-6'>
-          <div className='flex justify-between items-start mb-4'>
-            <h1 className='text-xl font-bold text-gray-900'>Sippy Wallet</h1>
-            <button
-              onClick={fetchWalletData}
-              disabled={isLoadingData}
-              className='text-gray-400 hover:text-gray-600 p-1'
-              title='Refresh'
-            >
-              <svg
-                className={`w-5 h-5 ${isLoadingData ? 'animate-spin' : ''}`}
-                fill='none'
-                stroke='currentColor'
-                viewBox='0 0 24 24'
-              >
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth={2}
-                  d='M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
-                />
-              </svg>
-            </button>
-          </div>
 
-          {balances ? (
-            <>
-              <p className='text-4xl font-bold text-gray-900 mb-1'>
-                ${parseFloat(balances.usdc).toFixed(2)}
+        {/* Wallet cards */}
+        <div className='grid grid-cols-2 gap-3'>
+          {/* WhatsApp Wallet (EOA) */}
+          <button
+            onClick={() => setSendFrom('whatsapp')}
+            className={`bg-white rounded-2xl shadow p-4 text-left transition-all ${
+              sendFrom === 'whatsapp' ? 'ring-2 ring-emerald-500' : 'opacity-70'
+            }`}
+          >
+            <p className='text-xs text-gray-500 mb-1 font-medium'>WhatsApp Wallet</p>
+            {isLoadingData ? (
+              <div className='animate-pulse h-7 bg-gray-100 rounded w-20 mb-1' />
+            ) : (
+              <p className='text-xl font-bold text-gray-900'>
+                ${parseFloat(eoaBalances?.usdc ?? '0').toFixed(2)}
               </p>
-              <p className='text-sm text-gray-500'>USDC</p>
-              {parseFloat(balances.eth) > 0 && (
-                <p className='text-xs text-gray-400 mt-1'>
-                  {parseFloat(balances.eth).toFixed(6)} ETH
-                </p>
-              )}
-            </>
-          ) : (
-            <div className='animate-pulse'>
-              <div className='h-10 bg-gray-200 rounded w-32 mb-2' />
-              <div className='h-4 bg-gray-100 rounded w-16' />
-            </div>
-          )}
+            )}
+            <p className='text-xs text-gray-400 mt-1 truncate'>
+              {eoaAddress ? formatAddress(eoaAddress) : '—'}
+            </p>
+          </button>
 
-          {smartAccountAddress && (
-            <div className='mt-4 pt-4 border-t'>
-              <p className='text-xs text-gray-400'>
-                {formatAddress(smartAccountAddress)}
-                <button
-                  onClick={() =>
-                    navigator.clipboard.writeText(smartAccountAddress)
-                  }
-                  className='ml-2 text-emerald-600 hover:text-emerald-700'
-                >
-                  Copy
-                </button>
+          {/* Web Wallet (Smart Account) */}
+          <button
+            onClick={() => setSendFrom('web')}
+            className={`bg-white rounded-2xl shadow p-4 text-left transition-all ${
+              sendFrom === 'web' ? 'ring-2 ring-emerald-500' : 'opacity-70'
+            }`}
+          >
+            <p className='text-xs text-gray-500 mb-1 font-medium'>Web Wallet</p>
+            {isLoadingData ? (
+              <div className='animate-pulse h-7 bg-gray-100 rounded w-20 mb-1' />
+            ) : (
+              <p className='text-xl font-bold text-gray-900'>
+                ${parseFloat(smartBalances?.usdc ?? '0').toFixed(2)}
               </p>
-            </div>
-          )}
+            )}
+            <p className='text-xs text-gray-400 mt-1 truncate'>
+              {smartAccountAddress ? formatAddress(smartAccountAddress) : '—'}
+            </p>
+          </button>
         </div>
 
-        {/* Send Section */}
+        {/* Selected wallet address + copy */}
+        <div className='bg-white rounded-2xl shadow-xl px-5 py-3 flex items-center justify-between'>
+          <div>
+            <p className='text-xs text-gray-400'>
+              {sendFrom === 'whatsapp' ? 'WhatsApp Wallet' : 'Web Wallet'} address
+            </p>
+            <p className='text-sm font-mono text-gray-700'>
+              {sendFrom === 'whatsapp'
+                ? eoaAddress
+                  ? formatAddress(eoaAddress)
+                  : '—'
+                : smartAccountAddress
+                  ? formatAddress(smartAccountAddress)
+                  : '—'}
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              const addr = sendFrom === 'whatsapp' ? eoaAddress : smartAccountAddress;
+              if (addr) navigator.clipboard.writeText(addr);
+            }}
+            className='text-xs text-emerald-600 hover:text-emerald-700 font-medium'
+          >
+            Copy
+          </button>
+        </div>
+
+        {/* Send section */}
         <div className='bg-white rounded-2xl shadow-xl p-6'>
-          <h2 className='text-lg font-semibold text-gray-900 mb-4'>Send</h2>
+          <div className='flex items-center justify-between mb-4'>
+            <h2 className='text-lg font-semibold text-gray-900'>Send</h2>
+            <span className='text-xs text-gray-400'>
+              from{' '}
+              <span className='font-medium text-gray-600'>
+                {sendFrom === 'whatsapp' ? 'WhatsApp Wallet' : 'Web Wallet'}
+              </span>
+            </span>
+          </div>
 
           {sendStep === 'form' && (
             <div className='space-y-3'>
@@ -569,9 +604,7 @@ const [error, setError] = useState<string | null>(null);
                   </button>
                 </div>
               </div>
-              {sendError && (
-                <p className='text-sm text-red-600'>{sendError}</p>
-              )}
+              {sendError && <p className='text-sm text-red-600'>{sendError}</p>}
               <button
                 onClick={handleSendReview}
                 disabled={!recipient || !amount}
@@ -594,6 +627,9 @@ const [error, setError] = useState<string | null>(null);
                   {isPhoneNumber(recipient.trim())
                     ? `${recipient.trim()} (${formatAddress(resolvedAddress || '')})`
                     : formatAddress(resolvedAddress || '')}
+                </p>
+                <p className='text-xs text-gray-400 mt-2'>
+                  from {sendFrom === 'whatsapp' ? 'WhatsApp Wallet' : 'Web Wallet'}
                 </p>
               </div>
               <button
@@ -687,7 +723,8 @@ const [error, setError] = useState<string | null>(null);
               clearToken();
               await signOut();
               setAuthStep('phone');
-              setBalances(null);
+              setEoaBalances(null);
+              setSmartBalances(null);
               setActivity([]);
               setHasCheckedSession(false);
               resetSend();
@@ -698,7 +735,6 @@ const [error, setError] = useState<string | null>(null);
           </button>
         </div>
 
-        {/* Footer */}
         <div className='text-center text-xs text-gray-500 pb-4'>
           <p>Powered by Coinbase</p>
           <p className='mt-1'>Network: {NETWORK}</p>

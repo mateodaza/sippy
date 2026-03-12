@@ -17,7 +17,11 @@ import env from '#start/env'
 import { CdpClient } from '@coinbase/cdp-sdk'
 import { ethers } from 'ethers'
 import { query, logExportEvent, logWebSend } from '#services/db'
-import { getSippySpenderAccount } from '#services/embedded_wallet.service'
+import {
+  getSippySpenderAccount,
+  sendToAddress,
+  sendToPhoneNumber,
+} from '#services/embedded_wallet.service'
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
 import { registerWalletWithIndexer } from '#services/indexer.service'
@@ -488,6 +492,52 @@ export default class EmbeddedWalletController {
       return response.status(isAuthError ? 401 : 500).json({
         error: isAuthError ? 'Unauthorized' : 'Internal server error',
       })
+    }
+  }
+
+  /**
+   * POST /api/send
+   *
+   * Send USDC from the caller's WhatsApp wallet (EOA) using the existing
+   * SpendPermission on-chain. Accepts a phone number or 0x address as recipient.
+   */
+  async sendFromWeb({ request, response, cdpUser }: HttpContext) {
+    try {
+      const { phoneNumber } = cdpUser!
+      const fromPhone = phoneNumber.replace(/^\+/, '')
+
+      const { to, amount } = request.body() as { to?: unknown; amount?: unknown }
+
+      if (!to || typeof to !== 'string') {
+        return response.status(422).json({ error: 'Invalid recipient' })
+      }
+
+      const numAmount = Number.parseFloat(String(amount))
+      if (Number.isNaN(numAmount) || numAmount <= 0) {
+        return response.status(422).json({ error: 'Invalid amount' })
+      }
+
+      const isAddress = /^0x[a-fA-F0-9]{40}$/.test(to)
+      const cleanPhone = to.replace(/[\s\-().]/g, '').replace(/^\+/, '')
+      const isPhone = !isAddress && /^[1-9]\d{7,14}$/.test(cleanPhone)
+
+      if (!isAddress && !isPhone) {
+        return response.status(422).json({ error: 'Recipient must be a phone number or 0x address' })
+      }
+
+      const result = isAddress
+        ? await sendToAddress(fromPhone, to, numAmount)
+        : await sendToPhoneNumber(fromPhone, cleanPhone, numAmount)
+
+      return response.json({
+        success: true,
+        txHash: result.transactionHash,
+        remainingAllowance: result.remainingAllowance,
+      })
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Send failed'
+      logger.error('sendFromWeb error: %o', error)
+      return response.status(500).json({ error: msg })
     }
   }
 }
