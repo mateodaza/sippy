@@ -59,7 +59,7 @@
 - **Dependencies:** None
 - **Files:** `apps/backend/app/utils/messages.ts`
 
-#### DC-003 [ ] Update balance message to show dual currency
+#### DC-003 [x] Update balance message to show dual currency
 - **What:** Thread exchange rate through balance command so users see local equivalent.
 - **Acceptance criteria:**
   - `formatBalanceMessage` accepts optional `localRate` + `localCurrency` params
