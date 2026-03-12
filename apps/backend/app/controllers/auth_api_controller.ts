@@ -9,7 +9,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { otpService } from '#services/otp_service'
 import { jwtService } from '#services/jwt_service'
 import { emailService } from '#services/email_service'
-import { normalizeEmail, hashEmail, encryptEmail } from '#utils/email_crypto'
+import { normalizeEmail, hashEmail, encryptEmail, decryptEmail } from '#utils/email_crypto'
 import UserPreference from '#models/user_preference'
 import { DateTime } from 'luxon'
 
@@ -24,6 +24,13 @@ export function normalizePhone(raw: string): string | null {
   const stripped = raw.replace(/[\s\-().]/g, '')
   // Must now match E.164 after stripping
   return /^\+[1-9]\d{1,14}$/.test(stripped) ? stripped : null
+}
+
+// ── Email masking ──────────────────────────────────────────────────────────────
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@')
+  return `${local[0]}***@${domain}`
 }
 
 // ── Controller ─────────────────────────────────────────────────────────────────
@@ -206,9 +213,23 @@ export default class AuthApiController {
       // Strip leading '+' to match the DB phone format used by user_preferences
       const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
       const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+
+      let maskedEmail: string | null = null
+      if (pref?.emailEncrypted) {
+        try {
+          const [iv, encrypted] = pref.emailEncrypted.split(':')
+          const plaintext = decryptEmail(encrypted, iv)
+          maskedEmail = maskEmail(plaintext)
+        } catch {
+          // Non-fatal: display field only — never 500 over a masked email
+          maskedEmail = null
+        }
+      }
+
       return response.status(200).json({
         hasEmail: pref?.emailHash != null,
         verified: pref?.emailVerified ?? false,
+        maskedEmail,
       })
     } catch {
       return response.status(500).json({ error: 'Internal server error' })

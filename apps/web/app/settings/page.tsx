@@ -46,6 +46,22 @@ interface WalletStatus {
 
 type ExportStep = 'idle' | 'warning' | 'sweep_offer' | 'sweeping' | 'export_active';
 
+interface EmailStatus {
+  hasEmail: boolean;
+  verified: boolean;
+  maskedEmail: string | null;
+}
+
+type EmailSectionStep =
+  | 'loading'
+  | 'no_email'
+  | 'add_sent'
+  | 'unverified'
+  | 'verify_entry'
+  | 'verified'
+  | 'change_entry'
+  | 'change_sent';
+
 function SettingsContent() {
   const searchParams = useSearchParams();
   const phoneFromUrl = searchParams.get('phone') || '';
@@ -79,6 +95,15 @@ function SettingsContent() {
   const [sweepTxHash, setSweepTxHash] = useState<string | null>(null);
   const [sweepError, setSweepError] = useState<string | null>(null);
 
+  // Email management state
+  const [emailStatus, setEmailStatus] = useState<EmailStatus | null>(null);
+  const [emailSectionStep, setEmailSectionStep] = useState<EmailSectionStep>('loading');
+  const [emailInput, setEmailInput] = useState('');
+  const [emailCode, setEmailCode] = useState('');
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
   // CDP Hooks
   const { authenticateWithJWT } = useAuthenticateWithJWT();
   const { createSpendPermission } = useCreateSpendPermission();
@@ -99,6 +124,25 @@ function SettingsContent() {
 
   // Check if CDP is configured
   const isCdpConfigured = !!CDP_PROJECT_ID;
+
+  // Fetch email status from backend
+  const fetchEmailStatus = async () => {
+    const accessToken = getStoredToken();
+    if (!accessToken || !BACKEND_URL) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/auth/email-status`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return;
+      const data: EmailStatus = await res.json();
+      setEmailStatus(data);
+      if (!data.hasEmail) setEmailSectionStep('no_email');
+      else if (!data.verified) setEmailSectionStep('unverified');
+      else setEmailSectionStep('verified');
+    } catch {
+      // Non-blocking — email section stays in 'loading' state silently
+    }
+  };
 
   // Session recovery: Check for existing session on mount
   useEffect(() => {
@@ -176,6 +220,7 @@ function SettingsContent() {
             setVerifiedPhone(status.phoneNumber);
           }
           console.log('Wallet status restored:', status);
+          await fetchEmailStatus();
         }
 
         // Session restored - go directly to authenticated view
@@ -214,6 +259,66 @@ function SettingsContent() {
       }
     } catch (err) {
       console.error('Failed to fetch wallet status:', err);
+    }
+  };
+
+  // Send email verification code
+  const handleSendEmailCode = async (email: string) => {
+    setEmailLoading(true);
+    setEmailError(null);
+    try {
+      const accessToken = getStoredToken();
+      const res = await fetch(`${BACKEND_URL}/api/auth/send-email-code`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+      if (res.ok) {
+        setEmailInput(email);
+        setEmailSectionStep((prev) =>
+          prev === 'change_entry' ? 'change_sent' : 'add_sent'
+        );
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setEmailError((err as { error?: string }).error ?? 'Failed to send code');
+      }
+    } catch {
+      setEmailError('Failed to send code');
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  // Verify email code
+  const handleVerifyEmailCode = async () => {
+    if (!emailInput || !emailCode) return;
+    setEmailLoading(true);
+    setEmailError(null);
+    try {
+      const accessToken = getStoredToken();
+      const res = await fetch(`${BACKEND_URL}/api/auth/verify-email-code`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: emailInput, code: emailCode }),
+      });
+      if (res.ok) {
+        setEmailCode('');
+        setEmailInput('');
+        await fetchEmailStatus();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setEmailError((err as { error?: string }).error ?? 'Invalid or expired code');
+      }
+    } catch {
+      setEmailError('Verification failed');
+    } finally {
+      setEmailLoading(false);
     }
   };
 
@@ -267,6 +372,7 @@ function SettingsContent() {
 
       // Fetch current wallet status
       await fetchWalletStatus();
+      await fetchEmailStatus();
     } catch (err) {
       console.error('OTP verification failed:', err);
       setError(err instanceof Error ? err.message : 'Verification failed');
@@ -848,6 +954,188 @@ function SettingsContent() {
             </p>
           </div>
         )}
+
+        {/* Recovery Email */}
+        <div className='mt-6 pt-6 border-t'>
+          <h2 className='text-lg font-semibold mb-3 text-gray-900'>
+            Recovery Email
+          </h2>
+
+          {emailSectionStep === 'no_email' && (
+            <>
+              {!bannerDismissed && (
+                <div className='mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-start'>
+                  <p className='text-sm text-blue-800'>Add a recovery email to protect your account</p>
+                  <button onClick={() => setBannerDismissed(true)} className='ml-2 text-blue-600 hover:text-blue-800'>✕</button>
+                </div>
+              )}
+              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
+              <input
+                type='email'
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder='you@example.com'
+                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+              />
+              <button
+                onClick={() => handleSendEmailCode(emailInput)}
+                disabled={!emailInput || emailLoading}
+                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+              >
+                {emailLoading ? 'Sending...' : 'Add recovery email'}
+              </button>
+            </>
+          )}
+
+          {emailSectionStep === 'add_sent' && (
+            <>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
+              <p className='text-sm text-gray-600 mb-3'>Code sent to {emailInput}</p>
+              <input
+                type='text'
+                value={emailCode}
+                onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
+                placeholder='123456'
+                maxLength={6}
+                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+              />
+              <button
+                onClick={handleVerifyEmailCode}
+                disabled={emailCode.length !== 6 || emailLoading}
+                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed mb-2'
+              >
+                {emailLoading ? 'Verifying...' : 'Verify'}
+              </button>
+              <button
+                onClick={() => handleSendEmailCode(emailInput)}
+                disabled={emailLoading}
+                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+              >
+                Resend code
+              </button>
+            </>
+          )}
+
+          {emailSectionStep === 'unverified' && (
+            <>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
+              <p className='text-sm text-gray-600 mb-3'>{emailStatus?.maskedEmail} — not verified</p>
+              <button
+                onClick={() => setEmailSectionStep('verify_entry')}
+                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 mb-2'
+              >
+                Verify
+              </button>
+              <button
+                onClick={() => setEmailSectionStep('verify_entry')}
+                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+              >
+                Resend code
+              </button>
+            </>
+          )}
+
+          {emailSectionStep === 'verify_entry' && (
+            <>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
+              <p className='text-sm text-gray-600 mb-3'>Enter your email ({emailStatus?.maskedEmail}) to continue</p>
+              <input
+                type='email'
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder='you@example.com'
+                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+              />
+              <input
+                type='text'
+                value={emailCode}
+                onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
+                placeholder='123456'
+                maxLength={6}
+                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+              />
+              <button
+                onClick={handleVerifyEmailCode}
+                disabled={!emailInput || emailCode.length !== 6 || emailLoading}
+                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed mb-2'
+              >
+                {emailLoading ? 'Verifying...' : 'Verify'}
+              </button>
+              <button
+                onClick={() => handleSendEmailCode(emailInput)}
+                disabled={!emailInput || emailLoading}
+                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+              >
+                Resend code
+              </button>
+            </>
+          )}
+
+          {emailSectionStep === 'verified' && (
+            <>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
+              <p className='text-sm text-gray-600 mb-3'>{emailStatus?.maskedEmail} ✓ Verified</p>
+              <button
+                onClick={() => { setEmailInput(''); setEmailCode(''); setEmailSectionStep('change_entry'); }}
+                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
+              >
+                Change
+              </button>
+            </>
+          )}
+
+          {emailSectionStep === 'change_entry' && (
+            <>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
+              <p className='text-sm text-gray-600 mb-3'>Enter new email address</p>
+              <input
+                type='email'
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder='new@example.com'
+                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+              />
+              <button
+                onClick={() => handleSendEmailCode(emailInput)}
+                disabled={!emailInput || emailLoading}
+                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+              >
+                {emailLoading ? 'Sending...' : 'Send code'}
+              </button>
+            </>
+          )}
+
+          {emailSectionStep === 'change_sent' && (
+            <>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
+              <p className='text-sm text-gray-600 mb-3'>Code sent to {emailInput}</p>
+              <input
+                type='text'
+                value={emailCode}
+                onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
+                placeholder='123456'
+                maxLength={6}
+                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+              />
+              <button
+                onClick={handleVerifyEmailCode}
+                disabled={emailCode.length !== 6 || emailLoading}
+                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed mb-2'
+              >
+                {emailLoading ? 'Verifying...' : 'Verify'}
+              </button>
+              <button
+                onClick={() => handleSendEmailCode(emailInput)}
+                disabled={emailLoading}
+                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+              >
+                Resend code
+              </button>
+            </>
+          )}
+
+          {emailError && <p className='text-red-600 text-sm mt-2'>{emailError}</p>}
+        </div>
 
         {/* Wallet Security */}
         <div className='mt-6 pt-6 border-t'>
