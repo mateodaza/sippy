@@ -450,7 +450,7 @@ test.group('emailStatus', (group) => {
     await controller.emailStatus(ctx as any)
 
     assert.equal(getStatus(), 200)
-    assert.deepEqual(getBody(), { hasEmail: false, verified: false })
+    assert.deepEqual(getBody(), { hasEmail: false, verified: false, maskedEmail: null })
   })
 
   test('row exists, emailHash is null → { hasEmail: false, verified: false }', async ({ assert }) => {
@@ -461,7 +461,7 @@ test.group('emailStatus', (group) => {
     await controller.emailStatus(ctx as any)
 
     assert.equal(getStatus(), 200)
-    assert.deepEqual(getBody(), { hasEmail: false, verified: false })
+    assert.deepEqual(getBody(), { hasEmail: false, verified: false, maskedEmail: null })
   })
 
   test('row exists, emailHash set, emailVerified=false → { hasEmail: true, verified: false }', async ({
@@ -475,7 +475,7 @@ test.group('emailStatus', (group) => {
     await controller.emailStatus(ctx as any)
 
     assert.equal(getStatus(), 200)
-    assert.deepEqual(getBody(), { hasEmail: true, verified: false })
+    assert.deepEqual(getBody(), { hasEmail: true, verified: false, maskedEmail: null })
   })
 
   test('row exists, emailHash set, emailVerified=true → { hasEmail: true, verified: true }', async ({
@@ -489,6 +489,6 @@ test.group('emailStatus', (group) => {
     await controller.emailStatus(ctx as any)
 
     assert.equal(getStatus(), 200)
-    assert.deepEqual(getBody(), { hasEmail: true, verified: true })
+    assert.deepEqual(getBody(), { hasEmail: true, verified: true, maskedEmail: null })
   })
 })

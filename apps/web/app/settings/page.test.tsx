@@ -526,6 +526,485 @@ describe('sweep and export flow', () => {
   })
 })
 
+// Helper: render with authenticated session and email-status stub
+async function renderWithEmailStatus(emailStatusPayload: object) {
+  vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+  mocks.state.isSignedIn = true
+  mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+  mocks.getStoredToken.mockReturnValue('mock-token')
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    if (url.includes('/api/auth/email-status')) {
+      return { ok: true, json: async () => emailStatusPayload }
+    }
+    return { ok: true, json: async () => ({ hasPermission: false }) }
+  }))
+  await renderPage()
+}
+
+describe('email management', () => {
+  it('banner shown when no email', async () => {
+    await renderWithEmailStatus({ hasEmail: false, verified: false, maskedEmail: null })
+    expect(container!.textContent).toContain('Add a recovery email to protect your account')
+  })
+
+  it('banner dismissed on ✕ click', async () => {
+    await renderWithEmailStatus({ hasEmail: false, verified: false, maskedEmail: null })
+    await act(async () => {
+      findButton('✕')!.click()
+    })
+    expect(container!.textContent).not.toContain('Add a recovery email to protect your account')
+  })
+
+  it('no email — shows email input directly without extra click', async () => {
+    await renderWithEmailStatus({ hasEmail: false, verified: false, maskedEmail: null })
+    expect(container!.querySelector('input[type="email"]')).not.toBeNull()
+  })
+
+  it('handleSendEmailCode (add flow) calls correct endpoint with email and auth header', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+      }
+      if (url.includes('/api/auth/send-email-code')) {
+        return { ok: true, json: async () => ({ success: true }) }
+      }
+      return { ok: true, json: async () => ({ hasPermission: false }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    await act(async () => {
+      const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(emailInput, 'test@example.com')
+      emailInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      findButton('Add recovery email')!.click()
+    })
+
+    const sendCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+    )
+    expect(sendCall).toBeDefined()
+    expect((sendCall![1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
+    expect(JSON.parse((sendCall![1] as RequestInit).body as string)).toEqual({ email: 'test@example.com' })
+  })
+
+  it('code input shown after send success', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+      }
+      return { ok: true, json: async () => ({ success: true }) }
+    }))
+    await renderPage()
+
+    await act(async () => {
+      const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(emailInput, 'test@example.com')
+      emailInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { findButton('Add recovery email')!.click() })
+
+    expect(container!.querySelector('input[placeholder="123456"]')).not.toBeNull()
+    expect(container!.textContent).toContain('Code sent to test@example.com')
+  })
+
+  it('handleVerifyEmailCode (add flow) includes email in body', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+      }
+      return { ok: true, json: async () => ({ success: true }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    // Enter email and send code
+    await act(async () => {
+      const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(emailInput, 'test@example.com')
+      emailInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { findButton('Add recovery email')!.click() })
+
+    // Enter code and verify
+    await act(async () => {
+      const codeInput = container!.querySelector('input[placeholder="123456"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(codeInput, '123456')
+      codeInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { findButton('Verify')!.click() })
+
+    const verifyCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+    )
+    expect(verifyCall).toBeDefined()
+    expect(JSON.parse((verifyCall![1] as RequestInit).body as string)).toEqual({ email: 'test@example.com', code: '123456' })
+  })
+
+  it('error displayed on failed verify', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+      }
+      if (url.includes('/api/auth/send-email-code')) {
+        return { ok: true, json: async () => ({ success: true }) }
+      }
+      if (url.includes('/api/auth/verify-email-code')) {
+        return { ok: false, json: async () => ({ error: 'invalid_or_expired_code' }) }
+      }
+      return { ok: true, json: async () => ({}) }
+    }))
+    await renderPage()
+
+    await act(async () => {
+      const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(emailInput, 'test@example.com')
+      emailInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { findButton('Add recovery email')!.click() })
+    await act(async () => {
+      const codeInput = container!.querySelector('input[placeholder="123456"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(codeInput, '123456')
+      codeInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { findButton('Verify')!.click() })
+
+    expect(container!.textContent).toContain('invalid_or_expired_code')
+  })
+
+  it('Resend code (add flow) calls send-email-code with same email', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+      }
+      return { ok: true, json: async () => ({ success: true }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    await act(async () => {
+      const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(emailInput, 'test@example.com')
+      emailInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { findButton('Add recovery email')!.click() })
+    mockFetch.mockClear()
+    await act(async () => { findButton('Resend code')!.click() })
+
+    const resendCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+    )
+    expect(resendCall).toBeDefined()
+    expect(JSON.parse((resendCall![1] as RequestInit).body as string)).toEqual({ email: 'test@example.com' })
+  })
+
+  it('verified email — shows maskedEmail and Change button', async () => {
+    await renderWithEmailStatus({ hasEmail: true, verified: true, maskedEmail: 'm***@gmail.com' })
+    expect(container!.textContent).toContain('m***@gmail.com')
+    expect(findButton('Change')).not.toBeNull()
+  })
+
+  it('unverified — shows maskedEmail, Verify and Resend code buttons', async () => {
+    await renderWithEmailStatus({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' })
+    expect(container!.textContent).toContain('u***@gmail.com')
+    expect(findButton('Verify')).not.toBeNull()
+    expect(findButton('Resend code')).not.toBeNull()
+  })
+
+  it('Verify click (unverified idle) transitions to verify_entry — shows email and code inputs, no fetch yet', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }) }
+      }
+      return { ok: true, json: async () => ({ hasPermission: false }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    mockFetch.mockClear()
+    await act(async () => { findButton('Verify')!.click() })
+
+    expect(container!.querySelector('input[type="email"]')).not.toBeNull()
+    expect(container!.querySelector('input[placeholder="123456"]')).not.toBeNull()
+    const verifyCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+    )
+    expect(verifyCalls).toHaveLength(0)
+  })
+
+  it('Resend code click (unverified idle) transitions to verify_entry — shows email input, no fetch yet', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }) }
+      }
+      return { ok: true, json: async () => ({ hasPermission: false }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    mockFetch.mockClear()
+    await act(async () => { findButton('Resend code')!.click() })
+
+    expect(container!.querySelector('input[type="email"]')).not.toBeNull()
+    const sendCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+    )
+    expect(sendCalls).toHaveLength(0)
+  })
+
+  it('verify submit from verify_entry — calls verify-email-code with email and code', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }) }
+      }
+      return { ok: true, json: async () => ({ success: true }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    await act(async () => { findButton('Verify')!.click() }) // → verify_entry
+    await act(async () => {
+      const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(emailInput, 'user@gmail.com')
+      emailInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      const codeInput = container!.querySelector('input[placeholder="123456"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(codeInput, '123456')
+      codeInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { findButton('Verify')!.click() })
+
+    const verifyCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+    )
+    expect(verifyCall).toBeDefined()
+    expect(JSON.parse((verifyCall![1] as RequestInit).body as string)).toEqual({ email: 'user@gmail.com', code: '123456' })
+  })
+
+  it('verify submit from verify_entry — blocked when email empty', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }) }
+      }
+      return { ok: true, json: async () => ({ success: true }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    await act(async () => { findButton('Verify')!.click() }) // → verify_entry
+    // leave email empty, fill code
+    await act(async () => {
+      const codeInput = container!.querySelector('input[placeholder="123456"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(codeInput, '123456')
+      codeInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    mockFetch.mockClear()
+    // Verify button should be disabled (empty email) — clicking does nothing
+    const verifyBtn = findButton('Verify') as HTMLButtonElement
+    expect(verifyBtn.disabled).toBe(true)
+
+    const verifyCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+    )
+    expect(verifyCalls).toHaveLength(0)
+  })
+
+  it('Resend code from verify_entry — calls send-email-code with email', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }) }
+      }
+      return { ok: true, json: async () => ({ success: true }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    await act(async () => { findButton('Resend code')!.click() }) // → verify_entry
+    await act(async () => {
+      const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(emailInput, 'user@gmail.com')
+      emailInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    mockFetch.mockClear()
+    await act(async () => { findButton('Resend code')!.click() })
+
+    const sendCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+    )
+    expect(sendCall).toBeDefined()
+    expect(JSON.parse((sendCall![1] as RequestInit).body as string)).toEqual({ email: 'user@gmail.com' })
+  })
+
+  it('Change — shows new email input; verify-email-code not called yet', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: true, verified: true, maskedEmail: 'm***@gmail.com' }) }
+      }
+      return { ok: true, json: async () => ({ hasPermission: false }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    mockFetch.mockClear()
+    await act(async () => { findButton('Change')!.click() })
+
+    expect(container!.querySelector('input[type="email"]')).not.toBeNull()
+    const verifyCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+    )
+    expect(verifyCalls).toHaveLength(0)
+  })
+
+  it('change flow — verify new email calls verify-email-code with new email', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: true, verified: true, maskedEmail: 'm***@gmail.com' }) }
+      }
+      return { ok: true, json: async () => ({ success: true }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    await act(async () => { findButton('Change')!.click() }) // → change_entry
+    await act(async () => {
+      const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(emailInput, 'new@example.com')
+      emailInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { findButton('Send code')!.click() }) // → change_sent
+    await act(async () => {
+      const codeInput = container!.querySelector('input[placeholder="123456"]') as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      setter.call(codeInput, '123456')
+      codeInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => { findButton('Verify')!.click() })
+
+    const verifyCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+    )
+    expect(verifyCall).toBeDefined()
+    expect(JSON.parse((verifyCall![1] as RequestInit).body as string)).toEqual({ email: 'new@example.com', code: '123456' })
+  })
+
+  it('fetchEmailStatus called on session restore', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+      }
+      return { ok: true, json: async () => ({ hasPermission: false }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    const emailStatusCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/email-status')
+    )
+    expect(emailStatusCall).toBeDefined()
+    expect((emailStatusCall![1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
+  })
+
+  it('fetchEmailStatus called after OTP verify', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = false
+    mocks.state.currentUser = null
+    mocks.state.evmAccounts = [{ address: '0xEOA123' }]
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    mocks.sendOtp.mockResolvedValue(undefined)
+    mocks.verifyOtp.mockResolvedValue('jwt-token')
+    mocks.authenticateWithJWT.mockResolvedValue({
+      user: {
+        evmSmartAccounts: ['0xSMART456'],
+        evmSmartAccountObjects: [{ address: '0xSMART456' }],
+        evmAccounts: ['0xEOA123'],
+      },
+    })
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+      }
+      return { ok: true, json: async () => ({ hasPermission: false }) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    await goToOtpStep()
+    await goToVerifyStep()
+
+    const emailStatusCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/email-status')
+    )
+    expect(emailStatusCall).toBeDefined()
+  })
+})
+
 describe('source integrity', () => {
   it('settings/page.tsx does not contain useSignInWithSms', () => {
     const source = readFileSync(join(__dir, 'page.tsx'), 'utf-8')

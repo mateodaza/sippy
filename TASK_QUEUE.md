@@ -193,7 +193,7 @@
 - **Dependencies:** ER-004
 - **Files:** `apps/web/app/setup/page.tsx`
 
-#### ER-006 [ ] Add email management to settings page
+#### ER-006 [x] Add email management to settings page
 - **What:** View/add/change recovery email from settings.
 - **Acceptance criteria:**
   - New section: "Recovery Email" in settings page
