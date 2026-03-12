@@ -206,7 +206,7 @@
 - **Dependencies:** ER-004
 - **Files:** `apps/web/app/settings/page.tsx`
 
-#### ER-007 [ ] Gate sensitive operations on email verification
+#### ER-007 [x] Gate sensitive operations on email verification
 - **What:** Require email code before export key or revoke permission, if user has a verified email.
 - **Acceptance criteria:**
   - Before export private key: if user has verified email → require email code inline

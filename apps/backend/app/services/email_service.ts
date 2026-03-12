@@ -47,6 +47,7 @@ class EmailService {
   private emailSender: EmailSender
   private codeStore: Map<string, EmailCodeEntry> = new Map()
   private sendRateLimitMap: Map<string, SendBucket> = new Map()
+  private gateTokens = new Map<string, { token: string; expiresAt: number }>()
   private cleanupTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(emailSender?: EmailSender) {
@@ -115,6 +116,32 @@ class EmailService {
     return { valid: false }
   }
 
+  // ── Public: gate tokens ─────────────────────────────────────────────────────
+
+  /**
+   * Generates and stores a short-lived gate token for the given phone.
+   * Previous token for the same phone is replaced.
+   */
+  issueGateToken(phone: string): string {
+    const token = crypto.randomBytes(32).toString('hex')
+    this.gateTokens.set(phone, { token, expiresAt: Date.now() + 5 * 60 * 1000 })
+    return token
+  }
+
+  /**
+   * Validates and consumes the gate token for the given phone.
+   * Returns true once; the token is deleted after first use or on expiry.
+   */
+  consumeGateToken(phone: string, token: string): boolean {
+    const entry = this.gateTokens.get(phone)
+    if (!entry || entry.token !== token || Date.now() > entry.expiresAt) {
+      this.gateTokens.delete(phone)
+      return false
+    }
+    this.gateTokens.delete(phone)
+    return true
+  }
+
   // ── Public: cleanup timer ───────────────────────────────────────────────────
 
   startCleanupTimer(): void {
@@ -135,6 +162,10 @@ class EmailService {
     const now = Date.now()
     for (const [email, bucket] of this.sendRateLimitMap) {
       if (now > bucket.resetAt) this.sendRateLimitMap.delete(email)
+    }
+    // Sweep expired gate tokens
+    for (const [phone, entry] of this.gateTokens) {
+      if (now > entry.expiresAt) this.gateTokens.delete(phone)
     }
   }
 
