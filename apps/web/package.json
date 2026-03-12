@@ -27,6 +27,7 @@
     "react-international-phone": "4.3.0",
     "tailwind-merge": "^3.3.1",
     "viem": "~2.29.4",
+    "@walletconnect/ethereum-provider": "^2.21.1",
     "wagmi": "2.19.5",
     "zod": "^3.22.0"
   },

@@ -415,11 +415,11 @@ function SettingsContent() {
 
       // STEP 1: Onchain revoke via CDP SDK.
       console.log('Finding spend permission to revoke...');
-      // Use the return value — permissionsData is React hook state and may still
-      // hold the pre-refetch snapshot even after the await resolves.
-      const { data: freshPermissions } = await refetchPermissions();
+      // refetch() returns void on CDP hooks, so we trigger it for side-effect
+      // then read from permissionsData (already current after the await).
+      await refetchPermissions();
 
-      const sippyPermission = freshPermissions?.spendPermissions?.find(
+      const sippyPermission = permissionsData?.spendPermissions?.find(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (p: any) =>
           p.permission?.spender?.toLowerCase() === SIPPY_SPENDER_ADDRESS.toLowerCase() &&
