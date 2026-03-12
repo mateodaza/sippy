@@ -237,6 +237,108 @@ export default class AuthApiController {
   }
 
   /**
+   * POST /api/auth/send-gate-code
+   *
+   * Sends an OTP to the user's already-stored verified email.
+   * Does not modify emailVerified or emailVerifiedAt.
+   */
+  async sendGateCode(ctx: HttpContext) {
+    const { response } = ctx
+    try {
+      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
+      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+
+      if (!pref?.emailEncrypted || !pref.emailHash || pref.emailVerified !== true) {
+        return response.status(409).json({ error: 'no_verified_email' })
+      }
+
+      const [iv, encrypted] = pref.emailEncrypted.split(':')
+      const plaintext = decryptEmail(encrypted, iv)
+
+      const result = await emailService.sendEmailCode(plaintext)
+      if ('error' in result) {
+        if (result.error === 'rate_limited') {
+          return response.status(429).json({ error: 'rate_limited' })
+        }
+        return response.status(500).json({ error: 'Internal server error' })
+      }
+
+      return response.status(200).json({ success: true })
+    } catch {
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * POST /api/auth/verify-gate-code
+   *
+   * Verifies the OTP against the user's already-stored verified email.
+   * On success, issues a gateToken. Does not modify emailVerified or emailVerifiedAt.
+   */
+  async verifyGateCode(ctx: HttpContext) {
+    const { request, response } = ctx
+    try {
+      const code = request.body()?.code
+      if (typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+        return response.status(422).json({ error: 'Invalid code' })
+      }
+
+      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
+      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+
+      if (!pref?.emailEncrypted || !pref.emailHash || pref.emailVerified !== true) {
+        return response.status(409).json({ error: 'no_verified_email' })
+      }
+
+      const [iv, encrypted] = pref.emailEncrypted.split(':')
+      const plaintext = decryptEmail(encrypted, iv)
+
+      const result = await emailService.verifyEmailCode(plaintext, code)
+      if (!result.valid) {
+        return response.status(401).json({ error: 'invalid_or_expired_code' })
+      }
+
+      const gateToken = emailService.issueGateToken(dbPhone)
+      return response.status(200).json({ success: true, gateToken })
+    } catch {
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * POST /api/auth/validate-export-gate
+   *
+   * Validates and consumes the gate token for a private key export operation.
+   * Only required for users with a verified email. Returns 403 gate_required
+   * if the token is missing, wrong, or expired.
+   */
+  async validateExportGate(ctx: HttpContext) {
+    const { request, response } = ctx
+    try {
+      const gateToken = request.body()?.gateToken
+      if (!gateToken || typeof gateToken !== 'string') {
+        return response.status(403).json({ error: 'gate_required' })
+      }
+
+      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
+      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+
+      if (!pref?.emailVerified) {
+        return response.status(409).json({ error: 'no_verified_email' })
+      }
+
+      const valid = emailService.consumeGateToken(dbPhone, gateToken)
+      if (!valid) {
+        return response.status(403).json({ error: 'gate_required' })
+      }
+
+      return response.status(200).json({ success: true })
+    } catch {
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
    * GET /api/auth/.well-known/jwks.json
    *
    * Returns the public key set for JWT verification.

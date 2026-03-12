@@ -353,6 +353,11 @@ describe('backend API calls use getStoredToken', () => {
     await act(async () => {
       findButton('Revoke Permission')!.click()
     })
+    // No verified email → warning_no_email gate shown; dismiss to proceed
+    await act(async () => {
+      findButton('Continue Anyway')!.click()
+    })
+    await act(async () => {}) // wait for handleRevoke
 
     const revokeCall = mockFetch.mock.calls.find(
       (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/revoke-permission')
@@ -411,6 +416,10 @@ describe('backend API calls use getStoredToken', () => {
     await act(async () => {
       findButton('Export Private Key')!.click()
     })
+    // No verified email → warning_no_email gate shown; dismiss to proceed
+    await act(async () => {
+      findButton('Continue Anyway')!.click()
+    })
     // Allow fire-and-forget logExportEventFn to complete
     await act(async () => {})
 
@@ -447,6 +456,8 @@ describe('sweep and export flow', () => {
     await renderPage()
 
     await act(async () => { findButton('Export Private Key')!.click() })
+    // No verified email → warning_no_email gate; dismiss to proceed to export flow
+    await act(async () => { findButton('Continue Anyway')!.click() })
     await act(async () => { findButton('I Understand, Continue')!.click() })
     await act(async () => {}) // wait for getBalances and sweep_offer render
 
@@ -463,10 +474,14 @@ describe('sweep and export flow', () => {
   })
 
   it('handleSweep null token error: shows "Session expired" and does not call sendUserOperation', async () => {
-    // Override: allow session recovery (2 getStoredToken calls) + logExportEventFn (1 call),
-    // then return null for handleSweep token check
-    mocks.state.isSignedIn = false // Use OTP flow to avoid session recovery consuming tokens
-    mocks.getStoredToken.mockReturnValue(null) // null throughout — OTP flow doesn't call getStoredToken
+    // Provide tokens for fetchWalletStatus + fetchEmailStatus (called after OTP verification)
+    // so emailSectionStep transitions out of 'loading' and the export button becomes clickable.
+    // Then return null for logExportEventFn and handleSweep — handleSweep shows "Session expired".
+    mocks.state.isSignedIn = false // Use OTP flow
+    mocks.getStoredToken
+      .mockReturnValueOnce('setup-token') // fetchWalletStatus after OTP
+      .mockReturnValueOnce('setup-token') // fetchEmailStatus after OTP
+      .mockReturnValue(null)              // null for logExportEventFn + handleSweep
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token')
     mocks.authenticateWithJWT.mockResolvedValue({
@@ -483,6 +498,8 @@ describe('sweep and export flow', () => {
     await goToVerifyStep()
 
     await act(async () => { findButton('Export Private Key')!.click() })
+    // No verified email → warning_no_email gate; dismiss to proceed to export flow
+    await act(async () => { findButton('Continue Anyway')!.click() })
     await act(async () => { findButton('I Understand, Continue')!.click() })
     await act(async () => {}) // wait for getBalances and sweep_offer render
 
@@ -503,6 +520,8 @@ describe('sweep and export flow', () => {
     await renderPage()
 
     await act(async () => { findButton('Export Private Key')!.click() })
+    // No verified email → warning_no_email gate; dismiss to proceed to export flow
+    await act(async () => { findButton('Continue Anyway')!.click() })
     await act(async () => { findButton('I Understand, Continue')!.click() })
     await act(async () => {}) // wait for auto-export
 
@@ -517,6 +536,8 @@ describe('sweep and export flow', () => {
     await renderPage()
 
     await act(async () => { findButton('Export Private Key')!.click() })
+    // No verified email → warning_no_email gate; dismiss to proceed to export flow
+    await act(async () => { findButton('Continue Anyway')!.click() })
     await act(async () => { findButton('I Understand, Continue')!.click() })
     await act(async () => {}) // wait for error
 

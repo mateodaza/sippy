@@ -52,8 +52,12 @@ interface EmailStatus {
   maskedEmail: string | null;
 }
 
+type EmailGateContext = 'export' | 'revoke' | null;
+type EmailGateStep = 'idle' | 'warning_no_email' | 'code_entry' | 'code_sent';
+
 type EmailSectionStep =
   | 'loading'
+  | 'fetch_error'
   | 'no_email'
   | 'add_sent'
   | 'unverified'
@@ -104,6 +108,14 @@ function SettingsContent() {
   const [emailLoading, setEmailLoading] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
+  // Email gate state
+  const [emailGateContext, setEmailGateContext] = useState<EmailGateContext>(null);
+  const [emailGateStep, setEmailGateStep] = useState<EmailGateStep>('idle');
+  const [emailGateCode, setEmailGateCode] = useState('');
+  const [emailGateError, setEmailGateError] = useState<string | null>(null);
+  const [emailGateLoading, setEmailGateLoading] = useState(false);
+  const [emailGateToken, setEmailGateToken] = useState<string | null>(null);
+
   // CDP Hooks
   const { authenticateWithJWT } = useAuthenticateWithJWT();
   const { createSpendPermission } = useCreateSpendPermission();
@@ -140,7 +152,10 @@ function SettingsContent() {
       else if (!data.verified) setEmailSectionStep('unverified');
       else setEmailSectionStep('verified');
     } catch {
-      // Non-blocking — email section stays in 'loading' state silently
+      // On fetch failure, enter error state so gate buttons stay disabled
+      // and the user can retry. Do NOT set emailStatus to a false-email
+      // sentinel — that would route verified users into the bypass path.
+      setEmailSectionStep('fetch_error');
     }
   };
 
@@ -382,7 +397,7 @@ function SettingsContent() {
   };
 
   // Revoke permission
-  const handleRevoke = async () => {
+  const handleRevoke = useCallback(async (gateToken?: string) => {
     setPermissionStatus('loading');
     setError(null);
 
@@ -391,12 +406,17 @@ function SettingsContent() {
         throw new Error('Wallet address not found. Please refresh and try again.');
       }
 
-      console.log('Finding spend permission to revoke...');
+      // FAIL CLOSED: if this user has a verified email, a gate token is required.
+      // Do not proceed to CDP or DB without one. This guards against any code path
+      // that calls handleRevoke(undefined) for a verified-email user.
+      if (emailStatus?.verified === true && !gateToken) {
+        throw new Error('Email verification required. Please verify your email and try again.');
+      }
 
-      // Refresh permissions list first
+      // STEP 1: Onchain revoke via CDP SDK.
+      console.log('Finding spend permission to revoke...');
       await refetchPermissions();
 
-      // Find the permission for Sippy's spender from the data
       const sippyPermission = permissionsData?.spendPermissions?.find(
         (p) =>
           p.permission?.spender?.toLowerCase() === SIPPY_SPENDER_ADDRESS.toLowerCase() &&
@@ -409,32 +429,33 @@ function SettingsContent() {
 
       console.log('Revoking spend permission:', sippyPermission.permissionHash);
 
-      // Revoke using CDP SDK
       await revokeSpendPermission({
         network: NETWORK as 'arbitrum',
         permissionHash: sippyPermission.permissionHash,
-        // CDP paymaster only works on Base
         ...(NETWORK === 'base' && { useCdpPaymaster: true }),
       });
 
-      // Update backend - this MUST succeed to keep state in sync
+      // STEP 2: Sync DB — only reached if onchain revoke succeeded.
+      // Backend enforces gate token for verified-email users.
       if (BACKEND_URL) {
         const accessToken = getStoredToken();
         if (!accessToken) {
           throw new Error('Failed to get access token. Please try again.');
         }
-
-        const response = await fetch(`${BACKEND_URL}/api/revoke-permission`, {
+        const revokeRes = await fetch(`${BACKEND_URL}/api/revoke-permission`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${accessToken}`,
           },
+          body: JSON.stringify(gateToken ? { gateToken } : {}),
         });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Failed to update backend after revoke:', errorText);
+        if (!revokeRes.ok) {
+          const data = await revokeRes.json().catch(() => ({}));
+          if ((data as { error?: string }).error === 'gate_required') {
+            throw new Error('Email verification required. Please verify your email and try again.');
+          }
+          console.error('Failed to update backend after revoke:', data);
           throw new Error('Failed to sync revocation with backend. Please try again.');
         }
       }
@@ -446,7 +467,7 @@ function SettingsContent() {
       setError(err instanceof Error ? err.message : 'Failed to revoke permission');
       setPermissionStatus('error');
     }
-  };
+  }, [walletAddress, emailStatus, permissionsData, refetchPermissions, revokeSpendPermission]);
 
   // Create/update permission with new limit
   const handleChangeLimit = async () => {
@@ -625,6 +646,111 @@ function SettingsContent() {
       setSweepError(err instanceof Error ? err.message : 'Transfer failed. You can skip and export anyway.');
     }
   };
+
+  // ── Email gate helpers ─────────────────────────────────────────────────────
+
+  const resetEmailGate = useCallback(() => {
+    setEmailGateContext(null);
+    setEmailGateStep('idle');
+    setEmailGateCode('');
+    setEmailGateError(null);
+    setEmailGateLoading(false);
+    setEmailGateToken(null);
+  }, []);
+
+  const proceedWithGatedOperation = useCallback(async (gateToken?: string) => {
+    const ctx = emailGateContext;
+
+    if (ctx === 'export') {
+      // Backend enforcement: for verified-email users, validate and consume the gate
+      // token on the server before starting the export. This prevents client-side-only
+      // enforcement — an API-level attacker cannot bypass this without a valid token.
+      if (emailStatus?.verified === true) {
+        if (!gateToken) {
+          setEmailGateError('Email verification required. Please verify your email and try again.');
+          return;
+        }
+        try {
+          const accessToken = getStoredToken();
+          const res = await fetch(`${BACKEND_URL}/api/auth/validate-export-gate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify({ gateToken }),
+          });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            setEmailGateError(
+              (data as { error?: string }).error === 'gate_required'
+                ? 'Verification failed. Please try again.'
+                : 'Verification failed. Please try again.'
+            );
+            return;
+          }
+        } catch {
+          setEmailGateError('Verification failed. Please try again.');
+          return;
+        }
+      }
+      resetEmailGate();
+      handleExportStart();
+    } else if (ctx === 'revoke') {
+      resetEmailGate();
+      handleRevoke(gateToken);
+    }
+  }, [emailGateContext, emailStatus, resetEmailGate, handleExportStart, handleRevoke]);
+
+  const handleEmailGateSendCode = useCallback(async () => {
+    setEmailGateLoading(true);
+    setEmailGateError(null);
+    try {
+      const token = getStoredToken();
+      const res = await fetch(`${BACKEND_URL}/api/auth/send-gate-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEmailGateError((data as { error?: string; message?: string }).error === 'no_verified_email'
+          ? 'No verified email on file.'
+          : ((data as { message?: string }).message || 'Failed to send code'));
+      } else {
+        setEmailGateStep('code_sent');
+      }
+    } catch {
+      setEmailGateError('Failed to send code');
+    } finally {
+      setEmailGateLoading(false);
+    }
+  }, []);
+
+  const handleEmailGateVerify = useCallback(async () => {
+    setEmailGateLoading(true);
+    setEmailGateError(null);
+    try {
+      const token = getStoredToken();
+      const res = await fetch(`${BACKEND_URL}/api/auth/verify-gate-code`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: emailGateCode }),
+      });
+      const data = await res.json() as { success?: boolean; gateToken?: unknown; error?: string; message?: string };
+      if (!res.ok || !data.success) {
+        setEmailGateError(data.error === 'invalid_or_expired_code'
+          ? 'Invalid or expired code. Please try again.'
+          : (data.message || 'Verification failed. Please try again.'));
+      } else if (!data.gateToken || typeof data.gateToken !== 'string') {
+        // Fail closed: success=true but no usable token is an error condition.
+        // Never call proceedWithGatedOperation without a valid token.
+        setEmailGateError('Verification failed — no token returned. Please try again.');
+      } else {
+        proceedWithGatedOperation(data.gateToken);
+      }
+    } catch {
+      setEmailGateError('Verification failed. Please try again.');
+    } finally {
+      setEmailGateLoading(false);
+    }
+  }, [emailGateCode, proceedWithGatedOperation]);
 
   // Watch sweep status changes
   useEffect(() => {
@@ -895,15 +1021,82 @@ function SettingsContent() {
               This will revoke Sippy&apos;s permission to send from your wallet.
               You can re-enable anytime.
             </p>
-            <button
-              onClick={handleRevoke}
-              disabled={permissionStatus === 'loading'}
-              className='w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
-            >
-              {permissionStatus === 'loading'
-                ? 'Revoking...'
-                : 'Revoke Permission'}
-            </button>
+            {!(emailGateContext === 'revoke' && emailGateStep !== 'idle') && (
+              <button
+                onClick={() => {
+                  if (emailSectionStep === 'loading' || emailSectionStep === 'fetch_error') return;
+                  if (emailStatus?.verified) {
+                    setEmailGateContext('revoke');
+                    setEmailGateStep('code_entry');
+                  } else {
+                    setEmailGateContext('revoke');
+                    setEmailGateStep('warning_no_email');
+                  }
+                }}
+                disabled={permissionStatus === 'loading' || emailSectionStep === 'loading' || emailSectionStep === 'fetch_error'}
+                className='w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
+              >
+                {permissionStatus === 'loading'
+                  ? 'Revoking...'
+                  : 'Revoke Permission'}
+              </button>
+            )}
+            {emailGateStep === 'warning_no_email' && emailGateContext === 'revoke' && (
+              <div className='rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800'>
+                <p className='mb-2'>
+                  ⚠️ We recommend adding a recovery email before performing this operation.
+                </p>
+                <div className='flex gap-2'>
+                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
+                  <button className='w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700' onClick={() => proceedWithGatedOperation()}>Continue Anyway</button>
+                </div>
+              </div>
+            )}
+            {emailGateStep === 'code_entry' && emailGateContext === 'revoke' && (
+              <div className='space-y-2'>
+                <p className='text-sm'>
+                  Verify your identity via email to continue.
+                  {emailStatus?.maskedEmail && (
+                    <span className='ml-1 text-gray-500'>({emailStatus.maskedEmail})</span>
+                  )}
+                </p>
+                <button
+                  className='w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                  onClick={handleEmailGateSendCode}
+                  disabled={emailGateLoading}
+                >
+                  {emailGateLoading ? 'Sending…' : 'Send Verification Code'}
+                </button>
+                {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
+                <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
+              </div>
+            )}
+            {emailGateStep === 'code_sent' && emailGateContext === 'revoke' && (
+              <div className='space-y-2'>
+                <p className='text-sm'>Enter the 6-digit code sent to your email:</p>
+                <input
+                  type='text'
+                  inputMode='numeric'
+                  maxLength={6}
+                  value={emailGateCode}
+                  onChange={(e) => setEmailGateCode(e.target.value.replace(/\D/g, ''))}
+                  placeholder='123456'
+                  className='w-full p-3 border rounded-lg text-gray-900'
+                />
+                <button
+                  className='w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                  onClick={handleEmailGateVerify}
+                  disabled={emailGateLoading || emailGateCode.length !== 6}
+                >
+                  {emailGateLoading ? 'Verifying…' : 'Verify'}
+                </button>
+                {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
+                <div className='flex gap-2'>
+                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={() => setEmailGateStep('code_entry')}>Back</button>
+                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -960,6 +1153,13 @@ function SettingsContent() {
           <h2 className='text-lg font-semibold mb-3 text-gray-900'>
             Recovery Email
           </h2>
+
+          {emailSectionStep === 'fetch_error' && (
+            <div className='text-sm text-red-600'>
+              Unable to load email status.{' '}
+              <button className='underline' onClick={fetchEmailStatus}>Retry</button>
+            </div>
+          )}
 
           {emailSectionStep === 'no_email' && (
             <>
@@ -1146,12 +1346,82 @@ function SettingsContent() {
           {exportStep === 'idle' && (
             <>
               {eoaAddress ? (
-                <button
-                  onClick={handleExportStart}
-                  className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700'
-                >
-                  Export Private Key
-                </button>
+                <>
+                  {!(emailGateContext === 'export' && emailGateStep !== 'idle') && (
+                    <button
+                      onClick={() => {
+                        if (emailSectionStep === 'loading' || emailSectionStep === 'fetch_error') return;
+                        if (emailStatus?.verified) {
+                          setEmailGateContext('export');
+                          setEmailGateStep('code_entry');
+                        } else {
+                          setEmailGateContext('export');
+                          setEmailGateStep('warning_no_email');
+                        }
+                      }}
+                      disabled={exportStep !== 'idle' || emailSectionStep === 'loading' || emailSectionStep === 'fetch_error'}
+                      className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                    >
+                      Export Private Key
+                    </button>
+                  )}
+                  {emailGateStep === 'warning_no_email' && emailGateContext === 'export' && (
+                    <div className='rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800'>
+                      <p className='mb-2'>
+                        ⚠️ We recommend adding a recovery email before performing this operation.
+                      </p>
+                      <div className='flex gap-2'>
+                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
+                        <button className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700' onClick={() => proceedWithGatedOperation()}>Continue Anyway</button>
+                      </div>
+                    </div>
+                  )}
+                  {emailGateStep === 'code_entry' && emailGateContext === 'export' && (
+                    <div className='space-y-2'>
+                      <p className='text-sm'>
+                        Verify your identity via email to continue.
+                        {emailStatus?.maskedEmail && (
+                          <span className='ml-1 text-gray-500'>({emailStatus.maskedEmail})</span>
+                        )}
+                      </p>
+                      <button
+                        className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                        onClick={handleEmailGateSendCode}
+                        disabled={emailGateLoading}
+                      >
+                        {emailGateLoading ? 'Sending…' : 'Send Verification Code'}
+                      </button>
+                      {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
+                      <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
+                    </div>
+                  )}
+                  {emailGateStep === 'code_sent' && emailGateContext === 'export' && (
+                    <div className='space-y-2'>
+                      <p className='text-sm'>Enter the 6-digit code sent to your email:</p>
+                      <input
+                        type='text'
+                        inputMode='numeric'
+                        maxLength={6}
+                        value={emailGateCode}
+                        onChange={(e) => setEmailGateCode(e.target.value.replace(/\D/g, ''))}
+                        placeholder='123456'
+                        className='w-full p-3 border rounded-lg text-gray-900'
+                      />
+                      <button
+                        className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                        onClick={handleEmailGateVerify}
+                        disabled={emailGateLoading || emailGateCode.length !== 6}
+                      >
+                        {emailGateLoading ? 'Verifying…' : 'Verify'}
+                      </button>
+                      {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
+                      <div className='flex gap-2'>
+                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={() => setEmailGateStep('code_entry')}>Back</button>
+                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
+                      </div>
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className='text-xs text-gray-400'>
                   No exportable account found.
