@@ -130,7 +130,7 @@
 - **Context:** `apps/backend/database/migrations/` (follow existing migration patterns)
 - **Files:** `apps/backend/database/migrations/*_add_email_to_user_preferences.ts` (new), `apps/backend/start/env.ts`, `apps/backend/app/models/user_preference.ts` (if exists, else check model pattern)
 
-#### ER-002 [ ] Create email encryption helpers
+#### ER-002 [x] Create email encryption helpers
 - **What:** Encrypt/decrypt email at rest using AES-256-GCM, plus hash for lookups.
 - **Acceptance criteria:**
   - New utility file with:
