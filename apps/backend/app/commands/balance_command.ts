@@ -26,7 +26,9 @@ import { getRefuelService } from '#services/refuel.service'
 
 export async function handleBalanceCommand(
   phoneNumber: string,
-  lang: Lang = 'en'
+  lang: Lang,
+  localRate: number | null,
+  localCurrency: string | null
 ): Promise<void> {
   logger.info(`BALANCE command from +${phoneNumber}`)
 
@@ -35,7 +37,7 @@ export async function handleBalanceCommand(
     const embeddedWallet = await getEmbeddedWallet(phoneNumber)
 
     if (embeddedWallet) {
-      await handleEmbeddedBalance(phoneNumber, embeddedWallet, lang)
+      await handleEmbeddedBalance(phoneNumber, embeddedWallet, lang, localRate, localCurrency)
       return
     }
 
@@ -73,6 +75,8 @@ export async function handleBalanceCommand(
         wallet: userWallet.walletAddress,
         ethBalance,
         phoneNumber,
+        localRate,
+        localCurrency,
       },
       lang
     )
@@ -100,7 +104,9 @@ async function handleEmbeddedBalance(
     spendPermissionHash: string | null
     dailyLimit: number | null
   },
-  lang: Lang
+  lang: Lang,
+  localRate: number | null,
+  localCurrency: string | null
 ): Promise<void> {
   logger.info(`Fetching embedded wallet balance for +${phoneNumber}...`)
 
@@ -111,6 +117,8 @@ async function handleEmbeddedBalance(
       balance,
       wallet: wallet.walletAddress,
       phoneNumber,
+      localRate,
+      localCurrency,
     },
     lang
   )

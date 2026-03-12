@@ -16,7 +16,6 @@ import {
   sendButtonMessage,
 } from '#services/whatsapp.service'
 import { getRefuelService } from '#services/refuel.service'
-import { exchangeRateService } from '#services/exchange_rate_service'
 import {
   type Lang,
   formatSendProcessingMessage,
@@ -44,7 +43,11 @@ export async function handleSendCommand(
   fromPhoneNumber: string,
   amount: number,
   toPhoneNumber: string,
-  lang: Lang = 'en'
+  lang: Lang,
+  senderRate: number | null,
+  senderCurrency: string | null,
+  recipientRate: number | null,
+  recipientCurrency: string | null
 ): Promise<void> {
   logger.info(`SEND command: +${fromPhoneNumber} -> +${toPhoneNumber} (${amount} USD)`)
 
@@ -58,7 +61,7 @@ export async function handleSendCommand(
     const embeddedWallet = await getEmbeddedWallet(fromPhoneNumber)
 
     if (embeddedWallet) {
-      await handleEmbeddedSend(fromPhoneNumber, toPhoneNumber, amount, embeddedWallet, lang)
+      await handleEmbeddedSend(fromPhoneNumber, toPhoneNumber, amount, embeddedWallet, lang, senderRate, senderCurrency, recipientRate, recipientCurrency)
       return
     }
 
@@ -88,9 +91,6 @@ export async function handleSendCommand(
     }
 
     const senderBalance = await getUserBalance(fromPhoneNumber)
-
-    const senderCurrency = exchangeRateService.getCurrencyForPhone('+' + fromPhoneNumber)
-    const senderRate = senderCurrency ? await exchangeRateService.getLocalRate(senderCurrency) : null
 
     if (senderBalance < amount) {
       await sendTextMessage(
@@ -169,10 +169,6 @@ export async function handleSendCommand(
     await sendTextMessage(fromPhoneNumber, successMessage, lang)
 
     const recipientLang = (await getUserLanguage(toPhoneNumber)) || 'en'
-    const recipientCurrency = exchangeRateService.getCurrencyForPhone('+' + toPhoneNumber)
-    const recipientRate = recipientCurrency
-      ? await exchangeRateService.getLocalRate(recipientCurrency)
-      : null
     const recipientMessage = formatSendRecipientMessage(
       {
         amount,
@@ -216,7 +212,11 @@ async function handleEmbeddedSend(
     spendPermissionHash: string | null
     dailyLimit: number | null
   },
-  lang: Lang
+  lang: Lang,
+  senderRate: number | null,
+  senderCurrency: string | null,
+  recipientRate: number | null,
+  recipientCurrency: string | null
 ): Promise<void> {
   if (!senderWallet.spendPermissionHash) {
     await sendTextMessage(
@@ -242,9 +242,6 @@ async function handleEmbeddedSend(
 
   // Check balance
   const senderBalance = await getEmbeddedBalance(fromPhoneNumber)
-
-  const senderCurrency = exchangeRateService.getCurrencyForPhone('+' + fromPhoneNumber)
-  const senderRate = senderCurrency ? await exchangeRateService.getLocalRate(senderCurrency) : null
 
   if (senderBalance < amount) {
     await sendTextMessage(
@@ -330,10 +327,6 @@ async function handleEmbeddedSend(
 
   try {
     const recipientLang = (await getUserLanguage(toPhoneNumber)) || 'en'
-    const recipientCurrency = exchangeRateService.getCurrencyForPhone('+' + toPhoneNumber)
-    const recipientRate = recipientCurrency
-      ? await exchangeRateService.getLocalRate(recipientCurrency)
-      : null
     const recipientMessage = formatSendRecipientMessage(
       {
         amount,
