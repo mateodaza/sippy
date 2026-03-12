@@ -31,6 +31,30 @@ export function formatCurrencyUSD(amount: number): string {
   return `$${amount.toFixed(2)}`
 }
 
+const CURRENCY_THOUSANDS_SEP: Record<string, string> = {
+  COP: ',',
+  MXN: '.',
+  ARS: '.',
+  BRL: '.',
+  PEN: '.',
+  CLP: '.',
+}
+
+function formatIntegerWithSep(n: number, sep: string): string {
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, sep)
+}
+
+export function formatDualAmount(usd: number, rate: number | null, currency: string | null): string {
+  const usdFormatted = formatCurrencyUSD(usd)
+  if (rate === null || currency === null) {
+    return usdFormatted
+  }
+  const localAmount = Math.round(usd * rate)
+  const sep = CURRENCY_THOUSANDS_SEP[currency] ?? ','
+  const localFormatted = formatIntegerWithSep(localAmount, sep)
+  return `${usdFormatted} (~${localFormatted} ${currency})`
+}
+
 export function maskAddress(address: string): string {
   if (address.length < 10) return address
   return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`

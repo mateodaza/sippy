@@ -47,7 +47,7 @@
 - **Context:** `apps/backend/app/services/rate_limit_service.ts` (follow Map + cleanup timer pattern)
 - **Files:** `apps/backend/app/services/exchange_rate_service.ts` (new)
 
-#### DC-002 [ ] Create dual amount formatter
+#### DC-002 [x] Create dual amount formatter
 - **What:** Helper function that formats USD amount with optional local currency equivalent.
 - **Acceptance criteria:**
   - New function in messages.ts: `formatDualAmount(usd: number, rate: number | null, currency: string | null): string`
