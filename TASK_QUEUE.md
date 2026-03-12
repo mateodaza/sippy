@@ -96,7 +96,7 @@
 - **Context:** `apps/backend/app/controllers/webhook_controller.ts` (command handling flow)
 - **Files:** `apps/backend/app/controllers/webhook_controller.ts`
 
-#### DC-006 [ ] Write tests for exchange rate service
+#### DC-006 [x] Write tests for exchange rate service
 - **What:** Unit tests for currency mapping, rate caching, and graceful fallback.
 - **Acceptance criteria:**
   - Test `getCurrencyForPhone`: all LATAM codes map correctly, USD codes return null, unknown returns null
