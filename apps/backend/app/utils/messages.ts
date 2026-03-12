@@ -191,10 +191,10 @@ export function formatBalanceMessage(
 // --- Send processing ---
 
 export function formatSendProcessingMessage(
-  params: { amount: number; toPhone: string },
+  params: { amount: number; toPhone: string; localRate?: number | null; localCurrency?: string | null },
   lang: Lang = 'en'
 ): string {
-  const amt = formatCurrencyUSD(params.amount)
+  const amt = formatDualAmount(params.amount, params.localRate ?? null, params.localCurrency ?? null)
   const to = getDisplayName(params.toPhone)
   const m = {
     en: () => `Sending ${amt} to ${to}...\n\nUsually instant, may take up to 30 seconds.`,
@@ -209,10 +209,10 @@ export function formatSendProcessingMessage(
 // --- Send success (sender) ---
 
 export function formatSendSuccessMessage(
-  params: { amount: number; toPhone: string; txHash: string; gasCovered?: boolean },
+  params: { amount: number; toPhone: string; txHash: string; gasCovered?: boolean; localRate?: number | null; localCurrency?: string | null },
   lang: Lang = 'en'
 ): string {
-  const amt = formatCurrencyUSD(params.amount)
+  const amt = formatDualAmount(params.amount, params.localRate ?? null, params.localCurrency ?? null)
   const to = getDisplayName(params.toPhone)
   const tx = shortHash(params.txHash)
   const receiptUrl = RECEIPT_BASE_URL + params.txHash
@@ -243,10 +243,10 @@ export function formatSendSuccessMessage(
 // --- Send recipient notification ---
 
 export function formatSendRecipientMessage(
-  params: { amount: number; fromPhone: string; txHash: string },
+  params: { amount: number; fromPhone: string; txHash: string; localRate?: number | null; localCurrency?: string | null },
   lang: Lang = 'en'
 ): string {
-  const amt = formatCurrencyUSD(params.amount)
+  const amt = formatDualAmount(params.amount, params.localRate ?? null, params.localCurrency ?? null)
   const from = getDisplayName(params.fromPhone)
   const receiptUrl = RECEIPT_BASE_URL + params.txHash
   const m = {
@@ -291,11 +291,11 @@ export function formatFundUSDReceivedMessage(
 // --- Error states ---
 
 export function formatInsufficientBalanceMessage(
-  params: { balance: number; needed: number },
+  params: { balance: number; needed: number; localRate?: number | null; localCurrency?: string | null },
   lang: Lang = 'en'
 ): string {
-  const bal = formatCurrencyUSD(params.balance)
-  const need = formatCurrencyUSD(params.needed)
+  const bal = formatDualAmount(params.balance, params.localRate ?? null, params.localCurrency ?? null)
+  const need = formatDualAmount(params.needed, params.localRate ?? null, params.localCurrency ?? null)
   const m = {
     en: () => `Insufficient balance.\n\nBalance: ${bal}\nNeeded: ${need}\n\nAdd funds: ${FUND_URL}`,
     es: () =>

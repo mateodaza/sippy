@@ -71,7 +71,7 @@
 - **Context:** `apps/backend/app/utils/messages.ts` (find `formatBalanceMessage`)
 - **Files:** `apps/backend/app/utils/messages.ts`
 
-#### DC-004 [ ] Update send messages to show dual currency
+#### DC-004 [x] Update send messages to show dual currency
 - **What:** Thread exchange rate through send command — processing, success, and recipient messages.
 - **Acceptance criteria:**
   - `formatSendProcessingMessage` — shows local equivalent of send amount
