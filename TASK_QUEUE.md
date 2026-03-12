@@ -218,7 +218,7 @@
 - **Dependencies:** ER-006
 - **Files:** `apps/web/app/settings/page.tsx`
 
-#### ER-008 [ ] Write tests for email service
+#### ER-008 [x] Write tests for email service
 - **What:** Unit tests for email code generation, verification, rate limiting, and encryption.
 - **Acceptance criteria:**
   - Test `sendEmailCode`: code generation, rate limiting (4th call rejected), map cleanup

@@ -64,7 +64,7 @@ class EmailService {
       return { error: 'rate_limited' }
     }
 
-    const code = String(crypto.randomInt(100000, 999999))
+    const code = String(crypto.randomInt(100000, 1000000))
 
     // Reserve capacity in codeStore before the send attempt (no write yet).
     // If the email already has a slot, no eviction is needed.
