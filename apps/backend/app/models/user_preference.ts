@@ -11,6 +11,18 @@ export default class UserPreference extends BaseModel {
   @column()
   declare preferredLanguage: string | null
 
+  @column()
+  declare emailEncrypted: string | null
+
+  @column()
+  declare emailHash: string | null
+
+  @column()
+  declare emailVerified: boolean
+
+  @column.dateTime()
+  declare emailVerifiedAt: DateTime | null
+
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
 }

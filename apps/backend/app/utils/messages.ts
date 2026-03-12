@@ -31,6 +31,54 @@ export function formatCurrencyUSD(amount: number): string {
   return `$${amount.toFixed(2)}`
 }
 
+const CURRENCY_THOUSANDS_SEP: Record<string, string> = {
+  // South America
+  COP: ',',  // Colombia: 1,000
+  MXN: ',',  // Mexico: 1,000
+  ARS: '.',  // Argentina: 1.000
+  BRL: '.',  // Brazil: 1.000
+  PEN: ',',  // Peru: 1,000
+  CLP: '.',  // Chile: 1.000
+  UYU: '.',  // Uruguay: 1.000
+  PYG: '.',  // Paraguay: 1.000
+  BOB: ',',  // Bolivia: 1,000
+  VES: ',',  // Venezuela: 1,000
+  // Central America
+  CRC: '.',  // Costa Rica: 1.000
+  GTQ: ',',  // Guatemala: 1,000
+  HNL: ',',  // Honduras: 1,000
+  NIO: ',',  // Nicaragua: 1,000
+  // Caribbean
+  DOP: ',',  // Dominican Republic: 1,000
+  CUP: ',',  // Cuba: 1,000
+  HTG: ',',  // Haiti: 1,000
+  JMD: ',',  // Jamaica: 1,000
+  TTD: ',',  // Trinidad & Tobago: 1,000
+  BBD: ',',  // Barbados: 1,000
+  // Other
+  GYD: ',',  // Guyana: 1,000
+  SRD: ',',  // Suriname: 1,000
+  BZD: ',',  // Belize: 1,000
+  AWG: ',',  // Aruba: 1,000
+  ANG: ',',  // Curaçao: 1,000
+  XCD: ',',  // EC$ islands: 1,000
+}
+
+function formatIntegerWithSep(n: number, sep: string): string {
+  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, sep)
+}
+
+export function formatDualAmount(usd: number, rate: number | null, currency: string | null): string {
+  const usdFormatted = formatCurrencyUSD(usd)
+  if (rate === null || currency === null) {
+    return usdFormatted
+  }
+  const localAmount = Math.round(usd * rate)
+  const sep = CURRENCY_THOUSANDS_SEP[currency] ?? ','
+  const localFormatted = formatIntegerWithSep(localAmount, sep)
+  return `${usdFormatted} (~${localFormatted} ${currency})`
+}
+
 export function maskAddress(address: string): string {
   if (address.length < 10) return address
   return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
@@ -131,10 +179,14 @@ export function formatAboutMessage(lang: Lang = 'en'): string {
 // --- Balance ---
 
 export function formatBalanceMessage(
-  params: { balance: number; wallet: string; ethBalance?: string; phoneNumber?: string },
+  params: { balance: number; wallet: string; ethBalance?: string; phoneNumber?: string; localRate?: number | null; localCurrency?: string | null },
   lang: Lang = 'en'
 ): string {
-  const amt = formatCurrencyUSD(params.balance)
+  const amt = formatDualAmount(
+    params.balance,
+    params.localRate ?? null,
+    params.localCurrency ?? null
+  )
   const addr = maskAddress(params.wallet)
 
   const m = {
@@ -163,10 +215,10 @@ export function formatBalanceMessage(
 // --- Send processing ---
 
 export function formatSendProcessingMessage(
-  params: { amount: number; toPhone: string },
+  params: { amount: number; toPhone: string; localRate?: number | null; localCurrency?: string | null },
   lang: Lang = 'en'
 ): string {
-  const amt = formatCurrencyUSD(params.amount)
+  const amt = formatDualAmount(params.amount, params.localRate ?? null, params.localCurrency ?? null)
   const to = getDisplayName(params.toPhone)
   const m = {
     en: () => `Sending ${amt} to ${to}...\n\nUsually instant, may take up to 30 seconds.`,
@@ -181,10 +233,10 @@ export function formatSendProcessingMessage(
 // --- Send success (sender) ---
 
 export function formatSendSuccessMessage(
-  params: { amount: number; toPhone: string; txHash: string; gasCovered?: boolean },
+  params: { amount: number; toPhone: string; txHash: string; gasCovered?: boolean; localRate?: number | null; localCurrency?: string | null },
   lang: Lang = 'en'
 ): string {
-  const amt = formatCurrencyUSD(params.amount)
+  const amt = formatDualAmount(params.amount, params.localRate ?? null, params.localCurrency ?? null)
   const to = getDisplayName(params.toPhone)
   const tx = shortHash(params.txHash)
   const receiptUrl = RECEIPT_BASE_URL + params.txHash
@@ -215,10 +267,10 @@ export function formatSendSuccessMessage(
 // --- Send recipient notification ---
 
 export function formatSendRecipientMessage(
-  params: { amount: number; fromPhone: string; txHash: string },
+  params: { amount: number; fromPhone: string; txHash: string; localRate?: number | null; localCurrency?: string | null },
   lang: Lang = 'en'
 ): string {
-  const amt = formatCurrencyUSD(params.amount)
+  const amt = formatDualAmount(params.amount, params.localRate ?? null, params.localCurrency ?? null)
   const from = getDisplayName(params.fromPhone)
   const receiptUrl = RECEIPT_BASE_URL + params.txHash
   const m = {
@@ -263,11 +315,11 @@ export function formatFundUSDReceivedMessage(
 // --- Error states ---
 
 export function formatInsufficientBalanceMessage(
-  params: { balance: number; needed: number },
+  params: { balance: number; needed: number; localRate?: number | null; localCurrency?: string | null },
   lang: Lang = 'en'
 ): string {
-  const bal = formatCurrencyUSD(params.balance)
-  const need = formatCurrencyUSD(params.needed)
+  const bal = formatDualAmount(params.balance, params.localRate ?? null, params.localCurrency ?? null)
+  const need = formatDualAmount(params.needed, params.localRate ?? null, params.localCurrency ?? null)
   const m = {
     en: () => `Insufficient balance.\n\nBalance: ${bal}\nNeeded: ${need}\n\nAdd funds: ${FUND_URL}`,
     es: () =>

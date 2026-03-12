@@ -13,10 +13,10 @@
 |---|------------|--------|-------|
 | 1 | Onramp integration (API, testing, user flow) | Blocked (waiting on Maash) | P6 |
 | 2 | Non-custodial wallet refinements | 95% | P1 (done), P2, Sweep+Wallet (done) |
-| 3 | Security hardening (rate limits, tx checks, error handling) | 75% | P4, rate limiting (partial) |
-| 4 | Dual currency display (USD + local) | 0% | P3 |
-| 5 | Privacy controls (phone visibility) | 0% | P5 |
-| 6 | User settings (daily limits via settings page) | 80% | P5 |
+| 3 | Security hardening (rate limits, tx checks, error handling) | 90% | P4, email gates + squatting fix done, tx confirmation + velocity pending |
+| 4 | Dual currency display (USD + local) | 100% | P3 (26 LATAM currencies, 24h cache) |
+| 5 | Privacy controls + Email Recovery | 90% | P5 (email recovery done, phone visibility pending) |
+| 6 | User settings (daily limits via settings page) | 95% | P5 (email mgmt + limits + export done, language UI pending) |
 | 7 | Monitoring infrastructure (error tracking, uptime) | 70% | P7 (indexer deployed, admin analytics + users showing real on-chain data) |
 | 8 | Legal entity establishment | External | — |
 | 9 | WhatsApp production number active | 100% | Done |
@@ -24,7 +24,7 @@
 
 **KPIs:** Security features tested, dual currency live, monitoring dashboard active, 50 beta testers, $10K+ USDC volume.
 
-> **Note:** Backend migrated from Express monolith to AdonisJS v7 (Feb 28, 2026). All 18 routes ported with identical paths/methods/JSON responses. **173 tests passing** (as of Mar 5). Frontend-compatible — no breaking changes. Admin panel with analytics dashboard deployed. Code at `apps/backend/`.
+> **Note:** Backend migrated from Express monolith to AdonisJS v7 (Feb 28, 2026). All 18 routes ported with identical paths/methods/JSON responses. **437 tests passing** (as of Mar 12). Frontend-compatible — no breaking changes. Admin panel with analytics dashboard deployed. Code at `apps/backend/`.
 
 ---
 

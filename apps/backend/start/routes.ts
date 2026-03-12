@@ -18,6 +18,7 @@ const ResolveController = () => import('#controllers/resolve_controller')
 const NotifyController = () => import('#controllers/notify_controller')
 const DebugController = () => import('#controllers/debug_controller')
 const EmbeddedWalletController = () => import('#controllers/embedded_wallet_controller')
+const AuthApiController = () => import('#controllers/auth_api_controller')
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
@@ -40,7 +41,16 @@ if (app.inDev || app.inTest) {
   router.get('/debug/parse-stats', [DebugController, 'parseStats'])
 }
 
-// ── CDP-authenticated API routes ────────────────────────────────────────────
+// ── Auth routes (public) ────────────────────────────────────────────────────
+router
+  .group(() => {
+    router.post('/send-otp', [AuthApiController, 'sendOtp']).use(middleware.ipThrottle())
+    router.post('/verify-otp', [AuthApiController, 'verifyOtp']).use(middleware.ipThrottle())
+    router.get('/.well-known/jwks.json', [AuthApiController, 'jwks'])
+  })
+  .prefix('/api/auth')
+
+// ── JWT-authenticated API routes ────────────────────────────────────────────
 router
   .group(() => {
     router.post('/register-wallet', [EmbeddedWalletController, 'registerWallet'])
@@ -51,9 +61,15 @@ router
     router.post('/log-export-event', [EmbeddedWalletController, 'logExportEvent'])
     router.post('/resolve-phone', [EmbeddedWalletController, 'resolvePhone'])
     router.post('/log-web-send', [EmbeddedWalletController, 'logWebSend'])
+    router.post('/auth/send-email-code', [AuthApiController, 'sendEmailCode'])
+    router.post('/auth/verify-email-code', [AuthApiController, 'verifyEmailCode'])
+    router.get('/auth/email-status', [AuthApiController, 'emailStatus'])
+    router.post('/auth/send-gate-code', [AuthApiController, 'sendGateCode'])
+    router.post('/auth/verify-gate-code', [AuthApiController, 'verifyGateCode'])
+    router.post('/auth/validate-export-gate', [AuthApiController, 'validateExportGate'])
   })
   .prefix('/api')
-  .use(middleware.cdpAuth())
+  .use(middleware.jwtAuth())
 
 // ── Admin dashboard ─────────────────────────────────────────────────────────
 const AdminAuthController = () => import('#controllers/admin/auth_controller')

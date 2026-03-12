@@ -43,7 +43,11 @@ export async function handleSendCommand(
   fromPhoneNumber: string,
   amount: number,
   toPhoneNumber: string,
-  lang: Lang = 'en'
+  lang: Lang,
+  senderRate: number | null,
+  senderCurrency: string | null,
+  recipientRate: number | null,
+  recipientCurrency: string | null
 ): Promise<void> {
   logger.info(`SEND command: +${fromPhoneNumber} -> +${toPhoneNumber} (${amount} USD)`)
 
@@ -57,7 +61,7 @@ export async function handleSendCommand(
     const embeddedWallet = await getEmbeddedWallet(fromPhoneNumber)
 
     if (embeddedWallet) {
-      await handleEmbeddedSend(fromPhoneNumber, toPhoneNumber, amount, embeddedWallet, lang)
+      await handleEmbeddedSend(fromPhoneNumber, toPhoneNumber, amount, embeddedWallet, lang, senderRate, senderCurrency, recipientRate, recipientCurrency)
       return
     }
 
@@ -87,10 +91,14 @@ export async function handleSendCommand(
     }
 
     const senderBalance = await getUserBalance(fromPhoneNumber)
+
     if (senderBalance < amount) {
       await sendTextMessage(
         fromPhoneNumber,
-        formatInsufficientBalanceMessage({ balance: senderBalance, needed: amount }, lang),
+        formatInsufficientBalanceMessage(
+          { balance: senderBalance, needed: amount, localRate: senderRate, localCurrency: senderCurrency },
+          lang
+        ),
         lang
       )
       return
@@ -114,7 +122,10 @@ export async function handleSendCommand(
 
     await sendTextMessage(
       fromPhoneNumber,
-      formatSendProcessingMessage({ amount, toPhone: toPhoneNumber }, lang),
+      formatSendProcessingMessage(
+        { amount, toPhone: toPhoneNumber, localRate: senderRate, localCurrency: senderCurrency },
+        lang
+      ),
       lang
     )
 
@@ -149,6 +160,8 @@ export async function handleSendCommand(
         toPhone: toPhoneNumber,
         txHash: result.transactionHash,
         gasCovered: !!refuelTxHash,
+        localRate: senderRate,
+        localCurrency: senderCurrency,
       },
       lang
     )
@@ -161,6 +174,8 @@ export async function handleSendCommand(
         amount,
         fromPhone: fromPhoneNumber,
         txHash: result.transactionHash,
+        localRate: recipientRate,
+        localCurrency: recipientCurrency,
       },
       recipientLang
     )
@@ -197,7 +212,11 @@ async function handleEmbeddedSend(
     spendPermissionHash: string | null
     dailyLimit: number | null
   },
-  lang: Lang
+  lang: Lang,
+  senderRate: number | null,
+  senderCurrency: string | null,
+  recipientRate: number | null,
+  recipientCurrency: string | null
 ): Promise<void> {
   if (!senderWallet.spendPermissionHash) {
     await sendTextMessage(
@@ -223,10 +242,14 @@ async function handleEmbeddedSend(
 
   // Check balance
   const senderBalance = await getEmbeddedBalance(fromPhoneNumber)
+
   if (senderBalance < amount) {
     await sendTextMessage(
       fromPhoneNumber,
-      formatInsufficientBalanceMessage({ balance: senderBalance, needed: amount }, lang),
+      formatInsufficientBalanceMessage(
+        { balance: senderBalance, needed: amount, localRate: senderRate, localCurrency: senderCurrency },
+        lang
+      ),
       lang
     )
     return
@@ -244,7 +267,10 @@ async function handleEmbeddedSend(
 
   await sendTextMessage(
     fromPhoneNumber,
-    formatSendProcessingMessage({ amount, toPhone: toPhoneNumber }, lang),
+    formatSendProcessingMessage(
+      { amount, toPhone: toPhoneNumber, localRate: senderRate, localCurrency: senderCurrency },
+      lang
+    ),
     lang
   )
 
@@ -260,6 +286,8 @@ async function handleEmbeddedSend(
       toPhone: toPhoneNumber,
       txHash: result.transactionHash,
       gasCovered: true,
+      localRate: senderRate,
+      localCurrency: senderCurrency,
     },
     lang
   )
@@ -304,6 +332,8 @@ async function handleEmbeddedSend(
         amount,
         fromPhone: fromPhoneNumber,
         txHash: result.transactionHash,
+        localRate: recipientRate,
+        localCurrency: recipientCurrency,
       },
       recipientLang
     )

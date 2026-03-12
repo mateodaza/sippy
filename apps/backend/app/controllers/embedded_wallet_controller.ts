@@ -23,6 +23,8 @@ import { getRefuelService } from '#services/refuel.service'
 import { registerWalletWithIndexer } from '#services/indexer.service'
 import { exportEventSchema, webSendEventSchema } from '#types/schemas'
 import { NETWORK, USDC_ADDRESSES, USDC_DECIMALS } from '#config/network'
+import UserPreference from '#models/user_preference'
+import { emailService } from '#services/email_service'
 
 // CDP client for spend permission queries
 const cdp = new CdpClient()
@@ -195,14 +197,28 @@ export default class EmbeddedWalletController {
    * POST /api/revoke-permission
    *
    * Called when user revokes their spend permission.
-   * Clears the permission from the database.
+   * If the user has a verified email, requires a valid gateToken in the request body.
+   * Clears the permission from the database after gate check passes.
    */
-  async revokePermission({ response, cdpUser }: HttpContext) {
+  async revokePermission({ request, response, cdpUser }: HttpContext) {
     try {
       const { phoneNumber } = cdpUser!
-      const normalizedPhone = phoneNumber.replace(/^\+/, '')
+      const dbPhone = phoneNumber.replace(/^\+/, '')
 
-      logger.info(`Revoking spend permission for +${normalizedPhone}`)
+      // Gate enforcement: if user has a verified email, require a valid gateToken.
+      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      if (pref?.emailVerified === true) {
+        const gateToken = request.body()?.gateToken
+        if (!gateToken || typeof gateToken !== 'string') {
+          return response.status(403).json({ error: 'gate_required' })
+        }
+        const valid = emailService.consumeGateToken(dbPhone, gateToken)
+        if (!valid) {
+          return response.status(403).json({ error: 'gate_required' })
+        }
+      }
+
+      logger.info(`Revoking spend permission for +${dbPhone}`)
 
       await query(
         `UPDATE phone_registry
@@ -210,10 +226,10 @@ export default class EmbeddedWalletController {
              daily_limit = NULL,
              permission_created_at = NULL
          WHERE phone_number = $1`,
-        [normalizedPhone]
+        [dbPhone]
       )
 
-      logger.info(`Spend permission revoked for +${normalizedPhone}`)
+      logger.info(`Spend permission revoked for +${dbPhone}`)
 
       return response.json({ success: true })
     } catch (error) {

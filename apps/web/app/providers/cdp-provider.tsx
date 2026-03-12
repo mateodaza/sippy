@@ -2,6 +2,7 @@
 
 import { CDPHooksProvider } from '@coinbase/cdp-hooks';
 import { ReactNode } from 'react';
+import { getFreshToken } from '../../lib/auth';
 
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
 
@@ -22,6 +23,9 @@ export function CDPProvider({ children }: CDPProviderProps) {
         ethereum: {
           createOnLogin: 'smart',
           enableSpendPermissions: true,
+        },
+        customAuth: {
+          getJwt: async () => getFreshToken() ?? undefined,
         },
       }}
     >
