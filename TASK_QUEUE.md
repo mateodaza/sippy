@@ -180,7 +180,7 @@
 - **Context:** `apps/backend/app/controllers/auth_api_controller.ts` (add methods to existing controller)
 - **Files:** `apps/backend/app/controllers/auth_api_controller.ts`, `apps/backend/start/routes.ts`
 
-#### ER-005 [ ] Add email collection to setup page
+#### ER-005 [x] Add email collection to setup page
 - **What:** Optional email step during onboarding, after phone verification.
 - **Acceptance criteria:**
   - After wallet creation step, show: "Add a recovery email (recommended)"
