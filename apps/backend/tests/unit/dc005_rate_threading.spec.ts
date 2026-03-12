@@ -76,7 +76,7 @@ test.group('AC1 dispatchCommand | rate threaded from cache to balance handler', 
     }
 
     const cmd: ParsedCommand = { command: 'balance', originalText: 'balance' }
-    await dispatchCommand('573001234567', cmd, 'es', fakeBalance)
+    await dispatchCommand('573001234567', cmd, 'es', [], fakeBalance)
 
     assert.equal(capturedRate, 4000, 'dispatchCommand must call fetchRateContext, not hardcode null')
     assert.equal(capturedCurrency, 'COP')
@@ -97,7 +97,7 @@ test.group('AC1 dispatchCommand | rate threaded from cache to balance handler', 
     }
 
     const cmd: ParsedCommand = { command: 'balance', originalText: 'balance' }
-    await dispatchCommand('521234567890', cmd, 'es', fakeBalance)
+    await dispatchCommand('521234567890', cmd, 'es', [], fakeBalance)
 
     assert.equal(capturedRate, 17)
     assert.equal(capturedCurrency, 'MXN')
@@ -118,7 +118,7 @@ test.group('AC1 dispatchCommand | rate threaded from cache to balance handler', 
     }
 
     const cmd: ParsedCommand = { command: 'balance', originalText: 'balance' }
-    await dispatchCommand('13105551234', cmd, 'en', fakeBalance)
+    await dispatchCommand('13105551234', cmd, 'en', [], fakeBalance)
 
     assert.isNull(capturedRate)
     assert.isNull(capturedCurrency)
@@ -162,7 +162,7 @@ test.group('AC1 dispatchCommand | rate threaded from cache to send handler', (gr
       recipient: '551234567890',
       originalText: 'send 10 to 551234567890',
     }
-    await dispatchCommand('573001234567', cmd, 'es', undefined, fakeSend)
+    await dispatchCommand('573001234567', cmd, 'es', [], undefined, fakeSend)
 
     assert.equal(capturedSenderRate, 4000, 'dispatchCommand must call fetchRateContext for sender')
     assert.equal(capturedSenderCurrency, 'COP')
@@ -266,7 +266,7 @@ test.group('AC2 routeCommand | rate values threaded to balance handler', () => {
     }
 
     const cmd: ParsedCommand = { command: 'balance', originalText: 'balance' }
-    await routeCommand('573001234567', cmd, 'es', rateCtx, fakeBalance)
+    await routeCommand('573001234567', cmd, 'es', rateCtx, [], fakeBalance)
 
     assert.equal(capturedRate, 4000)
     assert.equal(capturedCurrency, 'COP')
@@ -294,7 +294,7 @@ test.group('AC2 routeCommand | rate values threaded to balance handler', () => {
     }
 
     const cmd: ParsedCommand = { command: 'balance', originalText: 'balance' }
-    await routeCommand('13105551234', cmd, 'en', rateCtx, fakeBalance)
+    await routeCommand('13105551234', cmd, 'en', rateCtx, [], fakeBalance)
 
     assert.isNull(capturedRate)
     assert.isNull(capturedCurrency)
@@ -337,7 +337,7 @@ test.group('AC2 routeCommand | rate values threaded to send handler', () => {
       recipient: '551234567890',
       originalText: 'send 10 to 551234567890',
     }
-    await routeCommand('573001234567', cmd, 'es', rateCtx, undefined, fakeSend)
+    await routeCommand('573001234567', cmd, 'es', rateCtx, [], undefined, fakeSend)
 
     assert.equal(capturedSenderRate, 4000)
     assert.equal(capturedSenderCurrency, 'COP')
