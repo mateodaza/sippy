@@ -71,6 +71,13 @@ export default await Env.create(new URL('../', import.meta.url), {
   // Security
   EXPORT_AUDIT_SECRET: Env.schema.string.optional(),
   NOTIFY_SECRET: Env.schema.string.optional(),
+  EMAIL_ENCRYPTION_KEY: (key, value) => {
+    if (value === undefined || value === null || value === '') return undefined
+    if (!/^[0-9a-fA-F]{64}$/.test(value)) {
+      throw new Error(`${key} must be a 64-character hex string (32 bytes); got length ${String(value).length}`)
+    }
+    return value
+  },
 
   // Feature flags
   DEMO_SHOW_REFUEL: Env.schema.string.optional(),
