@@ -79,6 +79,9 @@ export default await Env.create(new URL('../', import.meta.url), {
     return value
   },
 
+  // Email
+  RESEND_API_KEY: Env.schema.string.optional(),
+
   // Feature flags
   DEMO_SHOW_REFUEL: Env.schema.string.optional(),
 
