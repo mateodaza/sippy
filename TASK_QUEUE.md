@@ -230,7 +230,7 @@
 - **Dependencies:** ER-003
 - **Files:** `apps/backend/tests/unit/email_service.spec.ts` (new), `apps/backend/tests/unit/email_crypto.spec.ts` (new)
 
-#### ER-009 [ ] Create recovery design doc
+#### ER-009 [x] Create recovery design doc
 - **What:** Document the full lost-phone recovery flow for M2 implementation.
 - **Acceptance criteria:**
   - File: `docs/RECOVERY-DESIGN.md`
