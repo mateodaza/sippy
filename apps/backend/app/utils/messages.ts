@@ -155,10 +155,14 @@ export function formatAboutMessage(lang: Lang = 'en'): string {
 // --- Balance ---
 
 export function formatBalanceMessage(
-  params: { balance: number; wallet: string; ethBalance?: string; phoneNumber?: string },
+  params: { balance: number; wallet: string; ethBalance?: string; phoneNumber?: string; localRate?: number | null; localCurrency?: string | null },
   lang: Lang = 'en'
 ): string {
-  const amt = formatCurrencyUSD(params.balance)
+  const amt = formatDualAmount(
+    params.balance,
+    params.localRate ?? null,
+    params.localCurrency ?? null
+  )
   const addr = maskAddress(params.wallet)
 
   const m = {
