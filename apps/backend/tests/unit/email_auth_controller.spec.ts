@@ -59,6 +59,7 @@ function makeQueryMock(firstResult: unknown) {
   builder['where'] = () => builder
   builder['whereNot'] = () => builder
   builder['first'] = async () => firstResult
+  builder['update'] = async () => 0
   return builder
 }
 
@@ -304,6 +305,7 @@ test.group('verifyEmailCode | success', (group) => {
     const hash = hashEmail(normalizeEmail(VALID_EMAIL))
     const pref = makePrefMock({ emailHash: hash, emailVerified: false })
     ;(UserPreference as any).findBy = async () => pref
+    ;(UserPreference as any).query = () => makeQueryMock(null)
     ;(emailService as any).verifyEmailCode = async () => ({ valid: true })
 
     const controller = new AuthApiController()
