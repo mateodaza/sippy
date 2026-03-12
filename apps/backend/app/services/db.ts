@@ -46,19 +46,58 @@ export interface ParseLogEntry {
   latencyMs: number
   status: string
   detectedLanguage?: string
+  originalText?: string // raw user text — sanitized into matched_phrase before storage
+}
+
+/**
+ * Scrub a raw user phrase for safe storage in parse_log.matched_phrase.
+ *
+ * Rules (applied in order):
+ *   1. Replace phone-like sequences with [PHONE]
+ *   2. Replace money/numeric amounts with [AMOUNT]
+ *   3. Lowercase and collapse whitespace
+ *   4. Return null if result is too short or contains only placeholders
+ *
+ * Only called for llm-success rows — never touches regex or send traffic.
+ */
+export function sanitizePhrase(text: string): string | null {
+  let s = text
+    .replace(/\+?\d[\d\s\-().]{6,}\d/g, '[PHONE]')   // phone patterns (7+ digits)
+    .replace(/\$?\d+(\.\d+)?/g, '[AMOUNT]')            // money / standalone numbers
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ')
+
+  // Too short to be useful
+  if (s.length < 4) return null
+
+  // Nothing left except placeholders and punctuation
+  const stripped = s.replace(/\[phone\]|\[amount\]|[\s.,!?¿¡]/g, '')
+  if (stripped.length < 2) return null
+
+  // Truncate to column limit
+  return s.length > 300 ? s.slice(0, 300) : s
 }
 
 /**
  * Log a parse result. Non-blocking — failures never break the main flow.
  * Uses ON CONFLICT DO NOTHING for WhatsApp webhook retry idempotency.
+ *
+ * matched_phrase is only written when parse_source='llm' and status='llm-success'.
+ * The raw originalText is sanitized at write time — never stored verbatim.
  */
 export async function logParseResult(entry: ParseLogEntry): Promise<void> {
+  const matchedPhrase =
+    entry.parseSource === 'llm' && entry.status === 'llm-success' && entry.originalText
+      ? sanitizePhrase(entry.originalText)
+      : null
+
   try {
     await query(
       `INSERT INTO parse_log
         (message_id, phone_number, parse_source, intent, model,
-         prompt_tokens, completion_tokens, latency_ms, status, detected_language)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         prompt_tokens, completion_tokens, latency_ms, status, detected_language, matched_phrase)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        ON CONFLICT (message_id) DO NOTHING`,
       [
         entry.messageId,
@@ -71,6 +110,7 @@ export async function logParseResult(entry: ParseLogEntry): Promise<void> {
         entry.latencyMs,
         entry.status,
         entry.detectedLanguage ?? null,
+        matchedPhrase,
       ]
     )
   } catch (error) {
@@ -176,5 +216,109 @@ export async function setUserLanguage(
     )
   } catch (error) {
     logger.warn('Failed to persist language (non-blocking): %o', error)
+  }
+}
+
+// ============================================================================
+// Conversation Context
+// ============================================================================
+
+export interface ContextMessage {
+  role: 'user'
+  content: string
+}
+
+/**
+ * Scrub a message before storing it in conversation_context.
+ *
+ * Lighter than sanitizePhrase — preserves natural phrasing and numbers for
+ * LLM context quality, but removes phone-like sequences which are the main
+ * PII risk in non-financial intents (e.g. "help me send to +57...").
+ *
+ * Returns null if nothing useful remains after scrubbing.
+ */
+function scrubForContext(text: string): string | null {
+  const s = text
+    .replace(/\+?\d[\d\s\-().]{6,}\d/g, '[PHONE]') // phone-like sequences only
+    .trim()
+
+  if (s.length < 3) return null
+
+  // Only placeholder and whitespace left — not useful as context
+  if (s.replace(/\[PHONE\]|\s/g, '').length === 0) return null
+
+  return s.length > 300 ? s.slice(0, 300) : s
+}
+
+/**
+ * Fetch the last 2 user messages for a phone number.
+ * Returns an empty array if no context exists or on error.
+ */
+export async function getConversationContext(phoneNumber: string): Promise<ContextMessage[]> {
+  try {
+    const result = await query<{ messages: ContextMessage[] }>(
+      'SELECT messages FROM conversation_context WHERE phone_number = $1',
+      [phoneNumber]
+    )
+    return result.rows[0]?.messages ?? []
+  } catch (error) {
+    logger.warn('getConversationContext failed (falling back to empty): %o', error)
+    return []
+  }
+}
+
+/**
+ * Atomically append a user message to conversation context, keeping only the
+ * last 2. Uses a single SQL upsert with JSONB array operations — no
+ * read-modify-write cycle, so concurrent inserts for the same phone number
+ * cannot lose turns.
+ *
+ * Content is scrubbed for phone numbers before storage.
+ * Returns early (no write) if the scrubbed content is empty.
+ *
+ * Only call for non-financial intents — the caller in webhook_controller
+ * gates on intent, but this function is the last line of defence against
+ * phone-bearing utterances that cleared the intent gate.
+ *
+ * Non-blocking — failures never break the message handling flow.
+ */
+export async function appendConversationMessage(
+  phoneNumber: string,
+  content: string
+): Promise<void> {
+  const safeContent = scrubForContext(content)
+  if (!safeContent) return // nothing useful after scrubbing
+
+  const newMessage = JSON.stringify({ role: 'user', content: safeContent })
+
+  try {
+    // Atomic append-and-trim: appends the new element to the JSONB array in the
+    // same statement that upserts the row, then slices to the last 2 elements.
+    // No separate SELECT — avoids the lost-update race under concurrent messages.
+    // WITH ORDINALITY assigns a stable 1-based position to each element.
+    // The inner query picks the 2 highest ordinals (newest 2 after append),
+    // and jsonb_agg(val ORDER BY ord) rebuilds the array in ascending order
+    // so the stored sequence is deterministically [older, newer].
+    await query(
+      `INSERT INTO conversation_context (phone_number, messages, updated_at)
+       VALUES ($1, jsonb_build_array($2::jsonb), NOW())
+       ON CONFLICT (phone_number)
+       DO UPDATE SET
+         messages = (
+           SELECT jsonb_agg(val ORDER BY ord)
+           FROM (
+             SELECT val, ord
+             FROM jsonb_array_elements(
+               conversation_context.messages || jsonb_build_array($2::jsonb)
+             ) WITH ORDINALITY AS t(val, ord)
+             ORDER BY ord DESC
+             LIMIT 2
+           ) sub
+         ),
+         updated_at = NOW()`,
+      [phoneNumber, newMessage]
+    )
+  } catch (error) {
+    logger.warn('appendConversationMessage failed (non-blocking): %o', error)
   }
 }

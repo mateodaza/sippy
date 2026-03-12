@@ -18,7 +18,7 @@ export default class NotifyController {
   /**
    * POST /notify-fund
    *
-   * Body: { phone: string, type: 'eth' | 'usdc' | 'pyusd', amount: string, txHash: string }
+   * Body: { phone: string, type: 'eth' | 'usdc', amount: string, txHash: string }
    *
    * Sends a WhatsApp notification to the user about a fund deposit.
    */
@@ -48,10 +48,10 @@ export default class NotifyController {
         })
       }
 
-      if (type !== 'eth' && type !== 'usdc' && type !== 'pyusd') {
+      if (type !== 'eth' && type !== 'usdc') {
         return response.status(400).json({
           error: 'Invalid type',
-          message: 'type must be "eth", "usdc", or "pyusd"',
+          message: 'type must be "eth" or "usdc"',
         })
       }
 

@@ -19,6 +19,7 @@ import logger from '@adonisjs/core/services/logger'
 import Groq from 'groq-sdk'
 import { type ParsedCommand } from '#types/index'
 import { llmResultSchema } from '#types/schemas'
+import { type ContextMessage } from '#services/db'
 
 // ============================================================================
 // Types
@@ -207,15 +208,16 @@ COMMAND NAMES BY LANGUAGE (always use the correct language when suggesting comma
 - PT: "enviar 10 para +55...", "saldo", "começar", "ajuda", "historico", "ajustes"
 
 PERSONALITY:
-- Warm, concise, helpful — like a knowledgeable friend, not a robot
+- Warm and conversational — like a friend over WhatsApp, not a support agent
 - Match the user's energy: casual greetings get casual replies, serious questions get clear answers
 - Always guide toward action: after answering, suggest what they can do next
-- No emojis. No exclamation marks. Keep it clean and natural.
+- No emojis. Short sentences. Natural rhythm. Occasional warmth is fine.
 - Use the facts above to give specific, accurate answers. Never make up features.
 
 GREETINGS (hola, hi, hey, oi, que tal, etc.):
-- command: "unknown", helpfulMessage: greet warmly, say what Sippy does in one line, suggest an action
-- Keep it to 2 sentences max.
+- command: "unknown", helpfulMessage: greet warmly in 1-2 sentences
+- Say what Sippy does and suggest one action to try
+- Vary the opener — avoid starting every greeting the same way
 
 EDGE CASES:
 - Insults, profanity, trolling: command "unknown", stay calm, don't engage, redirect to wallet features
@@ -237,7 +239,12 @@ Return ONLY valid JSON (no text before or after):
 // Core LLM Call (single model)
 // ============================================================================
 
-async function callModel(client: Groq, modelId: string, text: string): Promise<LLMCallResult> {
+async function callModel(
+  client: Groq,
+  modelId: string,
+  text: string,
+  context: ContextMessage[] = []
+): Promise<LLMCallResult> {
   const config = getModelConfig(modelId)
   const limiter = getLimiter(modelId)
 
@@ -252,10 +259,11 @@ async function callModel(client: Groq, modelId: string, text: string): Promise<L
     client.chat.completions.create({
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
+        ...context.map((m) => ({ role: m.role as 'user', content: m.content })),
         { role: 'user', content: text },
       ],
       model: config.id,
-      temperature: 0.1,
+      temperature: 0.3,
       max_tokens: config.maxTokens,
       response_format: { type: 'json_object' },
     }),
@@ -316,7 +324,10 @@ export interface LLMParseResult {
  *
  * Returns the parsed command + model metadata (concurrency-safe, no global state).
  */
-export async function parseMessageWithLLM(text: string): Promise<LLMParseResult | null> {
+export async function parseMessageWithLLM(
+  text: string,
+  context: ContextMessage[] = []
+): Promise<LLMParseResult | null> {
   const client = getGroqClient()
   if (!client) return null
 
@@ -324,7 +335,7 @@ export async function parseMessageWithLLM(text: string): Promise<LLMParseResult 
   const primaryLimiter = getLimiter(PRIMARY_MODEL)
   if (primaryLimiter.canMakeRequest()) {
     try {
-      const result = await callModel(client, PRIMARY_MODEL, text)
+      const result = await callModel(client, PRIMARY_MODEL, text, context)
       if (result.parsed) {
         return {
           parsed: result.parsed,
@@ -358,7 +369,7 @@ export async function parseMessageWithLLM(text: string): Promise<LLMParseResult 
 
   try {
     logger.info(`Falling back to ${FALLBACK_MODEL}`)
-    const result = await callModel(client, FALLBACK_MODEL, text)
+    const result = await callModel(client, FALLBACK_MODEL, text, context)
     return {
       parsed: result.parsed,
       meta: {
@@ -385,6 +396,75 @@ export interface CallMeta {
   model: string
   promptTokens?: number
   completionTokens?: number
+}
+
+// ============================================================================
+// Personality Response Generator (greeting / social intents)
+// ============================================================================
+
+const RESPONSE_SYSTEM_PROMPT = `You are Sippy, a friendly WhatsApp money assistant for LATAM.
+
+The user sent a greeting or acknowledgment. Respond warmly in 1-2 sentences.
+Match their language (English, Spanish, or Portuguese).
+Keep it short and natural — like a friend, not a support bot.
+No emojis. Return only the response text, nothing else.`
+
+/**
+ * Generate a short conversational reply for greeting and social intents.
+ *
+ * Uses llama-3.1-8b-instant via the shared per-model limiter (14.4K RPD).
+ * Returns null on rate-limit, timeout, or any error — callers must fall back
+ * to the static template in that case.
+ *
+ * Never called for financial intents (balance, send, history, settings).
+ */
+export async function generateResponse(
+  text: string,
+  lang: string,
+  context: ContextMessage[] = []
+): Promise<string | null> {
+  const client = getGroqClient()
+  if (!client) return null
+
+  const modelId = 'llama-3.1-8b-instant'
+  const limiter = getLimiter(modelId) // shared limiter — same quota as classification fallback
+
+  if (!limiter.canMakeRequest()) {
+    logger.warn('generateResponse: rate limit reached for %s', modelId)
+    return null
+  }
+
+  limiter.recordRequest()
+
+  const systemContent =
+    lang === 'es' || lang === 'pt'
+      ? `${RESPONSE_SYSTEM_PROMPT}\nRespond in ${lang === 'es' ? 'Spanish' : 'Portuguese'}.`
+      : RESPONSE_SYSTEM_PROMPT
+
+  try {
+    const completion = await Promise.race([
+      client.chat.completions.create({
+        messages: [
+          { role: 'system', content: systemContent },
+          ...context.map((m) => ({ role: m.role as 'user', content: m.content })),
+          { role: 'user', content: text },
+        ],
+        model: modelId,
+        temperature: 0.5,
+        max_tokens: 80,
+      }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000)),
+    ])
+
+    return completion.choices[0]?.message?.content?.trim() || null
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Timeout') {
+      logger.warn('generateResponse: timeout on %s', modelId)
+    } else {
+      logger.error('generateResponse: error on %s: %o', modelId, error)
+    }
+    return null
+  }
 }
 
 // ============================================================================

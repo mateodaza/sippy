@@ -20,11 +20,10 @@ export const wagmiConfig = createConfig(
     walletConnectProjectId:
       process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
 
-    // App info
     appName: 'Sippy - Fund My Phone',
     appDescription: 'Send USDC to phone numbers from any chain',
-    appUrl: 'https://sippy.app',
-    appIcon: 'https://sippy.app/icon.png',
+    appUrl: 'https://fund.sippy.lat',
+    appIcon: 'https://www.sippy.lat/images/logos/sippy-green.svg',
 
     enableFamily: false,
     ssr: true,

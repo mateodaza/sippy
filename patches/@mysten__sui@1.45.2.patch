@@ -1,0 +1,39 @@
+diff --git a/dist/cjs/jsonRpc/index.js b/dist/cjs/jsonRpc/index.js
+index 941fcac36df5c72c7767de53d3b77ece4f435846..c9b0c90029ae1084cbee38cf447b60665fecf667 100644
+--- a/dist/cjs/jsonRpc/index.js
++++ b/dist/cjs/jsonRpc/index.js
+@@ -23,8 +23,12 @@ __export(jsonRpc_exports, {
+   SuiHTTPStatusError: () => import_errors.SuiHTTPStatusError,
+   SuiHTTPTransportError: () => import_errors.SuiHTTPTransportError,
+   SuiJsonRpcClient: () => import_client.SuiJsonRpcClient,
++  getJsonRpcFullnodeUrl: () => getJsonRpcFullnodeUrl,
+   isSuiJsonRpcClient: () => import_client.isSuiJsonRpcClient
+ });
++function getJsonRpcFullnodeUrl(network) {
++  return `https://fullnode.${network}.sui.io:443`;
++}
+ module.exports = __toCommonJS(jsonRpc_exports);
+ var import_http_transport = require("./http-transport.js");
+ var import_client = require("./client.js");
+diff --git a/dist/esm/jsonRpc/index.js b/dist/esm/jsonRpc/index.js
+index f6b000a36d5c95ac81d8751d332886fb4cfe9145..fb9fb5c0d783ee8f6e2fe0561a742c86ad4ccdbd 100644
+--- a/dist/esm/jsonRpc/index.js
++++ b/dist/esm/jsonRpc/index.js
+@@ -6,12 +6,17 @@ import {
+   SuiJsonRpcClient
+ } from "./client.js";
+ import { SuiHTTPStatusError, SuiHTTPTransportError, JsonRpcError } from "./errors.js";
++// Shim for @mysten/dapp-kit@1.0.3 which imports this removed export.
++function getJsonRpcFullnodeUrl(network) {
++  return `https://fullnode.${network}.sui.io:443`;
++}
+ export {
+   JsonRpcError,
+   JsonRpcHTTPTransport,
+   SuiHTTPStatusError,
+   SuiHTTPTransportError,
+   SuiJsonRpcClient,
++  getJsonRpcFullnodeUrl,
+   isSuiJsonRpcClient
+ };
+ //# sourceMappingURL=index.js.map

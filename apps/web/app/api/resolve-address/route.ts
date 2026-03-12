@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,23 +15,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Proxy request to backend
     const response = await fetch(
       `${BACKEND_URL}/resolve-address?address=${encodeURIComponent(address)}`
     );
 
+    const data = await response.json().catch(() => null);
+
     if (!response.ok) {
-      const error = await response.text();
       return NextResponse.json(
-        { error: error || 'Failed to resolve address' },
+        data || { error: 'Failed to resolve address' },
         { status: response.status }
       );
     }
 
-    const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error('API route error:', error);
+    console.error('resolve-address proxy error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

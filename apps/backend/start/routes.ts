@@ -74,6 +74,7 @@ router
     router.get('/users', [AdminUsersController, 'index'])
     router.get('/users/:phone', [AdminUsersController, 'show'])
     router.get('/analytics', [AnalyticsController, 'index'])
+    router.get('/parse-patterns', [AnalyticsController, 'parsePatterns'])
     router.get('/roles', [RolesController, 'index'])
     router.put('/roles/:id', [RolesController, 'update'])
   })

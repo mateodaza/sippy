@@ -9,46 +9,46 @@ export interface TweetArchetype {
 
 export const ARCHETYPES: TweetArchetype[] = [
   {
+    id: 'product',
+    pillar: 'uxShowcase',
+    label: 'Product marketing',
+    promptTemplate: `Write a tweet that makes someone want to try Sippy. Describe what it does in a way that creates desire — not by explaining features, but by showing how simple it is. Think Apple marketing: show the experience, not the specs. One clear message. Under 200 characters ideally.`,
+  },
+  {
+    id: 'contrast',
+    pillar: 'uxShowcase',
+    label: 'Old way vs new way',
+    promptTemplate: `Write a tweet that contrasts the old/painful way of sending money or saving dollars with Sippy's way. The contrast should make the old way feel absurd. Parallel structure works well. Let the comparison sell — no need to say "revolutionary" or explain why it's better.`,
+  },
+  {
     id: 'take',
     pillar: 'domainInsights',
     label: 'Hot take',
-    promptTemplate: `Write a short, opinionated tweet about a frustrating reality of money/remittances/banking in Latin America. The take should feel like a genuine observation, not a pitch. Think "noticed that..." or "weird how..." framing (Guillermo Rauch style). No hashtags. One thought, punchy.`,
+    promptTemplate: `Write a short, opinionated tweet about a frustrating reality of money/remittances/banking in Latin America. The take MUST connect back to the problem Sippy solves — don't just observe, frame it so the reader thinks "someone should fix this." Punchy, under 200 characters.`,
   },
   {
     id: 'update',
     pillar: 'buildInPublic',
     label: 'Build-in-public update',
-    promptTemplate: `Write a short build-in-public tweet sharing progress on Sippy. Include a specific metric or milestone (can be small — users, volume, a feature shipped, a bug fixed). Be honest, even if numbers are modest. Pieter Levels style: raw, unpolished, real. No "we're excited" — just state what happened.`,
-  },
-  {
-    id: 'showcase',
-    pillar: 'uxShowcase',
-    label: 'UX showcase',
-    promptTemplate: `Write a tweet that describes the Sippy WhatsApp experience as if you're showing someone your phone screen. Walk through the flow in 1-2 sentences. Make it feel effortless. The point is: "this is the ENTIRE flow" — emphasize simplicity. No jargon.`,
+    promptTemplate: `Write a short build-in-public tweet about Sippy's progress. Focus on WHAT was shipped or learned, not metrics. Examples: a feature that went live, a decision you made, something that broke and got fixed. NEVER invent numbers — if you don't have real data, talk about the work itself. Raw, short, founder voice.`,
   },
   {
     id: 'question',
     pillar: 'domainInsights',
     label: 'Genuine question',
-    promptTemplate: `Write a tweet asking a genuine question about money habits, saving, or payment pain points in Latin America. Not rhetorical — something you'd actually want answers to. Questions drive replies (150x more valuable than likes in the algorithm). Keep it conversational.`,
+    promptTemplate: `Write a tweet asking a genuine question about money habits or payment pain points in Latin America. Not rhetorical — something that invites real answers. Keep it short and conversational. The question should relate to the problem space Sippy operates in.`,
   },
   {
-    id: 'thread_hook',
-    pillar: 'domainInsights',
-    label: 'Thread hook',
-    promptTemplate: `Write a single tweet that could be the opening of a thread (but standalone is fine too). It should tease an interesting insight about money, remittances, or saving in LatAm. End with something that makes people want to know more. Not clickbait — genuinely interesting.`,
+    id: 'hook',
+    pillar: 'productMilestone',
+    label: 'Curiosity hook',
+    promptTemplate: `Write a tweet that makes someone curious about Sippy without over-explaining. Tease what it does or why it exists. Think movie trailer — give enough to create interest, not enough to satisfy it. End with something that makes people want to click your profile or follow.`,
   },
   {
-    id: 'story',
-    pillar: 'buildInPublic',
-    label: 'User story',
-    promptTemplate: `Write a short tweet telling a brief, specific story about a Sippy user or interaction. Could be anonymous ("a user in Cali..."). Focus on the human moment, not the technology. Keep it concrete — names, cities, amounts make it real.`,
-  },
-  {
-    id: 'contrast',
-    pillar: 'domainInsights',
-    label: 'Old way vs new way',
-    promptTemplate: `Write a tweet that contrasts the old/traditional way of doing something (sending money, saving in dollars, paying internationally) with how Sippy does it. Use a list or parallel structure. The contrast should make the old way feel absurd. No "revolutionary" — let the comparison speak.`,
+    id: 'why',
+    pillar: 'productMilestone',
+    label: 'Why we built this',
+    promptTemplate: `Write a tweet about WHY Sippy exists — the founder motivation, the personal frustration, the moment that sparked it. Not the product pitch, the human reason behind it. Short, honest, specific to LatAm. This should make someone feel the problem.`,
   },
 ];
 

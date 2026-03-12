@@ -1,5 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
+import { query } from '#services/db'
 import GasRefuelStatus from '#models/indexer/gas_refuel_status'
 import SippyWallet from '#models/indexer/sippy_wallet'
 
@@ -110,5 +111,34 @@ export default class AnalyticsController {
       topUsers: topUsersData,
       dailyVolumes: dailyVolumesData,
     })
+  }
+
+  /**
+   * GET /admin/parse-patterns
+   *
+   * Returns the top 50 scrubbed phrases that the LLM successfully classified,
+   * grouped by intent and language. Use this to find recurring patterns that
+   * should be promoted to regex rules.
+   *
+   * Protected by admin session auth (same as other /admin routes).
+   */
+  async parsePatterns({ response }: HttpContext) {
+    const result = await query<{
+      matched_phrase: string
+      intent: string
+      detected_language: string | null
+      frequency: string
+    }>(
+      `SELECT matched_phrase, intent, detected_language, COUNT(*)::text AS frequency
+       FROM parse_log
+       WHERE parse_source = 'llm'
+         AND status = 'llm-success'
+         AND matched_phrase IS NOT NULL
+       GROUP BY matched_phrase, intent, detected_language
+       ORDER BY COUNT(*) DESC
+       LIMIT 50`
+    )
+
+    return response.json({ patterns: result.rows })
   }
 }

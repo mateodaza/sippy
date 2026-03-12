@@ -57,10 +57,12 @@ function buildUserPrompt(
   return `Write a single tweet in ${language === 'es' ? 'Spanish' : 'English'}. Format: ${archetype.label}. ${archetype.promptTemplate}
 
 Rules:
-- Maximum 280 characters
+- Maximum 280 characters (aim for under 200 — shorter is better)
 - No hashtags
 - No links (links go in replies, not tweets)
 - No emojis unless they add genuine meaning
+- NEVER invent numbers, user counts, dollar amounts, or metrics. Only use numbers from the REAL SIPPY DATA section above. If there are no real numbers to share, write about the product or the problem instead.
+- Every tweet should make someone want to try Sippy, follow the account, or feel the problem Sippy solves. No generic observations.
 - Output ONLY the tweet text, nothing else`;
 }
 

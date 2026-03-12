@@ -13,7 +13,7 @@ import {
   type CallMeta,
 } from '../services/llm.service.js'
 import { normalizePhoneNumber } from './phone.js'
-import { logParseResult, type ParseLogEntry } from '../services/db.js'
+import { logParseResult, type ParseLogEntry, type ContextMessage } from '../services/db.js'
 
 export { normalizePhoneNumber, verifySendAgreement } from './phone.js'
 
@@ -109,7 +109,7 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
     const match = normalizedText.match(pattern)
     if (match) {
       const lang = match[1].toLowerCase() as 'en' | 'es' | 'pt'
-      return { command: 'language', detectedLanguage: lang }
+      return { command: 'language', detectedLanguage: lang, originalText: text }
     }
   }
 
@@ -117,7 +117,7 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
   for (const [command, patterns] of Object.entries(COMMAND_PATTERNS)) {
     if (command === 'language') continue // Already handled above
     if (patterns.some((p) => p.test(normalizedText))) {
-      return { command: command as ParsedCommand['command'] }
+      return { command: command as ParsedCommand['command'], originalText: text }
     }
   }
 
@@ -179,7 +179,11 @@ function parseSendMatch(match: RegExpMatchArray, originalText: string): ParsedCo
  *
  * Send commands are NEVER accepted from LLM for M1.
  */
-export async function parseMessage(text: string, ctx?: ParseContext): Promise<ParsedCommand> {
+export async function parseMessage(
+  text: string,
+  ctx?: ParseContext,
+  context: ContextMessage[] = []
+): Promise<ParsedCommand> {
   const startTime = Date.now()
 
   // Step 1: Try regex first (zero cost)
@@ -225,7 +229,7 @@ export async function parseMessage(text: string, ctx?: ParseContext): Promise<Pa
   }
 
   try {
-    const llmResponse = await parseMessageWithLLM(text)
+    const llmResponse = await parseMessageWithLLM(text, context)
 
     if (llmResponse?.parsed) {
       const result: ParsedCommand = {
@@ -235,7 +239,7 @@ export async function parseMessage(text: string, ctx?: ParseContext): Promise<Pa
         llmStatus: 'success',
       }
       if (ctx) {
-        logParse(ctx, result, 'llm', 'llm-success', Date.now() - startTime, llmResponse.meta)
+        logParse(ctx, result, 'llm', 'llm-success', Date.now() - startTime, llmResponse.meta, text)
       }
       return result
     }
@@ -267,7 +271,8 @@ function logParse(
   source: 'regex' | 'llm',
   status: string,
   latencyMs: number,
-  meta?: CallMeta
+  meta?: CallMeta,
+  originalText?: string
 ): void {
   const entry: ParseLogEntry = {
     messageId: ctx.messageId,
@@ -280,6 +285,7 @@ function logParse(
     latencyMs,
     status,
     detectedLanguage: result.detectedLanguage,
+    originalText, // sanitized into matched_phrase inside logParseResult for llm-success rows
   }
   // Fire-and-forget — never blocks message handling
   logParseResult(entry)

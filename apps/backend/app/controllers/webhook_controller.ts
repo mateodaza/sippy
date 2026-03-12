@@ -18,7 +18,7 @@ import '#types/container'
 import type { Lang } from '#utils/messages'
 import { parseMessage } from '#utils/message_parser'
 import { sendTextMessage, markAsRead } from '#services/whatsapp.service'
-import { getUserLanguage, setUserLanguage } from '#services/db'
+import { getUserLanguage, setUserLanguage, getConversationContext, appendConversationMessage } from '#services/db'
 import { detectLanguage, PERSIST_THRESHOLD } from '#utils/language'
 import {
   formatHelpMessage,
@@ -38,6 +38,7 @@ import {
 import { handleStartCommand } from '#commands/start_command'
 import { handleBalanceCommand } from '#commands/balance_command'
 import { handleSendCommand } from '#commands/send_command'
+import { generateResponse } from '#services/llm.service'
 
 export default class WebhookController {
   /**
@@ -180,9 +181,20 @@ export default class WebhookController {
       return
     }
 
+    // ── Fetch conversation context (non-financial follow-ups) ──────────
+    const context = await getConversationContext(from)
+
     // ── Parse command ──────────────────────────────────────────────────
-    const command = await parseMessage(text, { messageId, phoneNumber: from })
+    const command = await parseMessage(text, { messageId, phoneNumber: from }, context)
     logger.info('Command parsed: %o', command)
+
+    // ── Store context for eligible intents (fire-and-forget, before handler) ──
+    // Written early to reduce race window if a second message arrives quickly.
+    // Only non-financial intents — never store send attempts or unknown messages.
+    const CONTEXT_INTENTS = new Set(['greeting', 'social', 'help', 'about', 'history', 'settings', 'language', 'start'])
+    if (CONTEXT_INTENTS.has(command.command)) {
+      appendConversationMessage(from, text)
+    }
 
     // Log LLM status for observability
     if (command.llmStatus) {
@@ -225,7 +237,7 @@ export default class WebhookController {
 
     // ── Route to command handler ──────────────────────────────────────
     const lang: Lang = userLang || 'en'
-    await this.handleCommand(from, command, lang)
+    await this.handleCommand(from, command, lang, context)
 
     // Only mark as processed after successful handling — allows Meta retry on failure
     rateLimitService.markProcessed(messageId)
@@ -240,7 +252,8 @@ export default class WebhookController {
   private async handleCommand(
     phoneNumber: string,
     command: ParsedCommand,
-    lang: Lang
+    lang: Lang,
+    context: import('#services/db').ContextMessage[] = []
   ): Promise<void> {
     try {
       switch (command.command) {
@@ -276,13 +289,19 @@ export default class WebhookController {
           await sendTextMessage(phoneNumber, formatSettingsMessage(phoneNumber, lang), lang)
           break
 
-        case 'greeting':
-          await sendTextMessage(phoneNumber, formatGreetingMessage(lang), lang)
+        case 'greeting': {
+          const text = command.originalText ?? ''
+          const reply = text ? await generateResponse(text, lang, context) : null
+          await sendTextMessage(phoneNumber, reply ?? formatGreetingMessage(lang), lang)
           break
+        }
 
-        case 'social':
-          await sendTextMessage(phoneNumber, formatSocialReplyMessage(lang), lang)
+        case 'social': {
+          const text = command.originalText ?? ''
+          const reply = text ? await generateResponse(text, lang, context) : null
+          await sendTextMessage(phoneNumber, reply ?? formatSocialReplyMessage(lang), lang)
           break
+        }
 
         case 'language': {
           const langNames: Record<string, string> = {

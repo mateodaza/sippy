@@ -115,4 +115,98 @@ test.group('Webhook | POST /webhook/whatsapp (Message Receive)', () => {
     // Meta requires immediate 200 — processing is async
     response.assertStatus(200)
   })
+
+  test('returns 200 for greeting message (async processing path)', async ({ client }) => {
+    // Greeting intents now go through generateResponse (with static template fallback).
+    // The HTTP layer still responds 200 immediately — async processing happens after.
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: '573009999001',
+                    id: 'test_greeting_001',
+                    type: 'text',
+                    text: { body: 'hola' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+    const response = await client
+      .post('/webhook/whatsapp')
+      .header('x-hub-signature-256', signPayload(payload))
+      .json(payload)
+
+    response.assertStatus(200)
+  })
+
+  test('returns 200 for social message (async processing path)', async ({ client }) => {
+    const payload = {
+      object: 'whatsapp_business_account',
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                messages: [
+                  {
+                    from: '573009999002',
+                    id: 'test_social_001',
+                    type: 'text',
+                    text: { body: 'gracias' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    }
+    const response = await client
+      .post('/webhook/whatsapp')
+      .header('x-hub-signature-256', signPayload(payload))
+      .json(payload)
+
+    response.assertStatus(200)
+  })
+})
+
+test.group('Webhook | GET /admin/parse-patterns (Auth Guard)', () => {
+  test('route registration can be looked up in the router', async ({ assert }) => {
+    // Verify the route exists without making an HTTP request, so this test
+    // passes regardless of whether auth infrastructure (session store) is
+    // available in the current environment.
+    const { default: router } = await import('@adonisjs/core/services/router')
+    const allRoutes = router.toJSON()
+    const found = Object.values(allRoutes)
+      .flat()
+      .some((r: any) => r.pattern === '/admin/parse-patterns')
+    assert.isTrue(found, '/admin/parse-patterns should be a registered route')
+  })
+
+  test('unauthenticated request returns an auth rejection (302 or 401 or 403)', async ({
+    client,
+    assert,
+  }) => {
+    const response = await client.get('/admin/parse-patterns')
+    const status = response.status()
+    // 302 — AdonisJS web guard redirects to /admin/login
+    // 401 — guard configured for JSON clients
+    // 403 — guard configured to forbid instead of redirect
+    // If you see 503 here, the session store is misconfigured in the test env.
+    assert.isTrue(
+      [302, 401, 403].includes(status),
+      `Expected auth rejection (302/401/403) but got ${status}. ` +
+        `If this is 503, the session/DB connection is failing inside the auth middleware — ` +
+        `check your test environment session configuration.`
+    )
+  })
 })

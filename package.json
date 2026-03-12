@@ -30,6 +30,10 @@
       "sharp",
       "unrs-resolver",
       "utf-8-validate"
-    ]
+    ],
+    "patchedDependencies": {
+      "@mysten/sui@1.45.2": "patches/@mysten__sui@1.45.2.patch",
+      "porto@0.2.35": "patches/porto@0.2.35.patch"
+    }
   }
 }

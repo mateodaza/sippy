@@ -136,7 +136,7 @@ test.group('Message Parser | Edge Cases', () => {
   })
 })
 
-test.group('Message Parser | OriginalText Field (Bug Fix Verification)', () => {
+test.group('Message Parser | OriginalText Field', () => {
   const unknownInputs = ['complete gibberish xyz', 'random nonsense', 'asdfghjkl']
 
   for (const input of unknownInputs) {
@@ -145,4 +145,45 @@ test.group('Message Parser | OriginalText Field (Bug Fix Verification)', () => {
       assert.isDefined(result.originalText)
     })
   }
+
+  // All regex-matched intents must now carry originalText so handlers can
+  // pass it to generateResponse for greeting/social personality replies.
+  const regexIntents: { input: string; command: string }[] = [
+    { input: 'hola', command: 'greeting' },
+    { input: 'gracias', command: 'social' },
+    { input: 'balance', command: 'balance' },
+    { input: 'ayuda', command: 'help' },
+    { input: 'historial', command: 'history' },
+    { input: 'ajustes', command: 'settings' },
+    { input: 'start', command: 'start' },
+    { input: 'about', command: 'about' },
+    { input: 'language es', command: 'language' },
+  ]
+
+  for (const { input, command } of regexIntents) {
+    test(`Regex-matched "${command}" includes originalText`, ({ assert }) => {
+      const result = parseMessageWithRegex(input)
+      assert.equal(result.command, command)
+      assert.equal(result.originalText, input)
+    })
+  }
+})
+
+test.group('Message Parser | Context Parameter', () => {
+  test('parseMessage accepts context without error', async ({ assert }) => {
+    const context = [{ role: 'user' as const, content: 'cuánto tengo?' }]
+    const result = await parseMessage('y el historial?', undefined, context)
+    // Context is forwarded to LLM — for unknown input, command is unknown or history
+    assert.isString(result.command)
+  })
+
+  test('parseMessage works normally with empty context', async ({ assert }) => {
+    const result = await parseMessage('balance', undefined, [])
+    assert.equal(result.command, 'balance')
+  })
+
+  test('parseMessage works normally with no context argument', async ({ assert }) => {
+    const result = await parseMessage('balance')
+    assert.equal(result.command, 'balance')
+  })
 })

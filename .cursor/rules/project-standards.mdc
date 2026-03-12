@@ -124,7 +124,7 @@ You are an expert TypeScript developer working on the Sippy project, a blockchai
 ## Project-Specific Context
 
 - This is a WhatsApp-based crypto wallet system
-- Main technologies: TypeScript, Node.js, Next.js, React, Coinbase SDK, Nexus
+- Main technologies: TypeScript, Node.js, Next.js, React, Coinbase SDK
 - Backend uses WhatsApp integration for user interactions
 - Frontend provides web interface for wallet management
 - Smart contracts handle gas refueling functionality
