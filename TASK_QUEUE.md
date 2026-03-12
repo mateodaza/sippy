@@ -29,7 +29,7 @@
 > **Deliverable:** M1 #4
 > **Estimate:** 6-8h
 
-#### DC-001 [ ] Create exchange rate service
+#### DC-001 [x] Create exchange rate service
 - **What:** Fetch USD→LATAM rates from a free API, cache in-memory with 15-min TTL.
 - **Acceptance criteria:**
   - New file exporting singleton with lazy init
