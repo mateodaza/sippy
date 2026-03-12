@@ -420,7 +420,8 @@ function SettingsContent() {
       const { data: freshPermissions } = await refetchPermissions();
 
       const sippyPermission = freshPermissions?.spendPermissions?.find(
-        (p) =>
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (p: any) =>
           p.permission?.spender?.toLowerCase() === SIPPY_SPENDER_ADDRESS.toLowerCase() &&
           !p.revoked
       );
