@@ -91,6 +91,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "reflect-metadata": "^0.2.2",
+    "resend": "^6.9.3",
     "zod": "^3.25.76"
   },
   "hotHook": {

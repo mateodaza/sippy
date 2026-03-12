@@ -144,7 +144,7 @@
 - **Dependencies:** ER-001
 - **Files:** `apps/backend/app/utils/email_crypto.ts` (new)
 
-#### ER-003 [ ] Create email service with Resend
+#### ER-003 [x] Create email service with Resend
 - **What:** Send branded verification emails via Resend API.
 - **Acceptance criteria:**
   - Install `resend` npm package: `cd apps/backend && pnpm add resend`

@@ -57,6 +57,7 @@ export default defineConfig({
     () => import('@adonisjs/inertia/inertia_provider'),
     () => import('#providers/rate_limit_provider'),
     () => import('#providers/otp_provider'),
+    () => import('#providers/email_provider'),
     () => import('@adonisjs/static/static_provider')
   ],
 
