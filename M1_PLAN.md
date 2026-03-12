@@ -12,8 +12,8 @@
 | # | Deliverable | Status | Phase |
 |---|------------|--------|-------|
 | 1 | Onramp integration (API, testing, user flow) | Blocked (waiting on Maash) | P6 |
-| 2 | Non-custodial wallet refinements | 95% | P1 (done), P2, Sweep+Wallet (done) |
-| 3 | Security hardening (rate limits, tx checks, error handling) | 90% | P4, email gates + squatting fix done, tx confirmation + velocity pending |
+| 2 | Non-custodial wallet refinements | 98% | P1 (done), P2, Sweep+Wallet (done), custom auth + dual-wallet web UI (done) |
+| 3 | Security hardening (rate limits, tx checks, error handling) | 92% | P4.6 custom auth done, email gates + squatting fix done, tx confirmation + velocity pending |
 | 4 | Dual currency display (USD + local) | 100% | P3 (26 LATAM currencies, 24h cache) |
 | 5 | Privacy controls + Email Recovery | 90% | P5 (email recovery done, phone visibility pending) |
 | 6 | User settings (daily limits via settings page) | 95% | P5 (email mgmt + limits + export done, language UI pending) |
@@ -59,23 +59,15 @@
 - Railway services: `sippy-backend`, `sippy-indexer`, shared Postgres
 
 **What to pick up next (priority order):**
-1. **P4.6: Custom Auth — Sippy-branded OTP (CRITICAL PATH)**
-   - Users currently see "Coinbase" in OTP messages — must say "Sippy"
-   - Replace CDP's `useSignInWithSms` with Twilio OTP + `useAuthenticateWithJWT`
-   - Backend: `otp.service.ts` (Twilio send/verify) + `jwt.service.ts` (RS256 keypair + JWKS endpoint)
-   - Frontend: swap auth flows in `/setup`, `/settings`, `/wallet`
-   - SMS template: "Sippy: Tu codigo es 123456" (branded, Spanish-first)
-   - This is a No-Go item — M1 cannot ship with Coinbase branding in OTPs
-   - Full spec: see Phase 4.6 below (~10-14h)
-2. **P4.7: Web Wallet Session Robustness** — depends on P4.6 completing first
-   - `useSessionGuard()` hook, JWT TTL, inline re-auth UX
+1. ~~**P4.6: Custom Auth — Sippy-branded OTP (CRITICAL PATH)**~~ **DONE (Mar 12, 2026)**
+   - OTP service (Twilio), JWT service (RS256), JWKS endpoint live at `https://backend.sippy.lat/api/auth/.well-known/jwks.json`
+   - CDP portal configured with custom auth (JWKS URL + issuer `https://backend.sippy.lat`)
+   - All web pages (`/setup`, `/settings`, `/wallet`) migrated to `useAuthenticateWithJWT`
+   - Dual-wallet web UI shipped: WhatsApp wallet (EOA) + Web wallet (smart account), `POST /api/send` for EOA sends
+2. **P4.7: Web Wallet Session Robustness** — JWT TTL is 1h (upgrade from 15 min spec); inline re-auth on expiry pending
 3. **P2: Onboarding Tightening** — quick wins, improves beta experience
-4. **P3: Dual Currency Display** — no dependencies, standalone
-   - Currency derived from phone country code (+57 → COP, +52 → MXN, etc.)
-   - Skip conversion for USD-using countries: +1 (US), +507 (Panama), +593 (Ecuador), +503 (El Salvador)
-   - See Phase 3 below for full mapping
-5. **P4.1-4.2: Tx Confirmation + Webhook Security** — needed before beta
-6. **Fix indexer restart mechanism** — replace `process.exit(0)` with Railway API redeploy (see Indexer Known Issues #1)
+4. **P4.1-4.2: Tx Confirmation + Webhook Security** — needed before beta
+5. **Fix indexer restart mechanism** — replace `process.exit(0)` with Railway API redeploy (see Indexer Known Issues #1)
 
 **Key files to know:**
 - `apps/indexer/src/api/index.ts` — Hono API routes, `writeDb` for offchain writes, backfill logic
@@ -526,40 +518,30 @@ This is zero-friction: users never configure anything, they just see their local
 >
 > **Our users are regular people.** The auth UX must be dead simple: phone number → OTP → done. No blockchain jargon. No confusing flows. If they lose access, recovery must be equally simple (see Phase 5.6 for recovery methods).
 
-- [ ] **Backend: Twilio OTP service** — new `backend/src/services/otp.service.ts`
-  - `POST /api/auth/send-otp` — sends OTP via Twilio to phone (E.164 format)
-  - `POST /api/auth/verify-otp` — verifies code, returns signed JWT
-  - **SMS must say "Sippy" not "Coinbase":** template → "Sippy: Tu codigo es 123456" (branded, trilingual)
-  - OTP: 6-digit, 5-min expiry, max 3 attempts, rate limit 5 OTPs/phone/hour
-  - Store pending OTPs in-memory Map (same pattern as other throttles)
-  - Edge case: user requests OTP, doesn't receive it, requests again → don't invalidate the first code until expiry (either code works)
-  - Edge case: phone number changed (SIM swap) → user can't receive OTP → recovery flow (Phase 5.6)
+- [x] **Backend: Twilio OTP service** — `app/services/otp_service.ts`
+  - `POST /api/auth/send-otp` + `POST /api/auth/verify-otp` — live and tested
+  - SMS says "Sippy: Tu código es XXXXXX" (trilingual: es/en/pt)
+  - 6-digit, 5-min TTL, max 5 verify attempts, rate limit 3 sends/min/phone
 
-- [ ] **Backend: JWT issuer** — `backend/src/services/jwt.service.ts`
-  - Generate RS256 keypair (store private key in env `JWT_PRIVATE_KEY`, publish public key via JWKS)
-  - `GET /api/auth/.well-known/jwks.json` — serves public key for CDP to validate
-  - JWT claims: `{ sub: phoneNumber, iat, exp }` — **short TTL: 15 min default** (configurable via `JWT_TTL_MINUTES` env)
-  - Register JWKS endpoint in CDP Portal under "Custom auth" tab
-  - `POST /api/auth/refresh` — extends session if current JWT is still valid (re-issues with fresh `exp`)
-  - Refresh window: only allow refresh if JWT has < 5 min remaining (prevents infinite sessions)
+- [x] **Backend: JWT issuer** — `app/services/jwt_service.ts`
+  - RS256 keypair in Railway env vars, `GET /api/auth/.well-known/jwks.json` live
+  - JWT TTL: 1h (sub = E.164 phone, iss = `https://backend.sippy.lat`)
+  - CDP Portal configured (JWKS URL + issuer registered)
 
-- [ ] **Frontend: Replace `useSignInWithSms` with `useAuthenticateWithJWT`** — all pages
-  - Update `CDPHooksProvider` config with `customAuth: { getJwt }` callback
-  - `getJwt` calls `POST /api/auth/verify-otp` on first auth, then `POST /api/auth/refresh` for session extension
-  - Replace auth flows in `/setup`, `/settings`, `/wallet` — phone input + OTP input stays the same UI, but OTP goes to our backend instead of CDP
-  - Session TTL controlled by JWT `exp` — 15 min default
-  - If JWT expires mid-operation (mid-send, mid-sweep): catch gracefully, show "Session expired — verify again to continue", **preserve form state** so user doesn't lose input
-  - Auto-refresh: if JWT has < 3 min remaining and user is active, silently refresh in background
+- [x] **Frontend: `useAuthenticateWithJWT`** — all pages migrated (`/setup`, `/settings`, `/wallet`)
+  - `lib/auth.ts`: `sendOtp`, `verifyOtp`, `storeToken`, `getFreshToken` (expiry-aware)
+  - `lib/usdc-transfer.ts` uses stored JWT for `ensureGas` + `resolve-phone`
 
-- [ ] **Sensitive operation re-auth gate**
-  - Before export key or revoke permission: check if JWT was issued < 5 min ago
-  - If stale: require fresh OTP ("Verify your identity to continue") before proceeding
-  - Prevents session hijacking from accessing high-risk operations
-  - UX: inline OTP prompt in the same page (don't redirect away and lose context)
+- [x] **Web wallet dual-wallet UI** (Mar 12, 2026)
+  - WhatsApp Wallet (EOA) + Web Wallet (smart account) shown as selectable cards
+  - EOA send: `POST /api/send` (SpendPermission, same flow as WhatsApp)
+  - Smart account send: UserOps (existing)
+  - Auto-selects wallet with funds on load
 
-**Prerequisites:** Twilio account + phone number, CDP Portal custom auth configuration
-**Estimate:** 10-14h
-**Dependencies:** None — can be done in parallel with other Phase 4 tasks. Phase 5.6 (recovery) builds on top of this.
+- [ ] **Sensitive operation re-auth gate** — pending
+  - Before export key or revoke: require fresh OTP if JWT > 5 min old
+
+**Dependencies:** Phase 5.6 (recovery) builds on top of this.
 
 ### 4.7 Web Wallet Session Robustness
 
