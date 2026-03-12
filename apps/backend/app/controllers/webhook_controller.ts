@@ -39,6 +39,195 @@ import { handleStartCommand } from '#commands/start_command'
 import { handleBalanceCommand } from '#commands/balance_command'
 import { handleSendCommand } from '#commands/send_command'
 import { generateResponse } from '#services/llm.service'
+import { exchangeRateService } from '#services/exchange_rate_service'
+
+export interface RateContext {
+  senderRate: number | null
+  senderCurrency: string | null
+  recipientRate: number | null
+  recipientCurrency: string | null
+}
+
+/**
+ * Resolve exchange rates from the service for a sender and optional recipient.
+ *
+ * Uses getLocalRate (async) so that on first boot this correctly awaits the
+ * initial fetch before returning — avoiding USD-only display on the first
+ * message after server restart. When the cache is already warm, getLocalRate
+ * resolves via an in-memory Map.get with no I/O.
+ *
+ * Never throws: all errors are caught and return all-nulls (graceful USD fallback).
+ *
+ * Exported for direct unit testing without going through processWebhook.
+ */
+export async function fetchRateContext(
+  fromPhone: string,
+  recipientPhone?: string
+): Promise<RateContext> {
+  let senderRate: number | null = null
+  let senderCurrency: string | null = null
+  let recipientRate: number | null = null
+  let recipientCurrency: string | null = null
+
+  try {
+    senderCurrency = exchangeRateService.getCurrencyForPhone('+' + fromPhone)
+    if (senderCurrency) {
+      senderRate = await exchangeRateService.getLocalRate(senderCurrency)
+    }
+    if (recipientPhone) {
+      recipientCurrency = exchangeRateService.getCurrencyForPhone('+' + recipientPhone)
+      if (recipientCurrency) {
+        recipientRate = await exchangeRateService.getLocalRate(recipientCurrency)
+      }
+    }
+  } catch {
+    // Non-blocking: unexpected error → fall back to USD-only
+  }
+
+  return { senderRate, senderCurrency, recipientRate, recipientCurrency }
+}
+
+/**
+ * Route a parsed command to the appropriate handler, threading a pre-fetched
+ * rate context into balance and send handlers.
+ *
+ * Exported as a module-level function so that tests can inject fake balance/send
+ * handlers to verify the exact rate values passed without mocking external services.
+ *
+ * `balanceHandler` and `sendHandler` default to the real imports and are only
+ * overridden in tests.
+ */
+export async function routeCommand(
+  phoneNumber: string,
+  command: ParsedCommand,
+  lang: Lang,
+  rateCtx: RateContext,
+  context: import('#services/db').ContextMessage[] = [],
+  balanceHandler: typeof handleBalanceCommand = handleBalanceCommand,
+  sendHandler: typeof handleSendCommand = handleSendCommand
+): Promise<void> {
+  try {
+    switch (command.command) {
+      case 'start':
+        await handleStartCommand(phoneNumber, lang)
+        break
+
+      case 'help':
+        await sendTextMessage(phoneNumber, formatHelpMessage(lang), lang)
+        break
+
+      case 'about':
+        await sendTextMessage(phoneNumber, formatAboutMessage(lang), lang)
+        break
+
+      case 'balance':
+        await balanceHandler(phoneNumber, lang, rateCtx.senderRate, rateCtx.senderCurrency)
+        break
+
+      case 'send':
+        if (command.amount && command.recipient) {
+          await sendHandler(
+            phoneNumber,
+            command.amount,
+            command.recipient,
+            lang,
+            rateCtx.senderRate,
+            rateCtx.senderCurrency,
+            rateCtx.recipientRate,
+            rateCtx.recipientCurrency
+          )
+        } else {
+          await sendTextMessage(phoneNumber, formatInvalidSendFormat(lang), lang)
+        }
+        break
+
+      case 'history':
+        await sendTextMessage(phoneNumber, formatHistoryMessage(phoneNumber, lang), lang)
+        break
+
+      case 'settings':
+        await sendTextMessage(phoneNumber, formatSettingsMessage(phoneNumber, lang), lang)
+        break
+
+      case 'greeting': {
+        const text = command.originalText ?? ''
+        const reply = text ? await generateResponse(text, lang, context) : null
+        await sendTextMessage(phoneNumber, reply ?? formatGreetingMessage(lang), lang)
+        break
+      }
+
+      case 'social': {
+        const text = command.originalText ?? ''
+        const reply = text ? await generateResponse(text, lang, context) : null
+        await sendTextMessage(phoneNumber, reply ?? formatSocialReplyMessage(lang), lang)
+        break
+      }
+
+      case 'language': {
+        const langNames: Record<string, string> = {
+          en: 'English',
+          es: 'Español',
+          pt: 'Português',
+        }
+        const langName =
+          langNames[command.detectedLanguage || ''] || command.detectedLanguage || ''
+        await sendTextMessage(phoneNumber, formatLanguageSetMessage(langName, lang), lang)
+        break
+      }
+
+      case 'unknown':
+        if (command.helpfulMessage) {
+          await sendTextMessage(phoneNumber, command.helpfulMessage, lang)
+        } else {
+          const rateLimitNote =
+            command.llmStatus === 'rate-limited' ? `\n${formatRateLimitedMessage(lang)}\n\n` : ''
+          await sendTextMessage(
+            phoneNumber,
+            formatUnknownCommandMessage(command.originalText || '', lang) +
+              (rateLimitNote ? `\n${rateLimitNote}` : ''),
+            lang
+          )
+        }
+        break
+
+      default:
+        logger.warn('Unhandled command: %s', command.command)
+    }
+  } catch (error) {
+    logger.error('Error handling command: %o', error)
+    await sendTextMessage(phoneNumber, formatCommandErrorMessage(lang), lang)
+  }
+}
+
+/**
+ * Fetch rate context for the given phone numbers, then route the command.
+ *
+ * This function is exported (with injectable handlers) so that AC1 tests can
+ * verify the full fetch→route pipeline: phone number → getLocalRate → handler
+ * args — without going through the HTTP stack or the private processWebhook.
+ *
+ * processWebhook does NOT call dispatchCommand directly; it calls
+ * fetchRateContext + handleCommand separately so that the rate fetch visibly
+ * occurs before handleCommand in the processWebhook body. dispatchCommand
+ * mirrors that logic for testing purposes.
+ *
+ * If dispatchCommand were to hardcode nulls instead of calling fetchRateContext,
+ * the AC1 tests would fail because the injected handler would receive null
+ * instead of the seeded cache value.
+ */
+export async function dispatchCommand(
+  from: string,
+  command: ParsedCommand,
+  lang: Lang,
+  context: import('#services/db').ContextMessage[] = [],
+  balanceHandler: typeof handleBalanceCommand = handleBalanceCommand,
+  sendHandler: typeof handleSendCommand = handleSendCommand
+): Promise<void> {
+  const recipientPhone =
+    command.command === 'send' && command.recipient ? command.recipient : undefined
+  const rateCtx = await fetchRateContext(from, recipientPhone)
+  await routeCommand(from, command, lang, rateCtx, context, balanceHandler, sendHandler)
+}
 
 export default class WebhookController {
   /**
@@ -235,9 +424,14 @@ export default class WebhookController {
       }
     }
 
+    // ── Fetch exchange rates before handleCommand ──────────────────────
+    const recipientPhone =
+      command.command === 'send' && command.recipient ? command.recipient : undefined
+    const rateCtx = await fetchRateContext(from, recipientPhone)
+
     // ── Route to command handler ──────────────────────────────────────
     const lang: Lang = userLang || 'en'
-    await this.handleCommand(from, command, lang, context)
+    await this.handleCommand(from, command, lang, rateCtx, context)
 
     // Only mark as processed after successful handling — allows Meta retry on failure
     rateLimitService.markProcessed(messageId)
@@ -247,95 +441,16 @@ export default class WebhookController {
   /**
    * Route a parsed command to the appropriate handler.
    *
-   * Ported from Express handleCommand() (server.ts lines 323-403).
+   * Rate context is resolved by processWebhook before this call and forwarded
+   * to the routing layer so balance and send handlers receive pre-fetched rates.
    */
   private async handleCommand(
     phoneNumber: string,
     command: ParsedCommand,
     lang: Lang,
+    rateCtx: RateContext,
     context: import('#services/db').ContextMessage[] = []
   ): Promise<void> {
-    try {
-      switch (command.command) {
-        case 'start':
-          await handleStartCommand(phoneNumber, lang)
-          break
-
-        case 'help':
-          await sendTextMessage(phoneNumber, formatHelpMessage(lang), lang)
-          break
-
-        case 'about':
-          await sendTextMessage(phoneNumber, formatAboutMessage(lang), lang)
-          break
-
-        case 'balance':
-          await handleBalanceCommand(phoneNumber, lang)
-          break
-
-        case 'send':
-          if (command.amount && command.recipient) {
-            await handleSendCommand(phoneNumber, command.amount, command.recipient, lang)
-          } else {
-            await sendTextMessage(phoneNumber, formatInvalidSendFormat(lang), lang)
-          }
-          break
-
-        case 'history':
-          await sendTextMessage(phoneNumber, formatHistoryMessage(phoneNumber, lang), lang)
-          break
-
-        case 'settings':
-          await sendTextMessage(phoneNumber, formatSettingsMessage(phoneNumber, lang), lang)
-          break
-
-        case 'greeting': {
-          const text = command.originalText ?? ''
-          const reply = text ? await generateResponse(text, lang, context) : null
-          await sendTextMessage(phoneNumber, reply ?? formatGreetingMessage(lang), lang)
-          break
-        }
-
-        case 'social': {
-          const text = command.originalText ?? ''
-          const reply = text ? await generateResponse(text, lang, context) : null
-          await sendTextMessage(phoneNumber, reply ?? formatSocialReplyMessage(lang), lang)
-          break
-        }
-
-        case 'language': {
-          const langNames: Record<string, string> = {
-            en: 'English',
-            es: 'Español',
-            pt: 'Português',
-          }
-          const langName =
-            langNames[command.detectedLanguage || ''] || command.detectedLanguage || ''
-          await sendTextMessage(phoneNumber, formatLanguageSetMessage(langName, lang), lang)
-          break
-        }
-
-        case 'unknown':
-          if (command.helpfulMessage) {
-            await sendTextMessage(phoneNumber, command.helpfulMessage, lang)
-          } else {
-            const rateLimitNote =
-              command.llmStatus === 'rate-limited' ? `\n${formatRateLimitedMessage(lang)}\n\n` : ''
-            await sendTextMessage(
-              phoneNumber,
-              formatUnknownCommandMessage(command.originalText || '', lang) +
-                (rateLimitNote ? `\n${rateLimitNote}` : ''),
-              lang
-            )
-          }
-          break
-
-        default:
-          logger.warn('Unhandled command: %s', command.command)
-      }
-    } catch (error) {
-      logger.error('Error handling command: %o', error)
-      await sendTextMessage(phoneNumber, formatCommandErrorMessage(lang), lang)
-    }
+    await routeCommand(phoneNumber, command, lang, rateCtx, context)
   }
 }

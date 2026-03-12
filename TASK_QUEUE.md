@@ -83,7 +83,7 @@
 - **Dependencies:** DC-001, DC-002
 - **Files:** `apps/backend/app/utils/messages.ts`
 
-#### DC-005 [ ] Thread rate through webhook command handler
+#### DC-005 [x] Thread rate through webhook command handler
 - **What:** Fetch exchange rate before handling commands and pass to formatters.
 - **Acceptance criteria:**
   - In the webhook controller, before `handleCommand`: fetch rate for sender's phone prefix via `exchangeRateService`
