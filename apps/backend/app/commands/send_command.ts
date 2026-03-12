@@ -16,6 +16,7 @@ import {
   sendButtonMessage,
 } from '#services/whatsapp.service'
 import { getRefuelService } from '#services/refuel.service'
+import { exchangeRateService } from '#services/exchange_rate_service'
 import {
   type Lang,
   formatSendProcessingMessage,
@@ -87,10 +88,17 @@ export async function handleSendCommand(
     }
 
     const senderBalance = await getUserBalance(fromPhoneNumber)
+
+    const senderCurrency = exchangeRateService.getCurrencyForPhone('+' + fromPhoneNumber)
+    const senderRate = senderCurrency ? await exchangeRateService.getLocalRate(senderCurrency) : null
+
     if (senderBalance < amount) {
       await sendTextMessage(
         fromPhoneNumber,
-        formatInsufficientBalanceMessage({ balance: senderBalance, needed: amount }, lang),
+        formatInsufficientBalanceMessage(
+          { balance: senderBalance, needed: amount, localRate: senderRate, localCurrency: senderCurrency },
+          lang
+        ),
         lang
       )
       return
@@ -114,7 +122,10 @@ export async function handleSendCommand(
 
     await sendTextMessage(
       fromPhoneNumber,
-      formatSendProcessingMessage({ amount, toPhone: toPhoneNumber }, lang),
+      formatSendProcessingMessage(
+        { amount, toPhone: toPhoneNumber, localRate: senderRate, localCurrency: senderCurrency },
+        lang
+      ),
       lang
     )
 
@@ -149,6 +160,8 @@ export async function handleSendCommand(
         toPhone: toPhoneNumber,
         txHash: result.transactionHash,
         gasCovered: !!refuelTxHash,
+        localRate: senderRate,
+        localCurrency: senderCurrency,
       },
       lang
     )
@@ -156,11 +169,17 @@ export async function handleSendCommand(
     await sendTextMessage(fromPhoneNumber, successMessage, lang)
 
     const recipientLang = (await getUserLanguage(toPhoneNumber)) || 'en'
+    const recipientCurrency = exchangeRateService.getCurrencyForPhone('+' + toPhoneNumber)
+    const recipientRate = recipientCurrency
+      ? await exchangeRateService.getLocalRate(recipientCurrency)
+      : null
     const recipientMessage = formatSendRecipientMessage(
       {
         amount,
         fromPhone: fromPhoneNumber,
         txHash: result.transactionHash,
+        localRate: recipientRate,
+        localCurrency: recipientCurrency,
       },
       recipientLang
     )
@@ -223,10 +242,17 @@ async function handleEmbeddedSend(
 
   // Check balance
   const senderBalance = await getEmbeddedBalance(fromPhoneNumber)
+
+  const senderCurrency = exchangeRateService.getCurrencyForPhone('+' + fromPhoneNumber)
+  const senderRate = senderCurrency ? await exchangeRateService.getLocalRate(senderCurrency) : null
+
   if (senderBalance < amount) {
     await sendTextMessage(
       fromPhoneNumber,
-      formatInsufficientBalanceMessage({ balance: senderBalance, needed: amount }, lang),
+      formatInsufficientBalanceMessage(
+        { balance: senderBalance, needed: amount, localRate: senderRate, localCurrency: senderCurrency },
+        lang
+      ),
       lang
     )
     return
@@ -244,7 +270,10 @@ async function handleEmbeddedSend(
 
   await sendTextMessage(
     fromPhoneNumber,
-    formatSendProcessingMessage({ amount, toPhone: toPhoneNumber }, lang),
+    formatSendProcessingMessage(
+      { amount, toPhone: toPhoneNumber, localRate: senderRate, localCurrency: senderCurrency },
+      lang
+    ),
     lang
   )
 
@@ -260,6 +289,8 @@ async function handleEmbeddedSend(
       toPhone: toPhoneNumber,
       txHash: result.transactionHash,
       gasCovered: true,
+      localRate: senderRate,
+      localCurrency: senderCurrency,
     },
     lang
   )
@@ -299,11 +330,17 @@ async function handleEmbeddedSend(
 
   try {
     const recipientLang = (await getUserLanguage(toPhoneNumber)) || 'en'
+    const recipientCurrency = exchangeRateService.getCurrencyForPhone('+' + toPhoneNumber)
+    const recipientRate = recipientCurrency
+      ? await exchangeRateService.getLocalRate(recipientCurrency)
+      : null
     const recipientMessage = formatSendRecipientMessage(
       {
         amount,
         fromPhone: fromPhoneNumber,
         txHash: result.transactionHash,
+        localRate: recipientRate,
+        localCurrency: recipientCurrency,
       },
       recipientLang
     )
