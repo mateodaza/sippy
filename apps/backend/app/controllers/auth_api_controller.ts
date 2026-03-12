@@ -121,9 +121,12 @@ export default class AuthApiController {
       // Strip leading '+' to match the DB phone format used by user_preferences
       const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
 
+      // Only block if another account has this email AND it's verified.
+      // Unverified claims don't block — prevents squatting/lockout attacks.
       const duplicate = await UserPreference.query()
         .whereNotNull('emailHash')
         .where('emailHash', hash)
+        .where('emailVerified', true)
         .whereNot('phoneNumber', dbPhone)
         .first()
       if (duplicate) {
@@ -144,9 +147,20 @@ export default class AuthApiController {
         return response.status(500).json({ error: 'Internal server error' })
       }
 
+      // Store pending email but preserve emailVerified status.
+      // emailVerified is only set to true in verifyEmailCode after code confirmation.
+      // This prevents a compromised session from downgrading protection by calling
+      // sendEmailCode to reset emailVerified=false before the new email is proven.
+      const existingVerified = existingPref?.emailVerified ?? false
+      const existingVerifiedAt = existingPref?.emailVerifiedAt ?? null
       await UserPreference.updateOrCreate(
         { phoneNumber: dbPhone },
-        { emailEncrypted: combined, emailHash: hash, emailVerified: false, emailVerifiedAt: null }
+        {
+          emailEncrypted: combined,
+          emailHash: hash,
+          emailVerified: existingVerified,
+          emailVerifiedAt: existingVerifiedAt,
+        }
       )
 
       return response.status(200).json({ success: true })
@@ -191,6 +205,14 @@ export default class AuthApiController {
       if (!result.valid) {
         return response.status(401).json({ error: 'invalid_or_expired_code' })
       }
+
+      // Clear any unverified claims of this email hash by other accounts
+      // (prevents stale unverified rows from blocking future lookups)
+      await UserPreference.query()
+        .where('emailHash', submittedHash)
+        .where('emailVerified', false)
+        .whereNot('phoneNumber', dbPhone)
+        .update({ emailHash: null, emailEncrypted: null })
 
       pref.emailVerified = true
       pref.emailVerifiedAt = DateTime.now()

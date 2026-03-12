@@ -32,12 +32,36 @@ export function formatCurrencyUSD(amount: number): string {
 }
 
 const CURRENCY_THOUSANDS_SEP: Record<string, string> = {
-  COP: ',',
-  MXN: '.',
-  ARS: '.',
-  BRL: '.',
-  PEN: '.',
-  CLP: '.',
+  // South America
+  COP: ',',  // Colombia: 1,000
+  MXN: ',',  // Mexico: 1,000
+  ARS: '.',  // Argentina: 1.000
+  BRL: '.',  // Brazil: 1.000
+  PEN: ',',  // Peru: 1,000
+  CLP: '.',  // Chile: 1.000
+  UYU: '.',  // Uruguay: 1.000
+  PYG: '.',  // Paraguay: 1.000
+  BOB: ',',  // Bolivia: 1,000
+  VES: ',',  // Venezuela: 1,000
+  // Central America
+  CRC: '.',  // Costa Rica: 1.000
+  GTQ: ',',  // Guatemala: 1,000
+  HNL: ',',  // Honduras: 1,000
+  NIO: ',',  // Nicaragua: 1,000
+  // Caribbean
+  DOP: ',',  // Dominican Republic: 1,000
+  CUP: ',',  // Cuba: 1,000
+  HTG: ',',  // Haiti: 1,000
+  JMD: ',',  // Jamaica: 1,000
+  TTD: ',',  // Trinidad & Tobago: 1,000
+  BBD: ',',  // Barbados: 1,000
+  // Other
+  GYD: ',',  // Guyana: 1,000
+  SRD: ',',  // Suriname: 1,000
+  BZD: ',',  // Belize: 1,000
+  AWG: ',',  // Aruba: 1,000
+  ANG: ',',  // Curaçao: 1,000
+  XCD: ',',  // EC$ islands: 1,000
 }
 
 function formatIntegerWithSep(n: number, sep: string): string {

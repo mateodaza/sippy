@@ -39,7 +39,7 @@ M1 establishes the recovery email system:
 - **Email verification:** A 6-digit code is sent via `email_service.ts` (Resend). The code expires after a fixed TTL.
 - **Storage:** Three columns are written to `user_preferences`:
   - `email_encrypted` — AES-encrypted email address (for sending future codes)
-  - `email_hash` — HMAC hash of email (for lookup without decrypting)
+  - `email_hash` — SHA-256 hash of normalized email (for lookup without decrypting)
   - `email_verified` — boolean flag, set `true` only after code confirmation
 - **Sensitive operation gating:** Export key and revoke permission require `email_verified = true` before proceeding (ER-007).
 
