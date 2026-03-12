@@ -1,6 +1,6 @@
 # Project Status — Sippy
 
-**Last Updated:** March 11, 2026
+**Last Updated:** March 12, 2026
 **Current Milestone:** M1 — Production Ready (deadline Mar 26, 2026)
 **Detailed Plan:** [M1_PLAN.md](./M1_PLAN.md)
 
@@ -12,10 +12,10 @@
 |---|------------|--------|-------|
 | 1 | Onramp integration | Blocked | Waiting on Maash API response |
 | 2 | Non-custodial wallet refinements | 95% | CDP Embedded Wallets working, sweep-to-EOA + web wallet done |
-| 3 | Security hardening | 85% | Rate limits + spam + auth endpoints + custom auth (Twilio+JWT) done, tx confirmation + velocity pending |
-| 4 | Dual currency display (USD + local) | 0% | Phone prefix → currency mapping designed, not built |
-| 5 | Privacy controls | 0% | Planned: phone visibility toggle |
-| 6 | User settings | 80% | Settings page working, language via WhatsApp working |
+| 3 | Security hardening | 90% | Rate limits + spam + auth + custom auth + email gates + email squatting fix done, tx confirmation + velocity pending |
+| 4 | Dual currency display (USD + local) | 100% | 26 LATAM currencies, phone prefix mapping, 24h cache, all separators |
+| 5 | Privacy controls + Email Recovery | 90% | Email collection, verification, gate tokens, recovery design — phone visibility toggle pending |
+| 6 | User settings | 95% | Settings page + email management + daily limits + key export, language UI pending |
 | 7 | Monitoring infrastructure | 70% | Indexer deployed, admin analytics + users showing real on-chain data, Sentry pending |
 | 8 | Legal entity | External | In progress separately |
 | 9 | WhatsApp production number | 100% | Active, approved |
@@ -59,8 +59,8 @@
 
 ### Frontend — Production
 
-- Setup page: full onboarding flow (phone → OTP → wallet → permission) — custom auth via Twilio+JWT
-- Settings page: daily limit management, private key export with sweep-to-EOA, session persistence
+- Setup page: full onboarding flow (phone → OTP → wallet → permission → optional recovery email) — custom auth via Twilio+JWT
+- Settings page: daily limit management, private key export with sweep-to-EOA, recovery email management, session persistence
 - Wallet page: web fallback — balance card, send USDC (to phone or 0x address), activity list
 - All pages: Sippy-branded SMS OTP (not Coinbase), JWT-based auth with CDP `authenticateWithJWT`
 - Fund page: add ETH/USDC to wallet
@@ -80,7 +80,7 @@
 - `/admin/analytics` — Total USDC volume, fund flow breakdown, top users by volume, daily volume chart, gas refuel stats
 - `/admin/users` — Users table with real on-chain data (Total Sent, Total Received, Txs, Last Activity)
 - `/admin/users/:phone` — User detail with on-chain stats + activity log
-- 276 tests passing (unit + functional)
+- 437 tests passing (unit + functional)
 
 ### Ponder On-Chain Indexer — Deployed
 
@@ -116,21 +116,23 @@
 - Setup page error recovery + progress indicator
 - Empty balance guidance with fund link
 
-### Phase 3: Dual Currency Display — Not Started
+### Phase 3: Dual Currency Display — DONE
 
-- Phone country code → local currency mapping (zero-friction)
-- Exchange rate service with 15-min cache
+- 26 LATAM currencies supported via phone prefix → currency mapping
+- Exchange rate service with 24h cache (open.er-api.com, no API key)
 - All balance/transfer messages show USD + local equivalent
+- Correct thousands separators per currency (period vs comma)
+- USD-pegged countries (Ecuador, Panama, El Salvador) skip local display
 
-### Phase 4: Security Hardening — Partially Done (75%)
+### Phase 4: Security Hardening — Partially Done (90%)
 
-- Done: rate limiting, spam protection, message deduplication, daily spending limits, amount validation, authenticated phone resolution, IP rate limiting, web send audit logging, custom auth (Twilio+JWT)
+- Done: rate limiting, spam protection, message deduplication, daily spending limits, amount validation, authenticated phone resolution, IP rate limiting, web send audit logging, custom auth (Twilio+JWT), email verification gates, email bypass fix, email squatting fix (partial unique index)
 - Pending: transaction confirmation flow, webhook signature validation, velocity checks, self-send block, concurrent send protection, admin controls
 
-### Phase 5: Privacy Controls + Settings — Partially Done
+### Phase 5: Privacy Controls + Email Recovery — Partially Done (90%)
 
-- Done: sweep-to-EOA in export flow, webapp fallback wallet (/wallet), cross-nav between /settings and /wallet
-- Pending: phone visibility toggle, language preference UI, WhatsApp privacy command, email recovery
+- Done: sweep-to-EOA in export flow, webapp fallback wallet (/wallet), cross-nav between /settings and /wallet, email collection (setup + settings), email verification (6-digit code via Resend), gate tokens for sensitive ops, recovery design doc
+- Pending: phone visibility toggle, language preference UI, WhatsApp privacy command
 
 ### Phase 6: Onramp — BLOCKED
 
@@ -227,12 +229,13 @@ sippy/                      ← Turborepo + pnpm workspaces
 | User-facing strings | 35+ (all trilingual) |
 | WhatsApp capacity | 2K bot-initiated + unlimited user-initiated |
 | Smart contract | GasRefuel.sol deployed on Arbitrum One |
-| Backend tests | 276 passing (unit + functional) |
+| Backend tests | 437 passing (unit + functional) |
 
 ---
 
 ## Recent Changes
 
+**Mar 12** — Dual currency COMPLETE (26 LATAM currencies, 24h cache). Email recovery infrastructure COMPLETE (collection, verification, gate tokens, Resend integration). Security fixes: email bypass vulnerability patched, email squatting blocked via partial unique index. 437 tests passing.
 **Mar 11** — P4.6 Custom Auth COMPLETE: Twilio raw SMS OTP (trilingual) + RS256 JWT + JWKS endpoint. Backend: jwt_service, otp_service, jwt_auth_middleware replacing CDP auth. Frontend: all 3 pages migrated to `authenticateWithJWT()`. CDP Portal config pending (manual).
 **Mar 6** — Doc cleanup: removed stale planning docs (ADONISJS-POC-PLAN, PONDER plans, loyalty-network). M1_PLAN.md updated with Carlos handoff priorities — custom auth (P4.6) is now #1.
 **Mar 5** — Admin analytics fixes: Top Users now ranks by total volume (sent + received), daily volume chart renders with pixel-based bar heights. Users page shows real on-chain data from indexer.
@@ -261,4 +264,6 @@ sippy/                      ← Turborepo + pnpm workspaces
 | Domain | sippy.lat | Active |
 | On-chain indexer | Ponder v0.15 + Railway | Deployed |
 | SMS OTP | Twilio (raw SMS API) | Configured |
+| Email delivery | Resend | Configured |
+| Exchange rates | open.er-api.com (free) | Active |
 | Onramp | Maash | Blocked (waiting on API) |
