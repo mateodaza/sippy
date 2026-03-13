@@ -803,3 +803,65 @@ export function buttonHelp(lang: Lang = 'en'): string {
   const m = { en: 'Help', es: 'Ayuda', pt: 'Ajuda' }
   return m[lang]
 }
+
+// ============================================================================
+// Transaction confirmation helpers
+// ============================================================================
+
+// Country codes that are exactly 1 digit (NANP block: US, Canada, Caribbean)
+const ONE_DIGIT_CC_PREFIXES = new Set(['+1'])
+
+// Country codes that are exactly 3 digits — LATAM region coverage
+// Bolivia +591, Ecuador +593, Paraguay +595, Uruguay +598
+// Central America: Guatemala +502, El Salvador +503, Honduras +504,
+//                  Nicaragua +505, Costa Rica +506, Panama +507, Haiti +509
+// Caribbean/Guiana: Curaçao/Sint Maarten +599, Aruba +297, Suriname +597,
+//                   Belize +501, Guyana +592
+const THREE_DIGIT_CC_PREFIXES = new Set([
+  '+297', '+501', '+502', '+503', '+504', '+505', '+506', '+507', '+509',
+  '+591', '+592', '+593', '+595', '+597', '+598', '+599',
+])
+
+function maskPhoneForConfirmation(phone: string): string {
+  // phone is always E.164 (starts with '+')
+  // Output: +CC***XXXX — full country code visible, subscriber masked, last 4 shown
+  if (!phone.startsWith('+') || phone.length < 6) return phone
+  let prefixLen: number
+  if (ONE_DIGIT_CC_PREFIXES.has(phone.slice(0, 2))) {
+    prefixLen = 2  // +1XXXXXXXXXX  → "+1"
+  } else if (THREE_DIGIT_CC_PREFIXES.has(phone.slice(0, 4))) {
+    prefixLen = 4  // +591XXXXXXX   → "+591"
+  } else {
+    prefixLen = 3  // +52/+55/+57…  → "+57" (2-digit CC default)
+  }
+  return `${phone.slice(0, prefixLen)}***${phone.slice(-4)}`
+}
+
+export function formatConfirmationPrompt(amount: number, recipient: string, lang: Lang): string {
+  const amt = formatCurrencyUSD(amount)
+  const to = maskPhoneForConfirmation(recipient)
+  const m = {
+    en: () => `Send ${amt} to ${to}? Reply YES to confirm or NO to cancel.`,
+    es: () => `¿Enviar ${amt} a ${to}? Responde SI para confirmar o NO para cancelar.`,
+    pt: () => `Enviar ${amt} para ${to}? Responda SIM para confirmar ou NAO para cancelar.`,
+  }
+  return m[lang]()
+}
+
+export function formatTransferCancelled(lang: Lang): string {
+  const m = {
+    en: () => `Transfer cancelled.`,
+    es: () => `Transferencia cancelada.`,
+    pt: () => `Transferência cancelada.`,
+  }
+  return m[lang]()
+}
+
+export function formatNoPendingTransfer(lang: Lang): string {
+  const m = {
+    en: () => `No pending transfer.`,
+    es: () => `No hay transferencia pendiente.`,
+    pt: () => `Nenhuma transferência pendente.`,
+  }
+  return m[lang]()
+}

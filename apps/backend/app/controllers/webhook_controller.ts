@@ -13,7 +13,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import app from '@adonisjs/core/services/app'
-import type { WebhookPayload, ParsedCommand } from '#types/index'
+import type { WebhookPayload, ParsedCommand, PendingTransaction } from '#types/index'
 import '#types/container'
 import type { Lang } from '#utils/messages'
 import { parseMessage } from '#utils/message_parser'
@@ -34,6 +34,9 @@ import {
   formatSocialReplyMessage,
   formatTextOnlyMessage,
   formatPrivacySetMessage,
+  formatConfirmationPrompt,
+  formatTransferCancelled,
+  formatNoPendingTransfer,
 } from '#utils/messages'
 
 import UserPreference from '#models/user_preference'
@@ -43,6 +46,40 @@ import { handleSendCommand } from '#commands/send_command'
 import { generateResponse } from '#services/llm.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
 import { canonicalizePhone } from '#utils/phone'
+
+// Exported so tests can seed/inspect state directly
+export const pendingTransactions = new Map<string, PendingTransaction>()
+
+const CONFIRM_THRESHOLD_DEFAULT = 5
+const PENDING_TX_TTL_MS = 2 * 60 * 1000  // 2 minutes
+
+// GC interval — removes entries that were never confirmed/cancelled.
+// Correctness is NOT reliant on this interval; expiry is enforced lazily
+// on access in the confirm handler.
+// .unref() allows process to exit naturally without the interval keeping
+// the event loop alive. Pattern matches exchange_rate_service.ts:80-86.
+const _pendingTxCleanupInterval = setInterval(() => {
+  const now = Date.now()
+  for (const [phone, tx] of pendingTransactions.entries()) {
+    if (now - tx.timestamp > PENDING_TX_TTL_MS) {
+      pendingTransactions.delete(phone)
+    }
+  }
+}, 30_000)
+_pendingTxCleanupInterval.unref()
+
+function clearPendingIfUnrelated(
+  from: string,
+  command: ParsedCommand,
+  pendingTxs: Map<string, PendingTransaction>
+): void {
+  if (command.command !== 'confirm' && command.command !== 'cancel') {
+    if (pendingTxs.has(from)) {
+      pendingTxs.delete(from)
+      logger.info('Pending tx cancelled due to new command from %s', from)
+    }
+  }
+}
 
 /**
  * Returns the phone key to use for updateOrCreate on user_preferences.
@@ -123,7 +160,8 @@ export async function routeCommand(
   balanceHandler: typeof handleBalanceCommand = handleBalanceCommand,
   sendHandler: typeof handleSendCommand = handleSendCommand,
   generateResponseFn: typeof generateResponse = generateResponse,
-  sendMessageFn: typeof sendTextMessage = sendTextMessage
+  sendMessageFn: typeof sendTextMessage = sendTextMessage,
+  pendingTxs: Map<string, PendingTransaction> = pendingTransactions
 ): Promise<void> {
   try {
     switch (command.command) {
@@ -145,19 +183,67 @@ export async function routeCommand(
 
       case 'send':
         if (command.amount && command.recipient) {
-          await sendHandler(
-            phoneNumber,
-            command.amount,
-            command.recipient,
-            lang,
-            rateCtx.senderRate,
-            rateCtx.senderCurrency,
-            rateCtx.recipientRate,
-            rateCtx.recipientCurrency
-          )
+          const threshold = env.get('CONFIRM_THRESHOLD') ?? CONFIRM_THRESHOLD_DEFAULT
+          if (command.amount <= threshold) {
+            // At or below threshold — execute immediately
+            await sendHandler(
+              phoneNumber,
+              command.amount,
+              command.recipient,
+              lang,
+              rateCtx.senderRate,
+              rateCtx.senderCurrency,
+              rateCtx.recipientRate,
+              rateCtx.recipientCurrency
+            )
+          } else {
+            // Above threshold — store pending, ask for confirmation
+            // New send overwrites any existing pending tx (one per user)
+            pendingTxs.set(phoneNumber, {
+              amount: command.amount,
+              recipient: command.recipient,
+              timestamp: Date.now(),
+              lang,
+            })
+            await sendMessageFn(
+              phoneNumber,
+              formatConfirmationPrompt(command.amount, command.recipient, lang),
+              lang
+            )
+          }
         } else {
           await sendMessageFn(phoneNumber, formatInvalidSendFormat(lang), lang)
         }
+        break
+
+      case 'confirm': {
+        const pending = pendingTxs.get(phoneNumber)
+        // Lazy expiry check — guarantees 2-minute cutoff regardless of GC interval timing
+        if (!pending || Date.now() - pending.timestamp > PENDING_TX_TTL_MS) {
+          if (pending) pendingTxs.delete(phoneNumber)  // clean up expired entry
+          await sendMessageFn(phoneNumber, formatNoPendingTransfer(lang), lang)
+        } else {
+          // Atomic consume: delete BEFORE awaiting sendHandler.
+          // A second concurrent confirm will find no entry and get "No pending transfer."
+          // No rollback on failure: if sendHandler returns false or throws after the
+          // transfer succeeded (e.g. a notification failed), re-inserting the pending tx
+          // would allow a second YES to double-execute the transfer.
+          // The send paths guarantee they return true on a successful transfer regardless
+          // of notification outcome, so false/throw here means the transfer did not occur.
+          // The outer try/catch (line 318) handles any throw and sends formatCommandErrorMessage.
+          pendingTxs.delete(phoneNumber)
+          await sendHandler(
+            phoneNumber, pending.amount, pending.recipient, pending.lang,
+            rateCtx.senderRate, rateCtx.senderCurrency,
+            rateCtx.recipientRate, rateCtx.recipientCurrency
+          )
+        }
+        break
+      }
+
+      case 'cancel':
+        pendingTxs.delete(phoneNumber)
+        await sendMessageFn(phoneNumber, formatTransferCancelled(lang), lang)
         break
 
       case 'history':
@@ -251,12 +337,19 @@ export async function dispatchCommand(
   lang: Lang,
   context: import('#services/db').ContextMessage[] = [],
   balanceHandler: typeof handleBalanceCommand = handleBalanceCommand,
-  sendHandler: typeof handleSendCommand = handleSendCommand
+  sendHandler: typeof handleSendCommand = handleSendCommand,
+  pendingTxs: Map<string, PendingTransaction> = pendingTransactions
 ): Promise<void> {
+  // Cancel stale pending tx if user sends an unrelated command
+  clearPendingIfUnrelated(from, command, pendingTxs)
+
   const recipientPhone =
-    command.command === 'send' && command.recipient ? command.recipient : undefined
+    command.command === 'send' && command.recipient ? command.recipient :
+    command.command === 'confirm' ? pendingTxs.get(from)?.recipient :
+    undefined
   const rateCtx = await fetchRateContext(from, recipientPhone)
-  await routeCommand(from, command, lang, rateCtx, context, balanceHandler, sendHandler)
+  await routeCommand(from, command, lang, rateCtx, context, balanceHandler, sendHandler,
+    generateResponse, sendTextMessage, pendingTxs)
 }
 
 export default class WebhookController {
@@ -459,9 +552,16 @@ export default class WebhookController {
       }
     }
 
+    // Cancel stale pending tx if user sends an unrelated command
+    clearPendingIfUnrelated(from, command, pendingTransactions)
+
     // ── Fetch exchange rates before handleCommand ──────────────────────
-    const recipientPhone =
-      command.command === 'send' && command.recipient ? command.recipient : undefined
+    let recipientPhone: string | undefined
+    if (command.command === 'send' && command.recipient) {
+      recipientPhone = command.recipient
+    } else if (command.command === 'confirm') {
+      recipientPhone = pendingTransactions.get(from)?.recipient
+    }
     const rateCtx = await fetchRateContext(from, recipientPhone)
 
     // ── Route to command handler ──────────────────────────────────────

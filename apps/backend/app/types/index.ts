@@ -21,6 +21,15 @@ export interface UserWallet {
   lastResetDate: string // For daily limit reset
 }
 
+export interface PendingTransaction {
+  amount: number
+  recipient: string   // canonical E.164 phone
+  timestamp: number   // Date.now()
+  lang: Lang          // user's lang at time of send command
+}
+
+type Lang = 'en' | 'es' | 'pt'
+
 export interface ParsedCommand {
   command:
     | 'start'
@@ -34,6 +43,8 @@ export interface ParsedCommand {
     | 'greeting'
     | 'social'
     | 'privacy'
+    | 'confirm'
+    | 'cancel'
     | 'unknown'
   amount?: number
   recipient?: string

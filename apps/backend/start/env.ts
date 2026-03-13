@@ -84,6 +84,7 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // Feature flags
   DEMO_SHOW_REFUEL: Env.schema.string.optional(),
+  CONFIRM_THRESHOLD: Env.schema.number.optional(),
 
   // Indexer
   INDEXER_URL: Env.schema.string.optional(),

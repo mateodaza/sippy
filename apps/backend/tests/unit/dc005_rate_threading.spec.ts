@@ -149,18 +149,19 @@ test.group('AC1 dispatchCommand | rate threaded from cache to send handler', (gr
       sc: string | null,
       rr: number | null,
       rc: string | null
-    ) => {
+    ): Promise<boolean> => {
       capturedSenderRate = sr
       capturedSenderCurrency = sc
       capturedRecipientRate = rr
       capturedRecipientCurrency = rc
+      return true
     }
 
     const cmd: ParsedCommand = {
       command: 'send',
-      amount: 10,
+      amount: 3,  // ≤ CONFIRM_THRESHOLD_DEFAULT ($5) — executes immediately without confirmation gate
       recipient: '+551234567890',
-      originalText: 'send 10 to +551234567890',
+      originalText: 'send 3 to +551234567890',
     }
     await dispatchCommand('+573001234567', cmd, 'es', [], undefined, fakeSend)
 
@@ -317,11 +318,12 @@ test.group('AC2 routeCommand | rate values threaded to send handler', () => {
       sc: string | null,
       rr: number | null,
       rc: string | null
-    ) => {
+    ): Promise<boolean> => {
       capturedSenderRate = sr
       capturedSenderCurrency = sc
       capturedRecipientRate = rr
       capturedRecipientCurrency = rc
+      return true
     }
 
     const rateCtx: RateContext = {
@@ -333,9 +335,9 @@ test.group('AC2 routeCommand | rate values threaded to send handler', () => {
 
     const cmd: ParsedCommand = {
       command: 'send',
-      amount: 10,
+      amount: 3,  // ≤ CONFIRM_THRESHOLD_DEFAULT ($5) — executes immediately without confirmation gate
       recipient: '+551234567890',
-      originalText: 'send 10 to +551234567890',
+      originalText: 'send 3 to +551234567890',
     }
     await routeCommand('+573001234567', cmd, 'es', rateCtx, [], undefined, fakeSend)
 

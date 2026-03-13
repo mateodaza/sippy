@@ -80,9 +80,15 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(hola|buenas?|qu[eé] tal|buenos d[ií]as|buenas tardes|buenas noches|saludos)$/i,
     /^(oi|ol[aá]|bom dia|boa tarde|boa noite|e a[ií])$/i,
   ],
+  confirm: [
+    /^(yes|s[ií]|sim|confirmar|dale|va)$/i,
+  ],
+  cancel: [
+    /^(no|cancel|cancelar|n[aã]o)$/i,
+  ],
   social: [
     /^(thanks|thank you|thx|ty|ok|okay|cool|got it|great|nice|perfect|awesome|sure|bye|goodbye|see you)$/i,
-    /^(gracias|dale|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada)$/i,
+    /^(gracias|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada)$/i,
     /^(obrigado|obrigada|valeu|beleza|legal|perfeito|tchau|at[eé] logo|de nada)$/i,
   ],
 }

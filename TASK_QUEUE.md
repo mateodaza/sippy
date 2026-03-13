@@ -263,7 +263,7 @@
 > **Deliverable:** M1 #3
 > **Priority:** P0
 
-#### TX-001 [ ] Transaction confirmation flow
+#### TX-001 [x] Transaction confirmation flow
 - **What:** Before executing a send, reply with confirmation prompt. User must reply YES/SI/SIM to proceed.
 - **Acceptance criteria:**
   - Before executing send: reply "Send $10.00 to +57***4567? Reply YES to confirm or NO to cancel." (trilingual)
