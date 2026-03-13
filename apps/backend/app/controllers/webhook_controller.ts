@@ -50,6 +50,7 @@ import { handleSendCommand } from '#commands/send_command'
 import { generateResponse } from '#services/llm.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
 import { canonicalizePhone } from '#utils/phone'
+import sentryService from '#services/sentry_service'
 
 // Exported so tests can seed/inspect state directly
 export const pendingTransactions = new Map<string, PendingTransaction>()
@@ -371,6 +372,7 @@ export async function routeCommand(
     }
   } catch (error) {
     logger.error('Error handling command: %o', error)
+    sentryService.captureException(error, { phone: phoneNumber })
     await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
   }
 }

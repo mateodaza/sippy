@@ -397,7 +397,7 @@
 - **Dependencies:** None
 - **Files:** `apps/backend/start/routes.ts`, `apps/backend/app/controllers/health_controller.ts` (new)
 
-#### MO-002 [ ] Sentry integration (backend + frontend)
+#### MO-002 [x] Sentry integration (backend + frontend)
 - **What:** Install and configure Sentry for error tracking.
 - **Acceptance criteria:**
   - Backend: `@sentry/node` init on startup, capture unhandled exceptions, manual capture on send failures

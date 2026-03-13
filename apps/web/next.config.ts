@@ -1,5 +1,6 @@
 import type { NextConfig } from 'next';
 import path from 'path';
+import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
   // Set the correct workspace root for pnpm
@@ -9,6 +10,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:
       process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
     NEXT_PUBLIC_ENABLE_TESTNET: process.env.NEXT_PUBLIC_ENABLE_TESTNET,
+    SENTRY_RELEASE: process.env.SENTRY_RELEASE ?? 'unknown',
   },
   turbopack: {},
   webpack: (config) => {
@@ -30,4 +32,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, { silent: true });

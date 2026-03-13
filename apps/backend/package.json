@@ -92,7 +92,8 @@
     "react-dom": "^19.2.4",
     "reflect-metadata": "^0.2.2",
     "resend": "^6.9.3",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "@sentry/node": "^8.0.0"
   },
   "hotHook": {
     "boundaries": [

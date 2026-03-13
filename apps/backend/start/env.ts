@@ -98,4 +98,9 @@ export default await Env.create(new URL('../', import.meta.url), {
   // Infrastructure
   TRUST_PROXY: Env.schema.string.optional(),
   RAILWAY_ENVIRONMENT: Env.schema.string.optional(),
+
+  // Sentry
+  SENTRY_DSN: Env.schema.string.optional(),
+  SENTRY_ENVIRONMENT: Env.schema.string.optional(),
+  SENTRY_RELEASE: Env.schema.string.optional(),
 })

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import * as Sentry from '@sentry/nextjs';
 import { useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts, useSendUserOperation } from '@coinbase/cdp-hooks';
 import { getStoredToken, clearToken } from '../../lib/auth';
 import { useSessionGuard } from '../../lib/useSessionGuard';
@@ -1784,14 +1785,16 @@ function SettingsContent() {
 
 export default function SettingsPage() {
   return (
-    <Suspense
-      fallback={
-        <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center'>
-          <div className='text-gray-600'>Loading...</div>
-        </div>
-      }
-    >
-      <SettingsContent />
-    </Suspense>
+    <Sentry.ErrorBoundary fallback={<p>Something went wrong.</p>}>
+      <Suspense
+        fallback={
+          <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center'>
+            <div className='text-gray-600'>Loading...</div>
+          </div>
+        }
+      >
+        <SettingsContent />
+      </Suspense>
+    </Sentry.ErrorBoundary>
   );
 }

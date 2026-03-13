@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, Suspense, useEffect } from 'react';
+import * as Sentry from '@sentry/nextjs';
 import { useSearchParams } from 'next/navigation';
 import { useAuthenticateWithJWT, useCreateSpendPermission, useCurrentUser, useIsSignedIn, useSignOut } from '@coinbase/cdp-hooks';
 import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '../../lib/auth';
@@ -784,14 +785,16 @@ function SetupContent() {
 
 export default function SetupPage() {
   return (
-    <Suspense
-      fallback={
-        <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center'>
-          <div className='text-gray-600'>Loading...</div>
-        </div>
-      }
-    >
-      <SetupContent />
-    </Suspense>
+    <Sentry.ErrorBoundary fallback={<p>Something went wrong.</p>}>
+      <Suspense
+        fallback={
+          <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center'>
+            <div className='text-gray-600'>Loading...</div>
+          </div>
+        }
+      >
+        <SetupContent />
+      </Suspense>
+    </Sentry.ErrorBoundary>
   );
 }

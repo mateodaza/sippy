@@ -29,7 +29,8 @@
     "viem": "~2.47.2",
     "@walletconnect/ethereum-provider": "^2.21.1",
     "wagmi": "2.19.5",
-    "zod": "^3.22.0"
+    "zod": "^3.22.0",
+    "@sentry/nextjs": "^8.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
