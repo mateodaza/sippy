@@ -275,6 +275,13 @@ export async function sendWithSpendPermission(
     }
 
     // Convert amount to USDC units (6 decimals)
+    // Defense-in-depth: reject amounts with more than 6 decimal places before
+    // passing to ethers — prevents opaque BigNumber errors from callers that
+    // bypass controller-layer schema validation.
+    const decimalParts = amount.toString().split('.')
+    if (decimalParts[1] && decimalParts[1].length > 6) {
+      throw new Error('Amount has too many decimal places (max 6 for USDC)')
+    }
     const amountInUnits = BigInt(
       ethers.utils.parseUnits(amount.toString(), USDC_DECIMALS).toString()
     )

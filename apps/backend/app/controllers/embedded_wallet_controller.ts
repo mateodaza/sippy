@@ -25,7 +25,7 @@ import {
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
 import { registerWalletWithIndexer } from '#services/indexer.service'
-import { exportEventSchema, webSendEventSchema } from '#types/schemas'
+import { exportEventSchema, webSendEventSchema, sendFromWebBodySchema } from '#types/schemas'
 import { NETWORK, USDC_ADDRESSES, USDC_DECIMALS } from '#config/network'
 import UserPreference from '#models/user_preference'
 import { emailService } from '#services/email_service'
@@ -591,16 +591,12 @@ export default class EmbeddedWalletController {
       const { phoneNumber } = cdpUser!
       const fromPhone = phoneNumber  // already canonical from cdpUser JWT
 
-      const { to, amount } = request.body() as { to?: unknown; amount?: unknown }
-
-      if (!to || typeof to !== 'string') {
-        return response.status(422).json({ error: 'Invalid recipient' })
+      const parsed = sendFromWebBodySchema.safeParse(request.body())
+      if (!parsed.success) {
+        return response.status(422).json({ error: 'Invalid request', details: parsed.error.issues })
       }
 
-      const numAmount = Number.parseFloat(String(amount))
-      if (Number.isNaN(numAmount) || numAmount <= 0) {
-        return response.status(422).json({ error: 'Invalid amount' })
-      }
+      const { to, amount: numAmount } = parsed.data
 
       const isAddress = /^0x[a-fA-F0-9]{40}$/.test(to)
 
@@ -625,9 +621,8 @@ export default class EmbeddedWalletController {
         remainingAllowance: result.remainingAllowance,
       })
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Send failed'
       logger.error('sendFromWeb error: %o', error)
-      return response.status(500).json({ error: msg })
+      return response.status(500).json({ error: 'Internal server error' })
     }
   }
 

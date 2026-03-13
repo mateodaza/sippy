@@ -6,6 +6,7 @@
  */
 
 import type { HttpContext } from '@adonisjs/core/http'
+import logger from '@adonisjs/core/services/logger'
 import { otpService } from '#services/otp_service'
 import { jwtService } from '#services/jwt_service'
 import { emailService } from '#services/email_service'
@@ -77,7 +78,8 @@ export default class AuthApiController {
       }
 
       return response.status(200).json({ success: true })
-    } catch {
+    } catch (error) {
+      logger.error('sendOtp error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -109,7 +111,8 @@ export default class AuthApiController {
 
       const token = await jwtService.signToken(normalizedPhone)
       return response.status(200).json({ token, expiresIn: 3600 })
-    } catch {
+    } catch (error) {
+      logger.error('verifyOtp error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -179,7 +182,8 @@ export default class AuthApiController {
       )
 
       return response.status(200).json({ success: true })
-    } catch {
+    } catch (error) {
+      logger.error('sendEmailCode error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -233,7 +237,8 @@ export default class AuthApiController {
       await pref.save()
 
       return response.status(200).json({ success: true })
-    } catch {
+    } catch (error) {
+      logger.error('verifyEmailCode error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -266,7 +271,8 @@ export default class AuthApiController {
         verified: pref?.emailVerified ?? false,
         maskedEmail,
       })
-    } catch {
+    } catch (error) {
+      logger.error('emailStatus error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -299,7 +305,8 @@ export default class AuthApiController {
       }
 
       return response.status(200).json({ success: true })
-    } catch {
+    } catch (error) {
+      logger.error('sendGateCode error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -335,7 +342,8 @@ export default class AuthApiController {
 
       const gateToken = emailService.issueGateToken(dbPhone)
       return response.status(200).json({ success: true, gateToken })
-    } catch {
+    } catch (error) {
+      logger.error('verifyGateCode error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -368,7 +376,8 @@ export default class AuthApiController {
       }
 
       return response.status(200).json({ success: true })
-    } catch {
+    } catch (error) {
+      logger.error('validateExportGate error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -397,7 +406,8 @@ export default class AuthApiController {
 
       const language = getLanguageForPhone(dbPhone)
       return response.status(200).json({ language, source: 'phone' })
-    } catch {
+    } catch (error) {
+      logger.error('userLanguage error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -425,7 +435,8 @@ export default class AuthApiController {
         { preferredLanguage: language as string | null }
       )
       return response.status(200).json({ ok: true })
-    } catch {
+    } catch (error) {
+      logger.error('setLanguage error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -440,7 +451,8 @@ export default class AuthApiController {
       const jwks = await jwtService.getJwks()
       response.header('Cache-Control', 'public, max-age=3600')
       return response.status(200).json(jwks)
-    } catch {
+    } catch (error) {
+      logger.error('jwks error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }

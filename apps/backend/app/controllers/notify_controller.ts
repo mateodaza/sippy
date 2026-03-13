@@ -49,6 +49,10 @@ export default class NotifyController {
         })
       }
 
+      if (typeof amount !== 'string' || typeof txHash !== 'string') {
+        return response.status(400).json({ error: 'Invalid field types' })
+      }
+
       if (type !== 'eth' && type !== 'usdc') {
         return response.status(400).json({
           error: 'Invalid type',

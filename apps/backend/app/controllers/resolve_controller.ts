@@ -87,6 +87,10 @@ export default class ResolveController {
         })
       }
 
+      if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+        return response.status(400).json({ error: 'Invalid wallet address' })
+      }
+
       logger.info(`Reverse lookup for address: ${address}`)
 
       // Query database for phone number by wallet address

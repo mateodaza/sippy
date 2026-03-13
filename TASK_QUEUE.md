@@ -333,7 +333,7 @@
 > **Deliverable:** M1 #3
 > **Priority:** P1 — do after TX tasks
 
-#### AU-001 [ ] Error handling + input validation audit
+#### AU-001 [x] Error handling + input validation audit
 - **What:** Read every controller, service, and command handler. Verify: every try/catch logs server-side + sends trilingual user message + never leaks internals. Every req.body is validated.
 - **Acceptance criteria:**
   - Audit doc: `docs/AUDIT-M1.md` with table: File, Finding, Severity (P0/P1/P2), Status
