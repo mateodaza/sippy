@@ -195,7 +195,6 @@ test.group('JwtAuthMiddleware | invalid token', (group) => {
 
 test.group('JwtAuthMiddleware | registered user — other routes', (group) => {
   const PHONE_E164 = '+573001234567'
-  const PHONE_DB = '573001234567'
   const WALLET = '0xAbCdEf1234567890AbCdEf1234567890AbCdEf12'
 
   group.setup(async () => {
@@ -231,7 +230,7 @@ test.group('JwtAuthMiddleware | registered user — other routes', (group) => {
     assert.isTrue(ctx.cdpUser?.phoneNumber.startsWith('+'))
   })
 
-  test('TC-6: DB lookup uses normalized phone (without +)', async ({ assert }) => {
+  test('TC-6: DB lookup uses canonical phone (with +)', async ({ assert }) => {
     mockFindBy({ walletAddress: WALLET })
     const middleware = new JwtAuthMiddleware()
     const token = await signToken(PHONE_E164)
@@ -240,7 +239,7 @@ test.group('JwtAuthMiddleware | registered user — other routes', (group) => {
     await middleware.handle(ctx as any, next)
 
     assert.lengthOf(findByCalls, 1)
-    assert.equal(findByCalls[0][1], PHONE_DB)
+    assert.equal(findByCalls[0][1], PHONE_E164)
   })
 
   test('TC-7: phone not in registry → 401, next not called', async ({ assert }) => {
@@ -393,7 +392,7 @@ test.group('JwtAuthMiddleware | register-wallet — first-time user, valid body 
     assert.deepEqual(ctx.cdpUser, { phoneNumber: PHONE_E164, walletAddress: VALID_WALLET })
   })
 
-  test('TC-F: DB lookup called before body used (DB-first order confirmed)', async ({ assert }) => {
+  test('TC-F: DB lookup called before body used (canonical + bare-digit compat fallback)', async ({ assert }) => {
     mockFindBy(null)
     const middleware = new JwtAuthMiddleware()
     const token = await signToken(PHONE_E164)
@@ -405,7 +404,8 @@ test.group('JwtAuthMiddleware | register-wallet — first-time user, valid body 
 
     await middleware.handle(ctx as any, next)
 
-    assert.lengthOf(findByCalls, 1)
+    // Two calls: canonical phone first, then bare-digit compat fallback
+    assert.lengthOf(findByCalls, 2)
   })
 
   test('TC-G: no DB record, mixed-case valid address → cdpUser uses body address, next called', async ({
@@ -509,7 +509,7 @@ test.group('JwtAuthMiddleware | register-wallet — first-time user, no/invalid 
     assert.isFalse(wasNextCalled())
   })
 
-  test('TC-L: DB lookup called exactly once before body checked (DB-first for Tier 3)', async ({
+  test('TC-L: DB lookup tries canonical then bare-digit before body checked (DB-first for Tier 3)', async ({
     assert,
   }) => {
     mockFindBy(null)
@@ -523,7 +523,8 @@ test.group('JwtAuthMiddleware | register-wallet — first-time user, no/invalid 
 
     await middleware.handle(ctx as any, next)
 
-    assert.lengthOf(findByCalls, 1)
+    // Two calls: canonical phone first, then bare-digit compat fallback
+    assert.lengthOf(findByCalls, 2)
   })
 })
 

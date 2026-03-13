@@ -11,12 +11,19 @@ interface ProfileHeaderProps {
   address: string;
   balances: Balance;
   phoneNumber?: string;
+  phoneVisible?: boolean;
+}
+
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  return `***${digits.slice(-4)}`;
 }
 
 export function ProfileHeader({
   address,
   balances,
   phoneNumber,
+  phoneVisible = true,
 }: ProfileHeaderProps) {
   const [copied, setCopied] = useState(false);
 
@@ -42,14 +49,30 @@ export function ProfileHeader({
           <div className='flex items-start justify-between mb-4 sm:mb-6'>
             <div className='flex-1 flex flex-col gap-2'>
               {phoneNumber ? (
-                <div className='inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 w-fit'>
-                  <PhoneDisplay
-                    phone={phoneNumber}
-                    showFull
-                    flagSize='18px'
-                    className='text-white text-sm sm:text-base font-medium'
-                  />
-                </div>
+                phoneVisible ? (
+                  <div className='inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 w-fit'>
+                    <PhoneDisplay
+                      phone={phoneNumber}
+                      showFull
+                      flagSize='18px'
+                      className='text-white text-sm sm:text-base font-medium'
+                    />
+                  </div>
+                ) : (
+                  <div className='flex flex-col gap-1.5'>
+                    <div className='inline-flex items-center gap-2 px-3 py-1.5 bg-white/20 backdrop-blur-sm rounded-full border border-white/30 w-fit'>
+                      <span className='text-white text-sm sm:text-base font-medium font-mono'>
+                        {maskPhone(phoneNumber)}
+                      </span>
+                    </div>
+                    <div className='inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/10 backdrop-blur-sm rounded-full border border-white/20 w-fit'>
+                      <svg className='w-3 h-3 text-white/70' fill='currentColor' viewBox='0 0 24 24'>
+                        <path d='M12 1a5 5 0 0 1 5 5v3h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h1V6a5 5 0 0 1 5-5zm0 2a3 3 0 0 0-3 3v3h6V6a3 3 0 0 0-3-3z' />
+                      </svg>
+                      <span className='text-white/70 text-xs font-medium'>Private account</span>
+                    </div>
+                  </div>
+                )
               ) : (
                 <div className='text-white/90 text-sm font-medium'>Wallet</div>
               )}

@@ -6,25 +6,15 @@
  */
 
 import type { HttpContext } from '@adonisjs/core/http'
+import logger from '@adonisjs/core/services/logger'
 import { otpService } from '#services/otp_service'
 import { jwtService } from '#services/jwt_service'
 import { emailService } from '#services/email_service'
 import { normalizeEmail, hashEmail, encryptEmail, decryptEmail } from '#utils/email_crypto'
 import UserPreference from '#models/user_preference'
 import { DateTime } from 'luxon'
-
-// ── Phone normalization ────────────────────────────────────────────────────────
-
-/**
- * Strips common E.164 formatting characters and validates the result.
- * Exported for unit testing.
- */
-export function normalizePhone(raw: string): string | null {
-  // Strip whitespace, dashes, dots, parentheses
-  const stripped = raw.replace(/[\s\-().]/g, '')
-  // Must now match E.164 after stripping
-  return /^\+[1-9]\d{1,14}$/.test(stripped) ? stripped : null
-}
+import { canonicalizePhone, getLanguageForPhone } from '#utils/phone'
+import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 
 // ── Email masking ──────────────────────────────────────────────────────────────
 
@@ -50,7 +40,7 @@ export default class AuthApiController {
         return response.status(422).json({ error: 'Invalid phone number' })
       }
 
-      const normalizedPhone = normalizePhone(phone)
+      const normalizedPhone = canonicalizePhone(phone)
       if (normalizedPhone === null) {
         return response.status(422).json({ error: 'Invalid phone number' })
       }
@@ -62,7 +52,8 @@ export default class AuthApiController {
       }
 
       return response.status(200).json({ success: true })
-    } catch {
+    } catch (error) {
+      logger.error('sendOtp error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -77,7 +68,7 @@ export default class AuthApiController {
       const body = request.body()
       const { phone, code } = body ?? {}
 
-      const normalizedPhone = typeof phone === 'string' ? normalizePhone(phone) : null
+      const normalizedPhone = typeof phone === 'string' ? canonicalizePhone(phone) : null
       if (normalizedPhone === null) {
         return response.status(422).json({ error: 'Invalid phone number' })
       }
@@ -94,7 +85,8 @@ export default class AuthApiController {
 
       const token = await jwtService.signToken(normalizedPhone)
       return response.status(200).json({ token, expiresIn: 3600 })
-    } catch {
+    } catch (error) {
+      logger.error('verifyOtp error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -118,8 +110,7 @@ export default class AuthApiController {
       const normalized = normalizeEmail(email)
       const hash = hashEmail(normalized)
 
-      // Strip leading '+' to match the DB phone format used by user_preferences
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
+      const dbPhone = ctx.cdpUser!.phoneNumber
 
       // Only block if another account has this email AND it's verified.
       // Unverified claims don't block — prevents squatting/lockout attacks.
@@ -127,13 +118,13 @@ export default class AuthApiController {
         .whereNotNull('emailHash')
         .where('emailHash', hash)
         .where('emailVerified', true)
-        .whereNot('phoneNumber', dbPhone)
+        .whereNotIn('phoneNumber', [dbPhone, dbPhone.slice(1)])
         .first()
       if (duplicate) {
         return response.status(409).json({ error: 'email_already_linked' })
       }
 
-      const existingPref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const existingPref = await findUserPrefByPhone(dbPhone)
       const lang = existingPref?.preferredLanguage ?? undefined
 
       const { encrypted, iv } = encryptEmail(normalized)
@@ -153,8 +144,9 @@ export default class AuthApiController {
       // sendEmailCode to reset emailVerified=false before the new email is proven.
       const existingVerified = existingPref?.emailVerified ?? false
       const existingVerifiedAt = existingPref?.emailVerifiedAt ?? null
+      const prefKey = await resolveUserPrefKey(dbPhone)
       await UserPreference.updateOrCreate(
-        { phoneNumber: dbPhone },
+        { phoneNumber: prefKey },
         {
           emailEncrypted: combined,
           emailHash: hash,
@@ -164,7 +156,8 @@ export default class AuthApiController {
       )
 
       return response.status(200).json({ success: true })
-    } catch {
+    } catch (error) {
+      logger.error('sendEmailCode error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -192,10 +185,9 @@ export default class AuthApiController {
         return response.status(422).json({ error: 'Invalid code' })
       }
 
-      // Strip leading '+' to match the DB phone format used by user_preferences
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
+      const dbPhone = ctx.cdpUser!.phoneNumber
 
-      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const pref = await findUserPrefByPhone(dbPhone)
       const submittedHash = hashEmail(normalized)
       if (!pref || pref.emailHash !== submittedHash) {
         return response.status(409).json({ error: 'email_mismatch' })
@@ -211,7 +203,7 @@ export default class AuthApiController {
       await UserPreference.query()
         .where('emailHash', submittedHash)
         .where('emailVerified', false)
-        .whereNot('phoneNumber', dbPhone)
+        .whereNotIn('phoneNumber', [dbPhone, dbPhone.slice(1)])
         .update({ emailHash: null, emailEncrypted: null })
 
       pref.emailVerified = true
@@ -219,7 +211,8 @@ export default class AuthApiController {
       await pref.save()
 
       return response.status(200).json({ success: true })
-    } catch {
+    } catch (error) {
+      logger.error('verifyEmailCode error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -232,9 +225,8 @@ export default class AuthApiController {
   async emailStatus(ctx: HttpContext) {
     const { response } = ctx
     try {
-      // Strip leading '+' to match the DB phone format used by user_preferences
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
-      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
 
       let maskedEmail: string | null = null
       if (pref?.emailEncrypted) {
@@ -253,7 +245,8 @@ export default class AuthApiController {
         verified: pref?.emailVerified ?? false,
         maskedEmail,
       })
-    } catch {
+    } catch (error) {
+      logger.error('emailStatus error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -267,8 +260,8 @@ export default class AuthApiController {
   async sendGateCode(ctx: HttpContext) {
     const { response } = ctx
     try {
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
-      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
 
       if (!pref?.emailEncrypted || !pref.emailHash || pref.emailVerified !== true) {
         return response.status(409).json({ error: 'no_verified_email' })
@@ -286,7 +279,8 @@ export default class AuthApiController {
       }
 
       return response.status(200).json({ success: true })
-    } catch {
+    } catch (error) {
+      logger.error('sendGateCode error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -305,8 +299,8 @@ export default class AuthApiController {
         return response.status(422).json({ error: 'Invalid code' })
       }
 
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
-      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
 
       if (!pref?.emailEncrypted || !pref.emailHash || pref.emailVerified !== true) {
         return response.status(409).json({ error: 'no_verified_email' })
@@ -322,7 +316,8 @@ export default class AuthApiController {
 
       const gateToken = emailService.issueGateToken(dbPhone)
       return response.status(200).json({ success: true, gateToken })
-    } catch {
+    } catch (error) {
+      logger.error('verifyGateCode error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -342,8 +337,8 @@ export default class AuthApiController {
         return response.status(403).json({ error: 'gate_required' })
       }
 
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
-      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
 
       if (!pref?.emailVerified) {
         return response.status(409).json({ error: 'no_verified_email' })
@@ -355,7 +350,67 @@ export default class AuthApiController {
       }
 
       return response.status(200).json({ success: true })
-    } catch {
+    } catch (error) {
+      logger.error('validateExportGate error: %o', error)
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * GET /api/user-language
+   *
+   * Returns the resolved language for the authenticated user.
+   * Checks DB preference first; falls back to phone-number detection.
+   */
+  async userLanguage(ctx: HttpContext) {
+    const { response } = ctx
+    try {
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
+
+      const validLanguages = ['en', 'es', 'pt'] as const
+      type ValidLanguage = (typeof validLanguages)[number]
+
+      if (pref?.preferredLanguage && (validLanguages as readonly string[]).includes(pref.preferredLanguage)) {
+        return response.status(200).json({
+          language: pref.preferredLanguage as ValidLanguage,
+          source: 'preference',
+        })
+      }
+
+      const language = getLanguageForPhone(dbPhone)
+      return response.status(200).json({ language, source: 'phone' })
+    } catch (error) {
+      logger.error('userLanguage error: %o', error)
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * POST /api/set-language
+   *
+   * Saves or clears the user's preferred language.
+   */
+  async setLanguage(ctx: HttpContext) {
+    const { request, response } = ctx
+    const VALID_LANGUAGES = ['en', 'es', 'pt'] as const
+    try {
+      const body = request.body() as { language?: unknown }
+      const { language } = body
+
+      if (language !== null && !(VALID_LANGUAGES as readonly unknown[]).includes(language)) {
+        return response.status(400).json({ error: 'invalid_language' })
+      }
+
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const prefKey = await resolveUserPrefKey(dbPhone)
+      await UserPreference.updateOrCreate(
+        { phoneNumber: prefKey },
+        { preferredLanguage: language as string | null }
+      )
+      return response.status(200).json({ ok: true })
+    } catch (error) {
+      logger.error('setLanguage error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -370,7 +425,8 @@ export default class AuthApiController {
       const jwks = await jwtService.getJwks()
       response.header('Cache-Control', 'public, max-age=3600')
       return response.status(200).json(jwks)
-    } catch {
+    } catch (error) {
+      logger.error('jwks error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }

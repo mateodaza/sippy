@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useAuthenticateWithJWT, useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts, useSendUserOperation } from '@coinbase/cdp-hooks';
-import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '../../lib/auth';
+import { useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts, useSendUserOperation } from '@coinbase/cdp-hooks';
+import { getStoredToken, clearToken } from '../../lib/auth';
+import { useSessionGuard } from '../../lib/useSessionGuard';
 import { parseUnits } from 'viem';
 import { getBalances } from '../../lib/blockscout';
 import { ensureGasReady, buildUsdcTransferCall } from '../../lib/usdc-transfer';
+import { Language, getStoredLanguage, storeLanguage, clearLanguage, resolveLanguage, localizeError, t } from '../../lib/i18n';
 
 /**
  * Settings Page for Embedded Wallets
@@ -27,6 +29,9 @@ const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
 
+const DAILY_LIMIT_UNVERIFIED = 50   // must match backend EL-001 constant
+const DAILY_LIMIT_VERIFIED   = 500
+
 // USDC addresses by network (CDP SDK doesn't support 'usdc' shortcut on Arbitrum)
 const USDC_ADDRESSES: Record<string, string> = {
   arbitrum: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
@@ -34,7 +39,6 @@ const USDC_ADDRESSES: Record<string, string> = {
 };
 const USDC_ADDRESS = USDC_ADDRESSES[NETWORK] || USDC_ADDRESSES.arbitrum;
 
-type AuthStep = 'phone' | 'otp' | 'authenticated';
 
 interface WalletStatus {
   hasWallet: boolean;
@@ -70,14 +74,38 @@ function SettingsContent() {
   const searchParams = useSearchParams();
   const phoneFromUrl = searchParams.get('phone') || '';
 
-  const [authStep, setAuthStep] = useState<AuthStep>('phone');
-  const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl);
-  const [otp, setOtp] = useState('');
+  // Session guard hook
+  const {
+    isAuthenticated,
+    isCheckingSession,
+    expiryWarning,
+    reAuthVisible,
+    reAuthStep,
+    reAuthPhone,
+    reAuthOtp,
+    reAuthError,
+    reAuthLoading,
+    setReAuthPhone,
+    setReAuthOtp,
+    handleReAuthSendOtp,
+    handleReAuthVerifyOtp,
+    requireReauth,
+    dismissReAuth,
+  } = useSessionGuard();
+
+  const isPhoneLocked = !!phoneFromUrl;
+  const isCdpConfigured = !!CDP_PROJECT_ID;
+
+  // Initialize re-auth phone from URL param
+  useEffect(() => {
+    if (phoneFromUrl) setReAuthPhone(phoneFromUrl);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
-  const [hasCheckedSession, setHasCheckedSession] = useState(false);
+
+  // Language state
+  const [lang, setLang] = useState<Language>('en');
 
   // Permission state
   const [walletStatus, setWalletStatus] = useState<WalletStatus | null>(null);
@@ -116,8 +144,16 @@ function SettingsContent() {
   const [emailGateLoading, setEmailGateLoading] = useState(false);
   const [emailGateToken, setEmailGateToken] = useState<string | null>(null);
 
+  // Language selector state
+  const [langSaving, setLangSaving] = useState(false);
+  const [langSaveError, setLangSaveError] = useState<string | null>(null);
+
+  // Privacy toggle state
+  const [phoneVisible, setPhoneVisible] = useState<boolean | null>(null);
+  const [privacySaving, setPrivacySaving] = useState(false);
+  const [privacySaveError, setPrivacySaveError] = useState<string | null>(null);
+
   // CDP Hooks
-  const { authenticateWithJWT } = useAuthenticateWithJWT();
   const { createSpendPermission } = useCreateSpendPermission();
   const { revokeSpendPermission } = useRevokeSpendPermission();
   const { refetch: refetchPermissions, data: permissionsData } = useListSpendPermissions({
@@ -129,23 +165,53 @@ function SettingsContent() {
   const { sendUserOperation, status: sweepStatus, data: sweepData, error: sweepOpError } = useSendUserOperation();
 
   // Smart account address — NEVER fall back to evmAccounts for UserOps
-  const smartAccountAddress = currentUser?.evmSmartAccountObjects?.[0]?.address ?? null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const smartAccountAddress = (currentUser as any)?.evmSmartAccountObjects?.[0]?.address ?? null;
 
-  // Security: Phone number must match what was sent in the WhatsApp link
-  const isPhoneLocked = !!phoneFromUrl;
+  // Set wallet address from currentUser when authenticated
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const addr = (currentUser as any)?.evmSmartAccounts?.[0] || (currentUser as any)?.evmAccounts?.[0];
+      if (addr) setWalletAddress(addr);
+    } else if (!isAuthenticated) {
+      setWalletAddress(null);
+    }
+  }, [isAuthenticated, currentUser]);
 
-  // Check if CDP is configured
-  const isCdpConfigured = !!CDP_PROJECT_ID;
+  // Fetch settings data after authentication
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchWalletStatus();
+    fetchEmailStatus();
+    fetchPrivacyStatus();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
+
+  // Language mount effect — two-phase: instant render from cache, then authoritative API update
+  useEffect(() => {
+    const cached = getStoredLanguage();
+    if (cached) setLang(cached);
+
+    const token = getStoredToken();
+    resolveLanguage(phoneFromUrl || null, token, BACKEND_URL)
+      .then(resolved => { if (resolved !== cached) setLang(resolved) })
+      .catch(() => {});
+  }, []);
 
   // Fetch email status from backend
   const fetchEmailStatus = async () => {
     const accessToken = getStoredToken();
     if (!accessToken || !BACKEND_URL) return;
+    setEmailSectionStep('loading');
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/email-status`, {
         headers: { 'Authorization': `Bearer ${accessToken}` },
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setEmailSectionStep('fetch_error');
+        return;
+      }
       const data: EmailStatus = await res.json();
       setEmailStatus(data);
       if (!data.hasEmail) setEmailSectionStep('no_email');
@@ -159,96 +225,27 @@ function SettingsContent() {
     }
   };
 
-  // Session recovery: Check for existing session on mount
-  useEffect(() => {
-    const checkExistingSession = async () => {
-      // Only run once
-      if (hasCheckedSession) return;
-
-      // Wait for CDP to initialize - isSignedIn starts as undefined
-      if (isSignedIn === undefined) return;
-
-      // If signed in, wait for currentUser to be populated before deciding
-      // This prevents a race condition where isSignedIn=true but currentUser is still loading
-      if (isSignedIn && !currentUser) {
-        console.log('Signed in but waiting for currentUser to load...');
-        return; // Don't set hasCheckedSession yet, wait for currentUser
+  const fetchPrivacyStatus = async () => {
+    const accessToken = getStoredToken();
+    if (!accessToken || !BACKEND_URL) {
+      setPhoneVisible(true);
+      return;
+    }
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/privacy-status`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPhoneVisible(data.phoneVisible ?? true);
+      } else {
+        setPhoneVisible(true);
       }
+    } catch {
+      setPhoneVisible(true);
+    }
+  };
 
-      // Now we can make a decision
-      setHasCheckedSession(true);
-
-      // If not signed in, show phone step
-      if (!isSignedIn) {
-        console.log('No existing session, showing login');
-        setIsCheckingSession(false);
-        return;
-      }
-
-      // At this point: isSignedIn=true AND currentUser is loaded
-      console.log('Found existing CDP session, restoring...');
-
-      try {
-        // Get wallet address from current user
-        const smartAccountAddress = currentUser!.evmSmartAccounts?.[0] || currentUser!.evmAccounts?.[0];
-        if (!smartAccountAddress) {
-          console.log('No wallet in session');
-          setIsCheckingSession(false);
-          return;
-        }
-
-        setWalletAddress(smartAccountAddress);
-        console.log('Restored wallet:', smartAccountAddress);
-
-        // Validate the stored JWT against the backend before restoring session.
-        // An expired token returns 401; treat any non-ok response as invalid.
-        if (BACKEND_URL) {
-          const accessToken = getStoredToken();
-          if (!accessToken) {
-            clearToken();
-            await signOut();
-            setIsCheckingSession(false);
-            return;
-          }
-
-          const response = await fetch(`${BACKEND_URL}/api/wallet-status`, {
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-            },
-          });
-
-          if (!response.ok) {
-            // Token rejected by backend (expired or invalid) — force re-auth
-            console.warn('Stored JWT rejected by backend, signing out');
-            clearToken();
-            await signOut();
-            setIsCheckingSession(false);
-            return;
-          }
-
-          const status = await response.json();
-          setWalletStatus(status);
-          if (status.dailyLimit) {
-            setNewLimit(status.dailyLimit.toString());
-          }
-          if (status.phoneNumber) {
-            setVerifiedPhone(status.phoneNumber);
-          }
-          console.log('Wallet status restored:', status);
-          await fetchEmailStatus();
-        }
-
-        // Session restored - go directly to authenticated view
-        setAuthStep('authenticated');
-      } catch (err) {
-        console.error('Session recovery failed:', err);
-      } finally {
-        setIsCheckingSession(false);
-      }
-    };
-
-    checkExistingSession();
-  }, [isSignedIn, currentUser, hasCheckedSession]);
 
   // Fetch wallet status from backend after authentication
   const fetchWalletStatus = async () => {
@@ -298,10 +295,10 @@ function SettingsContent() {
         );
       } else {
         const err = await res.json().catch(() => ({}));
-        setEmailError((err as { error?: string }).error ?? 'Failed to send code');
+        setEmailError(localizeError(err, 'email-send', lang));
       }
     } catch {
-      setEmailError('Failed to send code');
+      setEmailError(localizeError({}, 'email-send', lang));
     } finally {
       setEmailLoading(false);
     }
@@ -328,73 +325,73 @@ function SettingsContent() {
         await fetchEmailStatus();
       } else {
         const err = await res.json().catch(() => ({}));
-        setEmailError((err as { error?: string }).error ?? 'Invalid or expired code');
+        setEmailError(localizeError(err, 'email-verify', lang));
       }
     } catch {
-      setEmailError('Verification failed');
+      setEmailError(localizeError({}, 'email-verify', lang));
     } finally {
       setEmailLoading(false);
     }
   };
 
-  // Step 1: Send SMS OTP
-  const handleSendOtp = async () => {
-    setIsLoading(true);
-    setError(null);
-
+  // Set preferred language
+  const handleSetLanguage = async (newLang: Language | 'auto') => {
+    setLangSaving(true);
+    setLangSaveError(null);
     try {
-      if (!isCdpConfigured) {
-        throw new Error('CDP not configured. Please set NEXT_PUBLIC_CDP_PROJECT_ID.');
+      const accessToken = getStoredToken();
+      const res = await fetch(`${BACKEND_URL}/api/set-language`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ language: newLang === 'auto' ? null : newLang }),
+      });
+      if (res.ok) {
+        if (newLang === 'auto') {
+          clearLanguage();
+          const resolved = await resolveLanguage(verifiedPhone || null, accessToken, BACKEND_URL);
+          setLang(resolved);
+        } else {
+          storeLanguage(newLang);
+          setLang(newLang);
+        }
+      } else {
+        setLangSaveError(t('settings.langSaveError', lang));
       }
-
-      // Phone number must be in E.164 format (e.g., +573001234567)
-      const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
-      setPhoneNumber(formattedPhone);
-
-      console.log('Sending OTP to:', formattedPhone);
-      await sendOtp(formattedPhone);
-      setAuthStep('otp');
-    } catch (err) {
-      console.error('Failed to send OTP:', err);
-      const errorMsg = err instanceof Error ? err.message : 'Failed to send verification code';
-      setError(errorMsg);
+    } catch {
+      setLangSaveError(t('settings.langSaveError', lang));
     } finally {
-      setIsLoading(false);
+      setLangSaving(false);
     }
   };
 
-  // Step 2: Verify OTP
-  const handleVerifyOtp = async () => {
-    setIsLoading(true);
-    setError(null);
-
+  const handleSetPhoneVisible = async (visible: boolean) => {
+    setPrivacySaving(true);
+    setPrivacySaveError(null);
     try {
-      console.log('Verifying OTP...');
-      const token = await verifyOtp(phoneNumber, otp);
-      storeToken(token);
-      const { user } = await authenticateWithJWT();
-
-      console.log('User authenticated:', user.userId);
-
-      // Get the user's smart account address
-      const smartAccountAddress = user.evmSmartAccounts?.[0] || user.evmAccounts?.[0];
-      if (!smartAccountAddress) {
-        throw new Error('No wallet found. Please set up your wallet first at sippy.lat/setup');
+      const accessToken = getStoredToken();
+      const res = await fetch(`${BACKEND_URL}/api/set-privacy`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phoneVisible: visible }),
+      });
+      if (res.ok) {
+        setPhoneVisible(visible);
+      } else {
+        setPrivacySaveError('Failed to save privacy setting');
       }
-
-      setWalletAddress(smartAccountAddress);
-      setAuthStep('authenticated');
-
-      // Fetch current wallet status
-      await fetchWalletStatus();
-      await fetchEmailStatus();
-    } catch (err) {
-      console.error('OTP verification failed:', err);
-      setError(err instanceof Error ? err.message : 'Verification failed');
+    } catch {
+      setPrivacySaveError('Failed to save privacy setting');
     } finally {
-      setIsLoading(false);
+      setPrivacySaving(false);
     }
   };
+
 
   // Revoke permission
   const handleRevoke = useCallback(async (gateToken?: string) => {
@@ -410,7 +407,7 @@ function SettingsContent() {
       // Do not proceed to CDP or DB without one. This guards against any code path
       // that calls handleRevoke(undefined) for a verified-email user.
       if (emailStatus?.verified === true && !gateToken) {
-        throw new Error('Email verification required. Please verify your email and try again.');
+        throw new Error(t('settings.errGateRequired', lang));
       }
 
       // STEP 1: Onchain revoke via CDP SDK.
@@ -456,10 +453,10 @@ function SettingsContent() {
         if (!revokeRes.ok) {
           const data = await revokeRes.json().catch(() => ({}));
           if ((data as { error?: string }).error === 'gate_required') {
-            throw new Error('Email verification required. Please verify your email and try again.');
+            throw new Error(t('settings.errGateRequired', lang));
           }
           console.error('Failed to update backend after revoke:', data);
-          throw new Error('Failed to sync revocation with backend. Please try again.');
+          throw new Error(localizeError(data, 'revoke-permission', lang));
         }
       }
 
@@ -467,10 +464,10 @@ function SettingsContent() {
       setPermissionStatus('success');
     } catch (err) {
       console.error('Revoke failed:', err);
-      setError(err instanceof Error ? err.message : 'Failed to revoke permission');
+      setError(err instanceof Error ? err.message : localizeError(err, 'revoke-permission', lang));
       setPermissionStatus('error');
     }
-  }, [walletAddress, emailStatus, permissionsData, refetchPermissions, revokeSpendPermission]);
+  }, [walletAddress, emailStatus, permissionsData, refetchPermissions, revokeSpendPermission, lang]);
 
   // Create/update permission with new limit
   const handleChangeLimit = async () => {
@@ -518,7 +515,7 @@ function SettingsContent() {
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Failed to register permission with backend:', errorText);
-          throw new Error('Failed to register permission. Please try again.');
+          throw new Error(localizeError({ message: errorText }, 'enable-permission', lang));
         }
 
         // Use the backend response as source of truth (derives limit from onchain)
@@ -534,7 +531,7 @@ function SettingsContent() {
       setPermissionStatus('success');
     } catch (err) {
       console.error('Change limit failed:', err);
-      setError(err instanceof Error ? err.message : 'Failed to change limit');
+      setError(err instanceof Error ? err.message : localizeError(err, 'enable-permission', lang));
       setPermissionStatus('error');
     }
   };
@@ -646,7 +643,7 @@ function SettingsContent() {
       });
     } catch (err) {
       console.error('Sweep failed:', err);
-      setSweepError(err instanceof Error ? err.message : 'Transfer failed. You can skip and export anyway.');
+      setSweepError(localizeError(err instanceof Error ? err : {}, 'sweep', lang));
     }
   };
 
@@ -670,7 +667,7 @@ function SettingsContent() {
       // enforcement — an API-level attacker cannot bypass this without a valid token.
       if (emailStatus?.verified === true) {
         if (!gateToken) {
-          setEmailGateError('Email verification required. Please verify your email and try again.');
+          setEmailGateError(t('settings.errGateRequired', lang));
           return;
         }
         try {
@@ -682,15 +679,11 @@ function SettingsContent() {
           });
           if (!res.ok) {
             const data = await res.json().catch(() => ({}));
-            setEmailGateError(
-              (data as { error?: string }).error === 'gate_required'
-                ? 'Verification failed. Please try again.'
-                : 'Verification failed. Please try again.'
-            );
+            setEmailGateError(localizeError(data, 'export-gate-verify', lang));
             return;
           }
         } catch {
-          setEmailGateError('Verification failed. Please try again.');
+          setEmailGateError(localizeError({}, 'export-gate-verify', lang));
           return;
         }
       }
@@ -700,7 +693,7 @@ function SettingsContent() {
       resetEmailGate();
       handleRevoke(gateToken);
     }
-  }, [emailGateContext, emailStatus, resetEmailGate, handleExportStart, handleRevoke]);
+  }, [emailGateContext, emailStatus, resetEmailGate, handleExportStart, handleRevoke, lang]);
 
   const handleEmailGateSendCode = useCallback(async () => {
     setEmailGateLoading(true);
@@ -714,17 +707,17 @@ function SettingsContent() {
       const data = await res.json();
       if (!res.ok) {
         setEmailGateError((data as { error?: string; message?: string }).error === 'no_verified_email'
-          ? 'No verified email on file.'
-          : ((data as { message?: string }).message || 'Failed to send code'));
+          ? t('settings.errNoVerifiedEmail', lang)
+          : localizeError(data, 'export-gate-send', lang));
       } else {
         setEmailGateStep('code_sent');
       }
     } catch {
-      setEmailGateError('Failed to send code');
+      setEmailGateError(localizeError({}, 'export-gate-send', lang));
     } finally {
       setEmailGateLoading(false);
     }
-  }, []);
+  }, [lang]);
 
   const handleEmailGateVerify = useCallback(async () => {
     setEmailGateLoading(true);
@@ -739,21 +732,21 @@ function SettingsContent() {
       const data = await res.json() as { success?: boolean; gateToken?: unknown; error?: string; message?: string };
       if (!res.ok || !data.success) {
         setEmailGateError(data.error === 'invalid_or_expired_code'
-          ? 'Invalid or expired code. Please try again.'
-          : (data.message || 'Verification failed. Please try again.'));
+          ? t('settings.errInvalidCode', lang)
+          : localizeError(data, 'export-gate-verify', lang));
       } else if (!data.gateToken || typeof data.gateToken !== 'string') {
         // Fail closed: success=true but no usable token is an error condition.
         // Never call proceedWithGatedOperation without a valid token.
-        setEmailGateError('Verification failed — no token returned. Please try again.');
+        setEmailGateError(localizeError({}, 'export-gate-verify', lang));
       } else {
         proceedWithGatedOperation(data.gateToken);
       }
     } catch {
-      setEmailGateError('Verification failed. Please try again.');
+      setEmailGateError(localizeError({}, 'export-gate-verify', lang));
     } finally {
       setEmailGateLoading(false);
     }
-  }, [emailGateCode, proceedWithGatedOperation]);
+  }, [emailGateCode, proceedWithGatedOperation, lang]);
 
   // Watch sweep status changes
   useEffect(() => {
@@ -764,7 +757,7 @@ function SettingsContent() {
       handleExportContinue();
     }
     if (sweepStatus === 'error' && sweepOpError) {
-      setSweepError(sweepOpError instanceof Error ? sweepOpError.message : 'Transfer failed.');
+      setSweepError(localizeError(sweepOpError instanceof Error ? sweepOpError : {}, 'sweep', lang));
       setExportStep('sweeping'); // Stay on sweeping to show error + retry/skip
     }
   }, [sweepStatus, sweepData, sweepOpError]);
@@ -785,7 +778,7 @@ function SettingsContent() {
       logExportEventFn('unlocked');
       logExportEventFn('iframe_ready'); // Reuse event for "key ready"
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Export failed. Please try again.');
+      setExportError(localizeError(err instanceof Error ? err : {}, 'export', lang));
     } finally {
       setIsExporting(false);
     }
@@ -841,7 +834,7 @@ function SettingsContent() {
         <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center'>
           <div className='animate-pulse'>
             <div className='text-4xl mb-4'>🔐</div>
-            <p className='text-gray-600'>Checking your session...</p>
+            <p className='text-gray-600'>{t('settings.loading', lang)}</p>
           </div>
         </div>
       </div>
@@ -849,37 +842,37 @@ function SettingsContent() {
   }
 
   // Render auth flow if not authenticated
-  if (authStep !== 'authenticated') {
+  if (!isAuthenticated && !isCheckingSession) {
     return (
       <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
         <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
-          <h1 className='text-2xl font-bold mb-6 text-gray-900'>
-            Sippy Settings
+          <h1 className='text-2xl font-bold mb-2 text-gray-900'>
+            {t('settings.authTitle', lang)}
           </h1>
           <p className='text-gray-600 mb-6'>
-            Verify your phone number to access settings.
+            {t('settings.authSubtitle', lang)}
           </p>
 
           {/* Configuration warning */}
           {!isCdpConfigured && (
             <div className='mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm'>
-              <strong>Configuration Required:</strong> Set NEXT_PUBLIC_CDP_PROJECT_ID in your environment.
+              <strong>{t('settings.configRequired', lang)}</strong> {t('settings.configInstruction', lang)}
             </div>
           )}
 
-          {error && (
+          {reAuthError && (
             <div className='mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
-              {error}
+              {reAuthError}
             </div>
           )}
 
-          {authStep === 'phone' && (
+          {reAuthStep === 'phone' && (
             <>
               <input
                 type='tel'
-                value={phoneNumber}
-                onChange={(e) => !isPhoneLocked && setPhoneNumber(e.target.value)}
-                placeholder='+573001234567'
+                value={reAuthPhone}
+                onChange={(e) => !isPhoneLocked && setReAuthPhone(e.target.value)}
+                placeholder={t('settings.phonePlaceholder', lang)}
                 disabled={isPhoneLocked}
                 className={`w-full p-3 border rounded-lg mb-4 text-gray-900 ${
                   isPhoneLocked ? 'bg-gray-100 text-gray-600' : ''
@@ -887,44 +880,44 @@ function SettingsContent() {
               />
               {isPhoneLocked && (
                 <p className='text-sm text-gray-500 mb-4'>
-                  Phone number from your WhatsApp link
+                  {t('settings.phoneFromWhatsapp', lang)}
                 </p>
               )}
               <button
-                onClick={handleSendOtp}
-                disabled={isLoading || !phoneNumber || !isCdpConfigured}
+                onClick={handleReAuthSendOtp}
+                disabled={reAuthLoading || !reAuthPhone || !isCdpConfigured}
                 className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                {isLoading ? 'Sending...' : 'Send Verification Code'}
+                {reAuthLoading ? t('settings.sending', lang) : t('settings.sendCode', lang)}
               </button>
             </>
           )}
 
-          {authStep === 'otp' && (
+          {reAuthStep === 'otp' && (
             <>
               <p className='text-gray-600 mb-4'>
-                We sent a 6-digit code to {phoneNumber}
+                {t('settings.codeSentTo', lang)} {reAuthPhone}
               </p>
               <input
                 type='text'
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-                placeholder='123456'
+                value={reAuthOtp}
+                onChange={(e) => setReAuthOtp(e.target.value.replace(/\D/g, ''))}
+                placeholder={t('settings.codePlaceholder', lang)}
                 maxLength={6}
                 className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-gray-900'
               />
               <button
-                onClick={handleVerifyOtp}
-                disabled={isLoading || otp.length !== 6}
+                onClick={handleReAuthVerifyOtp}
+                disabled={reAuthLoading || reAuthOtp.length !== 6}
                 className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                {isLoading ? 'Verifying...' : 'Verify'}
+                {reAuthLoading ? t('settings.verifying', lang) : t('settings.verify', lang)}
               </button>
               <button
-                onClick={() => setAuthStep('phone')}
+                onClick={() => setReAuthOtp('')}
                 className='w-full mt-2 text-gray-500 py-2'
               >
-                Back
+                {t('settings.back', lang)}
               </button>
             </>
           )}
@@ -938,8 +931,71 @@ function SettingsContent() {
     <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
       <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
         <h1 className='text-2xl font-bold mb-6 text-gray-900'>
-          Sippy Settings
+          {t('settings.title', lang)}
         </h1>
+
+        {/* Expiry warning banner */}
+        {expiryWarning && (
+          <div className='mb-4 flex items-center justify-between p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-800 text-sm'>
+            <span>Your session expires soon. Re-authenticate to continue.</span>
+            <button onClick={requireReauth} className='ml-3 font-semibold underline whitespace-nowrap'>
+              Re-auth
+            </button>
+          </div>
+        )}
+
+        {/* Inline re-auth overlay */}
+        {reAuthVisible && (
+          <div className='mb-4 bg-amber-50 rounded-xl border border-amber-200 p-5'>
+            <div className='flex items-center justify-between mb-3'>
+              <h2 className='text-base font-semibold text-gray-900'>Session expired</h2>
+              <button onClick={dismissReAuth} className='text-gray-400 hover:text-gray-600 text-xl leading-none'>&times;</button>
+            </div>
+            {reAuthError && (
+              <div className='mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
+                {reAuthError}
+              </div>
+            )}
+            {reAuthStep === 'phone' && (
+              <>
+                <input
+                  type='tel'
+                  value={reAuthPhone}
+                  onChange={(e) => setReAuthPhone(e.target.value)}
+                  placeholder={t('settings.phonePlaceholder', lang)}
+                  className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+                />
+                <button
+                  onClick={handleReAuthSendOtp}
+                  disabled={reAuthLoading || !reAuthPhone}
+                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                >
+                  {reAuthLoading ? t('settings.sending', lang) : t('settings.sendCode', lang)}
+                </button>
+              </>
+            )}
+            {reAuthStep === 'otp' && (
+              <>
+                <p className='text-gray-600 mb-3 text-sm'>{t('settings.codeSentTo', lang)} {reAuthPhone}</p>
+                <input
+                  type='text'
+                  value={reAuthOtp}
+                  onChange={(e) => setReAuthOtp(e.target.value.replace(/\D/g, ''))}
+                  placeholder={t('settings.codePlaceholder', lang)}
+                  maxLength={6}
+                  className='w-full p-3 border rounded-lg mb-3 text-center text-2xl tracking-widest text-gray-900'
+                />
+                <button
+                  onClick={handleReAuthVerifyOtp}
+                  disabled={reAuthLoading || reAuthOtp.length !== 6}
+                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                >
+                  {reAuthLoading ? t('settings.verifying', lang) : t('settings.verify', lang)}
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className='mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
@@ -949,17 +1005,65 @@ function SettingsContent() {
 
         {permissionStatus === 'success' && (
           <div className='mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm'>
-            Settings updated successfully!
+            {t('settings.updateSuccess', lang)}
           </div>
         )}
 
+        {/* Daily transfer limit */}
+        <div className='mb-6 p-4 bg-gray-50 rounded-lg'>
+          <p className='text-sm text-gray-600'>{t('settings.dailyLimit', lang)}</p>
+          {emailSectionStep === 'loading' && (
+            <p className='text-2xl font-bold text-gray-400'>— {t('settings.perDay', lang)}</p>
+          )}
+          {emailSectionStep === 'fetch_error' && (
+            <>
+              <p className='text-2xl font-bold text-gray-400'>— {t('settings.perDay', lang)}</p>
+              <p className='text-xs text-gray-400 mt-1'>{t('settings.limitLoadError', lang)}</p>
+            </>
+          )}
+          {(emailSectionStep === 'verified' || emailSectionStep === 'change_entry' || emailSectionStep === 'change_sent') && (
+            <>
+              <p className='text-2xl font-bold text-gray-900'>${DAILY_LIMIT_VERIFIED}{t('settings.perDay', lang)}</p>
+              <p className='text-xs text-green-600 mt-1'>✓ {t('settings.emailVerified', lang)}</p>
+            </>
+          )}
+          {emailSectionStep === 'unverified' && (
+            <>
+              <p className='text-2xl font-bold text-gray-900'>${DAILY_LIMIT_UNVERIFIED}{t('settings.perDay', lang)}</p>
+              <div className='mt-3 border border-amber-400 bg-amber-50 rounded-lg p-3'>
+                <p className='text-sm text-amber-800 mb-2'>{t('settings.verifyEmailCta', lang)}</p>
+                <button
+                  onClick={() => { const el = document.getElementById('recovery-email'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth' }) }}
+                  className='text-sm text-amber-700 underline'
+                >
+                  {t('settings.unlockLimit', lang)}
+                </button>
+              </div>
+            </>
+          )}
+          {(emailSectionStep === 'no_email' || emailSectionStep === 'add_sent' || emailSectionStep === 'verify_entry') && (
+            <>
+              <p className='text-2xl font-bold text-gray-900'>${DAILY_LIMIT_UNVERIFIED}{t('settings.perDay', lang)}</p>
+              <div className='mt-3 border border-amber-400 bg-amber-50 rounded-lg p-3'>
+                <p className='text-sm text-amber-800 mb-2'>{t('settings.verifyEmailCta', lang)}</p>
+                <button
+                  onClick={() => { const el = document.getElementById('recovery-email'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth' }) }}
+                  className='text-sm text-amber-700 underline'
+                >
+                  {t('settings.unlockLimit', lang)}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Current permission status */}
         <div className='mb-6 p-4 bg-gray-50 rounded-lg'>
-          <p className='text-sm text-gray-600'>Current daily limit</p>
+          <p className='text-sm text-gray-600'>{t('settings.currentLimit', lang)}</p>
           <p className='text-2xl font-bold text-gray-900'>
             {walletStatus?.hasPermission && walletStatus.dailyLimit
-              ? `$${walletStatus.dailyLimit}/day`
-              : 'No permission'}
+              ? `$${walletStatus.dailyLimit}${t('settings.perDay', lang)}`
+              : t('settings.noPermission', lang)}
           </p>
         </div>
 
@@ -967,7 +1071,7 @@ function SettingsContent() {
         {walletStatus?.hasPermission && (
           <div className='mb-6'>
             <label className='block text-sm font-medium mb-2 text-gray-700'>
-              Change daily limit
+              {t('settings.changeLimitLabel', lang)}
             </label>
             <div className='space-y-3 mb-4'>
               {['50', '100', '250', '500'].map((amount) => (
@@ -980,24 +1084,24 @@ function SettingsContent() {
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <span className='font-bold text-gray-900'>${amount}/day</span>
+                  <span className='font-bold text-gray-900'>${amount}{t('settings.perDay', lang)}</span>
                   {amount === '100' && (
                     <span className='ml-2 text-sm text-emerald-600'>
-                      (Recommended)
+                      {t('settings.recommended', lang)}
                     </span>
                   )}
                 </button>
               ))}
 
               <div className='flex items-center gap-2 p-3 border-2 border-gray-200 rounded-lg'>
-                <span className='text-gray-700'>Custom: $</span>
+                <span className='text-gray-700'>{t('settings.customPrefix', lang)}</span>
                 <input
                   type='number'
                   value={newLimit}
                   onChange={(e) => setNewLimit(e.target.value)}
                   className='w-24 p-2 border rounded text-gray-900'
                 />
-                <span className='text-gray-700'>/day</span>
+                <span className='text-gray-700'>{t('settings.perDay', lang)}</span>
               </div>
             </div>
 
@@ -1009,7 +1113,7 @@ function SettingsContent() {
               }
               className='w-full px-4 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
             >
-              {permissionStatus === 'loading' ? 'Updating...' : 'Update Limit'}
+              {permissionStatus === 'loading' ? t('settings.updating', lang) : t('settings.updateLimit', lang)}
             </button>
           </div>
         )}
@@ -1018,11 +1122,10 @@ function SettingsContent() {
         {walletStatus?.hasPermission && (
           <div className='border-t pt-6'>
             <h2 className='text-lg font-semibold mb-2 text-red-600'>
-              Disable Sippy Access
+              {t('settings.disableTitle', lang)}
             </h2>
             <p className='text-sm text-gray-600 mb-4'>
-              This will revoke Sippy&apos;s permission to send from your wallet.
-              You can re-enable anytime.
+              {t('settings.disableDesc', lang)}
             </p>
             {!(emailGateContext === 'revoke' && emailGateStep !== 'idle') && (
               <button
@@ -1040,25 +1143,25 @@ function SettingsContent() {
                 className='w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 {permissionStatus === 'loading'
-                  ? 'Revoking...'
-                  : 'Revoke Permission'}
+                  ? t('settings.revoking', lang)
+                  : t('settings.revokePermission', lang)}
               </button>
             )}
             {emailGateStep === 'warning_no_email' && emailGateContext === 'revoke' && (
               <div className='rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800'>
                 <p className='mb-2'>
-                  ⚠️ We recommend adding a recovery email before performing this operation.
+                  ⚠️ {t('settings.emailWarning', lang)}
                 </p>
                 <div className='flex gap-2'>
-                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
-                  <button className='w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700' onClick={() => proceedWithGatedOperation()}>Continue Anyway</button>
+                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
+                  <button className='w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700' onClick={() => proceedWithGatedOperation()}>{t('settings.continueAnyway', lang)}</button>
                 </div>
               </div>
             )}
             {emailGateStep === 'code_entry' && emailGateContext === 'revoke' && (
               <div className='space-y-2'>
                 <p className='text-sm'>
-                  Verify your identity via email to continue.
+                  {t('settings.verifyIdentity', lang)}
                   {emailStatus?.maskedEmail && (
                     <span className='ml-1 text-gray-500'>({emailStatus.maskedEmail})</span>
                   )}
@@ -1068,22 +1171,22 @@ function SettingsContent() {
                   onClick={handleEmailGateSendCode}
                   disabled={emailGateLoading}
                 >
-                  {emailGateLoading ? 'Sending…' : 'Send Verification Code'}
+                  {emailGateLoading ? t('settings.emailSending', lang) : t('settings.emailSendCode', lang)}
                 </button>
                 {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
-                <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
+                <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
               </div>
             )}
             {emailGateStep === 'code_sent' && emailGateContext === 'revoke' && (
               <div className='space-y-2'>
-                <p className='text-sm'>Enter the 6-digit code sent to your email:</p>
+                <p className='text-sm'>{t('settings.emailCodeInstruction', lang)}</p>
                 <input
                   type='text'
                   inputMode='numeric'
                   maxLength={6}
                   value={emailGateCode}
                   onChange={(e) => setEmailGateCode(e.target.value.replace(/\D/g, ''))}
-                  placeholder='123456'
+                  placeholder={t('settings.emailCodePlaceholder', lang)}
                   className='w-full p-3 border rounded-lg text-gray-900'
                 />
                 <button
@@ -1091,12 +1194,12 @@ function SettingsContent() {
                   onClick={handleEmailGateVerify}
                   disabled={emailGateLoading || emailGateCode.length !== 6}
                 >
-                  {emailGateLoading ? 'Verifying…' : 'Verify'}
+                  {emailGateLoading ? t('settings.emailVerifying', lang) : t('settings.verify', lang)}
                 </button>
                 {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
                 <div className='flex gap-2'>
-                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={() => setEmailGateStep('code_entry')}>Back</button>
-                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
+                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={() => setEmailGateStep('code_entry')}>{t('settings.back', lang)}</button>
+                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
                 </div>
               </div>
             )}
@@ -1106,8 +1209,11 @@ function SettingsContent() {
         {/* Re-enable permission */}
         {walletStatus && !walletStatus.hasPermission && (
           <div>
+            <h2 className='text-lg font-semibold mb-2 text-gray-900'>
+              {t('settings.enableTitle', lang)}
+            </h2>
             <p className='text-gray-600 mb-4'>
-              Sippy doesn&apos;t have permission to send from your wallet.
+              {t('settings.disableDesc', lang)}
             </p>
 
             <div className='space-y-3 mb-4'>
@@ -1121,10 +1227,10 @@ function SettingsContent() {
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <span className='font-bold text-gray-900'>${amount}/day</span>
+                  <span className='font-bold text-gray-900'>${amount}{t('settings.perDay', lang)}</span>
                   {amount === '100' && (
                     <span className='ml-2 text-sm text-emerald-600'>
-                      (Recommended)
+                      {t('settings.recommended', lang)}
                     </span>
                   )}
                 </button>
@@ -1136,7 +1242,7 @@ function SettingsContent() {
               disabled={permissionStatus === 'loading'}
               className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
             >
-              {permissionStatus === 'loading' ? 'Enabling...' : 'Enable Sippy'}
+              {permissionStatus === 'loading' ? t('settings.enabling', lang) : t('settings.enableSippy', lang)}
             </button>
           </div>
         )}
@@ -1144,7 +1250,7 @@ function SettingsContent() {
         {/* Wallet info */}
         {walletAddress && (
           <div className='mt-6 pt-6 border-t'>
-            <p className='text-sm text-gray-600 mb-2'>Your wallet address:</p>
+            <p className='text-sm text-gray-600 mb-2'>{t('settings.walletAddress', lang)}</p>
             <p className='font-mono text-xs text-gray-500 break-all'>
               {walletAddress}
             </p>
@@ -1152,15 +1258,15 @@ function SettingsContent() {
         )}
 
         {/* Recovery Email */}
-        <div className='mt-6 pt-6 border-t'>
+        <div id='recovery-email' className='mt-6 pt-6 border-t'>
           <h2 className='text-lg font-semibold mb-3 text-gray-900'>
-            Recovery Email
+            {t('settings.recoveryEmail', lang)}
           </h2>
 
           {emailSectionStep === 'fetch_error' && (
             <div className='text-sm text-red-600'>
-              Unable to load email status.{' '}
-              <button className='underline' onClick={fetchEmailStatus}>Retry</button>
+              {t('settings.emailLoadError', lang)}{' '}
+              <button className='underline' onClick={fetchEmailStatus}>{t('settings.emailLoadRetry', lang)}</button>
             </div>
           )}
 
@@ -1168,16 +1274,16 @@ function SettingsContent() {
             <>
               {!bannerDismissed && (
                 <div className='mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex justify-between items-start'>
-                  <p className='text-sm text-blue-800'>Add a recovery email to protect your account</p>
+                  <p className='text-sm text-blue-800'>{t('settings.addEmailBanner', lang)}</p>
                   <button onClick={() => setBannerDismissed(true)} className='ml-2 text-blue-600 hover:text-blue-800'>✕</button>
                 </div>
               )}
-              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
               <input
                 type='email'
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
-                placeholder='you@example.com'
+                placeholder={t('settings.emailPlaceholder', lang)}
                 className='w-full p-3 border rounded-lg mb-3 text-gray-900'
               />
               <button
@@ -1185,20 +1291,20 @@ function SettingsContent() {
                 disabled={!emailInput || emailLoading}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                {emailLoading ? 'Sending...' : 'Add recovery email'}
+                {emailLoading ? t('settings.emailSending', lang) : t('settings.addEmailBtn', lang)}
               </button>
             </>
           )}
 
           {emailSectionStep === 'add_sent' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
-              <p className='text-sm text-gray-600 mb-3'>Code sent to {emailInput}</p>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-600 mb-3'>{t('settings.emailCodeSentTo', lang)} {emailInput}</p>
               <input
                 type='text'
                 value={emailCode}
                 onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
-                placeholder='123456'
+                placeholder={t('settings.emailCodeInput', lang)}
                 maxLength={6}
                 className='w-full p-3 border rounded-lg mb-3 text-gray-900'
               />
@@ -1207,53 +1313,53 @@ function SettingsContent() {
                 disabled={emailCode.length !== 6 || emailLoading}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed mb-2'
               >
-                {emailLoading ? 'Verifying...' : 'Verify'}
+                {emailLoading ? t('settings.emailVerifying', lang) : t('settings.emailVerifyBtn', lang)}
               </button>
               <button
                 onClick={() => handleSendEmailCode(emailInput)}
                 disabled={emailLoading}
                 className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
               >
-                Resend code
+                {t('settings.resendCode', lang)}
               </button>
             </>
           )}
 
           {emailSectionStep === 'unverified' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
-              <p className='text-sm text-gray-600 mb-3'>{emailStatus?.maskedEmail} — not verified</p>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-600 mb-3'>{emailStatus?.maskedEmail} — {t('settings.emailNotVerified', lang)}</p>
               <button
                 onClick={() => setEmailSectionStep('verify_entry')}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 mb-2'
               >
-                Verify
+                {t('settings.emailVerifyBtn', lang)}
               </button>
               <button
                 onClick={() => setEmailSectionStep('verify_entry')}
                 className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
               >
-                Resend code
+                {t('settings.resendCode', lang)}
               </button>
             </>
           )}
 
           {emailSectionStep === 'verify_entry' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
-              <p className='text-sm text-gray-600 mb-3'>Enter your email ({emailStatus?.maskedEmail}) to continue</p>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-600 mb-3'>{t('settings.emailEnterToVerify', lang)} ({emailStatus?.maskedEmail})</p>
               <input
                 type='email'
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
-                placeholder='you@example.com'
+                placeholder={t('settings.emailPlaceholder', lang)}
                 className='w-full p-3 border rounded-lg mb-3 text-gray-900'
               />
               <input
                 type='text'
                 value={emailCode}
                 onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
-                placeholder='123456'
+                placeholder={t('settings.emailCodeInput', lang)}
                 maxLength={6}
                 className='w-full p-3 border rounded-lg mb-3 text-gray-900'
               />
@@ -1262,22 +1368,22 @@ function SettingsContent() {
                 disabled={!emailInput || emailCode.length !== 6 || emailLoading}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed mb-2'
               >
-                {emailLoading ? 'Verifying...' : 'Verify'}
+                {emailLoading ? t('settings.emailVerifying', lang) : t('settings.emailVerifyBtn', lang)}
               </button>
               <button
                 onClick={() => handleSendEmailCode(emailInput)}
                 disabled={!emailInput || emailLoading}
                 className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
               >
-                Resend code
+                {t('settings.resendCode', lang)}
               </button>
             </>
           )}
 
           {emailSectionStep === 'verified' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
-              <p className='text-sm text-gray-600 mb-3'>{emailStatus?.maskedEmail} ✓ Verified</p>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-600 mb-3'>{emailStatus?.maskedEmail} ✓ {t('settings.emailVerified', lang)}</p>
               <button
                 onClick={() => { setEmailInput(''); setEmailCode(''); setEmailSectionStep('change_entry'); }}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
@@ -1289,13 +1395,13 @@ function SettingsContent() {
 
           {emailSectionStep === 'change_entry' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
-              <p className='text-sm text-gray-600 mb-3'>Enter new email address</p>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-600 mb-3'>{t('settings.emailEnterToVerify', lang)}</p>
               <input
                 type='email'
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
-                placeholder='new@example.com'
+                placeholder={t('settings.emailPlaceholder', lang)}
                 className='w-full p-3 border rounded-lg mb-3 text-gray-900'
               />
               <button
@@ -1303,20 +1409,20 @@ function SettingsContent() {
                 disabled={!emailInput || emailLoading}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                {emailLoading ? 'Sending...' : 'Send code'}
+                {emailLoading ? t('settings.emailSending', lang) : t('settings.emailSendCode', lang)}
               </button>
             </>
           )}
 
           {emailSectionStep === 'change_sent' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>Recovery Email</label>
-              <p className='text-sm text-gray-600 mb-3'>Code sent to {emailInput}</p>
+              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-600 mb-3'>{t('settings.emailCodeSentTo', lang)} {emailInput}</p>
               <input
                 type='text'
                 value={emailCode}
                 onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
-                placeholder='123456'
+                placeholder={t('settings.emailCodeInput', lang)}
                 maxLength={6}
                 className='w-full p-3 border rounded-lg mb-3 text-gray-900'
               />
@@ -1325,14 +1431,14 @@ function SettingsContent() {
                 disabled={emailCode.length !== 6 || emailLoading}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed mb-2'
               >
-                {emailLoading ? 'Verifying...' : 'Verify'}
+                {emailLoading ? t('settings.emailVerifying', lang) : t('settings.emailVerifyBtn', lang)}
               </button>
               <button
                 onClick={() => handleSendEmailCode(emailInput)}
                 disabled={emailLoading}
                 className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
               >
-                Resend code
+                {t('settings.resendCode', lang)}
               </button>
             </>
           )}
@@ -1340,10 +1446,66 @@ function SettingsContent() {
           {emailError && <p className='text-red-600 text-sm mt-2'>{emailError}</p>}
         </div>
 
+        {/* Language selector */}
+        <div className='border-t pt-6 mb-6'>
+          <h2 className='text-sm font-medium text-gray-700 mb-3'>
+            {t('settings.languageTitle', lang)}
+          </h2>
+          <div className='grid grid-cols-2 gap-2'>
+            {[
+              { value: 'en',   label: t('settings.langEn',   lang) },
+              { value: 'es',   label: t('settings.langEs',   lang) },
+              { value: 'pt',   label: t('settings.langPt',   lang) },
+              { value: 'auto', label: t('settings.langAuto', lang) },
+            ].map(({ value, label }) => (
+              <button
+                key={value}
+                disabled={langSaving}
+                onClick={() => handleSetLanguage(value as Language | 'auto')}
+                className={`py-2 px-3 rounded-lg border-2 text-sm font-medium
+                  ${(value !== 'auto' && lang === value)
+                    ? 'border-emerald-600 bg-emerald-50'
+                    : 'border-gray-200 hover:border-gray-300'}
+                  disabled:opacity-50`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {langSaveError && (
+            <p className='text-sm text-red-600 mt-2'>{langSaveError}</p>
+          )}
+        </div>
+
+        {/* Privacy */}
+        <div className='border-t pt-6 mb-6'>
+          <h2 className='text-sm font-medium text-gray-700 mb-3'>Privacy</h2>
+          <label className='flex items-center justify-between cursor-pointer'>
+            <div>
+              <span className='text-sm text-gray-900'>Show phone number on profile</span>
+              <p className='text-xs text-gray-500 mt-0.5'>
+                When off, your phone number is hidden on your public profile
+              </p>
+            </div>
+            <input
+              type='checkbox'
+              role='switch'
+              className='sr-only peer'
+              checked={phoneVisible ?? true}
+              disabled={privacySaving || phoneVisible === null}
+              onChange={(e) => handleSetPhoneVisible(e.target.checked)}
+            />
+            <div className='relative w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-emerald-600 peer-disabled:opacity-50 after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 ml-3 flex-shrink-0' />
+          </label>
+          {privacySaveError && (
+            <p className='text-sm text-red-600 mt-2'>{privacySaveError}</p>
+          )}
+        </div>
+
         {/* Wallet Security */}
         <div className='mt-6 pt-6 border-t'>
           <h2 className='text-lg font-semibold mb-3 text-gray-900'>
-            Wallet Security
+            {t('settings.walletSecurity', lang)}
           </h2>
 
           {exportStep === 'idle' && (
@@ -1365,24 +1527,24 @@ function SettingsContent() {
                       disabled={exportStep !== 'idle' || emailSectionStep === 'loading' || emailSectionStep === 'fetch_error'}
                       className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed'
                     >
-                      Export Private Key
+                      {t('settings.exportKey', lang)}
                     </button>
                   )}
                   {emailGateStep === 'warning_no_email' && emailGateContext === 'export' && (
                     <div className='rounded border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800'>
                       <p className='mb-2'>
-                        ⚠️ We recommend adding a recovery email before performing this operation.
+                        ⚠️ {t('settings.emailWarning', lang)}
                       </p>
                       <div className='flex gap-2'>
-                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
-                        <button className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700' onClick={() => proceedWithGatedOperation()}>Continue Anyway</button>
+                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
+                        <button className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700' onClick={() => proceedWithGatedOperation()}>{t('settings.continueAnyway', lang)}</button>
                       </div>
                     </div>
                   )}
                   {emailGateStep === 'code_entry' && emailGateContext === 'export' && (
                     <div className='space-y-2'>
                       <p className='text-sm'>
-                        Verify your identity via email to continue.
+                        {t('settings.verifyIdentity', lang)}
                         {emailStatus?.maskedEmail && (
                           <span className='ml-1 text-gray-500'>({emailStatus.maskedEmail})</span>
                         )}
@@ -1392,22 +1554,22 @@ function SettingsContent() {
                         onClick={handleEmailGateSendCode}
                         disabled={emailGateLoading}
                       >
-                        {emailGateLoading ? 'Sending…' : 'Send Verification Code'}
+                        {emailGateLoading ? t('settings.emailSending', lang) : t('settings.emailSendCode', lang)}
                       </button>
                       {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
-                      <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
+                      <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
                     </div>
                   )}
                   {emailGateStep === 'code_sent' && emailGateContext === 'export' && (
                     <div className='space-y-2'>
-                      <p className='text-sm'>Enter the 6-digit code sent to your email:</p>
+                      <p className='text-sm'>{t('settings.emailCodeInstruction', lang)}</p>
                       <input
                         type='text'
                         inputMode='numeric'
                         maxLength={6}
                         value={emailGateCode}
                         onChange={(e) => setEmailGateCode(e.target.value.replace(/\D/g, ''))}
-                        placeholder='123456'
+                        placeholder={t('settings.emailCodePlaceholder', lang)}
                         className='w-full p-3 border rounded-lg text-gray-900'
                       />
                       <button
@@ -1415,19 +1577,19 @@ function SettingsContent() {
                         onClick={handleEmailGateVerify}
                         disabled={emailGateLoading || emailGateCode.length !== 6}
                       >
-                        {emailGateLoading ? 'Verifying…' : 'Verify'}
+                        {emailGateLoading ? t('settings.emailVerifying', lang) : t('settings.verify', lang)}
                       </button>
                       {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
                       <div className='flex gap-2'>
-                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={() => setEmailGateStep('code_entry')}>Back</button>
-                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>Cancel</button>
+                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={() => setEmailGateStep('code_entry')}>{t('settings.back', lang)}</button>
+                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
                       </div>
                     </div>
                   )}
                 </>
               ) : (
                 <p className='text-xs text-gray-400'>
-                  No exportable account found.
+                  {t('settings.noExportAccount', lang)}
                 </p>
               )}
             </>
@@ -1437,12 +1599,10 @@ function SettingsContent() {
             <div className='space-y-4'>
               <div className='p-4 bg-red-50 border border-red-200 rounded-lg'>
                 <p className='text-sm text-red-800 font-medium mb-2'>
-                  Security Warning
+                  {t('settings.exportWarningTitle', lang)}
                 </p>
                 <p className='text-sm text-red-700'>
-                  Your private key gives full control of your wallet. Never share
-                  it with anyone. Only export if you need to back up your wallet
-                  to an external app.
+                  {t('settings.exportWarningBody', lang)}
                 </p>
               </div>
               {exportError && (
@@ -1455,14 +1615,14 @@ function SettingsContent() {
                 disabled={isExporting}
                 className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                {isExporting ? 'Loading...' : 'I Understand, Continue'}
+                {isExporting ? t('settings.loadingKey', lang) : t('settings.understandContinue', lang)}
               </button>
               <button
                 onClick={() => resetExport('cancelled')}
                 disabled={isExporting}
                 className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
               >
-                Cancel
+                {t('settings.cancel', lang)}
               </button>
             </div>
           )}
@@ -1471,16 +1631,15 @@ function SettingsContent() {
             <div className='space-y-4'>
               <div className='p-4 bg-amber-50 border border-amber-200 rounded-lg'>
                 <p className='text-sm text-amber-800 font-medium mb-2'>
-                  Transfer Funds First
+                  {t('settings.transferFirst', lang)}
                 </p>
                 <p className='text-sm text-amber-700'>
-                  Your USDC is in your smart wallet. The exported key controls a
-                  different address. Transfer funds so they appear in MetaMask.
+                  {t('settings.transferDesc', lang)}
                 </p>
               </div>
 
               <div className='p-4 bg-gray-50 rounded-lg'>
-                <p className='text-sm text-gray-600'>Smart wallet balance</p>
+                <p className='text-sm text-gray-600'>{t('settings.smartBalance', lang)}</p>
                 <p className='text-2xl font-bold text-gray-900'>
                   ${parseFloat(smartAccountBalance || '0').toFixed(2)} USDC
                 </p>
@@ -1495,7 +1654,7 @@ function SettingsContent() {
                 onClick={handleSweep}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
               >
-                Transfer ${parseFloat(smartAccountBalance || '0').toFixed(2)} to exportable address
+                {t('settings.transferTo', lang)} (${parseFloat(smartAccountBalance || '0').toFixed(2)})
               </button>
 
               <button
@@ -1503,10 +1662,10 @@ function SettingsContent() {
                 disabled={isExporting}
                 className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
               >
-                Skip, just show key
+                {t('settings.skipShowKey', lang)}
               </button>
               <p className='text-xs text-amber-600 text-center'>
-                If you skip, funds will NOT be accessible via this key in MetaMask.
+                {t('settings.skipWarning', lang)}
               </p>
             </div>
           )}
@@ -1516,9 +1675,9 @@ function SettingsContent() {
               {!sweepError ? (
                 <div className='text-center py-6'>
                   <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto mb-4' />
-                  <p className='text-gray-700 font-medium'>Transferring funds...</p>
+                  <p className='text-gray-700 font-medium'>{t('settings.transferring', lang)}</p>
                   <p className='text-sm text-gray-500 mt-1'>
-                    Moving ${parseFloat(smartAccountBalance || '0').toFixed(2)} USDC to your exportable address
+                    {t('settings.movingFunds', lang)}
                   </p>
                 </div>
               ) : (
@@ -1530,14 +1689,14 @@ function SettingsContent() {
                     onClick={handleSweep}
                     className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
                   >
-                    Retry Transfer
+                    {t('settings.retryTransfer', lang)}
                   </button>
                   <button
                     onClick={handleExportContinue}
                     disabled={isExporting}
                     className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
                   >
-                    Skip and show key anyway
+                    {t('settings.skipAnyway', lang)}
                   </button>
                 </>
               )}
@@ -1548,7 +1707,7 @@ function SettingsContent() {
             <div className='space-y-4'>
               <div className='flex justify-between items-center'>
                 <span className='text-sm font-medium text-gray-700'>
-                  Your Private Key
+                  {t('settings.yourPrivateKey', lang)}
                 </span>
                 <span className={`text-sm font-mono ${exportCountdown <= 60 ? 'text-red-600' : 'text-gray-500'}`}>
                   {Math.floor(exportCountdown / 60)}:{(exportCountdown % 60).toString().padStart(2, '0')}
@@ -1569,18 +1728,18 @@ function SettingsContent() {
                     : 'bg-emerald-600 text-white hover:bg-emerald-700'
                 }`}
               >
-                {hasCopied ? 'Copied!' : 'Copy Private Key'}
+                {hasCopied ? t('settings.copied', lang) : t('settings.copyKey', lang)}
               </button>
 
               <button
                 onClick={() => resetExport(hasCopied ? 'completed' : 'cancelled')}
                 className='w-full py-3 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700'
               >
-                Done
+                {t('settings.done', lang)}
               </button>
 
               <p className='text-xs text-red-500 text-center'>
-                This key will be cleared when you click Done or after 5 minutes.
+                {t('settings.keyWillClear', lang)}
               </p>
             </div>
           )}
@@ -1592,28 +1751,25 @@ function SettingsContent() {
             href='/wallet'
             className='text-sm text-emerald-600 hover:text-emerald-700 font-medium'
           >
-            Open Wallet
+            {t('settings.openWallet', lang)}
           </a>
           <button
             onClick={async () => {
               if (exportStep !== 'idle') resetExport('cancelled');
               clearToken();
               await signOut();
-              setAuthStep('phone');
-              setWalletAddress(null);
               setWalletStatus(null);
               setVerifiedPhone(null);
-              setHasCheckedSession(false);
             }}
             className='text-sm text-gray-500 hover:text-gray-700'
           >
-            Sign out
+            {t('settings.signOut', lang)}
           </button>
         </div>
 
         {/* Footer */}
         <div className='mt-8 text-center text-xs text-gray-500'>
-          <p>Powered by Coinbase</p>
+          <p>{t('settings.poweredBy', lang)}</p>
           <p className='mt-1'>Network: {NETWORK}</p>
           {SIPPY_SPENDER_ADDRESS && (
             <p className='mt-1 font-mono text-[10px] truncate'>

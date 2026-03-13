@@ -77,6 +77,36 @@ export function normalizePhoneNumber(rawPhone: string, originalText?: string): s
   return digitsOnly
 }
 
+export function canonicalizePhone(input: string): string | null {
+  if (!input) return null
+
+  const stripped = input.replace(/[\s\-().]/g, '')
+
+  let rawDigits: string
+  if (stripped.startsWith('+')) {
+    rawDigits = stripped.slice(1)
+  } else if (stripped.startsWith('00')) {
+    rawDigits = stripped.slice(2)
+  } else {
+    rawDigits = stripped
+  }
+
+  if (!/^\d+$/.test(rawDigits)) return null
+  if (rawDigits.length < 10) return null
+  if (rawDigits.length > 15) return null
+
+  if (rawDigits.length === 10) {
+    const cc = (process.env.DEFAULT_COUNTRY_CODE ?? '').replace(/\D/g, '')
+    if (!cc) return null
+    rawDigits = cc + rawDigits
+  }
+
+  if (rawDigits.length > 15) return null
+  if (rawDigits[0] === '0') return null
+
+  return '+' + rawDigits
+}
+
 export type SendVerificationMismatch = 'amount' | 'recipient' | 'invalid'
 
 export interface SendVerificationResult {
@@ -91,7 +121,7 @@ export interface SendVerificationResult {
 export function verifySendAgreement(
   llmResult: ParsedCommand,
   regexVerification: ParsedCommand,
-  originalText: string
+  _originalText: string
 ): SendVerificationResult {
   // Validate amount is present and reasonable
   if (typeof llmResult.amount !== 'number' || llmResult.amount <= 0) {
@@ -108,20 +138,8 @@ export function verifySendAgreement(
     return { match: false, mismatchReason: 'recipient' }
   }
 
-  // First, try to normalize the recipient (handles name aliases like "Helena")
-  const normalizedRecipient = normalizePhoneNumber(llmResult.recipient, originalText)
-
-  // If normalization failed, validate as raw recipient
-  const recipientToValidate = normalizedRecipient || llmResult.recipient
-
-  // Remove formatting to get clean digits (accept with or without +)
-  const cleanRecipient = recipientToValidate.replace(/[\s\-().]/g, '')
-
-  // Accept either: +NNNNNNNNNN (with +) or NNNNNNNNNN (bare digits)
-  const withPlusPattern = /^\+\d{10,}$/
-  const bareDigitsPattern = /^\d{10,}$/
-
-  if (!withPlusPattern.test(cleanRecipient) && !bareDigitsPattern.test(cleanRecipient)) {
+  const canonicalRecipient = canonicalizePhone(llmResult.recipient)
+  if (!canonicalRecipient) {
     return { match: false, mismatchReason: 'recipient' }
   }
 
@@ -135,4 +153,34 @@ export function verifySendAgreement(
 
   // Valid format - trust the LLM and let the send service validate existence
   return { match: true }
+}
+
+// ── Phone-to-language mapping ──────────────────────────────────────────────────
+
+/**
+ * Ordered longest-prefix-first to prevent shorter prefixes from shadowing longer ones.
+ * Exported so tests can assert the ordering invariant.
+ *
+ * Current entries:
+ *   +55 (Brazil → pt) must appear before any future +5X entry.
+ *   +1  (USA/Canada → en) catch-all for NANP — comes after any future +1XXX entries.
+ *
+ * Rule when adding entries: always insert a longer prefix BEFORE any shorter
+ * prefix it would shadow (same convention as exchange_rate_service.ts).
+ */
+export const PHONE_LANGUAGE_PREFIX_MAP: readonly [string, 'en' | 'es' | 'pt'][] = [
+  ['+55', 'pt'],  // Brazil
+  ['+1',  'en'],  // USA / Canada (NANP catch-all)
+]
+
+/**
+ * Map a phone number (E.164 format expected) to a website language code.
+ * Uses longest-prefix match via ordered iteration.
+ * Fallback: 'es' (covers all LATAM prefixes not explicitly listed).
+ */
+export function getLanguageForPhone(phone: string): 'en' | 'es' | 'pt' {
+  for (const [prefix, lang] of PHONE_LANGUAGE_PREFIX_MAP) {
+    if (phone.startsWith(prefix)) return lang
+  }
+  return 'es'
 }

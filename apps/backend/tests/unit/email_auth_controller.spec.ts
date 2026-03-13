@@ -16,7 +16,7 @@ import UserPreference from '#models/user_preference'
 process.env.EMAIL_ENCRYPTION_KEY = 'abcdef1234567890'.repeat(4)
 
 const PHONE = '+573001234567'
-const DB_PHONE = '573001234567' // stored without '+' in user_preferences
+const DB_PHONE = '+573001234567'
 const OTHER_PHONE = '+573009999999'
 const VALID_EMAIL = 'user@example.com'
 
@@ -58,6 +58,7 @@ function makeQueryMock(firstResult: unknown) {
   builder['whereNotNull'] = () => builder
   builder['where'] = () => builder
   builder['whereNot'] = () => builder
+  builder['whereNotIn'] = () => builder
   builder['first'] = async () => firstResult
   builder['update'] = async () => 0
   return builder
@@ -148,7 +149,6 @@ test.group('sendEmailCode | success', (group) => {
     assert.equal(getStatus(), 200)
     assert.deepEqual(getBody(), { success: true })
     assert.lengthOf(spy.calls, 1)
-    // searchPayload must use the stripped DB phone (no '+')
     assert.equal(spy.calls[0].searchPayload['phoneNumber'], DB_PHONE)
     const update = spy.calls[0].updatePayload
     assert.isString(update['emailEncrypted'])

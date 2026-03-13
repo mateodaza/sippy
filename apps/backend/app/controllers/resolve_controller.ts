@@ -10,6 +10,7 @@ import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import { query } from '#services/db'
 import { getUserWallet } from '#services/cdp_wallet.service'
+import { canonicalizePhone } from '#utils/phone'
 
 export default class ResolveController {
   /**
@@ -28,17 +29,19 @@ export default class ResolveController {
         })
       }
 
-      // Remove '+' prefix if present for consistency
-      const cleanPhone = phone.replace(/^\+/, '')
+      const canonicalPhone = canonicalizePhone(phone)
+      if (!canonicalPhone) {
+        return response.status(400).json({ error: 'Invalid phone number' })
+      }
 
-      logger.info(`Resolving phone number: +${cleanPhone}`)
+      logger.info(`Resolving phone number: ${canonicalPhone}`)
 
       // Try to get existing wallet
-      const wallet = await getUserWallet(cleanPhone)
+      const wallet = await getUserWallet(canonicalPhone)
 
       // If wallet doesn't exist, return error - user must start via WhatsApp first
       if (!wallet) {
-        logger.info(`Wallet not found for +${cleanPhone}`)
+        logger.info(`Wallet not found for ${canonicalPhone}`)
 
         // Get Sippy WhatsApp number from env
         const sippyWhatsAppNumber = env.get('SIPPY_WHATSAPP_NUMBER')
@@ -49,7 +52,7 @@ export default class ResolveController {
         return response.status(404).json({
           error: 'Wallet not found',
           message: `This phone number hasn't started using Sippy yet. They need to send "start" to Sippy on WhatsApp first.`,
-          phone: `+${cleanPhone}`,
+          phone: canonicalPhone,
           ...(whatsappLink && { whatsappLink }),
         })
       }
@@ -58,7 +61,7 @@ export default class ResolveController {
 
       return response.json({
         address: wallet.walletAddress,
-        phone: `+${cleanPhone}`,
+        phone: canonicalPhone,
         isNew: !wallet.lastActivity || wallet.lastActivity === wallet.createdAt,
       })
     } catch (error) {
@@ -84,6 +87,10 @@ export default class ResolveController {
         })
       }
 
+      if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+        return response.status(400).json({ error: 'Invalid wallet address' })
+      }
+
       logger.info(`Reverse lookup for address: ${address}`)
 
       // Query database for phone number by wallet address
@@ -103,7 +110,8 @@ export default class ResolveController {
         })
       }
 
-      const phone = `+${result.rows[0].phone_number}`
+      const storedPhone = result.rows[0].phone_number
+      const phone = storedPhone.startsWith('+') ? storedPhone : `+${storedPhone}`
       logger.info(`Found phone: ${phone}`)
 
       return response.json({

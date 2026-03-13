@@ -14,6 +14,25 @@ import logger from '@adonisjs/core/services/logger'
 import { CdpClient } from '@coinbase/cdp-sdk'
 import { ethers } from 'ethers'
 import { query } from '#services/db'
+
+/**
+ * Compatibility helper: queries phone_registry with canonical phone first,
+ * falls back to bare-digit format for pre-SH-003 rows.
+ * Remove after SH-003 backfill is confirmed complete.
+ */
+async function lookupByPhone(phoneNumber: string): Promise<{ rows: any[] }> {
+  const result = await query(
+    `SELECT phone_number, wallet_address, spend_permission_hash, daily_limit
+     FROM phone_registry WHERE phone_number = $1`,
+    [phoneNumber]
+  )
+  if (result.rows.length > 0 || !phoneNumber.startsWith('+')) return result
+  return query(
+    `SELECT phone_number, wallet_address, spend_permission_hash, daily_limit
+     FROM phone_registry WHERE phone_number = $1`,
+    [phoneNumber.slice(1)]
+  )
+}
 import {
   NETWORK,
   SIPPY_SPENDER_ADDRESS,
@@ -115,17 +134,14 @@ interface EmbeddedUserWallet {
  */
 export async function getEmbeddedWallet(phoneNumber: string): Promise<EmbeddedUserWallet | null> {
   try {
-    const result = await query<{
-      phone_number: string
-      wallet_address: string
-      spend_permission_hash: string | null
-      daily_limit: string | null
-    }>(
-      `SELECT phone_number, wallet_address, spend_permission_hash, daily_limit
-       FROM phone_registry
-       WHERE phone_number = $1`,
-      [phoneNumber]
-    )
+    const result = (await lookupByPhone(phoneNumber)) as {
+      rows: Array<{
+        phone_number: string
+        wallet_address: string
+        spend_permission_hash: string | null
+        daily_limit: string | null
+      }>
+    }
 
     if (result.rows.length === 0) {
       return null
@@ -259,6 +275,13 @@ export async function sendWithSpendPermission(
     }
 
     // Convert amount to USDC units (6 decimals)
+    // Defense-in-depth: reject amounts with more than 6 decimal places before
+    // passing to ethers — prevents opaque BigNumber errors from callers that
+    // bypass controller-layer schema validation.
+    const decimalParts = amount.toString().split('.')
+    if (decimalParts[1] && decimalParts[1].length > 6) {
+      throw new Error('Amount has too many decimal places (max 6 for USDC)')
+    }
     const amountInUnits = BigInt(
       ethers.utils.parseUnits(amount.toString(), USDC_DECIMALS).toString()
     )
@@ -322,11 +345,33 @@ export async function sendWithSpendPermission(
     const txHash = userOp.transactionHash ?? receipt.userOpHash
     logger.info(`Transfer complete! Hash: ${txHash}`)
 
-    // Update last activity
-    await query('UPDATE phone_registry SET last_activity = $1 WHERE phone_number = $2', [
-      Date.now(),
-      fromPhoneNumber,
-    ])
+    // Track daily spend for embedded wallet users (mirrors updateLastActivity pattern)
+    const { getUserWallet: getWallet, computeNewDailySpent } = await import('#services/cdp_wallet.service')
+    const wallet = await getWallet(fromPhoneNumber)
+    const today = new Date().toDateString()
+    const newDailySpent = computeNewDailySpent(
+      wallet?.dailySpent ?? 0,
+      wallet?.lastResetDate ?? '',
+      amount,
+      today
+    )
+
+    let updateResult = await query(
+      `UPDATE phone_registry
+       SET last_activity = $1, daily_spent = $2, last_reset_date = $3
+       WHERE phone_number = $4`,
+      [Date.now(), newDailySpent, today, fromPhoneNumber]
+    )
+
+    // SH-003 transition fallback: retry with bare-digit format
+    if (updateResult.rowCount === 0 && fromPhoneNumber.startsWith('+')) {
+      await query(
+        `UPDATE phone_registry
+         SET last_activity = $1, daily_spent = $2, last_reset_date = $3
+         WHERE phone_number = $4`,
+        [Date.now(), newDailySpent, today, fromPhoneNumber.slice(1)]
+      )
+    }
 
     // Get remaining allowance after the transfer
     const postTransferAllowance = await getRemainingAllowance(fromPhoneNumber)

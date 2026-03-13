@@ -2,6 +2,13 @@
  * Type definitions for Sippy backend
  */
 
+export type AmountErrorCode =
+  | 'ZERO'
+  | 'TOO_LARGE'
+  | 'TOO_MANY_DECIMALS'
+  | 'AMBIGUOUS_SEPARATOR'
+  | 'INVALID_FORMAT'
+
 export interface Session {
   phoneNumber: string
   createdAt: number
@@ -21,6 +28,15 @@ export interface UserWallet {
   lastResetDate: string // For daily limit reset
 }
 
+export interface PendingTransaction {
+  amount: number
+  recipient: string   // canonical E.164 phone
+  timestamp: number   // Date.now()
+  lang: Lang          // user's lang at time of send command
+}
+
+type Lang = 'en' | 'es' | 'pt'
+
 export interface ParsedCommand {
   command:
     | 'start'
@@ -33,9 +49,13 @@ export interface ParsedCommand {
     | 'language'
     | 'greeting'
     | 'social'
+    | 'privacy'
+    | 'confirm'
+    | 'cancel'
     | 'unknown'
   amount?: number
   recipient?: string
+  privacyAction?: 'on' | 'off'
   originalText?: string
   helpfulMessage?: string // Natural, conversational response for unknown commands
   detectedLanguage?: 'en' | 'es' | 'pt' | 'ambiguous' // Language detected from current message
@@ -50,6 +70,9 @@ export interface ParsedCommand {
     | 'error'
     | 'low-confidence'
     | 'validation-failed'
+  amountError?: AmountErrorCode      // set when send regex matched but amount is invalid
+  recipientError?: 'INVALID_PHONE'   // set when amount is valid but phone canonicalization fails
+  isLargeAmount?: boolean            // true iff amount > 500 and no amountError
 }
 
 export interface WalletInfo {

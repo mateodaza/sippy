@@ -20,6 +20,12 @@ export default class UserPreference extends BaseModel {
   @column()
   declare emailVerified: boolean
 
+  @column()
+  declare phoneVisible: boolean
+
+  @column()
+  declare blocked: boolean
+
   @column.dateTime()
   declare emailVerifiedAt: DateTime | null
 

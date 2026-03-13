@@ -85,6 +85,7 @@ test.group('Parity | All Express routes exist', () => {
     { method: 'post' as const, path: '/api/log-export-event' },
     { method: 'post' as const, path: '/api/resolve-phone' },
     { method: 'post' as const, path: '/api/log-web-send' },
+    { method: 'post' as const, path: '/api/set-language' },
   ]
 
   for (const route of cdpRoutes) {

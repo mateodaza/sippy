@@ -1,8 +1,6 @@
-# Task Queue — Sippy
+# Completed Task Queues — Sippy
 
-> This file is consumed by an AI agent. Tasks are executed in order, respecting dependencies.
-> Only Mateo adds or reorders tasks. The agent marks completion status.
-> Tasks use stable IDs (NC-001, etc.) that never change when tasks are reordered.
+> Archive of completed task queue sections. Moved here to keep TASK_QUEUE.md focused on pending work.
 
 ## Status Legend
 - [ ] Queued — ready for agent
@@ -252,3 +250,34 @@
 - **Verify:** `bash scripts/vps-setup-env.sh --db-password test --alchemy-key test` creates files without error
 - **Dependencies:** VPS-001
 - **Files:** `scripts/vps-setup-env.sh` (new)
+
+---
+
+## P3 Dual Currency Display — COMPLETED
+
+> **Goal:** All balance and transfer messages show USD + local currency equivalent, auto-detected from phone prefix.
+> **Deliverable:** M1 #4
+
+#### DC-001 [x] Create exchange rate service
+#### DC-002 [x] Create dual amount formatter
+#### DC-003 [x] Update balance message to show dual currency
+#### DC-004 [x] Update send messages to show dual currency
+#### DC-005 [x] Thread rate through webhook command handler
+#### DC-006 [x] Write tests for exchange rate service
+
+---
+
+## P5.6 Email Recovery — COMPLETED
+
+> **Goal:** Users can add a recovery email during setup. Email serves as 2FA for sensitive operations.
+> **Deliverable:** M1 #5 (partial), M1 #6
+
+#### ER-001 [x] Add email columns to user_preferences
+#### ER-002 [x] Create email encryption helpers
+#### ER-003 [x] Create email service with Resend
+#### ER-004 [x] Create email auth controller endpoints
+#### ER-005 [x] Add email collection to setup page
+#### ER-006 [x] Add email management to settings page
+#### ER-007 [x] Gate sensitive operations on email verification
+#### ER-008 [x] Write tests for email service
+#### ER-009 [x] Create recovery design doc

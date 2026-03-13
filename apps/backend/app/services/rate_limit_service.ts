@@ -212,6 +212,15 @@ export default class RateLimitService {
     this.loginThrottle.delete(ip)
   }
 
+  /**
+   * Clear all IP resolve throttle entries.
+   * Intended for use in functional tests to reset the shared budget between
+   * test groups that hit throttled endpoints.
+   */
+  resetIpThrottle(): void {
+    this.ipResolveThrottle.clear()
+  }
+
   // ── Map 4: Per-User Phone Resolution Throttle ──────────────────────────────
 
   /**
@@ -283,63 +292,71 @@ export default class RateLimitService {
   startCleanupTimers(): void {
     // Messages + spam: every 60 seconds
     const msgTimer = setInterval(() => {
-      const now = Date.now()
-      let msgCleaned = 0
-      let spamCleaned = 0
+      try {
+        const now = Date.now()
+        let msgCleaned = 0
+        let spamCleaned = 0
 
-      for (const [id, timestamp] of this.processedMessages) {
-        if (now - timestamp > MESSAGE_CACHE_TTL) {
-          this.processedMessages.delete(id)
-          msgCleaned++
+        for (const [id, timestamp] of this.processedMessages) {
+          if (now - timestamp > MESSAGE_CACHE_TTL) {
+            this.processedMessages.delete(id)
+            msgCleaned++
+          }
         }
-      }
 
-      for (const [phone, entry] of this.userMessageCount) {
-        if (now > entry.resetTime) {
-          this.userMessageCount.delete(phone)
-          spamCleaned++
+        for (const [phone, entry] of this.userMessageCount) {
+          if (now > entry.resetTime) {
+            this.userMessageCount.delete(phone)
+            spamCleaned++
+          }
         }
-      }
 
-      if (msgCleaned > 0 || spamCleaned > 0) {
-        this.logger?.debug(
-          `RateLimitService cleanup: ${msgCleaned} messages, ${spamCleaned} spam entries`
-        )
+        if (msgCleaned > 0 || spamCleaned > 0) {
+          this.logger?.debug(
+            `RateLimitService cleanup: ${msgCleaned} messages, ${spamCleaned} spam entries`
+          )
+        }
+      } catch (err) {
+        this.logger?.error('RateLimitService msgTimer cleanup error: %o', err)
       }
     }, 60_000)
 
     // IP + user resolve throttles: every 5 minutes
     const resolveTimer = setInterval(() => {
-      const now = Date.now()
-      let ipCleaned = 0
-      let userCleaned = 0
+      try {
+        const now = Date.now()
+        let ipCleaned = 0
+        let userCleaned = 0
 
-      for (const [ip, entry] of this.ipResolveThrottle) {
-        if (entry.resetAt < now) {
-          this.ipResolveThrottle.delete(ip)
-          ipCleaned++
+        for (const [ip, entry] of this.ipResolveThrottle) {
+          if (entry.resetAt < now) {
+            this.ipResolveThrottle.delete(ip)
+            ipCleaned++
+          }
         }
-      }
 
-      for (const [phone, entry] of this.userResolveThrottle) {
-        if (entry.resetAt < now) {
-          this.userResolveThrottle.delete(phone)
-          userCleaned++
+        for (const [phone, entry] of this.userResolveThrottle) {
+          if (entry.resetAt < now) {
+            this.userResolveThrottle.delete(phone)
+            userCleaned++
+          }
         }
-      }
 
-      let loginCleaned = 0
-      for (const [ip, entry] of this.loginThrottle) {
-        if (entry.resetAt < now) {
-          this.loginThrottle.delete(ip)
-          loginCleaned++
+        let loginCleaned = 0
+        for (const [ip, entry] of this.loginThrottle) {
+          if (entry.resetAt < now) {
+            this.loginThrottle.delete(ip)
+            loginCleaned++
+          }
         }
-      }
 
-      if (ipCleaned > 0 || userCleaned > 0 || loginCleaned > 0) {
-        this.logger?.debug(
-          `RateLimitService cleanup: ${ipCleaned} IP, ${userCleaned} user-resolve, ${loginCleaned} login entries`
-        )
+        if (ipCleaned > 0 || userCleaned > 0 || loginCleaned > 0) {
+          this.logger?.debug(
+            `RateLimitService cleanup: ${ipCleaned} IP, ${userCleaned} user-resolve, ${loginCleaned} login entries`
+          )
+        }
+      } catch (err) {
+        this.logger?.error('RateLimitService resolveTimer cleanup error: %o', err)
       }
     }, 5 * 60_000)
 

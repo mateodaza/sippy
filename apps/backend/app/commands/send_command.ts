@@ -5,6 +5,8 @@ import {
   sendUSDCToUser,
   getUserBalance,
   checkSecurityLimits,
+  DAILY_LIMIT_VERIFIED,
+  DAILY_LIMIT_UNVERIFIED,
 } from '#services/cdp_wallet.service'
 import {
   getEmbeddedWallet,
@@ -30,6 +32,7 @@ import {
   formatTransferFailedMessage,
   formatSetupRequiredMessage,
   formatDailyLimitExceededMessage,
+  formatTieredDailyLimitExceededMessage,
   formatSpendingLimitInfo,
   buttonNeedAnythingElse,
   buttonBalance,
@@ -38,6 +41,7 @@ import {
 import { toUserErrorMessage } from '#utils/errors'
 import { getUserLanguage } from '#services/db'
 import logger from '@adonisjs/core/services/logger'
+import { velocityService } from '#services/velocity_service'
 
 export async function handleSendCommand(
   fromPhoneNumber: string,
@@ -48,33 +52,33 @@ export async function handleSendCommand(
   senderCurrency: string | null,
   recipientRate: number | null,
   recipientCurrency: string | null
-): Promise<void> {
+): Promise<boolean> {
   logger.info(`SEND command: +${fromPhoneNumber} -> +${toPhoneNumber} (${amount} USD)`)
 
+  let transferCompleted = false
   try {
     if (amount <= 0 || isNaN(amount)) {
       await sendTextMessage(fromPhoneNumber, formatInvalidAmountMessage(lang), lang)
-      return
+      return false
     }
 
     // Check for embedded wallet first (new self-custodial system)
     const embeddedWallet = await getEmbeddedWallet(fromPhoneNumber)
 
     if (embeddedWallet) {
-      await handleEmbeddedSend(fromPhoneNumber, toPhoneNumber, amount, embeddedWallet, lang, senderRate, senderCurrency, recipientRate, recipientCurrency)
-      return
+      return await handleEmbeddedSend(fromPhoneNumber, toPhoneNumber, amount, embeddedWallet, lang, senderRate, senderCurrency, recipientRate, recipientCurrency)
     }
 
     // Fall back to legacy server wallet flow
     const senderWallet = await getUserWallet(fromPhoneNumber)
     if (!senderWallet) {
       await sendTextMessage(fromPhoneNumber, formatNoWalletMessage(lang), lang)
-      return
+      return false
     }
 
     if (!(await isSessionValid(fromPhoneNumber))) {
       await sendTextMessage(fromPhoneNumber, formatSessionExpiredMessage(lang), lang)
-      return
+      return false
     }
 
     // Check recipient has a wallet (either embedded or legacy)
@@ -87,7 +91,7 @@ export async function handleSendCommand(
         formatRecipientNotFoundMessage(toPhoneNumber, lang),
         lang
       )
-      return
+      return false
     }
 
     const senderBalance = await getUserBalance(fromPhoneNumber)
@@ -101,18 +105,30 @@ export async function handleSendCommand(
         ),
         lang
       )
-      return
+      return false
     }
 
     // Check security limits
     const limitsCheck = await checkSecurityLimits(fromPhoneNumber, amount)
     if (!limitsCheck.allowed) {
-      await sendTextMessage(
-        fromPhoneNumber,
-        formatTransactionBlockedMessage(limitsCheck.reason || '', lang),
-        lang
-      )
-      return
+      const effectiveLimit = limitsCheck.emailVerified ? DAILY_LIMIT_VERIFIED : DAILY_LIMIT_UNVERIFIED
+      const blockedMsg =
+        limitsCheck.limitType === 'daily'
+          ? formatTieredDailyLimitExceededMessage(
+              effectiveLimit,
+              fromPhoneNumber,
+              lang,
+              limitsCheck.emailVerified ?? false
+            )
+          : formatTransactionBlockedMessage(limitsCheck.reason || '', lang)
+      await sendTextMessage(fromPhoneNumber, blockedMsg, lang)
+      return false
+    }
+
+    const velocityCheck = velocityService.check(fromPhoneNumber, toPhoneNumber, amount, lang)
+    if (!velocityCheck.allowed) {
+      await sendTextMessage(fromPhoneNumber, velocityCheck.reason!, lang)
+      return false
     }
 
     const updateResult = await updateLastActivity(fromPhoneNumber)
@@ -153,6 +169,8 @@ export async function handleSendCommand(
 
     logger.info('Executing transfer...')
     const result = await sendUSDCToUser(fromPhoneNumber, toPhoneNumber, amount)
+    transferCompleted = true  // Transfer on-chain; notification failures must not return false
+    velocityService.recordSend(fromPhoneNumber, toPhoneNumber, amount)
 
     const successMessage = formatSendSuccessMessage(
       {
@@ -190,7 +208,14 @@ export async function handleSendCommand(
     )
 
     logger.info(`Transfer completed. Hash: ${result.transactionHash}`)
+    return true
   } catch (error) {
+    if (transferCompleted) {
+      // Transfer succeeded but a post-transfer notification failed — non-critical.
+      // Return true so the confirm handler does not treat this as a failed transfer.
+      logger.error('Post-transfer notification failed: %o', error)
+      return true
+    }
     logger.error('Failed to send USDC: %o', error)
 
     const errorMessage = toUserErrorMessage(error, lang)
@@ -199,6 +224,7 @@ export async function handleSendCommand(
       formatTransferFailedMessage(errorMessage, lang),
       lang
     )
+    return false
   }
 }
 
@@ -217,14 +243,14 @@ async function handleEmbeddedSend(
   senderCurrency: string | null,
   recipientRate: number | null,
   recipientCurrency: string | null
-): Promise<void> {
+): Promise<boolean> {
   if (!senderWallet.spendPermissionHash) {
     await sendTextMessage(
       fromPhoneNumber,
       formatSetupRequiredMessage(fromPhoneNumber, lang),
       lang
     )
-    return
+    return false
   }
 
   // Check recipient has a wallet (either embedded or legacy)
@@ -237,7 +263,7 @@ async function handleEmbeddedSend(
       formatRecipientNotFoundMessage(toPhoneNumber, lang),
       lang
     )
-    return
+    return false
   }
 
   // Check balance
@@ -252,7 +278,7 @@ async function handleEmbeddedSend(
       ),
       lang
     )
-    return
+    return false
   }
 
   // Check daily limit
@@ -262,7 +288,13 @@ async function handleEmbeddedSend(
       formatDailyLimitExceededMessage(senderWallet.dailyLimit, fromPhoneNumber, lang),
       lang
     )
-    return
+    return false
+  }
+
+  const velocityCheck = velocityService.check(fromPhoneNumber, toPhoneNumber, amount, lang)
+  if (!velocityCheck.allowed) {
+    await sendTextMessage(fromPhoneNumber, velocityCheck.reason!, lang)
+    return false
   }
 
   await sendTextMessage(
@@ -277,6 +309,7 @@ async function handleEmbeddedSend(
   logger.info('Executing embedded wallet transfer via spend permission...')
 
   const result = await sendToPhoneNumber(fromPhoneNumber, toPhoneNumber, amount)
+  velocityService.recordSend(fromPhoneNumber, toPhoneNumber, amount)
 
   logger.info(`Embedded transfer completed. Hash: ${result.transactionHash}`)
 
@@ -342,10 +375,15 @@ async function handleEmbeddedSend(
     logger.error('Failed to send notification to recipient: %o', notifyError)
   }
 
-  await sendButtonMessage(
-    fromPhoneNumber,
-    buttonNeedAnythingElse(lang),
-    [{ title: buttonBalance(lang) }, { title: buttonHelp(lang) }],
-    lang
-  )
+  try {
+    await sendButtonMessage(
+      fromPhoneNumber,
+      buttonNeedAnythingElse(lang),
+      [{ title: buttonBalance(lang) }, { title: buttonHelp(lang) }],
+      lang
+    )
+  } catch (notifyError) {
+    logger.error('Failed to send button message: %o', notifyError)
+  }
+  return true
 }

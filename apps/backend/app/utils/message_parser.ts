@@ -5,14 +5,14 @@
  * Send commands are regex-only — LLM never triggers money movement.
  */
 
-import { type ParsedCommand } from '../types/index.js'
+import { type ParsedCommand, type AmountErrorCode } from '../types/index.js'
 import {
   isLLMEnabled,
   isRateLimited,
   parseMessageWithLLM,
   type CallMeta,
 } from '../services/llm.service.js'
-import { normalizePhoneNumber } from './phone.js'
+import { canonicalizePhone } from './phone.js'
 import { logParseResult, type ParseLogEntry, type ContextMessage } from '../services/db.js'
 
 export { normalizePhoneNumber, verifySendAgreement } from './phone.js'
@@ -80,21 +80,34 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(hola|buenas?|qu[eé] tal|buenos d[ií]as|buenas tardes|buenas noches|saludos)$/i,
     /^(oi|ol[aá]|bom dia|boa tarde|boa noite|e a[ií])$/i,
   ],
+  confirm: [
+    /^(yes|s[ií]|sim|confirmar|dale|va)$/i,
+  ],
+  cancel: [
+    /^(no|cancel|cancelar|n[aã]o)$/i,
+  ],
   social: [
     /^(thanks|thank you|thx|ty|ok|okay|cool|got it|great|nice|perfect|awesome|sure|bye|goodbye|see you)$/i,
-    /^(gracias|dale|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada)$/i,
+    /^(gracias|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada)$/i,
     /^(obrigado|obrigada|valeu|beleza|legal|perfeito|tchau|at[eé] logo|de nada)$/i,
   ],
 }
 
+/** Privacy patterns — each paired with the language it signals */
+const PRIVACY_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
+  { pattern: /^privacy\s+(on|off)$/i,     lang: 'en' },
+  { pattern: /^privacidad\s+(on|off)$/i,  lang: 'es' },
+  { pattern: /^privacidade\s+(on|off)$/i, lang: 'pt' },
+]
+
 /** Trilingual send patterns — strict format, must extract amount + recipient */
 const SEND_PATTERNS: RegExp[] = [
-  // EN: "send 10 to +573001234567" or "send $10 to ..."
-  /^send\s+\$?(\d+(?:\.\d+)?)\s+to\s+(.+)$/i,
+  // EN: "send 10 to +573001234567" or "send $10 to ..." or "send 10,50 to ..."
+  /^send\s+\$?(\d+(?:[.,]\d+)?)\s+to\s+(.+)$/i,
   // ES: "enviar 10 a +573001234567" / "envía 10 a ..."
-  /^env[ií]a?r?\s+\$?(\d+(?:\.\d+)?)\s+a\s+(.+)$/i,
+  /^env[ií]a?r?\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i,
   // PT: "enviar 10 para +573001234567"
-  /^enviar?\s+\$?(\d+(?:\.\d+)?)\s+para\s+(.+)$/i,
+  /^enviar?\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i,
 ]
 
 /**
@@ -121,6 +134,15 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
     }
   }
 
+  // Check privacy command (needs capture group for action + language signal)
+  for (const { pattern, lang } of PRIVACY_PATTERNS) {
+    const match = normalizedText.match(pattern)
+    if (match) {
+      const privacyAction = match[1].toLowerCase() as 'on' | 'off'
+      return { command: 'privacy', privacyAction, detectedLanguage: lang, originalText: text }
+    }
+  }
+
   // Check send patterns (need to extract amount + recipient)
   const trimmedText = text.trim()
   for (const pattern of SEND_PATTERNS) {
@@ -135,34 +157,81 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
 }
 
 // ============================================================================
+// Amount parsing and validation
+// ============================================================================
+
+interface AmountParseResult {
+  value: number | null
+  errorCode: AmountErrorCode | null
+  isLarge: boolean   // true iff value > 500 and errorCode is null
+}
+
+export function parseAndValidateAmount(raw: string): AmountParseResult {
+  // Step 1: Replace all commas with dots (LATAM decimal normalization)
+  const normalized = raw.replace(/,/g, '.')
+
+  // Step 2: If more than one dot, invalid format
+  const dotCount = (normalized.match(/\./g) || []).length
+  if (dotCount > 1) {
+    return { value: null, errorCode: 'INVALID_FORMAT', isLarge: false }
+  }
+
+  // Step 3: Exactly 3 digits after the only dot → ambiguous separator
+  if (/^\d+\.\d{3}$/.test(normalized)) {
+    return { value: null, errorCode: 'AMBIGUOUS_SEPARATOR', isLarge: false }
+  }
+
+  // Step 4: Parse float
+  const value = parseFloat(normalized)
+  if (isNaN(value)) {
+    return { value: null, errorCode: 'INVALID_FORMAT', isLarge: false }
+  }
+
+  // Step 5: Zero check
+  if (value === 0) {
+    return { value: null, errorCode: 'ZERO', isLarge: false }
+  }
+
+  // Step 6: Too many decimals (4+ decimal places)
+  const parts = normalized.split('.')
+  if (parts[1] !== undefined && parts[1].length > 2) {
+    return { value: null, errorCode: 'TOO_MANY_DECIMALS', isLarge: false }
+  }
+
+  // Step 7: Too large
+  if (value > 10_000) {
+    return { value: null, errorCode: 'TOO_LARGE', isLarge: false }
+  }
+
+  return { value, errorCode: null, isLarge: value > 500 }
+}
+
+// ============================================================================
 // Send match extraction
 // ============================================================================
 
 function parseSendMatch(match: RegExpMatchArray, originalText: string): ParsedCommand {
-  const amount = Number.parseFloat(match[1])
+  const rawAmount = match[1]   // literal text from regex, e.g. "10,50" or "1.000"
+  const result = parseAndValidateAmount(rawAmount)
 
-  if (amount <= 0 || amount > 100000) {
-    return { command: 'unknown', originalText }
+  if (result.errorCode !== null) {
+    // Amount is invalid — carry error to controller for a specific reply
+    return { command: 'send', amountError: result.errorCode, originalText }
   }
 
   const rawRecipient = match[2].trim()
-  const normalizedRecipient = normalizePhoneNumber(rawRecipient, originalText)
-
-  if (!normalizedRecipient) {
-    const digitsOnly = rawRecipient.replace(/\D/g, '')
-    if (digitsOnly.length < 10) {
-      return { command: 'unknown', originalText }
-    }
-    return { command: 'send', amount, recipient: digitsOnly }
+  const canonicalRecipient = canonicalizePhone(rawRecipient)
+  if (!canonicalRecipient) {
+    // Amount is valid but phone is bad — carry error to controller
+    return { command: 'send', amount: result.value!, recipientError: 'INVALID_PHONE', originalText }
   }
 
-  // Validate minimum phone length (at least 7 digits for valid international numbers)
-  const recipientDigits = normalizedRecipient.replace(/\D/g, '')
-  if (recipientDigits.length < 7) {
-    return { command: 'unknown', originalText }
+  return {
+    command: 'send',
+    amount: result.value!,
+    recipient: canonicalRecipient,
+    isLargeAmount: result.isLarge,
   }
-
-  return { command: 'send', amount, recipient: normalizedRecipient }
 }
 
 // ============================================================================
