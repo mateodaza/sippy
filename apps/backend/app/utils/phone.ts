@@ -154,3 +154,33 @@ export function verifySendAgreement(
   // Valid format - trust the LLM and let the send service validate existence
   return { match: true }
 }
+
+// ── Phone-to-language mapping ──────────────────────────────────────────────────
+
+/**
+ * Ordered longest-prefix-first to prevent shorter prefixes from shadowing longer ones.
+ * Exported so tests can assert the ordering invariant.
+ *
+ * Current entries:
+ *   +55 (Brazil → pt) must appear before any future +5X entry.
+ *   +1  (USA/Canada → en) catch-all for NANP — comes after any future +1XXX entries.
+ *
+ * Rule when adding entries: always insert a longer prefix BEFORE any shorter
+ * prefix it would shadow (same convention as exchange_rate_service.ts).
+ */
+export const PHONE_LANGUAGE_PREFIX_MAP: readonly [string, 'en' | 'es' | 'pt'][] = [
+  ['+55', 'pt'],  // Brazil
+  ['+1',  'en'],  // USA / Canada (NANP catch-all)
+]
+
+/**
+ * Map a phone number (E.164 format expected) to a website language code.
+ * Uses longest-prefix match via ordered iteration.
+ * Fallback: 'es' (covers all LATAM prefixes not explicitly listed).
+ */
+export function getLanguageForPhone(phone: string): 'en' | 'es' | 'pt' {
+  for (const [prefix, lang] of PHONE_LANGUAGE_PREFIX_MAP) {
+    if (phone.startsWith(prefix)) return lang
+  }
+  return 'es'
+}

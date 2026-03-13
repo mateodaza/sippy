@@ -154,7 +154,7 @@
 > - Unknown → `es` (default)
 > Future: add more mappings as needed (no code change, just add to map).
 
-#### LN-001 [ ] Create phone-to-language mapping utility
+#### LN-001 [x] Create phone-to-language mapping utility
 - **What:** Shared utility that maps phone prefix to website language code.
 - **Acceptance criteria:**
   - New function in `app/utils/phone.ts`: `getLanguageForPhone(phone: string): 'en' | 'es' | 'pt'`
