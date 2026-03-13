@@ -8,7 +8,6 @@ import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
 import { getAllWallets } from '#services/cdp_wallet.service'
 import { query } from '#services/db'
-import { getRefuelService } from '#services/refuel.service'
 import env from '#start/env'
 
 export default class HealthController {
@@ -41,7 +40,7 @@ export default class HealthController {
    * GET /health
    *
    * Structured health check for Railway — returns JSON with db, uptime,
-   * gasRefuel, whatsapp, and timestamp. Always returns HTTP 200.
+   * whatsapp, and timestamp. Always returns HTTP 200.
    */
   async health({ response }: HttpContext) {
     // DB check
@@ -53,18 +52,6 @@ export default class HealthController {
       logger.error('Health /health db check failed: %o', error)
     }
 
-    // Gas refuel balance check
-    const balanceStr = await getRefuelService().getContractBalance()
-    const balance = Number.parseFloat(balanceStr)
-    let gasRefuel: 'healthy' | 'low' | 'critical'
-    if (balance > 0.05) {
-      gasRefuel = 'healthy'
-    } else if (balance > 0.01) {
-      gasRefuel = 'low'
-    } else {
-      gasRefuel = 'critical'
-    }
-
     // WhatsApp config check
     const hasPhoneId = env.get('WHATSAPP_PHONE_NUMBER_ID', '') !== ''
     const hasToken = env.get('WHATSAPP_ACCESS_TOKEN', '') !== ''
@@ -73,7 +60,6 @@ export default class HealthController {
     return response.json({
       db,
       uptime: Math.floor(process.uptime()),
-      gasRefuel,
       whatsapp,
       timestamp: new Date().toISOString(),
     })

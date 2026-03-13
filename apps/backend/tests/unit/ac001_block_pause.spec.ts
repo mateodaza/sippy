@@ -9,7 +9,7 @@
 
 import { test } from '@japa/runner'
 import { formatAccountSuspendedMessage, formatMaintenanceMessage } from '#utils/messages'
-import { setIsPaused, isPaused } from '#controllers/admin/moderation_controller'
+import { setIsPaused, getIsPaused } from '#controllers/admin/moderation_controller'
 
 // ── Trilingual message tests ─────────────────────────────────────────────────
 
@@ -67,18 +67,18 @@ test.group('AC-001 | isPaused flag', (group) => {
   })
 
   test('defaults to false', ({ assert }) => {
-    assert.isFalse(isPaused)
+    assert.isFalse(getIsPaused())
   })
 
   test('setIsPaused(true) sets flag', ({ assert }) => {
     setIsPaused(true)
-    assert.isTrue(isPaused)
+    assert.isTrue(getIsPaused())
   })
 
   test('setIsPaused(false) clears flag', ({ assert }) => {
     setIsPaused(true)
     setIsPaused(false)
-    assert.isFalse(isPaused)
+    assert.isFalse(getIsPaused())
   })
 })
 
@@ -213,7 +213,7 @@ test.group('AC-001 | ModerationController.pause/resume', (group) => {
     assert.deepEqual(ctx._res.body, { success: true, paused: true })
     // Verify via the exported getter
     const mod = await import('#controllers/admin/moderation_controller')
-    assert.isTrue(mod.isPaused)
+    assert.isTrue(mod.getIsPaused())
   })
 
   test('resume sets isPaused to false', async ({ assert }) => {
@@ -226,6 +226,6 @@ test.group('AC-001 | ModerationController.pause/resume', (group) => {
     assert.equal(ctx._res.statusCode, 200)
     assert.deepEqual(ctx._res.body, { success: true, paused: false })
     const mod = await import('#controllers/admin/moderation_controller')
-    assert.isFalse(mod.isPaused)
+    assert.isFalse(mod.getIsPaused())
   })
 })

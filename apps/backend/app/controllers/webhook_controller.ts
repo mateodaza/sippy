@@ -53,7 +53,8 @@ import { generateResponse } from '#services/llm.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
 import { canonicalizePhone } from '#utils/phone'
 import sentryService from '#services/sentry_service'
-import { isPaused } from '#controllers/admin/moderation_controller'
+import { getIsPaused } from '#controllers/admin/moderation_controller'
+import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 
 // Exported so tests can seed/inspect state directly
 export const pendingTransactions = new Map<string, PendingTransaction>()
@@ -95,19 +96,6 @@ function clearPendingIfUnrelated(
   }
 }
 
-/**
- * Returns the phone key to use for updateOrCreate on user_preferences.
- * If a bare-digit row already exists (pre-SH-003), returns bare digits to
- * avoid creating a duplicate row.
- * Remove after SH-003 backfill is confirmed complete.
- */
-async function resolveWebhookUserPrefKey(phoneNumber: string): Promise<string> {
-  if (phoneNumber.startsWith('+')) {
-    const existing = await UserPreference.findBy('phoneNumber', phoneNumber.slice(1))
-    if (existing) return phoneNumber.slice(1)
-  }
-  return phoneNumber
-}
 
 export interface RateContext {
   senderRate: number | null
@@ -346,7 +334,7 @@ export async function routeCommand(
 
       case 'privacy': {
         const visible = command.privacyAction === 'on'
-        const prefKey = await resolveWebhookUserPrefKey(phoneNumber)
+        const prefKey = await resolveUserPrefKey(phoneNumber)
         await UserPreference.updateOrCreate(
           { phoneNumber: prefKey },
           { phoneVisible: visible }
@@ -551,7 +539,7 @@ export default class WebhookController {
     }
 
     // ── Global pause check ──────────────────────────────────────────
-    if (isPaused) {
+    if (getIsPaused()) {
       const pauseLang = (await getUserLanguage(from)) || 'en'
       await sendTextMessage(from, formatMaintenanceMessage(pauseLang), pauseLang)
       rateLimitService.markProcessed(messageId)
@@ -559,7 +547,7 @@ export default class WebhookController {
     }
 
     // ── Blocked user check ────────────────────────────────────────────
-    const blockedPref = await UserPreference.findBy('phoneNumber', from)
+    const blockedPref = await findUserPrefByPhone(from)
     if (blockedPref?.blocked) {
       const blockedLang: Lang = (blockedPref.preferredLanguage as Lang) || (await getUserLanguage(from)) || 'en'
       await sendTextMessage(from, formatAccountSuspendedMessage(blockedLang), blockedLang)

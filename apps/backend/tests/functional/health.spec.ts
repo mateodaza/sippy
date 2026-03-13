@@ -63,10 +63,10 @@ test.group('Health | GET /health', () => {
     assert.isTrue(body.uptime >= 0)
   })
 
-  test('has gasRefuel with valid value', async ({ client, assert }) => {
+  test('does not expose gasRefuel', async ({ client, assert }) => {
     const response = await client.get('/health')
     const body = response.body()
-    assert.include(['healthy', 'low', 'critical'], body.gasRefuel)
+    assert.notProperty(body, 'gasRefuel')
   })
 
   test('has whatsapp with valid value', async ({ client, assert }) => {

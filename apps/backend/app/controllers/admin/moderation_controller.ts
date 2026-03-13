@@ -1,13 +1,16 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
 import UserPreference from '#models/user_preference'
+import { canonicalizePhone } from '#utils/phone'
 
 /**
  * In-memory global pause flag.
  * Acceptable for single-replica deployment.
- * Exported so webhook_controller and tests can read it directly.
  */
-export let isPaused = false
+let isPaused = false
+
+/** Exported getter so other modules can read the pause state. */
+export function getIsPaused(): boolean { return isPaused }
 
 /** Exported setter so tests can reset state between runs. */
 export function setIsPaused(value: boolean) {
@@ -26,13 +29,18 @@ export default class ModerationController {
       return response.status(422).json({ error: 'phone is required' })
     }
 
+    const canonical = canonicalizePhone(phone)
+    if (!canonical) {
+      return response.status(422).json({ error: 'Invalid phone number' })
+    }
+
     await UserPreference.updateOrCreate(
-      { phoneNumber: phone },
+      { phoneNumber: canonical },
       { blocked: true }
     )
 
-    logger.info('User blocked: %s — reason: %s', phone, reason ?? '(none)')
-    return response.status(200).json({ success: true, phone, blocked: true })
+    logger.info('User blocked: %s — reason: %s', canonical, reason ?? '(none)')
+    return response.status(200).json({ success: true, phone: canonical, blocked: true })
   }
 
   /**
@@ -46,13 +54,18 @@ export default class ModerationController {
       return response.status(422).json({ error: 'phone is required' })
     }
 
+    const canonical = canonicalizePhone(phone)
+    if (!canonical) {
+      return response.status(422).json({ error: 'Invalid phone number' })
+    }
+
     await UserPreference.updateOrCreate(
-      { phoneNumber: phone },
+      { phoneNumber: canonical },
       { blocked: false }
     )
 
-    logger.info('User unblocked: %s', phone)
-    return response.status(200).json({ success: true, phone, blocked: false })
+    logger.info('User unblocked: %s', canonical)
+    return response.status(200).json({ success: true, phone: canonical, blocked: false })
   }
 
   /**

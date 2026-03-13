@@ -30,29 +30,7 @@ import { NETWORK, USDC_ADDRESSES, USDC_DECIMALS } from '#config/network'
 import UserPreference from '#models/user_preference'
 import { emailService } from '#services/email_service'
 import { canonicalizePhone } from '#utils/phone'
-
-/**
- * Compatibility helper: tries canonical phone then bare-digit fallback.
- * Remove after SH-003 backfill is confirmed complete.
- */
-async function findEmbeddedUserPref(phoneNumber: string): Promise<UserPreference | null> {
-  const pref = await UserPreference.findBy('phoneNumber', phoneNumber)
-  if (pref || !phoneNumber.startsWith('+')) return pref
-  return UserPreference.findBy('phoneNumber', phoneNumber.slice(1))
-}
-
-/**
- * Returns the phone key to use for updateOrCreate on user_preferences.
- * If a bare-digit row already exists, returns bare digits to avoid creating a duplicate row.
- * Remove after SH-003 backfill is confirmed complete.
- */
-async function resolveEmbeddedUserPrefKey(phoneNumber: string): Promise<string> {
-  if (phoneNumber.startsWith('+')) {
-    const existing = await UserPreference.findBy('phoneNumber', phoneNumber.slice(1))
-    if (existing) return phoneNumber.slice(1)
-  }
-  return phoneNumber
-}
+import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 
 // CDP client for spend permission queries — lazy to avoid crashing on import
 // when CDP credentials are not configured (e.g., in test environments)
@@ -267,7 +245,7 @@ export default class EmbeddedWalletController {
       const dbPhone = phoneNumber  // already canonical from cdpUser JWT
 
       // Gate enforcement: if user has a verified email, require a valid gateToken.
-      const pref = await findEmbeddedUserPref(dbPhone)
+      const pref = await findUserPrefByPhone(dbPhone)
       if (pref?.emailVerified === true) {
         const gateToken = request.body()?.gateToken
         if (!gateToken || typeof gateToken !== 'string') {
@@ -639,7 +617,7 @@ export default class EmbeddedWalletController {
         return response.status(422).json({ error: 'phoneVisible must be a boolean' })
       }
       const dbPhone = ctx.cdpUser!.phoneNumber
-      const prefKey = await resolveEmbeddedUserPrefKey(dbPhone)
+      const prefKey = await resolveUserPrefKey(dbPhone)
       await UserPreference.updateOrCreate(
         { phoneNumber: prefKey },
         { phoneVisible: body.phoneVisible }
@@ -659,7 +637,7 @@ export default class EmbeddedWalletController {
     const { response } = ctx
     try {
       const dbPhone = ctx.cdpUser!.phoneNumber
-      const pref = await findEmbeddedUserPref(dbPhone)
+      const pref = await findUserPrefByPhone(dbPhone)
       return response.status(200).json({ phoneVisible: pref?.phoneVisible ?? true })
     } catch {
       return response.status(500).json({ error: 'Internal server error' })
@@ -705,7 +683,7 @@ export default class EmbeddedWalletController {
       const row = result.rows[0]
 
       // Query user_preferences for phone_visible (with pre-SH-003 fallback)
-      const pref = await findEmbeddedUserPref(canonicalPhone)
+      const pref = await findUserPrefByPhone(canonicalPhone)
       const phoneVisible = pref?.phoneVisible ?? true
 
       return response.json({
