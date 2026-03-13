@@ -67,7 +67,7 @@
 - **Dependencies:** SH-001
 - **Files:** `apps/backend/app/controllers/auth_api_controller.ts`, `apps/backend/app/controllers/webhook_controller.ts`, `apps/backend/app/controllers/embedded_wallet_controller.ts`, `apps/backend/app/middleware/jwt_auth_middleware.ts`, `apps/backend/app/services/jwt_service.ts`
 
-#### SH-003 [ ] Add DB migration for phone format consistency + unique constraint audit
+#### SH-003 [x] Add DB migration for phone format consistency + unique constraint audit
 - **What:** Migration to normalize all existing phone_registry rows to E.164 with `+` prefix. Add CHECK constraint to prevent non-E.164 inserts.
 - **Acceptance criteria:**
   - New migration:
