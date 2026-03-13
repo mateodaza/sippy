@@ -176,7 +176,11 @@ export default class VelocityService {
    */
   startCleanupTimers(): void {
     const timer = setInterval(() => {
-      this.runCleanup()
+      try {
+        this.runCleanup()
+      } catch (err) {
+        this.logger?.error('VelocityService cleanup error: %o', err)
+      }
     }, CLEANUP_INTERVAL)
 
     this.cleanupTimers.push(timer)
@@ -242,3 +246,5 @@ export default class VelocityService {
     }
   }
 }
+
+export const velocityService = new VelocityService()

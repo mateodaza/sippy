@@ -346,7 +346,7 @@
 - **Dependencies:** SH-002, TX-001
 - **Files:** All backend controllers and services (read), `docs/AUDIT-M1.md` (new)
 
-#### AU-002 [ ] Memory leak + race condition audit
+#### AU-002 [x] Memory leak + race condition audit
 - **What:** Audit all in-memory Maps/Sets for TTL cleanup. Check concurrent operation safety.
 - **Acceptance criteria:**
   - All Maps have TTL cleanup: `processedMessages`, `spamTracker`, `activeSends`, pending tx, OTP, email codes, velocity

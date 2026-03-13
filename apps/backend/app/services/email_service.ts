@@ -124,6 +124,13 @@ class EmailService {
    */
   issueGateToken(phone: string): string {
     const token = crypto.randomBytes(32).toString('hex')
+    if (!this.gateTokens.has(phone) && this.gateTokens.size >= MAX_MAP_ENTRIES) {
+      this.purgeExpiredGateTokens()
+      if (this.gateTokens.size >= MAX_MAP_ENTRIES) {
+        const oldest = this.gateTokens.keys().next().value
+        if (oldest !== undefined) this.gateTokens.delete(oldest)
+      }
+    }
     this.gateTokens.set(phone, { token, expiresAt: Date.now() + 5 * 60 * 1000 })
     return token
   }
@@ -145,7 +152,13 @@ class EmailService {
   // ── Public: cleanup timer ───────────────────────────────────────────────────
 
   startCleanupTimer(): void {
-    this.cleanupTimer = setInterval(() => this.cleanup(), CLEANUP_INTERVAL)
+    this.cleanupTimer = setInterval(() => {
+      try {
+        this.cleanup()
+      } catch (err) {
+        console.error('EmailService cleanup error:', err)
+      }
+    }, CLEANUP_INTERVAL)
   }
 
   stopCleanupTimer(): void {
@@ -217,6 +230,13 @@ class EmailService {
     const now = Date.now()
     for (const [email, entry] of this.codeStore) {
       if (now > entry.expiresAt) this.codeStore.delete(email)
+    }
+  }
+
+  private purgeExpiredGateTokens(): void {
+    const now = Date.now()
+    for (const [phone, entry] of this.gateTokens) {
+      if (now > entry.expiresAt) this.gateTokens.delete(phone)
     }
   }
 }

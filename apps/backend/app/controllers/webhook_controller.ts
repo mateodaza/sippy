@@ -65,11 +65,15 @@ const PENDING_TX_TTL_MS = 2 * 60 * 1000  // 2 minutes
 // .unref() allows process to exit naturally without the interval keeping
 // the event loop alive. Pattern matches exchange_rate_service.ts:80-86.
 const _pendingTxCleanupInterval = setInterval(() => {
-  const now = Date.now()
-  for (const [phone, tx] of pendingTransactions.entries()) {
-    if (now - tx.timestamp > PENDING_TX_TTL_MS) {
-      pendingTransactions.delete(phone)
+  try {
+    const now = Date.now()
+    for (const [phone, tx] of pendingTransactions.entries()) {
+      if (now - tx.timestamp > PENDING_TX_TTL_MS) {
+        pendingTransactions.delete(phone)
+      }
     }
+  } catch (err) {
+    console.error('pendingTx cleanup error:', err)
   }
 }, 30_000)
 _pendingTxCleanupInterval.unref()

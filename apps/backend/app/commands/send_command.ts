@@ -41,6 +41,7 @@ import {
 import { toUserErrorMessage } from '#utils/errors'
 import { getUserLanguage } from '#services/db'
 import logger from '@adonisjs/core/services/logger'
+import { velocityService } from '#services/velocity_service'
 
 export async function handleSendCommand(
   fromPhoneNumber: string,
@@ -124,6 +125,12 @@ export async function handleSendCommand(
       return false
     }
 
+    const velocityCheck = velocityService.check(fromPhoneNumber, toPhoneNumber, amount, lang)
+    if (!velocityCheck.allowed) {
+      await sendTextMessage(fromPhoneNumber, velocityCheck.reason!, lang)
+      return false
+    }
+
     const updateResult = await updateLastActivity(fromPhoneNumber)
     if (!updateResult) {
       logger.error('Failed to update last activity')
@@ -163,6 +170,7 @@ export async function handleSendCommand(
     logger.info('Executing transfer...')
     const result = await sendUSDCToUser(fromPhoneNumber, toPhoneNumber, amount)
     transferCompleted = true  // Transfer on-chain; notification failures must not return false
+    velocityService.recordSend(fromPhoneNumber, toPhoneNumber, amount)
 
     const successMessage = formatSendSuccessMessage(
       {
@@ -283,6 +291,12 @@ async function handleEmbeddedSend(
     return false
   }
 
+  const velocityCheck = velocityService.check(fromPhoneNumber, toPhoneNumber, amount, lang)
+  if (!velocityCheck.allowed) {
+    await sendTextMessage(fromPhoneNumber, velocityCheck.reason!, lang)
+    return false
+  }
+
   await sendTextMessage(
     fromPhoneNumber,
     formatSendProcessingMessage(
@@ -295,6 +309,7 @@ async function handleEmbeddedSend(
   logger.info('Executing embedded wallet transfer via spend permission...')
 
   const result = await sendToPhoneNumber(fromPhoneNumber, toPhoneNumber, amount)
+  velocityService.recordSend(fromPhoneNumber, toPhoneNumber, amount)
 
   logger.info(`Embedded transfer completed. Hash: ${result.transactionHash}`)
 
