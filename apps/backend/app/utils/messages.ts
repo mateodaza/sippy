@@ -7,6 +7,8 @@
 
 export type Lang = 'en' | 'es' | 'pt'
 
+import { DAILY_LIMIT_VERIFIED } from '#services/cdp_wallet.service'
+
 const RECEIPT_BASE_URL = process.env.RECEIPT_BASE_URL || 'https://www.sippy.lat/receipt/'
 const FUND_URL = process.env.FUND_URL || 'https://www.sippy.lat/fund'
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.sippy.lat'
@@ -547,6 +549,35 @@ export function formatDailyLimitExceededMessage(
       `El monto excede tu limite diario de $${dailyLimit}.\n\nPuedes cambiar tu limite aqui:\n${settingsUrl}`,
     pt: () =>
       `O valor excede seu limite diario de $${dailyLimit}.\n\nVoce pode alterar seu limite aqui:\n${settingsUrl}`,
+  }
+  return m[lang]()
+}
+
+export function formatTieredDailyLimitExceededMessage(
+  dailyLimit: number,
+  phoneNumber: string,
+  lang: Lang = 'en',
+  emailVerified: boolean
+): string {
+  const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent(phoneNumber)}`
+  const upsell = {
+    en: `Verify your email to raise your daily limit to $${DAILY_LIMIT_VERIFIED}`,
+    es: `Verifica tu correo electronico para aumentar tu limite diario a $${DAILY_LIMIT_VERIFIED}`,
+    pt: `Verifique seu email para aumentar seu limite diario para $${DAILY_LIMIT_VERIFIED}`,
+  }
+  const m = {
+    en: () => {
+      const base = `Amount exceeds your daily limit of $${dailyLimit}.\n\nYou can change your limit here:\n${settingsUrl}`
+      return emailVerified ? base : `${base}\n\n${upsell.en}`
+    },
+    es: () => {
+      const base = `El monto excede tu limite diario de $${dailyLimit}.\n\nPuedes cambiar tu limite aqui:\n${settingsUrl}`
+      return emailVerified ? base : `${base}\n\n${upsell.es}`
+    },
+    pt: () => {
+      const base = `O valor excede seu limite diario de $${dailyLimit}.\n\nVoce pode alterar seu limite aqui:\n${settingsUrl}`
+      return emailVerified ? base : `${base}\n\n${upsell.pt}`
+    },
   }
   return m[lang]()
 }

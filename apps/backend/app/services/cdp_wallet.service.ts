@@ -39,9 +39,12 @@ function getCDPClient(): CdpClient {
   return cdpClient
 }
 
+export const DAILY_LIMIT_UNVERIFIED = 50   // $50 USD
+export const DAILY_LIMIT_VERIFIED   = 500  // $500 USD
+
 // Security limits for MVP
 const SECURITY_LIMITS: SecurityLimits = {
-  dailyLimit: 500, // $500 USD per day
+  dailyLimit: DAILY_LIMIT_VERIFIED, // $500 USD per day
   transactionLimit: 100, // $100 USD per transaction
   sessionDurationHours: 24, // 24 hour sessions
 }
@@ -207,35 +210,70 @@ export async function isSessionValid(phoneNumber: string): Promise<boolean> {
 }
 
 /**
+ * Pure helper: compute whether a transfer is allowed given email verification status.
+ * No DB calls — directly unit-testable.
+ */
+export function computeSecurityLimits(
+  emailVerified: boolean,
+  dailySpent: number,
+  amount: number
+): { allowed: boolean; reason?: string; emailVerified?: boolean; limitType?: 'transaction' | 'daily' } {
+  const effectiveLimit = emailVerified ? DAILY_LIMIT_VERIFIED : DAILY_LIMIT_UNVERIFIED
+
+  if (amount > SECURITY_LIMITS.transactionLimit) {
+    return {
+      allowed: false,
+      reason: `Transaction limit exceeded. Max: $${SECURITY_LIMITS.transactionLimit} per transaction`,
+      limitType: 'transaction',
+    }
+  }
+
+  if (dailySpent + amount > effectiveLimit) {
+    const remaining = effectiveLimit - dailySpent
+    return {
+      allowed: false,
+      reason: `Daily limit exceeded. Remaining: $${remaining.toFixed(2)}`,
+      emailVerified,
+      limitType: 'daily',
+    }
+  }
+
+  return { allowed: true, emailVerified }
+}
+
+/**
  * Check if transfer amount is within security limits
  */
 export async function checkSecurityLimits(
   phoneNumber: string,
   amount: number
-): Promise<{ allowed: boolean; reason?: string }> {
+): Promise<{ allowed: boolean; reason?: string; emailVerified?: boolean; limitType?: 'transaction' | 'daily' }> {
   const userWallet = await getUserWallet(phoneNumber)
   if (!userWallet) {
     return { allowed: false, reason: 'User wallet not found' }
   }
 
-  // Check transaction limit
-  if (amount > SECURITY_LIMITS.transactionLimit) {
-    return {
-      allowed: false,
-      reason: `Transaction limit exceeded. Max: $${SECURITY_LIMITS.transactionLimit} per transaction`,
+  // Look up email_verified from user_preferences.
+  // During SH-003 transition, a canonical (+...) row with email_verified = false/null
+  // can coexist with a bare-digit row with email_verified = true (documented at
+  // db.ts — setUserLanguage comment). Check both formats: if either has email_verified
+  // = true, treat the user as verified. Remove after SH-003 backfill confirmed complete.
+  const canonicalResult = await query(
+    'SELECT email_verified FROM user_preferences WHERE phone_number = $1',
+    [phoneNumber]
+  )
+  let emailVerified = canonicalResult.rows[0]?.email_verified === true
+  if (!emailVerified && phoneNumber.startsWith('+')) {
+    const bareResult = await query(
+      'SELECT email_verified FROM user_preferences WHERE phone_number = $1',
+      [phoneNumber.slice(1)]
+    )
+    if (bareResult.rows[0]?.email_verified === true) {
+      emailVerified = true
     }
   }
 
-  // Check daily limit
-  if (userWallet.dailySpent + amount > SECURITY_LIMITS.dailyLimit) {
-    const remaining = SECURITY_LIMITS.dailyLimit - userWallet.dailySpent
-    return {
-      allowed: false,
-      reason: `Daily limit exceeded. Remaining: $${remaining.toFixed(2)}`,
-    }
-  }
-
-  return { allowed: true }
+  return computeSecurityLimits(emailVerified, userWallet.dailySpent, amount)
 }
 
 /**

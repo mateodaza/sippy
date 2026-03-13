@@ -5,6 +5,8 @@ import {
   sendUSDCToUser,
   getUserBalance,
   checkSecurityLimits,
+  DAILY_LIMIT_VERIFIED,
+  DAILY_LIMIT_UNVERIFIED,
 } from '#services/cdp_wallet.service'
 import {
   getEmbeddedWallet,
@@ -30,6 +32,7 @@ import {
   formatTransferFailedMessage,
   formatSetupRequiredMessage,
   formatDailyLimitExceededMessage,
+  formatTieredDailyLimitExceededMessage,
   formatSpendingLimitInfo,
   buttonNeedAnythingElse,
   buttonBalance,
@@ -107,11 +110,17 @@ export async function handleSendCommand(
     // Check security limits
     const limitsCheck = await checkSecurityLimits(fromPhoneNumber, amount)
     if (!limitsCheck.allowed) {
-      await sendTextMessage(
-        fromPhoneNumber,
-        formatTransactionBlockedMessage(limitsCheck.reason || '', lang),
-        lang
-      )
+      const effectiveLimit = limitsCheck.emailVerified ? DAILY_LIMIT_VERIFIED : DAILY_LIMIT_UNVERIFIED
+      const blockedMsg =
+        limitsCheck.limitType === 'daily'
+          ? formatTieredDailyLimitExceededMessage(
+              effectiveLimit,
+              fromPhoneNumber,
+              lang,
+              limitsCheck.emailVerified ?? false
+            )
+          : formatTransactionBlockedMessage(limitsCheck.reason || '', lang)
+      await sendTextMessage(fromPhoneNumber, blockedMsg, lang)
       return
     }
 

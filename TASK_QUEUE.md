@@ -89,7 +89,7 @@
 > **Deliverable:** M1 #3 (security), M1 #6 (settings)
 > **Priority:** P1
 
-#### EL-001 [ ] Add tiered daily limit logic based on email verification
+#### EL-001 [x] Add tiered daily limit logic based on email verification
 - **What:** Change the hardcoded $500 daily limit to a tiered system: $50 default, $500 for email-verified users.
 - **Acceptance criteria:**
   - New constants in `cdp_wallet.service.ts`:
