@@ -617,6 +617,19 @@ export function formatSpendingLimitBalance(
   return m[lang]()
 }
 
+export function formatDailySecurityLimitBalance(
+  remaining: string,
+  total: string,
+  lang: Lang = 'en'
+): string {
+  const m = {
+    en: () => `Daily limit: $${remaining} remaining of $${total}`,
+    es: () => `Limite diario: $${remaining} restante de $${total}`,
+    pt: () => `Limite diario: $${remaining} restante de $${total}`,
+  }
+  return m[lang]()
+}
+
 export function formatCompleteSetupMessage(phoneNumber: string, lang: Lang = 'en'): string {
   const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {

@@ -27,6 +27,9 @@ const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
 
+const DAILY_LIMIT_UNVERIFIED = 50   // must match backend EL-001 constant
+const DAILY_LIMIT_VERIFIED   = 500
+
 // USDC addresses by network (CDP SDK doesn't support 'usdc' shortcut on Arbitrum)
 const USDC_ADDRESSES: Record<string, string> = {
   arbitrum: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
@@ -141,11 +144,15 @@ function SettingsContent() {
   const fetchEmailStatus = async () => {
     const accessToken = getStoredToken();
     if (!accessToken || !BACKEND_URL) return;
+    setEmailSectionStep('loading');
     try {
       const res = await fetch(`${BACKEND_URL}/api/auth/email-status`, {
         headers: { 'Authorization': `Bearer ${accessToken}` },
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setEmailSectionStep('fetch_error');
+        return;
+      }
       const data: EmailStatus = await res.json();
       setEmailStatus(data);
       if (!data.hasEmail) setEmailSectionStep('no_email');
@@ -953,6 +960,54 @@ function SettingsContent() {
           </div>
         )}
 
+        {/* Daily transfer limit */}
+        <div className='mb-6 p-4 bg-gray-50 rounded-lg'>
+          <p className='text-sm text-gray-600'>Daily transfer limit</p>
+          {emailSectionStep === 'loading' && (
+            <p className='text-2xl font-bold text-gray-400'>— /day</p>
+          )}
+          {emailSectionStep === 'fetch_error' && (
+            <>
+              <p className='text-2xl font-bold text-gray-400'>— /day</p>
+              <p className='text-xs text-gray-400 mt-1'>Could not load limit info</p>
+            </>
+          )}
+          {(emailSectionStep === 'verified' || emailSectionStep === 'change_entry' || emailSectionStep === 'change_sent') && (
+            <>
+              <p className='text-2xl font-bold text-gray-900'>${DAILY_LIMIT_VERIFIED}/day</p>
+              <p className='text-xs text-green-600 mt-1'>✓ Email verified</p>
+            </>
+          )}
+          {emailSectionStep === 'unverified' && (
+            <>
+              <p className='text-2xl font-bold text-gray-900'>${DAILY_LIMIT_UNVERIFIED}/day</p>
+              <div className='mt-3 border border-amber-400 bg-amber-50 rounded-lg p-3'>
+                <p className='text-sm text-amber-800 mb-2'>Verify your email to unlock ${DAILY_LIMIT_VERIFIED}/day limit</p>
+                <button
+                  onClick={() => { const el = document.getElementById('recovery-email'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth' }) }}
+                  className='text-sm text-amber-700 underline'
+                >
+                  Unlock ${DAILY_LIMIT_VERIFIED}/day
+                </button>
+              </div>
+            </>
+          )}
+          {(emailSectionStep === 'no_email' || emailSectionStep === 'add_sent' || emailSectionStep === 'verify_entry') && (
+            <>
+              <p className='text-2xl font-bold text-gray-900'>${DAILY_LIMIT_UNVERIFIED}/day</p>
+              <div className='mt-3 border border-amber-400 bg-amber-50 rounded-lg p-3'>
+                <p className='text-sm text-amber-800 mb-2'>Verify your email to unlock ${DAILY_LIMIT_VERIFIED}/day limit</p>
+                <button
+                  onClick={() => { const el = document.getElementById('recovery-email'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth' }) }}
+                  className='text-sm text-amber-700 underline'
+                >
+                  Unlock ${DAILY_LIMIT_VERIFIED}/day
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
         {/* Current permission status */}
         <div className='mb-6 p-4 bg-gray-50 rounded-lg'>
           <p className='text-sm text-gray-600'>Current daily limit</p>
@@ -1152,7 +1207,7 @@ function SettingsContent() {
         )}
 
         {/* Recovery Email */}
-        <div className='mt-6 pt-6 border-t'>
+        <div id='recovery-email' className='mt-6 pt-6 border-t'>
           <h2 className='text-lg font-semibold mb-3 text-gray-900'>
             Recovery Email
           </h2>

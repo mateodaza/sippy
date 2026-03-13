@@ -105,7 +105,7 @@
 - **Context:** `apps/backend/app/services/cdp_wallet.service.ts:32-36` (current limits), `apps/backend/app/services/cdp_wallet.service.ts:188-215` (checkSecurityLimits)
 - **Files:** `apps/backend/app/services/cdp_wallet.service.ts`, `apps/backend/app/utils/messages.ts`
 
-#### EL-002 [ ] Update settings page to show limit tier + email CTA
+#### EL-002 [x] Update settings page to show limit tier + email CTA
 - **What:** Settings page shows current daily limit tier and prompts unverified users to add email.
 - **Acceptance criteria:**
   - Daily limit section shows: "Your daily limit: $50/day" or "$500/day" based on verification status

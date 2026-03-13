@@ -423,3 +423,60 @@ export async function getAllWallets(): Promise<
 export function getSecurityLimits(): SecurityLimits {
   return { ...SECURITY_LIMITS }
 }
+
+/**
+ * Pure helper: compute accumulated daily_spent after a transfer.
+ * Resets to `amount` if `lastResetDate` differs from `today`; otherwise accumulates.
+ */
+export function computeNewDailySpent(
+  currentDailySpent: number,
+  lastResetDate: string,
+  amount: number,
+  today: string
+): number {
+  return lastResetDate !== today ? amount : currentDailySpent + amount
+}
+
+/**
+ * Get the security limit status for a user (daily spent, effective limit, remaining).
+ * Works for both legacy and embedded wallet users.
+ * Never returns null.
+ */
+export async function getSecurityLimitStatus(phoneNumber: string): Promise<{
+  dailySpent: number
+  effectiveLimit: number
+  remaining: number
+  emailVerified: boolean
+}> {
+  // Dual-format email_verified lookup (SH-003 transition)
+  const canonicalResult = await query(
+    'SELECT email_verified FROM user_preferences WHERE phone_number = $1',
+    [phoneNumber]
+  )
+  let emailVerified = canonicalResult.rows[0]?.email_verified === true
+  if (!emailVerified && phoneNumber.startsWith('+')) {
+    const bareResult = await query(
+      'SELECT email_verified FROM user_preferences WHERE phone_number = $1',
+      [phoneNumber.slice(1)]
+    )
+    if (bareResult.rows[0]?.email_verified === true) {
+      emailVerified = true
+    }
+  }
+
+  const userWallet = await getUserWallet(phoneNumber)
+  const today = new Date().toDateString()
+  let dailySpent = userWallet?.dailySpent ?? 0
+  if (userWallet && userWallet.lastResetDate !== today) {
+    dailySpent = 0
+  }
+
+  const effectiveLimit = emailVerified ? DAILY_LIMIT_VERIFIED : DAILY_LIMIT_UNVERIFIED
+
+  return {
+    dailySpent,
+    effectiveLimit,
+    remaining: Math.max(0, effectiveLimit - dailySpent),
+    emailVerified,
+  }
+}

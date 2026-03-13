@@ -338,11 +338,33 @@ export async function sendWithSpendPermission(
     const txHash = userOp.transactionHash ?? receipt.userOpHash
     logger.info(`Transfer complete! Hash: ${txHash}`)
 
-    // Update last activity
-    await query('UPDATE phone_registry SET last_activity = $1 WHERE phone_number = $2', [
-      Date.now(),
-      fromPhoneNumber,
-    ])
+    // Track daily spend for embedded wallet users (mirrors updateLastActivity pattern)
+    const { getUserWallet: getWallet, computeNewDailySpent } = await import('#services/cdp_wallet.service')
+    const wallet = await getWallet(fromPhoneNumber)
+    const today = new Date().toDateString()
+    const newDailySpent = computeNewDailySpent(
+      wallet?.dailySpent ?? 0,
+      wallet?.lastResetDate ?? '',
+      amount,
+      today
+    )
+
+    let updateResult = await query(
+      `UPDATE phone_registry
+       SET last_activity = $1, daily_spent = $2, last_reset_date = $3
+       WHERE phone_number = $4`,
+      [Date.now(), newDailySpent, today, fromPhoneNumber]
+    )
+
+    // SH-003 transition fallback: retry with bare-digit format
+    if (updateResult.rowCount === 0 && fromPhoneNumber.startsWith('+')) {
+      await query(
+        `UPDATE phone_registry
+         SET last_activity = $1, daily_spent = $2, last_reset_date = $3
+         WHERE phone_number = $4`,
+        [Date.now(), newDailySpent, today, fromPhoneNumber.slice(1)]
+      )
+    }
 
     // Get remaining allowance after the transfer
     const postTransferAllowance = await getRemainingAllowance(fromPhoneNumber)
