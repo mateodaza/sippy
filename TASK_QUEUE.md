@@ -127,7 +127,7 @@
 - **Dependencies:** EL-001
 - **Files:** `apps/backend/app/utils/messages.ts`, `apps/backend/app/services/cdp_wallet.service.ts`
 
-#### EL-004 [ ] Write tests for tiered limits
+#### EL-004 [x] Write tests for tiered limits
 - **What:** Unit + functional tests for the tiered daily limit system.
 - **Acceptance criteria:**
   - Test: unverified user blocked at $50
