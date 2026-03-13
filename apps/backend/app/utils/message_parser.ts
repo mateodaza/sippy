@@ -100,6 +100,23 @@ const PRIVACY_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
   { pattern: /^privacidade\s+(on|off)$/i, lang: 'pt' },
 ]
 
+/**
+ * Loose keyword patterns for read-only commands.
+ * Matched when strict regex fails — catches natural language like
+ * "Hola sippy! cuanto es mi balance?" without needing the LLM.
+ * Only safe (non-financial) commands are included here.
+ */
+const LOOSE_COMMAND_PATTERNS: Record<string, RegExp> = {
+  balance:
+    /\b(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi)\b/i,
+  help: /\b(help|ayuda|ajuda)\b/i,
+  history:
+    /\b(history|historial|hist[oó]rico|transactions?|transacciones?|transa[cç][oõ]es?)\b/i,
+  settings: /\b(settings?|configuraci[oó]n|configura[cç][aã]o|ajustes)\b/i,
+  about: /\b(what is sippy|whats sippy|what's sippy|qu[eé] es sippy|o que [eé] sippy)\b/i,
+  start: /\b(start|begin|comenzar|iniciar|come[cç]ar)\b/i,
+}
+
 /** Trilingual send patterns — strict format, must extract amount + recipient */
 const SEND_PATTERNS: RegExp[] = [
   // EN: "send 10 to +573001234567" or "send $10 to ..." or "send 10,50 to ..."
@@ -154,6 +171,20 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
 
   // Unknown command
   return { command: 'unknown', originalText: text }
+}
+
+/**
+ * Try loose keyword matching for read-only commands.
+ * Only fires when strict regex returned 'unknown'.
+ */
+function matchLooseCommand(text: string): ParsedCommand | null {
+  const normalized = text.trim().toLowerCase()
+  for (const [command, pattern] of Object.entries(LOOSE_COMMAND_PATTERNS)) {
+    if (pattern.test(normalized)) {
+      return { command: command as ParsedCommand['command'], originalText: text }
+    }
+  }
+  return null
 }
 
 // ============================================================================
@@ -241,10 +272,15 @@ function parseSendMatch(match: RegExpMatchArray, originalText: string): ParsedCo
 /**
  * Parse a user message into a command.
  *
- * Flow:
- * 1. Regex parser (zero cost, <1ms) — handles all known command formats
- * 2. Pre-LLM send detector — catches malformed send attempts, returns format hint
- * 3. LLM fallback — only for truly ambiguous messages (questions, natural language)
+ * Flow (Camello pattern: regex fast-path → LLM primary → keyword safety net):
+ * 1. Strict regex (zero cost, <1ms) — exact command formats only
+ * 2. Send detector — catches malformed send attempts, returns format hint
+ * 3. LLM (primary classifier) — handles natural language, detects language,
+ *    generates helpful messages. This is where most value comes from.
+ * 4. Loose keyword matching (safety net) — catches obvious intents when LLM
+ *    is disabled, rate-limited, or fails. Never as good as LLM (no language
+ *    detection, no helpful messages) but prevents "unknown command" for
+ *    clear queries like "cuanto es mi balance?"
  *
  * Send commands are NEVER accepted from LLM for M1.
  */
@@ -255,7 +291,7 @@ export async function parseMessage(
 ): Promise<ParsedCommand> {
   const startTime = Date.now()
 
-  // Step 1: Try regex first (zero cost)
+  // Step 1: Strict regex (exact match, zero cost)
   const regexResult = parseMessageWithRegex(text)
 
   if (regexResult.command !== 'unknown') {
@@ -266,7 +302,7 @@ export async function parseMessage(
     return result
   }
 
-  // Step 2: Check if this is a malformed send attempt
+  // Step 2: Malformed send detector (before LLM — financial safety)
   if (isAttemptedSend(text)) {
     const result: ParsedCommand = {
       command: 'send',
@@ -280,54 +316,57 @@ export async function parseMessage(
     return result
   }
 
-  // Step 3: LLM fallback for ambiguous messages
-  if (!isLLMEnabled()) {
-    const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: 'disabled' }
-    if (ctx) {
-      logParse(ctx, result, 'regex', 'llm-disabled', Date.now() - startTime)
-    }
-    return result
-  }
+  // Step 3: LLM — primary classifier for natural language
+  if (isLLMEnabled() && !isRateLimited()) {
+    try {
+      const llmResponse = await parseMessageWithLLM(text, context)
 
-  if (isRateLimited()) {
-    const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: 'rate-limited' }
-    if (ctx) {
-      logParse(ctx, result, 'regex', 'llm-rate-limited', Date.now() - startTime)
-    }
-    return result
-  }
-
-  try {
-    const llmResponse = await parseMessageWithLLM(text, context)
-
-    if (llmResponse?.parsed) {
-      const result: ParsedCommand = {
-        ...llmResponse.parsed,
-        originalText: text,
-        usedLLM: true,
-        llmStatus: 'success',
+      if (llmResponse?.parsed) {
+        const result: ParsedCommand = {
+          ...llmResponse.parsed,
+          originalText: text,
+          usedLLM: true,
+          llmStatus: 'success',
+        }
+        if (ctx) {
+          logParse(ctx, result, 'llm', 'llm-success', Date.now() - startTime, llmResponse.meta, text)
+        }
+        return result
       }
+
+      // LLM returned null (low confidence / validation fail) — fall through to loose matching
       if (ctx) {
-        logParse(ctx, result, 'llm', 'llm-success', Date.now() - startTime, llmResponse.meta, text)
+        logParse(ctx, { ...regexResult, usedLLM: true, llmStatus: 'low-confidence' }, 'llm', 'llm-rejected', Date.now() - startTime, llmResponse?.meta)
       }
-      return result
+    } catch (error) {
+      const status: ParsedCommand['llmStatus'] =
+        error instanceof Error && error.message === 'Timeout' ? 'timeout' : 'error'
+      const logStatus = status === 'timeout' ? 'llm-timeout' : 'llm-error'
+      if (ctx) {
+        logParse(ctx, { ...regexResult, usedLLM: true, llmStatus: status }, 'llm', logStatus, Date.now() - startTime)
+      }
+      // Fall through to loose matching
     }
+  }
 
-    const result: ParsedCommand = { ...regexResult, usedLLM: true, llmStatus: 'low-confidence' }
+  // Step 4: Loose keyword matching (safety net when LLM unavailable/failed)
+  const looseResult = matchLooseCommand(text)
+  if (looseResult) {
+    const llmStatus: ParsedCommand['llmStatus'] = !isLLMEnabled() ? 'disabled' : isRateLimited() ? 'rate-limited' : 'error'
+    const result: ParsedCommand = { ...looseResult, usedLLM: false, llmStatus }
     if (ctx) {
-      logParse(ctx, result, 'llm', 'llm-rejected', Date.now() - startTime, llmResponse?.meta)
-    }
-    return result
-  } catch (error) {
-    const status: ParsedCommand['llmStatus'] =
-      error instanceof Error && error.message === 'Timeout' ? 'timeout' : 'error'
-    const logStatus = status === 'timeout' ? 'llm-timeout' : 'llm-error'
-    const result: ParsedCommand = { ...regexResult, usedLLM: true, llmStatus: status }
-    if (ctx) {
-      logParse(ctx, result, 'llm', logStatus, Date.now() - startTime)
+      logParse(ctx, result, 'regex', 'loose-matched', Date.now() - startTime)
     }
     return result
   }
+
+  // Nothing matched — return unknown
+  const llmStatus: ParsedCommand['llmStatus'] = !isLLMEnabled() ? 'disabled' : isRateLimited() ? 'rate-limited' : 'error'
+  const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus }
+  if (ctx) {
+    logParse(ctx, result, 'regex', llmStatus === 'disabled' ? 'llm-disabled' : 'fallback-miss', Date.now() - startTime)
+  }
+  return result
 }
 
 // ============================================================================

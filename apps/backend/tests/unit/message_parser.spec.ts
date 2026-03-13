@@ -74,6 +74,28 @@ test.group('Message Parser | Regex Fallback (Core Guarantee)', () => {
 // test.group('Message Parser | Natural Language (Spanish)', () => { ... })
 // test.group('Message Parser | Typo Tolerance', () => { ... })
 
+test.group('Message Parser | Loose Keyword Matching (Natural Language)', () => {
+  const tests = [
+    { input: 'Hola sippy! cuanto es mi balance?', expected: 'balance' },
+    { input: 'hey, what is my balance?', expected: 'balance' },
+    { input: 'quiero ver mi saldo por favor', expected: 'balance' },
+    { input: 'oye necesito ayuda', expected: 'help' },
+    { input: 'can you show me my history?', expected: 'history' },
+    { input: 'quiero ver mi historial', expected: 'history' },
+    { input: 'where are the settings?', expected: 'settings' },
+    { input: 'como cambio la configuración?', expected: 'settings' },
+    { input: 'what is sippy exactly?', expected: 'about' },
+    { input: 'hola quiero comenzar', expected: 'start' },
+  ]
+
+  for (const t of tests) {
+    test(`"${t.input}" → ${t.expected}`, async ({ assert }) => {
+      const result = await parseMessage(t.input)
+      assert.equal(result.command, t.expected)
+    })
+  }
+})
+
 test.group('Message Parser | Send Command Parsing & Safety', () => {
   const tests = [
     { input: 'send 100 to +573001234567', expectedCmd: 'send', expectedAmount: 100 },
@@ -98,8 +120,8 @@ test.group('Message Parser | Phone Number Validation', () => {
     assert.isOk(result.recipient)
   })
 
-  test('Valid 10-digit phone (+1234567890)', async ({ assert }) => {
-    const result = await parseMessage('send 10 to +1234567890')
+  test('Valid international phone (+12345678901)', async ({ assert }) => {
+    const result = await parseMessage('send 10 to +12345678901')
     assert.equal(result.command, 'send')
     assert.isOk(result.recipient)
   })
