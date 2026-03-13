@@ -12,6 +12,17 @@ import { type UserWallet, type SecurityLimits, type TransferResult } from '#type
 import { query } from '#services/db'
 import { registerWalletWithIndexer } from '#services/indexer.service'
 
+/**
+ * Compatibility helper: queries phone_registry with canonical phone first,
+ * falls back to bare-digit format for pre-SH-003 rows.
+ * Remove after SH-003 backfill is confirmed complete.
+ */
+async function lookupByPhone(phoneNumber: string): Promise<{ rows: any[] }> {
+  const result = await query('SELECT * FROM phone_registry WHERE phone_number = $1', [phoneNumber])
+  if (result.rows.length > 0 || !phoneNumber.startsWith('+')) return result
+  return query('SELECT * FROM phone_registry WHERE phone_number = $1', [phoneNumber.slice(1)])
+}
+
 // USDC contract on Arbitrum (native USDC)
 const USDC_CONTRACT = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
 const USDC_DECIMALS = 6
@@ -40,7 +51,7 @@ const SECURITY_LIMITS: SecurityLimits = {
  */
 export async function createUserWallet(phoneNumber: string): Promise<UserWallet> {
   try {
-    logger.info(`Creating CDP wallet for +${phoneNumber}...`)
+    logger.info(`Creating CDP wallet for ${phoneNumber}...`)
 
     const cdp = getCDPClient()
 
@@ -107,15 +118,17 @@ export async function createUserWallet(phoneNumber: string): Promise<UserWallet>
  */
 export async function getUserWallet(phoneNumber: string): Promise<UserWallet | null> {
   try {
-    const result = await query<{
-      phone_number: string
-      cdp_wallet_name: string
-      wallet_address: string
-      created_at: string
-      last_activity: string
-      daily_spent: string
-      last_reset_date: string
-    }>('SELECT * FROM phone_registry WHERE phone_number = $1', [phoneNumber])
+    const result = (await lookupByPhone(phoneNumber)) as {
+      rows: Array<{
+        phone_number: string
+        cdp_wallet_name: string
+        wallet_address: string
+        created_at: string
+        last_activity: string
+        daily_spent: string
+        last_reset_date: string
+      }>
+    }
 
     if (result.rows.length === 0) {
       return null
@@ -152,19 +165,30 @@ export async function updateLastActivity(phoneNumber: string): Promise<boolean> 
     let dailySpent = userWallet.dailySpent
     if (userWallet.lastResetDate !== today) {
       dailySpent = 0
-      logger.info(`Daily spending reset for +${phoneNumber}`)
+      logger.info(`Daily spending reset for ${phoneNumber}`)
     }
 
-    await query(
+    let updateResult = await query(
       `UPDATE phone_registry
        SET last_activity = $1, daily_spent = $2, last_reset_date = $3
        WHERE phone_number = $4`,
       [now, dailySpent, today, phoneNumber]
     )
 
+    // Compatibility: fall back to bare-digit format for pre-SH-003 rows.
+    // Remove after SH-003 backfill is confirmed complete.
+    if (updateResult.rowCount === 0 && phoneNumber.startsWith('+')) {
+      updateResult = await query(
+        `UPDATE phone_registry
+         SET last_activity = $1, daily_spent = $2, last_reset_date = $3
+         WHERE phone_number = $4`,
+        [now, dailySpent, today, phoneNumber.slice(1)]
+      )
+    }
+
     return true
   } catch (error) {
-    logger.error(`Failed to update activity for +${phoneNumber}: %o`, error)
+    logger.error(`Failed to update activity for ${phoneNumber}: %o`, error)
     return false
   }
 }
@@ -345,7 +369,7 @@ export async function getAllWallets(): Promise<
     )
 
     return result.rows.map((row) => ({
-      phone: `+${row.phone_number}`,
+      phone: row.phone_number.startsWith('+') ? row.phone_number : `+${row.phone_number}`,
       wallet: row.cdp_wallet_name,
       address: row.wallet_address,
     }))

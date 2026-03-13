@@ -40,6 +40,7 @@ import { handleBalanceCommand } from '#commands/balance_command'
 import { handleSendCommand } from '#commands/send_command'
 import { generateResponse } from '#services/llm.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
+import { canonicalizePhone } from '#utils/phone'
 
 export interface RateContext {
   senderRate: number | null
@@ -70,12 +71,12 @@ export async function fetchRateContext(
   let recipientCurrency: string | null = null
 
   try {
-    senderCurrency = exchangeRateService.getCurrencyForPhone('+' + fromPhone)
+    senderCurrency = exchangeRateService.getCurrencyForPhone(fromPhone)
     if (senderCurrency) {
       senderRate = await exchangeRateService.getLocalRate(senderCurrency)
     }
     if (recipientPhone) {
-      recipientCurrency = exchangeRateService.getCurrencyForPhone('+' + recipientPhone)
+      recipientCurrency = exchangeRateService.getCurrencyForPhone(recipientPhone)
       if (recipientCurrency) {
         recipientRate = await exchangeRateService.getLocalRate(recipientCurrency)
       }
@@ -327,7 +328,12 @@ export default class WebhookController {
     }
 
     const message = messages[0]
-    const from = message.from
+    const rawFrom = message.from
+    const from = canonicalizePhone(rawFrom)
+    if (!from) {
+      logger.warn('Invalid sender phone, dropping')
+      return
+    }
     const messageId = message.id
 
     // ── Extract text from text, button reply, or list reply ────────────
@@ -352,20 +358,20 @@ export default class WebhookController {
 
     // ── Spam protection ────────────────────────────────────────────────
     if (rateLimitService.isSpamming(from)) {
-      logger.warn('Spam detected from +%s, ignoring', from)
+      logger.warn('Spam detected from %s, ignoring', from)
       // Mark as processed so Meta doesn't retry spam
       rateLimitService.markProcessed(messageId)
       return
     }
 
-    logger.info('Message from +%s: "%s"', from, text)
+    logger.info('Message from %s: "%s"', from, text)
 
     // Mark as read (non-blocking, best-effort)
     await markAsRead(messageId)
 
     // ── Non-text messages (image, audio, sticker, video, location) ────
     if (!text && message.type && message.type !== 'text' && message.type !== 'interactive') {
-      logger.info('Non-text message (%s) from +%s', message.type, from)
+      logger.info('Non-text message (%s) from %s', message.type, from)
       const mediaLang = (await getUserLanguage(from)) || 'en'
       await sendTextMessage(from, formatTextOnlyMessage(mediaLang), mediaLang)
       rateLimitService.markProcessed(messageId)

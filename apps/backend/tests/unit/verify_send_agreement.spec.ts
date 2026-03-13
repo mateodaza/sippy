@@ -5,6 +5,8 @@
  * against regex results before executing financial operations.
  */
 
+process.env.DEFAULT_COUNTRY_CODE = '57'
+
 import { test } from '@japa/runner'
 import { verifySendAgreement } from '#utils/phone'
 import type { ParsedCommand } from '#types/index'
@@ -35,9 +37,9 @@ test.group('verifySendAgreement | Valid inputs', () => {
   })
 
   test('accepts bare digit phone numbers (10+ digits)', ({ assert }) => {
-    const llm = makeParsed({ recipient: '3001234567' })
+    const llm = makeParsed({ recipient: '573001234567' })
     const regex = makeParsed({ command: 'unknown' })
-    const result = verifySendAgreement(llm, regex, 'enviar 10 a 3001234567')
+    const result = verifySendAgreement(llm, regex, 'enviar 10 a 573001234567')
     assert.isTrue(result.match)
   })
 })

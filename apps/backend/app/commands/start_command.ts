@@ -20,7 +20,7 @@ import {
 import { toUserErrorMessage } from '#utils/errors'
 
 export async function handleStartCommand(phoneNumber: string, lang: Lang = 'en'): Promise<void> {
-  logger.info(`START command from +${phoneNumber}`)
+  logger.info(`START command from ${phoneNumber}`)
 
   try {
     // Check for embedded wallet first (new self-custodial system)
@@ -68,7 +68,7 @@ export async function handleStartCommand(phoneNumber: string, lang: Lang = 'en')
     // New user - send setup link for embedded wallet
     await sendTextMessage(phoneNumber, formatNewUserSetupMessage(phoneNumber, lang), lang)
 
-    logger.info(`Setup link sent to +${phoneNumber}`)
+    logger.info(`Setup link sent to ${phoneNumber}`)
   } catch (error) {
     logger.error(`Failed to handle start command: %o`, error)
 

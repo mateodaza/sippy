@@ -17,7 +17,7 @@ import AuthApiController from '#controllers/auth_api_controller'
 import UserPreference from '#models/user_preference'
 
 const PHONE = '+573001234567'
-const DB_PHONE = '573001234567'
+const DB_PHONE = '+573001234567'
 
 // ── Context builder ────────────────────────────────────────────────────────────
 

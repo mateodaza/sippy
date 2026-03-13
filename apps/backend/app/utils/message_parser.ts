@@ -12,7 +12,7 @@ import {
   parseMessageWithLLM,
   type CallMeta,
 } from '../services/llm.service.js'
-import { normalizePhoneNumber } from './phone.js'
+import { canonicalizePhone } from './phone.js'
 import { logParseResult, type ParseLogEntry, type ContextMessage } from '../services/db.js'
 
 export { normalizePhoneNumber, verifySendAgreement } from './phone.js'
@@ -146,23 +146,12 @@ function parseSendMatch(match: RegExpMatchArray, originalText: string): ParsedCo
   }
 
   const rawRecipient = match[2].trim()
-  const normalizedRecipient = normalizePhoneNumber(rawRecipient, originalText)
-
-  if (!normalizedRecipient) {
-    const digitsOnly = rawRecipient.replace(/\D/g, '')
-    if (digitsOnly.length < 10) {
-      return { command: 'unknown', originalText }
-    }
-    return { command: 'send', amount, recipient: digitsOnly }
-  }
-
-  // Validate minimum phone length (at least 7 digits for valid international numbers)
-  const recipientDigits = normalizedRecipient.replace(/\D/g, '')
-  if (recipientDigits.length < 7) {
+  const canonicalRecipient = canonicalizePhone(rawRecipient)
+  if (!canonicalRecipient) {
     return { command: 'unknown', originalText }
   }
 
-  return { command: 'send', amount, recipient: normalizedRecipient }
+  return { command: 'send', amount, recipient: canonicalRecipient }
 }
 
 // ============================================================================

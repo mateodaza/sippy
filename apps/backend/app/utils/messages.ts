@@ -447,7 +447,7 @@ export function formatInvalidSendFormat(lang: Lang = 'en'): string {
 }
 
 export function formatHistoryMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const url = `https://www.sippy.lat/profile/+${phoneNumber}`
+  const url = `https://www.sippy.lat/profile/${phoneNumber}`
   const m = {
     en: () => `Transaction history\n\nView your activity at:\n${url}`,
     es: () => `Historial de transacciones\n\nVer tu actividad en:\n${url}`,
@@ -457,7 +457,7 @@ export function formatHistoryMessage(phoneNumber: string, lang: Lang = 'en'): st
 }
 
 export function formatSettingsMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
       `Manage your Sippy settings:\n\n${settingsUrl}\n\n` +
@@ -522,7 +522,7 @@ export function formatTransferFailedMessage(errorMessage: string, lang: Lang = '
 }
 
 export function formatSetupRequiredMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
       `You need to complete your wallet setup before sending.\n\nPlease finish setup here:\n${setupUrl}`,
@@ -539,7 +539,7 @@ export function formatDailyLimitExceededMessage(
   phoneNumber: string,
   lang: Lang = 'en'
 ): string {
-  const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
       `Amount exceeds your daily limit of $${dailyLimit}.\n\nYou can change your limit here:\n${settingsUrl}`,
@@ -587,7 +587,7 @@ export function formatSpendingLimitBalance(
 }
 
 export function formatCompleteSetupMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () => `Complete setup to enable sending:\n${setupUrl}`,
     es: () => `Completa la configuracion para habilitar envios:\n${setupUrl}`,
@@ -597,7 +597,7 @@ export function formatCompleteSetupMessage(phoneNumber: string, lang: Lang = 'en
 }
 
 export function formatWalletNotFullySetupMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
       `Your wallet is created but not fully set up.\n\nPlease complete the setup to enable sending:\n${setupUrl}`,
@@ -610,7 +610,7 @@ export function formatWalletNotFullySetupMessage(phoneNumber: string, lang: Lang
 }
 
 export function formatNewUserSetupMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
       `Welcome to Sippy.\n\n` +

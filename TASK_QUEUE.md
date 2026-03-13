@@ -53,7 +53,7 @@
 - **Context:** `apps/backend/app/utils/phone.ts` (existing normalize functions), `apps/backend/app/controllers/auth_api_controller.ts:22-27` (second normalize)
 - **Files:** `apps/backend/app/utils/phone.ts`, `apps/backend/tests/unit/phone_canonicalize.spec.ts` (new)
 
-#### SH-002 [ ] Replace all phone normalization call sites with canonicalizePhone
+#### SH-002 [x] Replace all phone normalization call sites with canonicalizePhone
 - **What:** Swap every call to `normalizePhoneNumber()` and the inline `normalizePhone()` in auth controller to use `canonicalizePhone()`. Ensure all DB writes use the canonical format.
 - **Acceptance criteria:**
   - `auth_api_controller.ts`: replace inline `normalizePhone()` with `canonicalizePhone()` from `app/utils/phone.ts`

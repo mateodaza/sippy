@@ -13,6 +13,7 @@ import { getUserLanguage } from '#services/db'
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { sendTextMessage } from '#services/whatsapp.service'
 import { formatFundETHReceivedMessage, formatFundUSDReceivedMessage } from '#utils/messages'
+import { canonicalizePhone } from '#utils/phone'
 
 export default class NotifyController {
   /**
@@ -55,35 +56,37 @@ export default class NotifyController {
         })
       }
 
-      // Clean phone number (remove + and spaces)
-      const cleanPhone = phone.replace(/[^\d]/g, '')
+      const canonicalPhone = canonicalizePhone(phone)
+      if (!canonicalPhone) {
+        return response.status(400).json({ error: 'Invalid phone number' })
+      }
 
-      logger.info(`Sending Fund notification to +${cleanPhone}: ${amount} ${type.toUpperCase()}`)
+      logger.info(`Sending Fund notification to ${canonicalPhone}: ${amount} ${type.toUpperCase()}`)
 
       // Verify wallet exists (user must have started via WhatsApp first)
-      const wallet = await getUserWallet(cleanPhone)
+      const wallet = await getUserWallet(canonicalPhone)
       if (!wallet) {
         return response.status(404).json({
           error: 'Wallet not found',
-          message: `Phone number +${cleanPhone} hasn't started using Sippy yet.`,
+          message: `Phone number ${canonicalPhone} hasn't started using Sippy yet.`,
         })
       }
 
       // Format message in recipient's language
-      const fundLang = (await getUserLanguage(cleanPhone)) || 'en'
+      const fundLang = (await getUserLanguage(canonicalPhone)) || 'en'
       const message =
         type === 'eth'
           ? formatFundETHReceivedMessage({ amount, txHash }, fundLang)
           : formatFundUSDReceivedMessage({ amount, txHash }, fundLang)
 
       // Send WhatsApp notification
-      await sendTextMessage(cleanPhone, message, fundLang)
+      await sendTextMessage(canonicalPhone, message, fundLang)
 
-      logger.info(`Notification sent to +${cleanPhone}`)
+      logger.info(`Notification sent to ${canonicalPhone}`)
 
       return response.json({
         success: true,
-        phone: `+${cleanPhone}`,
+        phone: canonicalPhone,
         type,
         amount,
       })

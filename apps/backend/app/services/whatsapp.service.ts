@@ -29,9 +29,11 @@ export async function sendTextMessage(
 ): Promise<WhatsAppAPIResponse> {
   // Sanitize before sending — final safety net
   const sanitized = sanitizeOutboundMessage(text, lang)
+  // Normalize: accept E.164 with or without '+'; always send bare international digits to Meta
+  const normalizedTo = to.startsWith('+') ? to.slice(1) : to
   if (sanitized.violations.length > 0) {
     logger.warn(
-      `Sanitizer [${sanitized.blocked ? 'BLOCKED' : 'CLEANED'}] to +${to}: ${sanitized.violations.join(', ')}`
+      `Sanitizer [${sanitized.blocked ? 'BLOCKED' : 'CLEANED'}] to +${normalizedTo}: ${sanitized.violations.join(', ')}`
     )
     if (sanitized.blocked) {
       logger.warn(`  Original length: ${text.length} chars`)
@@ -39,7 +41,7 @@ export async function sendTextMessage(
   }
   const body = sanitized.text
 
-  logger.info(`Sending message to +${to}: "${body}"`)
+  logger.info(`Sending message to +${normalizedTo}: "${body}"`)
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -51,7 +53,7 @@ export async function sendTextMessage(
         },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
-          to: to,
+          to: normalizedTo,
           type: 'text',
           text: {
             body: body,
@@ -149,12 +151,14 @@ export async function sendButtonMessage(
 
   // Sanitize button body text
   const sanitized = sanitizeOutboundMessage(bodyText, lang)
+  // Normalize: accept E.164 with or without '+'; always send bare international digits to Meta
+  const normalizedTo = to.startsWith('+') ? to.slice(1) : to
   if (sanitized.violations.length > 0) {
-    logger.warn(`Sanitizer [button] to +${to}: ${sanitized.violations.join(', ')}`)
+    logger.warn(`Sanitizer [button] to +${normalizedTo}: ${sanitized.violations.join(', ')}`)
   }
   const cleanBody = sanitized.text
 
-  logger.info(`Sending button message to +${to}`)
+  logger.info(`Sending button message to +${normalizedTo}`)
 
   try {
     const response = await fetch(`${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`, {
@@ -165,7 +169,7 @@ export async function sendButtonMessage(
       },
       body: JSON.stringify({
         messaging_product: 'whatsapp',
-        to: to,
+        to: normalizedTo,
         type: 'interactive',
         interactive: {
           type: 'button',

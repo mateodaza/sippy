@@ -10,7 +10,7 @@ import { parseMessage } from '#utils/message_parser'
 test.group('Phone Validation | Format Validation', () => {
   const tests = [
     { input: 'send 10 to +573001234567', desc: 'Standard format (+57 10 digits)', shouldWork: true },
-    { input: 'send 10 to +1234567890', desc: 'US format (+1 10 digits)', shouldWork: true },
+    { input: 'send 10 to +12345678901', desc: 'US format (+1 10 digits)', shouldWork: true },
     { input: 'send 10 to +573001234567890', desc: 'Valid long format', shouldWork: true },
     { input: 'send 10 to +123', desc: 'Too short (3 digits)', shouldWork: false },
     { input: 'send 10 to +12345', desc: 'Too short (5 digits)', shouldWork: false },

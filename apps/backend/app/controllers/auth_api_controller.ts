@@ -12,18 +12,33 @@ import { emailService } from '#services/email_service'
 import { normalizeEmail, hashEmail, encryptEmail, decryptEmail } from '#utils/email_crypto'
 import UserPreference from '#models/user_preference'
 import { DateTime } from 'luxon'
+import { canonicalizePhone } from '#utils/phone'
 
-// ── Phone normalization ────────────────────────────────────────────────────────
+// ── UserPreference compatibility helpers (SH-002 → SH-003 window) ─────────────
 
 /**
- * Strips common E.164 formatting characters and validates the result.
- * Exported for unit testing.
+ * Compatibility helpers for user_preferences during SH-002 → SH-003 window.
+ * Remove after SH-003 backfill is confirmed complete.
  */
-export function normalizePhone(raw: string): string | null {
-  // Strip whitespace, dashes, dots, parentheses
-  const stripped = raw.replace(/[\s\-().]/g, '')
-  // Must now match E.164 after stripping
-  return /^\+[1-9]\d{1,14}$/.test(stripped) ? stripped : null
+
+/** Tries canonical phone first; falls back to bare-digit if not found. */
+async function findUserPrefByPhone(phoneNumber: string): Promise<UserPreference | null> {
+  const pref = await UserPreference.findBy('phoneNumber', phoneNumber)
+  if (pref || !phoneNumber.startsWith('+')) return pref
+  return UserPreference.findBy('phoneNumber', phoneNumber.slice(1))
+}
+
+/**
+ * Returns the phone key to use for updateOrCreate.
+ * If a bare-digit row already exists, returns bare digits to avoid creating a duplicate row.
+ * Otherwise returns the canonical phone so new rows are written in canonical format.
+ */
+async function resolveUserPrefKey(phoneNumber: string): Promise<string> {
+  if (phoneNumber.startsWith('+')) {
+    const existing = await UserPreference.findBy('phoneNumber', phoneNumber.slice(1))
+    if (existing) return phoneNumber.slice(1)
+  }
+  return phoneNumber
 }
 
 // ── Email masking ──────────────────────────────────────────────────────────────
@@ -50,7 +65,7 @@ export default class AuthApiController {
         return response.status(422).json({ error: 'Invalid phone number' })
       }
 
-      const normalizedPhone = normalizePhone(phone)
+      const normalizedPhone = canonicalizePhone(phone)
       if (normalizedPhone === null) {
         return response.status(422).json({ error: 'Invalid phone number' })
       }
@@ -77,7 +92,7 @@ export default class AuthApiController {
       const body = request.body()
       const { phone, code } = body ?? {}
 
-      const normalizedPhone = typeof phone === 'string' ? normalizePhone(phone) : null
+      const normalizedPhone = typeof phone === 'string' ? canonicalizePhone(phone) : null
       if (normalizedPhone === null) {
         return response.status(422).json({ error: 'Invalid phone number' })
       }
@@ -118,8 +133,7 @@ export default class AuthApiController {
       const normalized = normalizeEmail(email)
       const hash = hashEmail(normalized)
 
-      // Strip leading '+' to match the DB phone format used by user_preferences
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
+      const dbPhone = ctx.cdpUser!.phoneNumber
 
       // Only block if another account has this email AND it's verified.
       // Unverified claims don't block — prevents squatting/lockout attacks.
@@ -127,13 +141,13 @@ export default class AuthApiController {
         .whereNotNull('emailHash')
         .where('emailHash', hash)
         .where('emailVerified', true)
-        .whereNot('phoneNumber', dbPhone)
+        .whereNotIn('phoneNumber', [dbPhone, dbPhone.slice(1)])
         .first()
       if (duplicate) {
         return response.status(409).json({ error: 'email_already_linked' })
       }
 
-      const existingPref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const existingPref = await findUserPrefByPhone(dbPhone)
       const lang = existingPref?.preferredLanguage ?? undefined
 
       const { encrypted, iv } = encryptEmail(normalized)
@@ -153,8 +167,9 @@ export default class AuthApiController {
       // sendEmailCode to reset emailVerified=false before the new email is proven.
       const existingVerified = existingPref?.emailVerified ?? false
       const existingVerifiedAt = existingPref?.emailVerifiedAt ?? null
+      const prefKey = await resolveUserPrefKey(dbPhone)
       await UserPreference.updateOrCreate(
-        { phoneNumber: dbPhone },
+        { phoneNumber: prefKey },
         {
           emailEncrypted: combined,
           emailHash: hash,
@@ -192,10 +207,9 @@ export default class AuthApiController {
         return response.status(422).json({ error: 'Invalid code' })
       }
 
-      // Strip leading '+' to match the DB phone format used by user_preferences
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
+      const dbPhone = ctx.cdpUser!.phoneNumber
 
-      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const pref = await findUserPrefByPhone(dbPhone)
       const submittedHash = hashEmail(normalized)
       if (!pref || pref.emailHash !== submittedHash) {
         return response.status(409).json({ error: 'email_mismatch' })
@@ -211,7 +225,7 @@ export default class AuthApiController {
       await UserPreference.query()
         .where('emailHash', submittedHash)
         .where('emailVerified', false)
-        .whereNot('phoneNumber', dbPhone)
+        .whereNotIn('phoneNumber', [dbPhone, dbPhone.slice(1)])
         .update({ emailHash: null, emailEncrypted: null })
 
       pref.emailVerified = true
@@ -232,9 +246,8 @@ export default class AuthApiController {
   async emailStatus(ctx: HttpContext) {
     const { response } = ctx
     try {
-      // Strip leading '+' to match the DB phone format used by user_preferences
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
-      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
 
       let maskedEmail: string | null = null
       if (pref?.emailEncrypted) {
@@ -267,8 +280,8 @@ export default class AuthApiController {
   async sendGateCode(ctx: HttpContext) {
     const { response } = ctx
     try {
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
-      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
 
       if (!pref?.emailEncrypted || !pref.emailHash || pref.emailVerified !== true) {
         return response.status(409).json({ error: 'no_verified_email' })
@@ -305,8 +318,8 @@ export default class AuthApiController {
         return response.status(422).json({ error: 'Invalid code' })
       }
 
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
-      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
 
       if (!pref?.emailEncrypted || !pref.emailHash || pref.emailVerified !== true) {
         return response.status(409).json({ error: 'no_verified_email' })
@@ -342,8 +355,8 @@ export default class AuthApiController {
         return response.status(403).json({ error: 'gate_required' })
       }
 
-      const dbPhone = ctx.cdpUser!.phoneNumber.replace(/^\+/, '')
-      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
 
       if (!pref?.emailVerified) {
         return response.status(409).json({ error: 'no_verified_email' })

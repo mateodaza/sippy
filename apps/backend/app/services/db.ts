@@ -15,7 +15,10 @@ import type { ExportEvent } from '#types/schemas'
  * Signature is intentionally identical to the Express/pg version so the 30+
  * call-sites that depend on it require zero changes.
  */
-export async function query<T = any>(text: string, params?: any[]): Promise<{ rows: T[] }> {
+export async function query<T = any>(
+  text: string,
+  params?: any[]
+): Promise<{ rows: T[]; rowCount: number }> {
   const start = Date.now()
   try {
     // Lucid rawQuery uses ? placeholders (knex convention), not PostgreSQL $1 syntax.
@@ -24,7 +27,10 @@ export async function query<T = any>(text: string, params?: any[]): Promise<{ ro
     const result = await db.rawQuery(knexText, params ?? [])
     const duration = Date.now() - start
     logger.info(`Query executed in ${duration}ms`)
-    return { rows: result.rows }
+    // rowCount is provided by the pg driver for DML statements (UPDATE/INSERT/DELETE).
+    // Fall back to rows.length for SELECT queries where rowCount may be absent.
+    const rowCount: number = (result as any).rowCount ?? result.rows?.length ?? 0
+    return { rows: result.rows, rowCount }
   } catch (error) {
     logger.error('Query error: %o', error)
     throw error
@@ -180,15 +186,39 @@ export async function logWebSend(entry: WebSendLogEntry): Promise<void> {
 // ============================================================================
 
 /**
+ * Compatibility helper: resolves the phone key to use for user_preferences writes.
+ * If a bare-digit row already exists for the given canonical phone, returns bare
+ * digits to update that existing row instead of creating a duplicate canonical row.
+ * Remove after SH-003 backfill is confirmed complete.
+ */
+async function resolveUserPrefsPhone(phoneNumber: string): Promise<string> {
+  if (phoneNumber.startsWith('+')) {
+    const result = await query<{ phone_number: string }>(
+      'SELECT phone_number FROM user_preferences WHERE phone_number = $1',
+      [phoneNumber.slice(1)]
+    )
+    if (result.rows.length > 0) return phoneNumber.slice(1)
+  }
+  return phoneNumber
+}
+
+/**
  * Get user's persisted language preference. Returns null if not set.
  * Checks user_preferences table (works before wallet creation).
  */
 export async function getUserLanguage(phoneNumber: string): Promise<'en' | 'es' | 'pt' | null> {
   try {
-    const result = await query<{ preferred_language: string | null }>(
+    let result = await query<{ preferred_language: string | null }>(
       'SELECT preferred_language FROM user_preferences WHERE phone_number = $1',
       [phoneNumber]
     )
+    // Compatibility: fall back to bare-digit format (pre-SH-003 rows)
+    if (result.rows.length === 0 && phoneNumber.startsWith('+')) {
+      result = await query<{ preferred_language: string | null }>(
+        'SELECT preferred_language FROM user_preferences WHERE phone_number = $1',
+        [phoneNumber.slice(1)]
+      )
+    }
     const lang = result.rows[0]?.preferred_language
     if (lang === 'en' || lang === 'es' || lang === 'pt') return lang
     return null
@@ -207,12 +237,17 @@ export async function setUserLanguage(
   lang: 'en' | 'es' | 'pt'
 ): Promise<void> {
   try {
+    // Compatibility: if a bare-digit row exists (pre-SH-003), update it to
+    // avoid creating a duplicate +... row alongside the existing row. A
+    // duplicate row would cause findUserPrefByPhone to return the new empty
+    // canonical row and miss the original verified-email fields.
+    const writePhone = await resolveUserPrefsPhone(phoneNumber)
     await query(
       `INSERT INTO user_preferences (phone_number, preferred_language, updated_at)
        VALUES ($1, $2, NOW())
        ON CONFLICT (phone_number)
        DO UPDATE SET preferred_language = $2, updated_at = NOW()`,
-      [phoneNumber, lang]
+      [writePhone, lang]
     )
   } catch (error) {
     logger.warn('Failed to persist language (non-blocking): %o', error)
@@ -256,10 +291,17 @@ function scrubForContext(text: string): string | null {
  */
 export async function getConversationContext(phoneNumber: string): Promise<ContextMessage[]> {
   try {
-    const result = await query<{ messages: ContextMessage[] }>(
+    let result = await query<{ messages: ContextMessage[] }>(
       'SELECT messages FROM conversation_context WHERE phone_number = $1',
       [phoneNumber]
     )
+    // Compatibility: fall back to bare-digit format (pre-SH-003 rows)
+    if (result.rows.length === 0 && phoneNumber.startsWith('+')) {
+      result = await query<{ messages: ContextMessage[] }>(
+        'SELECT messages FROM conversation_context WHERE phone_number = $1',
+        [phoneNumber.slice(1)]
+      )
+    }
     return result.rows[0]?.messages ?? []
   } catch (error) {
     logger.warn('getConversationContext failed (falling back to empty): %o', error)

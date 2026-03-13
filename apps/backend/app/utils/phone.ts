@@ -121,7 +121,7 @@ export interface SendVerificationResult {
 export function verifySendAgreement(
   llmResult: ParsedCommand,
   regexVerification: ParsedCommand,
-  originalText: string
+  _originalText: string
 ): SendVerificationResult {
   // Validate amount is present and reasonable
   if (typeof llmResult.amount !== 'number' || llmResult.amount <= 0) {
@@ -138,20 +138,8 @@ export function verifySendAgreement(
     return { match: false, mismatchReason: 'recipient' }
   }
 
-  // First, try to normalize the recipient (handles name aliases like "Helena")
-  const normalizedRecipient = normalizePhoneNumber(llmResult.recipient, originalText)
-
-  // If normalization failed, validate as raw recipient
-  const recipientToValidate = normalizedRecipient || llmResult.recipient
-
-  // Remove formatting to get clean digits (accept with or without +)
-  const cleanRecipient = recipientToValidate.replace(/[\s\-().]/g, '')
-
-  // Accept either: +NNNNNNNNNN (with +) or NNNNNNNNNN (bare digits)
-  const withPlusPattern = /^\+\d{10,}$/
-  const bareDigitsPattern = /^\d{10,}$/
-
-  if (!withPlusPattern.test(cleanRecipient) && !bareDigitsPattern.test(cleanRecipient)) {
+  const canonicalRecipient = canonicalizePhone(llmResult.recipient)
+  if (!canonicalRecipient) {
     return { match: false, mismatchReason: 'recipient' }
   }
 

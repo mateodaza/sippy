@@ -14,6 +14,25 @@ import logger from '@adonisjs/core/services/logger'
 import { CdpClient } from '@coinbase/cdp-sdk'
 import { ethers } from 'ethers'
 import { query } from '#services/db'
+
+/**
+ * Compatibility helper: queries phone_registry with canonical phone first,
+ * falls back to bare-digit format for pre-SH-003 rows.
+ * Remove after SH-003 backfill is confirmed complete.
+ */
+async function lookupByPhone(phoneNumber: string): Promise<{ rows: any[] }> {
+  const result = await query(
+    `SELECT phone_number, wallet_address, spend_permission_hash, daily_limit
+     FROM phone_registry WHERE phone_number = $1`,
+    [phoneNumber]
+  )
+  if (result.rows.length > 0 || !phoneNumber.startsWith('+')) return result
+  return query(
+    `SELECT phone_number, wallet_address, spend_permission_hash, daily_limit
+     FROM phone_registry WHERE phone_number = $1`,
+    [phoneNumber.slice(1)]
+  )
+}
 import {
   NETWORK,
   SIPPY_SPENDER_ADDRESS,
@@ -115,17 +134,14 @@ interface EmbeddedUserWallet {
  */
 export async function getEmbeddedWallet(phoneNumber: string): Promise<EmbeddedUserWallet | null> {
   try {
-    const result = await query<{
-      phone_number: string
-      wallet_address: string
-      spend_permission_hash: string | null
-      daily_limit: string | null
-    }>(
-      `SELECT phone_number, wallet_address, spend_permission_hash, daily_limit
-       FROM phone_registry
-       WHERE phone_number = $1`,
-      [phoneNumber]
-    )
+    const result = (await lookupByPhone(phoneNumber)) as {
+      rows: Array<{
+        phone_number: string
+        wallet_address: string
+        spend_permission_hash: string | null
+        daily_limit: string | null
+      }>
+    }
 
     if (result.rows.length === 0) {
       return null
