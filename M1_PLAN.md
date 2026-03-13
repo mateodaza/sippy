@@ -12,19 +12,19 @@
 | # | Deliverable | Status | Phase |
 |---|------------|--------|-------|
 | 1 | Onramp integration (API, testing, user flow) | Blocked (waiting on Maash) | P6 |
-| 2 | Non-custodial wallet refinements | 98% | P1 (done), P2, Sweep+Wallet (done), custom auth + dual-wallet web UI (done) |
-| 3 | Security hardening (rate limits, tx checks, error handling) | 70% | P4.6 custom auth done, email gates done. Pending: phone sanitization (SH), tx confirmation (TX), velocity checks, tiered limits (EL), backend audit (AU) |
+| 2 | Non-custodial wallet refinements | 100% | P1, P2, Sweep+Wallet, custom auth, dual-wallet web UI, web send hardened — all done |
+| 3 | Security hardening (rate limits, tx checks, error handling) | 100% | SH (phone sanitization), TX (confirmation, self-send, velocity, amount hardening), EL (tiered limits), AU (audit), AC (block/unblock, global pause), web send guards — all done |
 | 4 | Dual currency display (USD + local) | 100% | P3 (26 LATAM currencies, 24h cache) |
-| 5 | Privacy controls + Email Recovery | 85% | P5 (email recovery done, phone visibility pending — see PV tasks) |
-| 6 | User settings (daily limits via settings page) | 85% | P5 (email mgmt + export done. Pending: language auto-detect (LN), tiered limit display (EL), privacy toggle (PV)) |
-| 7 | Monitoring infrastructure (error tracking, uptime) | 70% | P7 (indexer deployed, admin analytics live. Pending: Sentry, health endpoint, structured logging) |
+| 5 | Privacy controls + Email Recovery | 100% | PV (phone visibility toggle, profile masking, WhatsApp command), email recovery — all done |
+| 6 | User settings (daily limits via settings page) | 100% | LN (language auto-detect + selector), EL (tiered limit display), PV (privacy toggle) — all done |
+| 7 | Monitoring infrastructure (error tracking, uptime) | 100% | MO (Sentry backend+frontend, health endpoint), PostHog analytics, indexer, admin dashboard — all done |
 | 8 | Legal entity establishment | External | — |
 | 9 | WhatsApp production number active | 100% | Done |
-| 10 | Closed beta: 50 testers + onramp | 0% | P8 |
+| 10 | Closed beta: 50 testers + onramp | 0% | P8 (E2E test matrix done, beta onboarding pending) |
 
 **KPIs:** Security features tested, dual currency live, monitoring dashboard active, 50 beta testers, $10K+ USDC volume.
 
-> **Note:** Backend migrated from Express monolith to AdonisJS v7 (Feb 28, 2026). All 18 routes ported with identical paths/methods/JSON responses. **437 tests passing** (as of Mar 12). Frontend-compatible — no breaking changes. Admin panel with analytics dashboard deployed. Code at `apps/backend/`.
+> **Note:** Backend migrated from Express monolith to AdonisJS v7 (Feb 28, 2026). All 18 routes ported with identical paths/methods/JSON responses. **500+ tests passing** (as of Mar 13). Frontend-compatible — no breaking changes. Admin panel with analytics dashboard deployed. Code at `apps/backend/`.
 
 ---
 

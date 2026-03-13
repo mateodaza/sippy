@@ -1,6 +1,6 @@
 # Project Status — Sippy
 
-**Last Updated:** March 12, 2026
+**Last Updated:** March 13, 2026
 **Current Milestone:** M1 — Production Ready (deadline Mar 26, 2026)
 **Detailed Plan:** [M1_PLAN.md](./M1_PLAN.md)
 **Task Queue:** [TASK_QUEUE.md](./TASK_QUEUE.md)
@@ -12,27 +12,25 @@
 | # | Deliverable | Status | Notes |
 |---|------------|--------|-------|
 | 1 | Onramp integration | Blocked | Waiting on Maash API response |
-| 2 | Non-custodial wallet refinements | 98% | CDP Embedded Wallets, sweep-to-EOA, web wallet, dual-wallet UI, custom auth — all done |
-| 3 | Security hardening | 70% | Done: rate limits, spam, auth, custom auth, email gates, email squatting fix. Pending: phone sanitization (SH), tx confirmation (TX), velocity checks, tiered limits (EL), backend audit (AU) |
+| 2 | Non-custodial wallet refinements | 100% | CDP Embedded Wallets, sweep-to-EOA, web wallet, dual-wallet UI, custom auth, web send hardened |
+| 3 | Security hardening | 100% | Phone sanitization (SH), tx confirmation + self-send block + concurrent protection (TX), velocity limiter, tiered limits (EL), amount hardening, backend audit (AU), admin block/unblock + global pause (AC), web send guards (self-send, velocity, daily limits) |
 | 4 | Dual currency display (USD + local) | 100% | 26 LATAM currencies, phone prefix mapping, 24h cache, all separators |
-| 5 | Privacy controls + Email Recovery | 85% | Email collection, verification, gate tokens, recovery design done. Pending: phone visibility toggle (PV) |
-| 6 | User settings | 85% | Settings page, email management, daily limits, key export done. Pending: language auto-detect (LN), tiered limit display (EL), privacy toggle (PV) |
-| 7 | Monitoring infrastructure | 70% | Indexer deployed, admin analytics + users with real on-chain data. Pending: Sentry (MO), health endpoint, structured logging |
+| 5 | Privacy controls + Email Recovery | 100% | Phone visibility toggle (settings + WhatsApp command), profile masking, email recovery |
+| 6 | User settings | 100% | Language auto-detect + selector (LN), tiered limit display (EL), privacy toggle (PV), email management, key export |
+| 7 | Monitoring infrastructure | 100% | Sentry (backend + frontend), health endpoint, PostHog analytics, indexer, admin dashboard |
 | 8 | Legal entity | External | In progress separately |
 | 9 | WhatsApp production number | 100% | Active, approved |
-| 10 | Closed beta: 50 testers | 0% | Depends on security + onramp completion |
+| 10 | Closed beta: 50 testers | 0% | E2E test matrix done, beta onboarding pending |
 
 ---
 
-## Current Focus: Backend Security (Week 4)
+## Current Focus: Beta Launch Prep (Week 5)
 
-Priority tasks in [TASK_QUEUE.md](./TASK_QUEUE.md):
+All security, privacy, language, and monitoring tasks are complete. Remaining work:
 
-1. **SH — Phone Sanitization (P0):** Unify phone normalization to single canonical E.164 format, DB constraints to prevent duplicates
-2. **TX — Transaction Security (P0):** Confirmation flow, self-send block, concurrent send protection, velocity limiter, amount hardening
-3. **EL — Tiered Limits (P1):** $50/day default, $500/day for email-verified users
-4. **LN — Language Auto-Detection (P1):** Phone prefix → website language (US→EN, BR→PT, else→ES)
-5. **PV — Phone Visibility (P2):** Privacy toggle for phone number on public profile
+1. **BP-002 — Beta tester onboarding (50 users):** Manual — WhatsApp broadcast
+2. **BP-003 — Onramp integration (Maash):** Blocked — waiting on API. Path B fallback if still blocked at deadline
+3. **Legal entity:** External — in progress separately
 
 ---
 
@@ -53,6 +51,8 @@ Priority tasks in [TASK_QUEUE.md](./TASK_QUEUE.md):
 - Parse observability: `parse_log` table with message correlation, latency, token usage
 - Spam protection: 10 msgs/min per user
 - Message deduplication (webhook replay protection)
+- Privacy command: `privacy on/off` (trilingual)
+- Admin controls: user block/unblock, global pause/resume
 
 ### Wallets — Production
 
@@ -66,18 +66,25 @@ Priority tasks in [TASK_QUEUE.md](./TASK_QUEUE.md):
 
 - USDC peer-to-peer on Arbitrum One
 - Gasless: GasRefuel.sol auto-funds gas before each transfer
-- Daily spending limits enforced per user
+- Tiered daily limits: $50/day (unverified), $500/day (email-verified)
+- Transaction confirmation flow (amounts > $5 require YES/SI/SIM)
+- Self-send blocked (phone + address, WhatsApp + web)
+- Concurrent send protection (one in-flight per user)
+- Velocity limiter: 5 sends/10min, $500/hour, 3 new recipients/hour
+- Amount hardening: $10K cap, decimal validation, ambiguous separator detection
 - Recipient notifications in recipient's language
 - Transaction receipts with shareable links
 
 ### Frontend — Production
 
 - Setup page: full onboarding flow (phone → OTP → wallet → permission → optional recovery email) — custom auth via Twilio+JWT
-- Settings page: daily limit management, private key export with sweep-to-EOA, recovery email management, session persistence
-- Wallet page: web fallback — balance card, send USDC (to phone or 0x address), activity list
-- All pages: Sippy-branded SMS OTP (not Coinbase), JWT-based auth with CDP `authenticateWithJWT`
+- Settings page: daily limit management, private key export with sweep-to-EOA, recovery email management, language selector, privacy toggle, session persistence
+- Wallet page: web fallback — balance card, send USDC (to phone or 0x address) with full security guards, activity list
+- All pages: Sippy-branded SMS OTP (not Coinbase), JWT-based auth with CDP `authenticateWithJWT`, session guard with re-auth
+- Language auto-detection from phone prefix (EN/ES/PT) + manual override
+- PostHog analytics integration
 - Fund page: add ETH/USDC to wallet
-- Profile pages: balance + transaction history (Blockscout API)
+- Profile pages: balance + transaction history, phone masking when hidden
 - Receipt pages: shareable transaction details
 - Responsive, Tailwind CSS
 
@@ -93,7 +100,9 @@ Priority tasks in [TASK_QUEUE.md](./TASK_QUEUE.md):
 - `/admin/analytics` — Total USDC volume, fund flow breakdown, top users by volume, daily volume chart, gas refuel stats
 - `/admin/users` — Users table with real on-chain data (Total Sent, Total Received, Txs, Last Activity)
 - `/admin/users/:phone` — User detail with on-chain stats + activity log
-- 437 tests passing (unit + functional)
+- Phone normalization unified to canonical E.164 format (SH-001→003)
+- Sentry error tracking (backend + frontend)
+- Health endpoint with DB + GasRefuel status
 
 ### Ponder On-Chain Indexer — Deployed
 
@@ -115,12 +124,9 @@ Priority tasks in [TASK_QUEUE.md](./TASK_QUEUE.md):
 
 ## Known Issues
 
-- **Phone format inconsistency:** Two normalization functions, phone stored without `+` in DB but with `+` in JWT. Fix: SH-001→003 in TASK_QUEUE.md
-- **No tx confirmation flow:** Sends execute immediately without user confirmation. Fix: TX-001
-- **Flat daily limit:** All users get $500/day regardless of verification status. Fix: EL-001→004
-- **No phone visibility toggle:** Profile always shows full phone number. Fix: PV-001→004
-- **No website language detection:** Website doesn't auto-detect language from phone. Fix: LN-001→003
 - **Onramp blocked:** Waiting on Maash API. Fallback Path B documented in M1_PLAN.md
+- **Web send error messages:** Backend returns safe error allowlist but wallet UI collapses all failures to generic "Send failed" via `localizeError`. Follow-up: wire specific errors through to UI
+- **SH-003 dual-format phone lookup:** 6 call sites still do canonical + bare-digit fallback during migration transition. Extract shared helper post-M1
 
 ---
 
@@ -154,12 +160,13 @@ sippy/                      ← Turborepo + pnpm workspaces
 | User-facing strings | 35+ (all trilingual) |
 | WhatsApp capacity | 2K bot-initiated + unlimited user-initiated |
 | Smart contract | GasRefuel.sol deployed on Arbitrum One |
-| Backend tests | 437 passing (unit + functional) |
+| Backend tests | 500+ passing (unit + functional) |
 
 ---
 
 ## Recent Changes
 
+**Mar 13** — Merged `develop` into `main`: all SH, TX, EL, LN, PV, AU, MO, AC, WS, BP-001 tasks complete. PostHog migration. Web send hardened (self-send block for phone + address, velocity checks, tiered daily limits, safe error allowlist). Privacy fallback fixed. Moderation uses SH-003-safe `resolveUserPrefKey`. Silent catch blocks now log. Deliverables 2, 3, 5, 6, 7 moved to 100%.
 **Mar 12** — Task queue restructured: completed tasks archived to `COMPLETED_TASK_QUEUES.md`, new TASK_QUEUE.md with SH (phone sanitization), TX (tx security), EL (tiered limits), LN (language detection), PV (phone visibility), AU (audit), MO (monitoring), AC (admin controls), WS (session robustness), BP (beta prep). M1_PLAN timeline updated for weeks 4-5.
 **Mar 12** — Dual-wallet web UI: WhatsApp EOA wallet + smart account shown as selectable cards, auto-selects funded wallet, `POST /api/send` for EOA sends via SpendPermission. CDP Portal configured (JWKS URL + issuer live). Dual currency COMPLETE (26 LATAM currencies, 24h cache). Email recovery infrastructure COMPLETE (collection, verification, gate tokens, Resend integration). Security fixes: email bypass vulnerability patched, email squatting blocked via partial unique index. 437 tests passing.
 **Mar 11** — P4.6 Custom Auth COMPLETE: Twilio raw SMS OTP (trilingual) + RS256 JWT + JWKS endpoint. Backend: jwt_service, otp_service, jwt_auth_middleware replacing CDP auth. Frontend: all 3 pages migrated to `authenticateWithJWT()`. CDP Portal config pending (manual).
