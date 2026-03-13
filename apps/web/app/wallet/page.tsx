@@ -20,6 +20,16 @@ import {
 } from '@/lib/blockscout';
 import { ensureGasReady, buildUsdcTransferCall } from '@/lib/usdc-transfer';
 import { ActivityList } from '@/components/activity/ActivityList';
+import {
+  Language,
+  getStoredLanguage,
+  storeLanguage,
+  detectLanguageFromPhone,
+  fetchUserLanguage,
+  resolveLanguage,
+  localizeError,
+  t,
+} from '../../lib/i18n';
 
 const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
@@ -41,6 +51,9 @@ function WalletContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [hasCheckedSession, setHasCheckedSession] = useState(false);
+
+  // Language state
+  const [lang, setLang] = useState<Language>('en');
 
   // Wallet state — two wallets
   const [eoaAddress, setEoaAddress] = useState<string | null>(null);
@@ -78,6 +91,20 @@ function WalletContent() {
 
   // Active balance based on selected send-from wallet
   const activeBalance = sendFrom === 'whatsapp' ? eoaBalances : smartBalances;
+
+  // ============================================================================
+  // Language
+  // ============================================================================
+
+  useEffect(() => {
+    const cached = getStoredLanguage()
+    if (cached) setLang(cached)
+
+    const token = getStoredToken()
+    resolveLanguage(phoneFromUrl || null, token, BACKEND_URL)
+      .then(resolved => { if (resolved !== cached) setLang(resolved) })
+      .catch(() => {})
+  }, [])
 
   // ============================================================================
   // Data fetching
@@ -190,18 +217,17 @@ function WalletContent() {
       await sendOtp(formattedPhone);
       setAuthStep('otp');
     } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : 'Failed to send verification code';
+      const rawMsg = err instanceof Error ? err.message : '';
       if (
-        msg.toLowerCase().includes('already') ||
-        msg.toLowerCase().includes('session')
+        rawMsg.toLowerCase().includes('already') ||
+        rawMsg.toLowerCase().includes('session')
       ) {
         if (currentUser) {
           setAuthStep('authenticated');
           return;
         }
       }
-      setError(msg);
+      setError(localizeError(err, 'otp-send', lang));
     } finally {
       setIsLoading(false);
     }
@@ -213,6 +239,12 @@ function WalletContent() {
     try {
       const token = await verifyOtp(phoneNumber, otp);
       storeToken(token);
+      const phoneLang = detectLanguageFromPhone(phoneNumber)
+      storeLanguage(phoneLang)
+      setLang(phoneLang)
+      fetchUserLanguage(token, BACKEND_URL)
+        .then(({ language }) => { storeLanguage(language); setLang(language) })
+        .catch(() => {})
       const { user } = await authenticateWithJWT();
       const addr = user.evmSmartAccounts?.[0] || user.evmAccounts?.[0];
       if (!addr)
@@ -222,7 +254,7 @@ function WalletContent() {
 
       setAuthStep('authenticated');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verification failed');
+      setError(localizeError(err, 'otp-verify', lang));
     } finally {
       setIsLoading(false);
     }
@@ -242,11 +274,11 @@ function WalletContent() {
 
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
-      setSendError('Enter a valid amount.');
+      setSendError(t('wallet.errInvalidAmount', lang));
       return;
     }
     if (activeBalance && numAmount > parseFloat(activeBalance.usdc)) {
-      setSendError('Insufficient balance.');
+      setSendError(t('wallet.errInsufficientBalance', lang));
       return;
     }
 
@@ -258,7 +290,7 @@ function WalletContent() {
       try {
         const accessToken = getStoredToken();
         if (!accessToken) {
-          setSendError('Session expired. Please sign in again.');
+          setSendError(t('wallet.errSessionExpired', lang));
           return;
         }
 
@@ -274,15 +306,15 @@ function WalletContent() {
         });
 
         if (response.status === 404) {
-          setSendError('This phone number is not a Sippy user.');
+          setSendError(t('wallet.errNotSippyUser', lang));
           return;
         }
         if (response.status === 429) {
-          setSendError('Too many lookups. Try again later.');
+          setSendError(t('wallet.errTooManyLookups', lang));
           return;
         }
         if (!response.ok) {
-          setSendError('Could not resolve phone number.');
+          setSendError(t('wallet.errResolvePhone', lang));
           return;
         }
 
@@ -290,10 +322,10 @@ function WalletContent() {
         setResolvedAddress(data.address);
         setSendStep('confirm');
       } catch {
-        setSendError('Network error. Please try again.');
+        setSendError(t('wallet.errNetwork', lang));
       }
     } else {
-      setSendError('Enter a valid phone number or 0x address.');
+      setSendError(t('wallet.errInvalidInput', lang));
     }
   };
 
@@ -320,7 +352,7 @@ function WalletContent() {
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          throw new Error(body.error || 'Send failed');
+          throw new Error(localizeError(body, 'send', lang));
         }
 
         const data = await res.json();
@@ -348,7 +380,7 @@ function WalletContent() {
       }
     } catch (err) {
       console.error('Send failed:', err);
-      setSendError(err instanceof Error ? err.message : 'Transaction failed.');
+      setSendError(localizeError(err, 'send', lang));
       setSendStep('error');
     }
   };
@@ -362,9 +394,7 @@ function WalletContent() {
       fetchWalletData();
     }
     if (sendOpStatus === 'error' && sendOpError) {
-      setSendError(
-        sendOpError instanceof Error ? sendOpError.message : 'Transaction failed.'
-      );
+      setSendError(localizeError(sendOpError, 'send', lang));
       setSendStep('error');
     }
   }, [sendOpStatus, sendOpData, sendOpError, sendFrom, fetchWalletData]);
@@ -392,7 +422,7 @@ function WalletContent() {
         <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center'>
           <div className='animate-pulse'>
             <div className='text-4xl mb-4'>💰</div>
-            <p className='text-gray-600'>Checking your session...</p>
+            <p className='text-gray-600'>{t('wallet.loading', lang)}</p>
           </div>
         </div>
       </div>
@@ -403,14 +433,14 @@ function WalletContent() {
     return (
       <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
         <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
-          <h1 className='text-2xl font-bold mb-6 text-gray-900'>Sippy Wallet</h1>
+          <h1 className='text-2xl font-bold mb-6 text-gray-900'>{t('wallet.title', lang)}</h1>
           <p className='text-gray-600 mb-6'>
-            Verify your phone number to access your wallet.
+            {t('wallet.subtitle', lang)}
           </p>
 
           {!isCdpConfigured && (
             <div className='mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm'>
-              <strong>Configuration Required:</strong> Set NEXT_PUBLIC_CDP_PROJECT_ID.
+              <strong>{t('wallet.configRequired', lang)}</strong> {t('wallet.configInstruction', lang)}
             </div>
           )}
 
@@ -433,14 +463,14 @@ function WalletContent() {
                 }`}
               />
               {isPhoneLocked && (
-                <p className='text-sm text-gray-500 mb-4'>Phone number from your WhatsApp link</p>
+                <p className='text-sm text-gray-500 mb-4'>{t('wallet.phoneFromWhatsapp', lang)}</p>
               )}
               <button
                 onClick={handleSendOtp}
                 disabled={isLoading || !phoneNumber || !isCdpConfigured}
                 className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                {isLoading ? 'Sending...' : 'Send Verification Code'}
+                {isLoading ? t('wallet.sending', lang) : t('wallet.sendCode', lang)}
               </button>
             </>
           )}
@@ -448,7 +478,7 @@ function WalletContent() {
           {authStep === 'otp' && (
             <>
               <p className='text-gray-600 mb-4'>
-                We sent a 6-digit code to {phoneNumber}
+                {t('wallet.codeSentTo', lang)} {phoneNumber}
               </p>
               <input
                 type='text'
@@ -463,13 +493,13 @@ function WalletContent() {
                 disabled={isLoading || otp.length !== 6}
                 className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                {isLoading ? 'Verifying...' : 'Verify'}
+                {isLoading ? t('wallet.verifying', lang) : t('wallet.verify', lang)}
               </button>
               <button
                 onClick={() => setAuthStep('phone')}
                 className='w-full mt-2 text-gray-500 py-2'
               >
-                Back
+                {t('wallet.back', lang)}
               </button>
             </>
           )}
@@ -495,7 +525,7 @@ function WalletContent() {
               sendFrom === 'whatsapp' ? 'ring-2 ring-emerald-500' : 'opacity-70'
             }`}
           >
-            <p className='text-xs text-gray-500 mb-1 font-medium'>WhatsApp Wallet</p>
+            <p className='text-xs text-gray-500 mb-1 font-medium'>{t('wallet.whatsappWallet', lang)}</p>
             {isLoadingData ? (
               <div className='animate-pulse h-7 bg-gray-100 rounded w-20 mb-1' />
             ) : (
@@ -515,7 +545,7 @@ function WalletContent() {
               sendFrom === 'web' ? 'ring-2 ring-emerald-500' : 'opacity-70'
             }`}
           >
-            <p className='text-xs text-gray-500 mb-1 font-medium'>Web Wallet</p>
+            <p className='text-xs text-gray-500 mb-1 font-medium'>{t('wallet.webWallet', lang)}</p>
             {isLoadingData ? (
               <div className='animate-pulse h-7 bg-gray-100 rounded w-20 mb-1' />
             ) : (
@@ -533,7 +563,7 @@ function WalletContent() {
         <div className='bg-white rounded-2xl shadow-xl px-5 py-3 flex items-center justify-between'>
           <div>
             <p className='text-xs text-gray-400'>
-              {sendFrom === 'whatsapp' ? 'WhatsApp Wallet' : 'Web Wallet'} address
+              {sendFrom === 'whatsapp' ? t('wallet.whatsappWallet', lang) : t('wallet.webWallet', lang)} {t('wallet.walletAddress', lang)}
             </p>
             <p className='text-sm font-mono text-gray-700'>
               {sendFrom === 'whatsapp'
@@ -552,18 +582,18 @@ function WalletContent() {
             }}
             className='text-xs text-emerald-600 hover:text-emerald-700 font-medium'
           >
-            Copy
+            {t('wallet.copy', lang)}
           </button>
         </div>
 
         {/* Send section */}
         <div className='bg-white rounded-2xl shadow-xl p-6'>
           <div className='flex items-center justify-between mb-4'>
-            <h2 className='text-lg font-semibold text-gray-900'>Send</h2>
+            <h2 className='text-lg font-semibold text-gray-900'>{t('wallet.send', lang)}</h2>
             <span className='text-xs text-gray-400'>
-              from{' '}
+              {t('wallet.sendFrom', lang)}{' '}
               <span className='font-medium text-gray-600'>
-                {sendFrom === 'whatsapp' ? 'WhatsApp Wallet' : 'Web Wallet'}
+                {sendFrom === 'whatsapp' ? t('wallet.whatsappWallet', lang) : t('wallet.webWallet', lang)}
               </span>
             </span>
           </div>
@@ -572,7 +602,7 @@ function WalletContent() {
             <div className='space-y-3'>
               <div>
                 <label className='block text-sm text-gray-600 mb-1'>
-                  To (phone or 0x address)
+                  {t('wallet.toLabel', lang)} ({t('wallet.toLabelHint', lang)})
                 </label>
                 <input
                   type='text'
@@ -584,7 +614,7 @@ function WalletContent() {
               </div>
               <div>
                 <label className='block text-sm text-gray-600 mb-1'>
-                  Amount (USDC)
+                  {t('wallet.amountLabel', lang)}
                 </label>
                 <div className='flex gap-2'>
                   <input
@@ -600,7 +630,7 @@ function WalletContent() {
                     onClick={handleMax}
                     className='px-4 py-3 bg-gray-100 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-200'
                   >
-                    MAX
+                    {t('wallet.max', lang).toUpperCase()}
                   </button>
                 </div>
               </div>
@@ -610,7 +640,7 @@ function WalletContent() {
                 disabled={!recipient || !amount}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                Review
+                {t('wallet.review', lang)}
               </button>
             </div>
           )}
@@ -618,31 +648,31 @@ function WalletContent() {
           {sendStep === 'confirm' && (
             <div className='space-y-4'>
               <div className='p-4 bg-gray-50 rounded-lg'>
-                <p className='text-sm text-gray-600'>Sending</p>
+                <p className='text-sm text-gray-600'>{t('wallet.send', lang)}</p>
                 <p className='text-2xl font-bold text-gray-900'>
                   ${parseFloat(amount).toFixed(2)} USDC
                 </p>
-                <p className='text-sm text-gray-600 mt-2'>To</p>
+                <p className='text-sm text-gray-600 mt-2'>{t('wallet.to', lang)}</p>
                 <p className='text-sm font-mono text-gray-800 break-all'>
                   {isPhoneNumber(recipient.trim())
                     ? `${recipient.trim()} (${formatAddress(resolvedAddress || '')})`
                     : formatAddress(resolvedAddress || '')}
                 </p>
                 <p className='text-xs text-gray-400 mt-2'>
-                  from {sendFrom === 'whatsapp' ? 'WhatsApp Wallet' : 'Web Wallet'}
+                  from {sendFrom === 'whatsapp' ? t('wallet.whatsappWallet', lang) : t('wallet.webWallet', lang)}
                 </p>
               </div>
               <button
                 onClick={handleSendConfirm}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
               >
-                Confirm Send
+                {t('wallet.confirmSend', lang)}
               </button>
               <button
                 onClick={() => setSendStep('form')}
                 className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
               >
-                Back
+                {t('wallet.back', lang)}
               </button>
             </div>
           )}
@@ -651,7 +681,7 @@ function WalletContent() {
             <div className='text-center py-6'>
               <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto mb-4' />
               <p className='text-gray-700 font-medium'>
-                Sending ${parseFloat(amount).toFixed(2)} USDC...
+                {t('wallet.sendingProgress', lang)} ${parseFloat(amount).toFixed(2)} USDC...
               </p>
             </div>
           )}
@@ -660,9 +690,9 @@ function WalletContent() {
             <div className='space-y-4'>
               <div className='text-center py-4'>
                 <div className='text-4xl mb-2'>&#10003;</div>
-                <p className='text-gray-900 font-semibold'>Sent!</p>
+                <p className='text-gray-900 font-semibold'>{t('wallet.sent', lang)}</p>
                 <p className='text-sm text-gray-600'>
-                  ${parseFloat(amount).toFixed(2)} USDC sent successfully
+                  ${parseFloat(amount).toFixed(2)} USDC {t('wallet.sentSuccess', lang)}
                 </p>
               </div>
               {sendTxHash && (
@@ -672,14 +702,14 @@ function WalletContent() {
                   rel='noopener noreferrer'
                   className='block text-center text-sm text-emerald-600 hover:text-emerald-700 underline'
                 >
-                  View on Blockscout
+                  {t('wallet.viewOnBlockscout', lang)}
                 </a>
               )}
               <button
                 onClick={resetSend}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
               >
-                Send Another
+                {t('wallet.sendAnother', lang)}
               </button>
             </div>
           )}
@@ -688,27 +718,27 @@ function WalletContent() {
             <div className='space-y-4'>
               <div className='p-4 bg-red-50 border border-red-200 rounded-lg'>
                 <p className='text-sm text-red-700'>
-                  {sendError || 'Transaction failed.'}
+                  {sendError || t('wallet.txFailed', lang)}
                 </p>
               </div>
               <button
                 onClick={handleSendConfirm}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
               >
-                Retry
+                {t('wallet.retry', lang)}
               </button>
               <button
                 onClick={resetSend}
                 className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
               >
-                Cancel
+                {t('wallet.cancel', lang)}
               </button>
             </div>
           )}
         </div>
 
         {/* Activity */}
-        <ActivityList transactions={activity} />
+        <ActivityList transactions={activity} lang={lang} />
 
         {/* Navigation */}
         <div className='bg-white rounded-2xl shadow-xl p-4 flex items-center justify-between'>
@@ -716,7 +746,7 @@ function WalletContent() {
             href='/settings'
             className='text-sm text-emerald-600 hover:text-emerald-700 font-medium'
           >
-            Settings & Export Key
+            {t('wallet.settings', lang)}
           </a>
           <button
             onClick={async () => {
@@ -731,12 +761,12 @@ function WalletContent() {
             }}
             className='text-sm text-gray-500 hover:text-gray-700'
           >
-            Sign out
+            {t('wallet.signOut', lang)}
           </button>
         </div>
 
         <div className='text-center text-xs text-gray-500 pb-4'>
-          <p>Powered by Coinbase</p>
+          <p>{t('wallet.poweredBy', lang)}</p>
           <p className='mt-1'>Network: {NETWORK}</p>
         </div>
       </div>

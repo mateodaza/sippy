@@ -4,6 +4,7 @@ import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuthenticateWithJWT, useCreateSpendPermission, useCurrentUser, useIsSignedIn, useSignOut } from '@coinbase/cdp-hooks';
 import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '../../lib/auth';
+import { Language, getStoredLanguage, storeLanguage, detectLanguageFromPhone, fetchUserLanguage, resolveLanguage, localizeError, t } from '../../lib/i18n';
 import { parseUnits } from 'viem';
 
 /**
@@ -53,6 +54,7 @@ function SetupContent() {
   const [emailCode, setEmailCode] = useState('');
   const [emailSent, setEmailSent] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
+  const [lang, setLang] = useState<Language>('en');
 
   // CDP Hooks
   const { authenticateWithJWT } = useAuthenticateWithJWT();
@@ -66,6 +68,17 @@ function SetupContent() {
 
   // Check if CDP is configured
   const isCdpConfigured = !!CDP_PROJECT_ID;
+
+  // Language init: two-phase (instant cache, then authoritative API)
+  useEffect(() => {
+    const cached = getStoredLanguage()
+    if (cached) setLang(cached)
+
+    const token = getStoredToken()
+    resolveLanguage(phoneFromUrl || null, token, BACKEND_URL)
+      .then(resolved => { if (resolved !== cached) setLang(resolved) })
+      .catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recovery: Check for existing session on mount (only once)
   useEffect(() => {
@@ -203,12 +216,12 @@ function SetupContent() {
       } else {
         // Refuel failed - show the actual error
         console.error('Gas ensure failed:', result.error);
-        setError(result.error || 'Could not fund wallet with gas. Please try again later.');
+        setError(localizeError(result, 'fund-gas', lang));
         return false;
       }
     } catch (err) {
       console.error('Failed to ensure gas:', err);
-      setError('Failed to prepare wallet. Please try again.');
+      setError(t('setup.errPrepare', lang));
       return false;
     } finally {
       setIsPreparingWallet(false);
@@ -231,9 +244,7 @@ function SetupContent() {
       setStep('otp');
     } catch (err) {
       console.error('Failed to send OTP:', err);
-      setError(
-        err instanceof Error ? err.message : 'Failed to send verification code'
-      );
+      setError(localizeError(err, 'otp-send', lang));
     } finally {
       setIsLoading(false);
     }
@@ -248,6 +259,14 @@ function SetupContent() {
       console.log('Verifying OTP...');
       const token = await verifyOtp(phoneNumber, otp);
       storeToken(token);
+
+      // Detect and store language immediately from phone, then update from API
+      const phoneLang = detectLanguageFromPhone(phoneNumber)
+      storeLanguage(phoneLang)
+      setLang(phoneLang)
+      fetchUserLanguage(token, BACKEND_URL)
+        .then(({ language }) => { storeLanguage(language); setLang(language) })
+        .catch(() => {})
 
       console.log('Authenticating with JWT...');
       const { user } = await authenticateWithJWT();
@@ -286,7 +305,7 @@ function SetupContent() {
       setStep('email');
     } catch (err) {
       console.error('OTP verification failed:', err);
-      setError(err instanceof Error ? err.message : 'Verification failed');
+      setError(localizeError(err, 'otp-verify', lang));
     } finally {
       setIsLoading(false);
     }
@@ -310,10 +329,10 @@ function SetupContent() {
       if (response.ok) {
         setEmailSent(true);
       } else {
-        setError(await response.text());
+        setError(localizeError(response, 'email-send', lang));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send email code');
+      setError(localizeError(err, 'email-send', lang));
     } finally {
       setIsLoading(false);
     }
@@ -338,10 +357,10 @@ function SetupContent() {
         setEmailVerified(true);
         setTimeout(() => setStep('permission'), 1500);
       } else {
-        setError(await response.text());
+        setError(localizeError(response, 'email-verify', lang));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to verify email code');
+      setError(localizeError(err, 'email-verify', lang));
     } finally {
       setIsLoading(false);
     }
@@ -419,7 +438,7 @@ function SetupContent() {
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Failed to register permission with backend:', errorText);
-          throw new Error('Failed to register permission. Please try again.');
+          throw new Error(t('setup.errRegisterPermission', lang));
         }
       }
 
@@ -432,9 +451,7 @@ function SetupContent() {
       if (errorMsg.toLowerCase().includes('insufficient') ||
           errorMsg.toLowerCase().includes('balance') ||
           errorMsg.toLowerCase().includes('gas')) {
-        setError(
-          'Insufficient ETH for gas fees. Please wait a moment and try again - we\'re sending you some ETH.'
-        );
+        setError(t('setup.errInsufficientEth', lang));
         // Trigger a re-registration to attempt refuel again
         if (BACKEND_URL && walletAddress) {
           try {
@@ -452,7 +469,7 @@ function SetupContent() {
         }
       } else {
         setError(
-          err instanceof Error ? err.message : 'Failed to create permission'
+          err instanceof Error ? err.message : t('setup.errCreatePermission', lang)
         );
       }
     } finally {
@@ -467,7 +484,7 @@ function SetupContent() {
         <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center'>
           <div className='animate-pulse'>
             <div className='text-4xl mb-4'>🔍</div>
-            <p className='text-gray-600'>Checking your account...</p>
+            <p className='text-gray-600'>{t('setup.loading', lang)}</p>
           </div>
         </div>
       </div>
@@ -505,7 +522,7 @@ function SetupContent() {
         {/* Configuration warning */}
         {!isCdpConfigured && (
           <div className='mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm'>
-            <strong>Configuration Required:</strong> Set NEXT_PUBLIC_CDP_PROJECT_ID in your environment.
+            <strong>{t('setup.configRequired', lang)}</strong> {t('setup.configInstruction', lang)}
           </div>
         )}
 
@@ -513,16 +530,16 @@ function SetupContent() {
         {step === 'phone' && (
           <div>
             <h1 className='text-2xl font-bold mb-4 text-gray-900'>
-              Set Up Your Wallet
+              {t('setup.title', lang)}
             </h1>
             <p className='text-gray-600 mb-6'>
-              Enter your phone number to create your self-custodial wallet.
+              {t('setup.subtitle', lang)}
             </p>
             <input
               type='tel'
               value={phoneNumber}
               onChange={(e) => !isPhoneLocked && setPhoneNumber(e.target.value)}
-              placeholder='+573001234567'
+              placeholder={t('setup.phonePlaceholder', lang)}
               disabled={isPhoneLocked}
               className={`w-full p-3 border rounded-lg mb-4 text-gray-900 ${
                 isPhoneLocked ? 'bg-gray-100 text-gray-600' : ''
@@ -530,7 +547,7 @@ function SetupContent() {
             />
             {isPhoneLocked && (
               <p className='text-sm text-gray-500 mb-4'>
-                Phone number from your WhatsApp link
+                {t('setup.phoneFromWhatsapp', lang)}
               </p>
             )}
             <button
@@ -538,7 +555,7 @@ function SetupContent() {
               disabled={isLoading || !phoneNumber || !isCdpConfigured}
               className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
             >
-              {isLoading ? 'Sending...' : 'Send Verification Code'}
+              {isLoading ? t('setup.sending', lang) : t('setup.sendCode', lang)}
             </button>
           </div>
         )}
@@ -547,16 +564,16 @@ function SetupContent() {
         {step === 'otp' && (
           <div>
             <h1 className='text-2xl font-bold mb-4 text-gray-900'>
-              Enter Code
+              {t('setup.enterCode', lang)}
             </h1>
             <p className='text-gray-600 mb-6'>
-              We sent a 6-digit code to {phoneNumber}
+              {t('setup.codeSentTo', lang)} {phoneNumber}
             </p>
             <input
               type='text'
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-              placeholder='123456'
+              placeholder={t('setup.codePlaceholder', lang)}
               maxLength={6}
               className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-gray-900'
             />
@@ -565,13 +582,13 @@ function SetupContent() {
               disabled={isLoading || otp.length !== 6}
               className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
             >
-              {isLoading ? 'Verifying...' : 'Verify'}
+              {isLoading ? t('setup.verifying', lang) : t('setup.verify', lang)}
             </button>
             <button
               onClick={() => setStep('phone')}
               className='w-full mt-2 text-gray-500 py-2'
             >
-              Back
+              {t('setup.back', lang)}
             </button>
           </div>
         )}
@@ -580,10 +597,10 @@ function SetupContent() {
         {step === 'email' && (
           <div>
             <h1 className='text-2xl font-bold mb-4 text-gray-900'>
-              Add a recovery email (recommended)
+              {t('setup.emailTitle', lang)}
             </h1>
             <p className='text-gray-600 mb-6'>
-              Helps you recover your wallet if you lose your phone.
+              {t('setup.emailSubtitle', lang)}
             </p>
 
             {!emailSent && (
@@ -592,7 +609,7 @@ function SetupContent() {
                   type='email'
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder='you@example.com'
+                  placeholder={t('setup.emailPlaceholder', lang)}
                   className='w-full p-3 border rounded-lg mb-4 text-gray-900'
                 />
                 <button
@@ -600,19 +617,19 @@ function SetupContent() {
                   disabled={isLoading || !email}
                   className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
                 >
-                  {isLoading ? 'Sending...' : 'Send code'}
+                  {isLoading ? t('setup.emailSending', lang) : t('setup.emailSendCode', lang)}
                 </button>
               </>
             )}
 
             {emailSent && !emailVerified && (
               <>
-                <p className='text-gray-600 mb-4'>Code sent to {email}</p>
+                <p className='text-gray-600 mb-4'>{t('setup.emailCodeSentTo', lang)} {email}</p>
                 <input
                   type='text'
                   value={emailCode}
                   onChange={(e) => setEmailCode(e.target.value)}
-                  placeholder='Enter 6-digit code'
+                  placeholder={t('setup.emailCodePlaceholder', lang)}
                   maxLength={6}
                   className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-gray-900'
                 />
@@ -621,7 +638,7 @@ function SetupContent() {
                   disabled={isLoading || !emailCode}
                   className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
                 >
-                  {isLoading ? 'Verifying...' : 'Verify'}
+                  {isLoading ? t('setup.emailVerifying', lang) : t('setup.emailVerify', lang)}
                 </button>
               </>
             )}
@@ -629,8 +646,8 @@ function SetupContent() {
             {emailVerified && (
               <div className='text-center py-4'>
                 <div className='text-4xl mb-2'>✅</div>
-                <p className='text-emerald-700 font-semibold'>Email verified</p>
-                <p className='text-sm text-gray-500 mt-1'>Continuing setup...</p>
+                <p className='text-emerald-700 font-semibold'>{t('setup.emailVerified', lang)}</p>
+                <p className='text-sm text-gray-500 mt-1'>{t('setup.continuingSetup', lang)}</p>
               </div>
             )}
 
@@ -639,7 +656,7 @@ function SetupContent() {
                 onClick={handleSkipEmail}
                 className='w-full mt-4 text-gray-500 py-2 text-sm'
               >
-                Skip for now
+                {t('setup.skipEmail', lang)}
               </button>
             )}
           </div>
@@ -649,11 +666,10 @@ function SetupContent() {
         {step === 'permission' && (
           <div>
             <h1 className='text-2xl font-bold mb-4 text-gray-900'>
-              Set Spending Limit
+              {t('setup.spendTitle', lang)}
             </h1>
             <p className='text-gray-600 mb-6'>
-              Choose how much Sippy can send per day on your behalf. You can
-              change this anytime.
+              {t('setup.spendSubtitle', lang)}
             </p>
 
             <div className='space-y-3 mb-6'>
@@ -667,34 +683,34 @@ function SetupContent() {
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <span className='font-bold text-gray-900'>${amount}/day</span>
+                  <span className='font-bold text-gray-900'>${amount}{t('setup.perDay', lang)}</span>
                   {amount === '100' && (
                     <span className='ml-2 text-sm text-emerald-600'>
-                      (Recommended)
+                      {t('setup.recommended', lang)}
                     </span>
                   )}
                 </button>
               ))}
 
               <div className='flex items-center gap-2 p-4 border-2 border-gray-200 rounded-lg'>
-                <span className='text-gray-700'>Custom: $</span>
+                <span className='text-gray-700'>{t('setup.customPrefix', lang)}</span>
                 <input
                   type='number'
                   value={dailyLimit}
                   onChange={(e) => setDailyLimit(e.target.value)}
                   className='w-24 p-2 border rounded text-gray-900'
                 />
-                <span className='text-gray-700'>/day</span>
+                <span className='text-gray-700'>{t('setup.perDay', lang)}</span>
               </div>
             </div>
 
             <div className='bg-blue-50 p-4 rounded-lg mb-6 text-sm'>
-              <p className='font-semibold text-blue-900'>What this means:</p>
+              <p className='font-semibold text-blue-900'>{t('setup.whatThisMeans', lang)}</p>
               <ul className='mt-2 space-y-1 text-blue-800'>
-                <li>Sippy can send up to ${dailyLimit} USDC per day</li>
-                <li>Limit resets automatically every day - no re-setup needed</li>
-                <li>You own your wallet and keys</li>
-                <li>You can revoke or change this anytime</li>
+                <li>{t('setup.spendExplain', lang).replace('{n}', dailyLimit)}</li>
+                <li>{t('setup.limitResets', lang)}</li>
+                <li>{t('setup.youOwnWallet', lang)}</li>
+                <li>{t('setup.revokable', lang)}</li>
               </ul>
             </div>
 
@@ -704,15 +720,15 @@ function SetupContent() {
               className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {isPreparingWallet
-                ? 'Preparing wallet...'
+                ? t('setup.preparingWallet', lang)
                 : isLoading
-                  ? 'Approving...'
-                  : 'Approve & Continue'}
+                  ? t('setup.approving', lang)
+                  : t('setup.approve', lang)}
             </button>
 
             {isPreparingWallet && (
               <p className='mt-2 text-sm text-gray-500 text-center animate-pulse'>
-                Setting up gas for your first transaction...
+                {t('setup.fundingGas', lang)}
               </p>
             )}
           </div>
@@ -723,16 +739,15 @@ function SetupContent() {
           <div className='text-center'>
             <div className='text-6xl mb-4'>🎉</div>
             <h1 className='text-2xl font-bold mb-4 text-gray-900'>
-              You&apos;re All Set!
+              {t('setup.allSet', lang)}
             </h1>
             <p className='text-gray-600 mb-6'>
-              Your wallet is ready. Return to WhatsApp and start sending
-              dollars!
+              {t('setup.walletReady', lang)}
             </p>
 
             {walletAddress && (
               <div className='bg-gray-100 p-4 rounded-lg text-left text-sm mb-6'>
-                <p className='font-semibold mb-2 text-gray-900'>Your wallet:</p>
+                <p className='font-semibold mb-2 text-gray-900'>{t('setup.yourWallet', lang)}</p>
                 <p className='font-mono text-xs text-gray-600 break-all'>
                   {walletAddress}
                 </p>
@@ -741,12 +756,12 @@ function SetupContent() {
 
             <div className='bg-gray-100 p-4 rounded-lg text-left text-sm'>
               <p className='font-semibold mb-2 text-gray-900'>
-                Try these commands:
+                {t('setup.tryCommands', lang)}
               </p>
               <ul className='space-y-1 font-mono text-gray-700'>
-                <li>• balance</li>
-                <li>• send $5 to +573001234567</li>
-                <li>• history</li>
+                <li>• {t('setup.cmdBalance', lang)}</li>
+                <li>• {t('setup.cmdSend', lang)}</li>
+                <li>• {t('setup.cmdHistory', lang)}</li>
               </ul>
             </div>
           </div>
@@ -754,7 +769,7 @@ function SetupContent() {
 
         {/* Footer */}
         <div className='mt-8 text-center text-xs text-gray-500'>
-          <p>Powered by Coinbase</p>
+          <p>{t('setup.poweredBy', lang)}</p>
           <p className='mt-1'>Network: {NETWORK}</p>
           {SIPPY_SPENDER_ADDRESS && (
             <p className='mt-1 font-mono text-[10px] truncate'>

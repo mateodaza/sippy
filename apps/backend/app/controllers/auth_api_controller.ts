@@ -12,7 +12,7 @@ import { emailService } from '#services/email_service'
 import { normalizeEmail, hashEmail, encryptEmail, decryptEmail } from '#utils/email_crypto'
 import UserPreference from '#models/user_preference'
 import { DateTime } from 'luxon'
-import { canonicalizePhone } from '#utils/phone'
+import { canonicalizePhone, getLanguageForPhone } from '#utils/phone'
 
 // ── UserPreference compatibility helpers (SH-002 → SH-003 window) ─────────────
 
@@ -368,6 +368,35 @@ export default class AuthApiController {
       }
 
       return response.status(200).json({ success: true })
+    } catch {
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * GET /api/user-language
+   *
+   * Returns the resolved language for the authenticated user.
+   * Checks DB preference first; falls back to phone-number detection.
+   */
+  async userLanguage(ctx: HttpContext) {
+    const { response } = ctx
+    try {
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
+
+      const validLanguages = ['en', 'es', 'pt'] as const
+      type ValidLanguage = (typeof validLanguages)[number]
+
+      if (pref?.preferredLanguage && (validLanguages as readonly string[]).includes(pref.preferredLanguage)) {
+        return response.status(200).json({
+          language: pref.preferredLanguage as ValidLanguage,
+          source: 'preference',
+        })
+      }
+
+      const language = getLanguageForPhone(dbPhone)
+      return response.status(200).json({ language, source: 'phone' })
     } catch {
       return response.status(500).json({ error: 'Internal server error' })
     }

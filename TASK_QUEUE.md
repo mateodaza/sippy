@@ -168,7 +168,7 @@
 - **Context:** `apps/backend/app/services/exchange_rate_service.ts` (existing phone prefix → currency mapping for reference)
 - **Files:** `apps/backend/app/utils/phone.ts`
 
-#### LN-002 [ ] Auto-set website language on auth
+#### LN-002 [x] Auto-set website language on auth
 - **What:** After phone verification on setup/wallet/settings pages, detect language from phone and apply it.
 - **Acceptance criteria:**
   - After successful `verifyOtp()`, call `getLanguageForPhone(phone)` to determine language

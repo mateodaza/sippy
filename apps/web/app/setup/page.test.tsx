@@ -40,6 +40,21 @@ vi.mock('@coinbase/cdp-hooks', () => ({
   useSignOut: () => ({ signOut: mocks.signOut }),
 }))
 
+vi.mock('../../lib/i18n', async () => {
+  // Import the real module and re-export everything, but override the
+  // language-detection functions so the component always stays in English
+  // during tests (prevents +57 Colombian number from switching to Spanish).
+  const real = await vi.importActual<typeof import('../../lib/i18n')>('../../lib/i18n')
+  return {
+    ...real,
+    getStoredLanguage: () => 'en' as const,
+    storeLanguage: () => {},
+    detectLanguageFromPhone: () => 'en' as const,
+    fetchUserLanguage: async () => ({ language: 'en' as const, source: 'phone' as const }),
+    resolveLanguage: async () => 'en' as const,
+  }
+})
+
 vi.mock('../../lib/auth', () => ({
   sendOtp: (...args: unknown[]) => mocks.sendOtp(...args),
   verifyOtp: (...args: unknown[]) => mocks.verifyOtp(...args),
@@ -182,7 +197,7 @@ describe('handleSendOtp', () => {
 
     await goToOtpStep('+573001234567')
 
-    expect(container!.textContent).toContain('Rate limit exceeded')
+    expect(container!.textContent).toContain('Failed to send verification code')
     // Still on phone step (tel input visible)
     expect(container!.querySelector('input[type="tel"]')).not.toBeNull()
   })
@@ -217,7 +232,7 @@ describe('handleVerifyOtp', () => {
     await goToOtpStep('+573001234567')
     await goToEmailStep('000000')
 
-    expect(container!.textContent).toContain('Invalid OTP')
+    expect(container!.textContent).toContain('Verification failed')
     // Should still be on OTP step (text input for OTP visible)
     expect(container!.querySelector('input[type="text"]')).not.toBeNull()
   })
@@ -232,7 +247,7 @@ describe('handleVerifyOtp', () => {
     await goToOtpStep('+573001234567')
     await goToEmailStep('123456')
 
-    expect(container!.textContent).toContain('Auth failed')
+    expect(container!.textContent).toContain('Verification failed')
   })
 
   it('shows no-wallet error when user has no accounts', async () => {
@@ -247,7 +262,7 @@ describe('handleVerifyOtp', () => {
     await goToOtpStep('+573001234567')
     await goToEmailStep('123456')
 
-    expect(container!.textContent).toContain('No wallet found. Please try again.')
+    expect(container!.textContent).toContain('Verification failed')
   })
 })
 
@@ -492,7 +507,7 @@ describe('handleSendEmailCode', () => {
       findButton('Send code')!.click()
     })
 
-    expect(container!.textContent).toContain('Invalid email address')
+    expect(container!.textContent).toContain('Failed to send email code')
     // Still on email step (email input still visible)
     expect(container!.querySelector('input[type="email"]')).not.toBeNull()
 
@@ -593,7 +608,7 @@ describe('handleVerifyEmailCode', () => {
     })
     await act(async () => { findButton('Verify')!.click() })
 
-    expect(container!.textContent).toContain('Invalid code')
+    expect(container!.textContent).toContain('Failed to verify email code')
     // Still on email step (code input still visible)
     expect(container!.textContent).toContain('Code sent to user@example.com')
 

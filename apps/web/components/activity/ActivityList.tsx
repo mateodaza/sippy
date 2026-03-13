@@ -2,17 +2,19 @@
 
 import {
   NormalizedTransaction,
-  formatRelativeTime,
   formatAddress,
 } from '@/lib/blockscout';
+import { Language, t, formatRelativeTime as formatRelativeTimeLocalized } from '@/lib/i18n';
 import { AddressOrPhone } from '@/components/shared/AddressOrPhone';
 import { useRouter } from 'next/navigation';
 
 interface ActivityListProps {
   transactions: NormalizedTransaction[];
+  lang?: Language;
 }
 
-export function ActivityList({ transactions }: ActivityListProps) {
+export function ActivityList({ transactions, lang }: ActivityListProps) {
+  const effectiveLang = lang ?? 'en';
   const router = useRouter();
 
   const handleRowClick = (txHash: string) => {
@@ -39,10 +41,10 @@ export function ActivityList({ transactions }: ActivityListProps) {
           </svg>
         </div>
         <p className='text-lg font-medium text-gray-600'>
-          No recent activity yet
+          {t('activity.noActivity', effectiveLang)}
         </p>
         <p className='text-sm text-gray-400 mt-1'>
-          Transactions will appear here
+          {t('activity.willAppear', effectiveLang)}
         </p>
       </div>
     );
@@ -52,10 +54,10 @@ export function ActivityList({ transactions }: ActivityListProps) {
     <div className='bg-white/90 backdrop-blur-xl rounded-2xl sm:rounded-[32px] shadow-[0_20px_50px_rgba(15,23,42,0.12)] sm:shadow-[0_28px_70px_rgba(15,23,42,0.16)] border border-white/50 overflow-hidden animate-fade-in-up animation-delay-100'>
       <div className='px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100'>
         <h2 className='text-lg sm:text-xl font-bold text-[#0f172a]'>
-          Recent Activity
+          {t('activity.recentActivity', effectiveLang)}
         </h2>
         <p className='text-xs sm:text-sm text-gray-600 mt-1'>
-          Last 10 transactions
+          {t('activity.last10', effectiveLang)}
         </p>
       </div>
 
@@ -65,7 +67,7 @@ export function ActivityList({ transactions }: ActivityListProps) {
             key={tx.hash}
             onClick={() => handleRowClick(tx.hash)}
             className='w-full px-4 sm:px-6 py-3 sm:py-4 hover:bg-green-50 transition-all text-left flex items-center gap-2 sm:gap-4 group relative'
-            title='Click to view receipt'
+            title={t('activity.viewReceipt', effectiveLang)}
           >
             {/* Direction Icon */}
             <div
@@ -125,8 +127,12 @@ export function ActivityList({ transactions }: ActivityListProps) {
             {/* Transaction Details */}
             <div className='flex-1 min-w-0'>
               <div className='flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap'>
-                <span className='font-semibold text-sm sm:text-base text-gray-900 capitalize'>
-                  {tx.direction || 'transaction'}
+                <span className='font-semibold text-sm sm:text-base text-gray-900'>
+                  {tx.direction === 'sent'
+                    ? t('activity.sent', effectiveLang)
+                    : tx.direction === 'received'
+                    ? t('activity.received', effectiveLang)
+                    : t('activity.transaction', effectiveLang)}
                 </span>
                 <span
                   className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium ${
@@ -139,21 +145,21 @@ export function ActivityList({ transactions }: ActivityListProps) {
                 </span>
                 {tx.status === 'pending' && (
                   <span className='inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800'>
-                    Pending
+                    {t('activity.pending', effectiveLang)}
                   </span>
                 )}
                 {tx.status === 'failed' && (
                   <span className='inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800'>
-                    Failed
+                    {t('activity.failed', effectiveLang)}
                   </span>
                 )}
               </div>
               <div className='text-xs sm:text-sm text-gray-500 truncate'>
                 {tx.direction === 'sent'
-                  ? 'To: '
+                  ? t('activity.to', effectiveLang)
                   : tx.direction === 'received'
-                  ? 'From: '
-                  : 'Address: '}
+                  ? t('activity.from', effectiveLang)
+                  : t('activity.address', effectiveLang)}
                 <AddressOrPhone address={tx.counterparty} flagSize='12px' />
               </div>
             </div>
@@ -178,7 +184,7 @@ export function ActivityList({ transactions }: ActivityListProps) {
                 <span className='hidden sm:inline'>{tx.token}</span>
               </div>
               <div className='text-xs text-gray-500 mt-1'>
-                {formatRelativeTime(tx.timestamp)}
+                {formatRelativeTimeLocalized(tx.timestamp, effectiveLang)}
               </div>
             </div>
 

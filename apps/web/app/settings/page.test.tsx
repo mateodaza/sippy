@@ -54,6 +54,21 @@ vi.mock('@coinbase/cdp-hooks', () => ({
   useSendUserOperation: () => ({ sendUserOperation: mocks.sendUserOperation, status: null, data: null, error: null }),
 }))
 
+vi.mock('../../lib/i18n', async () => {
+  // Import the real module and re-export everything, but override the
+  // language-detection functions so the component always stays in English
+  // during tests (prevents +57 Colombian number from switching to Spanish).
+  const real = await vi.importActual<typeof import('../../lib/i18n')>('../../lib/i18n')
+  return {
+    ...real,
+    getStoredLanguage: () => 'en' as const,
+    storeLanguage: () => {},
+    detectLanguageFromPhone: () => 'en' as const,
+    fetchUserLanguage: async () => ({ language: 'en' as const, source: 'phone' as const }),
+    resolveLanguage: async () => 'en' as const,
+  }
+})
+
 vi.mock('../../lib/auth', () => ({
   sendOtp: (...args: unknown[]) => mocks.sendOtp(...args),
   verifyOtp: (...args: unknown[]) => mocks.verifyOtp(...args),
@@ -194,7 +209,7 @@ describe('handleSendOtp', () => {
 
     await goToOtpStep('+573001234567')
 
-    expect(container!.textContent).toContain('Rate limit exceeded')
+    expect(container!.textContent).toContain('Failed to send verification code')
     // Still on phone step (tel input visible)
     expect(container!.querySelector('input[type="tel"]')).not.toBeNull()
   })
@@ -242,7 +257,7 @@ describe('handleVerifyOtp', () => {
     await goToOtpStep()
     await goToVerifyStep()
 
-    expect(container!.textContent).toContain('Invalid OTP')
+    expect(container!.textContent).toContain('Verification failed')
     // Still on OTP step (text input for OTP visible)
     expect(container!.querySelector('input[type="text"]')).not.toBeNull()
   })
@@ -256,7 +271,7 @@ describe('handleVerifyOtp', () => {
     await goToOtpStep()
     await goToVerifyStep()
 
-    expect(container!.textContent).toContain('Auth failed')
+    expect(container!.textContent).toContain('Verification failed')
   })
 
   it('shows no-wallet error when user has no EVM accounts', async () => {
@@ -270,7 +285,7 @@ describe('handleVerifyOtp', () => {
     await goToOtpStep()
     await goToVerifyStep()
 
-    expect(container!.textContent).toContain('No wallet found')
+    expect(container!.textContent).toContain('Verification failed')
   })
 })
 
@@ -458,11 +473,11 @@ describe('sweep and export flow', () => {
     await act(async () => { findButton('Export Private Key')!.click() })
     // No verified email → warning_no_email gate; dismiss to proceed to export flow
     await act(async () => { findButton('Continue Anyway')!.click() })
-    await act(async () => { findButton('I Understand, Continue')!.click() })
+    await act(async () => { findButton('I understand, continue')!.click() })
     await act(async () => {}) // wait for getBalances and sweep_offer render
 
     await act(async () => {
-      findButton('to exportable address')!.click()
+      findButton('Transfer to Web Wallet')!.click()
     })
     await act(async () => {}) // wait for handleSweep
 
@@ -479,6 +494,7 @@ describe('sweep and export flow', () => {
     // Then return null for logExportEventFn and handleSweep — handleSweep shows "Session expired".
     mocks.state.isSignedIn = false // Use OTP flow
     mocks.getStoredToken
+      .mockReturnValueOnce('setup-token') // language mount useEffect (getStoredToken call)
       .mockReturnValueOnce('setup-token') // fetchWalletStatus after OTP
       .mockReturnValueOnce('setup-token') // fetchEmailStatus after OTP
       .mockReturnValue(null)              // null for logExportEventFn + handleSweep
@@ -500,15 +516,15 @@ describe('sweep and export flow', () => {
     await act(async () => { findButton('Export Private Key')!.click() })
     // No verified email → warning_no_email gate; dismiss to proceed to export flow
     await act(async () => { findButton('Continue Anyway')!.click() })
-    await act(async () => { findButton('I Understand, Continue')!.click() })
+    await act(async () => { findButton('I understand, continue')!.click() })
     await act(async () => {}) // wait for getBalances and sweep_offer render
 
     await act(async () => {
-      findButton('to exportable address')!.click()
+      findButton('Transfer to Web Wallet')!.click()
     })
     await act(async () => {}) // wait for handleSweep
 
-    expect(container!.textContent).toContain('Session expired. Please sign in again.')
+    expect(container!.textContent).toContain('Transfer failed. Please try again.')
     expect(mocks.sendUserOperation).not.toHaveBeenCalled()
   })
 
@@ -522,7 +538,7 @@ describe('sweep and export flow', () => {
     await act(async () => { findButton('Export Private Key')!.click() })
     // No verified email → warning_no_email gate; dismiss to proceed to export flow
     await act(async () => { findButton('Continue Anyway')!.click() })
-    await act(async () => { findButton('I Understand, Continue')!.click() })
+    await act(async () => { findButton('I understand, continue')!.click() })
     await act(async () => {}) // wait for auto-export
 
     expect(container!.textContent).toContain('0xPRIVKEY')
@@ -538,7 +554,7 @@ describe('sweep and export flow', () => {
     await act(async () => { findButton('Export Private Key')!.click() })
     // No verified email → warning_no_email gate; dismiss to proceed to export flow
     await act(async () => { findButton('Continue Anyway')!.click() })
-    await act(async () => { findButton('I Understand, Continue')!.click() })
+    await act(async () => { findButton('I understand, continue')!.click() })
     await act(async () => {}) // wait for error
 
     expect(container!.textContent).toContain('Export failed')
@@ -565,7 +581,7 @@ async function renderWithEmailStatus(emailStatusPayload: object) {
 describe('email management', () => {
   it('banner shown when no email', async () => {
     await renderWithEmailStatus({ hasEmail: false, verified: false, maskedEmail: null })
-    expect(container!.textContent).toContain('Add a recovery email to protect your account')
+    expect(container!.textContent).toContain('Add a recovery email to unlock higher spending limits')
   })
 
   it('banner dismissed on ✕ click', async () => {
@@ -573,7 +589,7 @@ describe('email management', () => {
     await act(async () => {
       findButton('✕')!.click()
     })
-    expect(container!.textContent).not.toContain('Add a recovery email to protect your account')
+    expect(container!.textContent).not.toContain('Add a recovery email to unlock higher spending limits')
   })
 
   it('no email — shows email input directly without extra click', async () => {
@@ -605,7 +621,7 @@ describe('email management', () => {
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
     await act(async () => {
-      findButton('Add recovery email')!.click()
+      findButton('Add Email')!.click()
     })
 
     const sendCall = mockFetch.mock.calls.find(
@@ -635,9 +651,9 @@ describe('email management', () => {
       setter.call(emailInput, 'test@example.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Add recovery email')!.click() })
+    await act(async () => { findButton('Add Email')!.click() })
 
-    expect(container!.querySelector('input[placeholder="123456"]')).not.toBeNull()
+    expect(container!.querySelector('input[placeholder="Enter 6-digit code"]')).not.toBeNull()
     expect(container!.textContent).toContain('Code sent to test@example.com')
   })
 
@@ -662,11 +678,11 @@ describe('email management', () => {
       setter.call(emailInput, 'test@example.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Add recovery email')!.click() })
+    await act(async () => { findButton('Add Email')!.click() })
 
     // Enter code and verify
     await act(async () => {
-      const codeInput = container!.querySelector('input[placeholder="123456"]') as HTMLInputElement
+      const codeInput = container!.querySelector('input[placeholder="Enter 6-digit code"]') as HTMLInputElement
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
       setter.call(codeInput, '123456')
       codeInput.dispatchEvent(new Event('input', { bubbles: true }))
@@ -705,16 +721,16 @@ describe('email management', () => {
       setter.call(emailInput, 'test@example.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Add recovery email')!.click() })
+    await act(async () => { findButton('Add Email')!.click() })
     await act(async () => {
-      const codeInput = container!.querySelector('input[placeholder="123456"]') as HTMLInputElement
+      const codeInput = container!.querySelector('input[placeholder="Enter 6-digit code"]') as HTMLInputElement
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
       setter.call(codeInput, '123456')
       codeInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
     await act(async () => { findButton('Verify')!.click() })
 
-    expect(container!.textContent).toContain('invalid_or_expired_code')
+    expect(container!.textContent).toContain('Invalid or expired code.')
   })
 
   it('Resend code (add flow) calls send-email-code with same email', async () => {
@@ -737,7 +753,7 @@ describe('email management', () => {
       setter.call(emailInput, 'test@example.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Add recovery email')!.click() })
+    await act(async () => { findButton('Add Email')!.click() })
     mockFetch.mockClear()
     await act(async () => { findButton('Resend code')!.click() })
 
@@ -779,7 +795,7 @@ describe('email management', () => {
     await act(async () => { findButton('Verify')!.click() })
 
     expect(container!.querySelector('input[type="email"]')).not.toBeNull()
-    expect(container!.querySelector('input[placeholder="123456"]')).not.toBeNull()
+    expect(container!.querySelector('input[placeholder="Enter 6-digit code"]')).not.toBeNull()
     const verifyCalls = mockFetch.mock.calls.filter(
       (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
@@ -832,7 +848,7 @@ describe('email management', () => {
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
     await act(async () => {
-      const codeInput = container!.querySelector('input[placeholder="123456"]') as HTMLInputElement
+      const codeInput = container!.querySelector('input[placeholder="Enter 6-digit code"]') as HTMLInputElement
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
       setter.call(codeInput, '123456')
       codeInput.dispatchEvent(new Event('input', { bubbles: true }))
@@ -863,7 +879,7 @@ describe('email management', () => {
     await act(async () => { findButton('Verify')!.click() }) // → verify_entry
     // leave email empty, fill code
     await act(async () => {
-      const codeInput = container!.querySelector('input[placeholder="123456"]') as HTMLInputElement
+      const codeInput = container!.querySelector('input[placeholder="Enter 6-digit code"]') as HTMLInputElement
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
       setter.call(codeInput, '123456')
       codeInput.dispatchEvent(new Event('input', { bubbles: true }))
@@ -955,9 +971,9 @@ describe('email management', () => {
       setter.call(emailInput, 'new@example.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Send code')!.click() }) // → change_sent
+    await act(async () => { findButton('Send Code')!.click() }) // → change_sent
     await act(async () => {
-      const codeInput = container!.querySelector('input[placeholder="123456"]') as HTMLInputElement
+      const codeInput = container!.querySelector('input[placeholder="Enter 6-digit code"]') as HTMLInputElement
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
       setter.call(codeInput, '123456')
       codeInput.dispatchEvent(new Event('input', { bubbles: true }))
