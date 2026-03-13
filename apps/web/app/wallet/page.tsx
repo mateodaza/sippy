@@ -3,13 +3,10 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  useAuthenticateWithJWT,
-  useCurrentUser,
-  useIsSignedIn,
-  useSignOut,
   useSendUserOperation,
 } from '@coinbase/cdp-hooks';
-import { sendOtp, verifyOtp, storeToken, getStoredToken, getFreshToken, clearToken } from '@/lib/auth';
+import { getStoredToken, clearToken } from '@/lib/auth';
+import { useSessionGuard } from '@/lib/useSessionGuard';
 import {
   getBalances,
   getActivity,
@@ -24,8 +21,6 @@ import {
   Language,
   getStoredLanguage,
   storeLanguage,
-  detectLanguageFromPhone,
-  fetchUserLanguage,
   resolveLanguage,
   localizeError,
   t,
@@ -35,7 +30,6 @@ const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
 
-type AuthStep = 'phone' | 'otp' | 'authenticated';
 type SendStep = 'form' | 'confirm' | 'sending' | 'success' | 'error';
 type SendFrom = 'whatsapp' | 'web';
 
@@ -43,14 +37,34 @@ function WalletContent() {
   const searchParams = useSearchParams();
   const phoneFromUrl = searchParams.get('phone') || '';
 
-  // Auth state
-  const [authStep, setAuthStep] = useState<AuthStep>('phone');
-  const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl);
-  const [otp, setOtp] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
-  const [hasCheckedSession, setHasCheckedSession] = useState(false);
+  // Session guard hook
+  const {
+    isAuthenticated,
+    isCheckingSession,
+    expiryWarning,
+    reAuthVisible,
+    reAuthStep,
+    reAuthPhone,
+    reAuthOtp,
+    reAuthError,
+    reAuthLoading,
+    setReAuthPhone,
+    setReAuthOtp,
+    handleReAuthSendOtp,
+    handleReAuthVerifyOtp,
+    requireReauth,
+    dismissReAuth,
+    currentUser,
+    signOut,
+  } = useSessionGuard();
+
+  const isPhoneLocked = !!phoneFromUrl;
+  const isCdpConfigured = !!CDP_PROJECT_ID;
+
+  // Initialize re-auth phone from URL param
+  useEffect(() => {
+    if (phoneFromUrl) setReAuthPhone(phoneFromUrl);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Language state
   const [lang, setLang] = useState<Language>('en');
@@ -72,10 +86,6 @@ function WalletContent() {
   const [sendTxHash, setSendTxHash] = useState<string | null>(null);
 
   // CDP Hooks
-  const { authenticateWithJWT } = useAuthenticateWithJWT();
-  const { currentUser } = useCurrentUser();
-  const { isSignedIn } = useIsSignedIn();
-  const { signOut } = useSignOut();
   const {
     sendUserOperation,
     status: sendOpStatus,
@@ -83,11 +93,8 @@ function WalletContent() {
     error: sendOpError,
   } = useSendUserOperation();
 
-  const smartAccountAddress =
-    currentUser?.evmSmartAccountObjects?.[0]?.address ?? null;
-
-  const isPhoneLocked = !!phoneFromUrl;
-  const isCdpConfigured = !!CDP_PROJECT_ID;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const smartAccountAddress = (currentUser as any)?.evmSmartAccountObjects?.[0]?.address ?? null;
 
   // Active balance based on selected send-from wallet
   const activeBalance = sendFrom === 'whatsapp' ? eoaBalances : smartBalances;
@@ -154,111 +161,11 @@ function WalletContent() {
   }, [smartAccountAddress, BACKEND_URL]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (authStep !== 'authenticated') return;
+    if (!isAuthenticated) return;
     fetchWalletData();
     const interval = setInterval(fetchWalletData, 30000);
     return () => clearInterval(interval);
-  }, [authStep, fetchWalletData]);
-
-  // ============================================================================
-  // Auth
-  // ============================================================================
-
-  useEffect(() => {
-    const checkExistingSession = async () => {
-      if (hasCheckedSession) return;
-      if (isSignedIn === undefined) return;
-      if (isSignedIn && !currentUser) return;
-
-      setHasCheckedSession(true);
-
-      if (!isSignedIn) {
-        setIsCheckingSession(false);
-        return;
-      }
-
-      const addr =
-        currentUser!.evmSmartAccounts?.[0] ||
-        currentUser!.evmAccounts?.[0];
-      if (!addr) {
-        setIsCheckingSession(false);
-        return;
-      }
-
-      if (!getFreshToken()) {
-        clearToken();
-        await signOut();
-        setIsCheckingSession(false);
-        return;
-      }
-
-      setAuthStep('authenticated');
-      setIsCheckingSession(false);
-    };
-
-    checkExistingSession();
-  }, [isSignedIn, currentUser, hasCheckedSession]);
-
-  const handleSendOtp = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      if (!isCdpConfigured) throw new Error('CDP not configured.');
-
-      if (isSignedIn && currentUser) {
-        setAuthStep('authenticated');
-        return;
-      }
-
-      const formattedPhone = phoneNumber.startsWith('+')
-        ? phoneNumber
-        : `+${phoneNumber}`;
-      setPhoneNumber(formattedPhone);
-      await sendOtp(formattedPhone);
-      setAuthStep('otp');
-    } catch (err) {
-      const rawMsg = err instanceof Error ? err.message : '';
-      if (
-        rawMsg.toLowerCase().includes('already') ||
-        rawMsg.toLowerCase().includes('session')
-      ) {
-        if (currentUser) {
-          setAuthStep('authenticated');
-          return;
-        }
-      }
-      setError(localizeError(err, 'otp-send', lang));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const token = await verifyOtp(phoneNumber, otp);
-      storeToken(token);
-      const phoneLang = detectLanguageFromPhone(phoneNumber)
-      storeLanguage(phoneLang)
-      setLang(phoneLang)
-      fetchUserLanguage(token, BACKEND_URL)
-        .then(({ language }) => { storeLanguage(language); setLang(language) })
-        .catch(() => {})
-      const { user } = await authenticateWithJWT();
-      const addr = user.evmSmartAccounts?.[0] || user.evmAccounts?.[0];
-      if (!addr)
-        throw new Error(
-          'No wallet found. Set up your wallet first at sippy.lat/setup'
-        );
-
-      setAuthStep('authenticated');
-    } catch (err) {
-      setError(localizeError(err, 'otp-verify', lang));
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [isAuthenticated, fetchWalletData]);
 
   // ============================================================================
   // Send flow
@@ -429,7 +336,7 @@ function WalletContent() {
     );
   }
 
-  if (authStep !== 'authenticated') {
+  if (!isAuthenticated && !isCheckingSession) {
     return (
       <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
         <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
@@ -444,18 +351,18 @@ function WalletContent() {
             </div>
           )}
 
-          {error && (
+          {reAuthError && (
             <div className='mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
-              {error}
+              {reAuthError}
             </div>
           )}
 
-          {authStep === 'phone' && (
+          {reAuthStep === 'phone' && (
             <>
               <input
                 type='tel'
-                value={phoneNumber}
-                onChange={(e) => !isPhoneLocked && setPhoneNumber(e.target.value)}
+                value={reAuthPhone}
+                onChange={(e) => !isPhoneLocked && setReAuthPhone(e.target.value)}
                 placeholder='+573001234567'
                 disabled={isPhoneLocked}
                 className={`w-full p-3 border rounded-lg mb-4 text-gray-900 ${
@@ -466,37 +373,37 @@ function WalletContent() {
                 <p className='text-sm text-gray-500 mb-4'>{t('wallet.phoneFromWhatsapp', lang)}</p>
               )}
               <button
-                onClick={handleSendOtp}
-                disabled={isLoading || !phoneNumber || !isCdpConfigured}
+                onClick={handleReAuthSendOtp}
+                disabled={reAuthLoading || !reAuthPhone || !isCdpConfigured}
                 className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                {isLoading ? t('wallet.sending', lang) : t('wallet.sendCode', lang)}
+                {reAuthLoading ? t('wallet.sending', lang) : t('wallet.sendCode', lang)}
               </button>
             </>
           )}
 
-          {authStep === 'otp' && (
+          {reAuthStep === 'otp' && (
             <>
               <p className='text-gray-600 mb-4'>
-                {t('wallet.codeSentTo', lang)} {phoneNumber}
+                {t('wallet.codeSentTo', lang)} {reAuthPhone}
               </p>
               <input
                 type='text'
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                value={reAuthOtp}
+                onChange={(e) => setReAuthOtp(e.target.value.replace(/\D/g, ''))}
                 placeholder='123456'
                 maxLength={6}
                 className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-gray-900'
               />
               <button
-                onClick={handleVerifyOtp}
-                disabled={isLoading || otp.length !== 6}
+                onClick={handleReAuthVerifyOtp}
+                disabled={reAuthLoading || reAuthOtp.length !== 6}
                 className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                {isLoading ? t('wallet.verifying', lang) : t('wallet.verify', lang)}
+                {reAuthLoading ? t('wallet.verifying', lang) : t('wallet.verify', lang)}
               </button>
               <button
-                onClick={() => setAuthStep('phone')}
+                onClick={() => setReAuthOtp('')}
                 className='w-full mt-2 text-gray-500 py-2'
               >
                 {t('wallet.back', lang)}
@@ -515,6 +422,69 @@ function WalletContent() {
   return (
     <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 p-4'>
       <div className='max-w-md mx-auto space-y-4'>
+
+        {/* Expiry warning banner */}
+        {expiryWarning && (
+          <div className='flex items-center justify-between p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-800 text-sm'>
+            <span>Your session expires soon. Re-authenticate to continue.</span>
+            <button onClick={requireReauth} className='ml-3 font-semibold underline whitespace-nowrap'>
+              Re-auth
+            </button>
+          </div>
+        )}
+
+        {/* Inline re-auth overlay */}
+        {reAuthVisible && (
+          <div className='bg-white rounded-2xl shadow-xl p-6 border border-amber-200'>
+            <div className='flex items-center justify-between mb-4'>
+              <h2 className='text-lg font-semibold text-gray-900'>Session expired</h2>
+              <button onClick={dismissReAuth} className='text-gray-400 hover:text-gray-600 text-xl leading-none'>&times;</button>
+            </div>
+            {reAuthError && (
+              <div className='mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
+                {reAuthError}
+              </div>
+            )}
+            {reAuthStep === 'phone' && (
+              <>
+                <input
+                  type='tel'
+                  value={reAuthPhone}
+                  onChange={(e) => setReAuthPhone(e.target.value)}
+                  placeholder='+573001234567'
+                  className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+                />
+                <button
+                  onClick={handleReAuthSendOtp}
+                  disabled={reAuthLoading || !reAuthPhone}
+                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                >
+                  {reAuthLoading ? t('wallet.sending', lang) : t('wallet.sendCode', lang)}
+                </button>
+              </>
+            )}
+            {reAuthStep === 'otp' && (
+              <>
+                <p className='text-gray-600 mb-3 text-sm'>{t('wallet.codeSentTo', lang)} {reAuthPhone}</p>
+                <input
+                  type='text'
+                  value={reAuthOtp}
+                  onChange={(e) => setReAuthOtp(e.target.value.replace(/\D/g, ''))}
+                  placeholder='123456'
+                  maxLength={6}
+                  className='w-full p-3 border rounded-lg mb-3 text-center text-2xl tracking-widest text-gray-900'
+                />
+                <button
+                  onClick={handleReAuthVerifyOtp}
+                  disabled={reAuthLoading || reAuthOtp.length !== 6}
+                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                >
+                  {reAuthLoading ? t('wallet.verifying', lang) : t('wallet.verify', lang)}
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Wallet cards */}
         <div className='grid grid-cols-2 gap-3'>
@@ -752,11 +722,9 @@ function WalletContent() {
             onClick={async () => {
               clearToken();
               await signOut();
-              setAuthStep('phone');
               setEoaBalances(null);
               setSmartBalances(null);
               setActivity([]);
-              setHasCheckedSession(false);
               resetSend();
             }}
             className='text-sm text-gray-500 hover:text-gray-700'

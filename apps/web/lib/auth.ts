@@ -73,3 +73,19 @@ export function getFreshToken(): string | null {
   if (isTokenExpired(token)) return null
   return token
 }
+
+export function getTokenSecondsRemaining(token: string): number {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return 0
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    while (base64.length % 4 !== 0) {
+      base64 += '='
+    }
+    const payload = JSON.parse(atob(base64))
+    if (typeof payload.exp !== 'number') return 0
+    return Math.max(0, payload.exp - Date.now() / 1000)
+  } catch {
+    return 0
+  }
+}

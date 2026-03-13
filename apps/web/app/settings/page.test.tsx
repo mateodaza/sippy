@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   storeToken: vi.fn(),
   getStoredToken: vi.fn(() => null as string | null),
   clearToken: vi.fn(),
+  isTokenExpired: vi.fn(() => false),
+  getTokenSecondsRemaining: vi.fn(() => 3600),
   authenticateWithJWT: vi.fn(),
   createSpendPermission: vi.fn(),
   revokeSpendPermission: vi.fn(),
@@ -78,7 +80,11 @@ vi.mock('../../lib/auth', () => ({
   verifyOtp: (...args: unknown[]) => mocks.verifyOtp(...args),
   storeToken: (...args: unknown[]) => mocks.storeToken(...args),
   getStoredToken: () => mocks.getStoredToken(),
+  // getFreshToken delegates to getStoredToken so authenticated test setups work automatically
+  getFreshToken: () => mocks.getStoredToken(),
   clearToken: () => mocks.clearToken(),
+  isTokenExpired: (...args: unknown[]) => mocks.isTokenExpired(...args),
+  getTokenSecondsRemaining: (...args: unknown[]) => mocks.getTokenSecondsRemaining(...args),
 }))
 
 vi.mock('../../lib/blockscout', () => ({
@@ -197,15 +203,15 @@ describe('handleSendOtp', () => {
     expect(container!.textContent).toContain('+573001234567')
   })
 
-  it('normalizes phone without + prefix', async () => {
+  it('sends phone as-is without + prefix normalization', async () => {
     mocks.sendOtp.mockResolvedValue(undefined)
     await renderPage()
 
     await goToOtpStep('573001234567')
 
-    expect(mocks.sendOtp).toHaveBeenCalledWith('+573001234567')
-    // phoneNumber state should be normalized — shown in OTP step text
-    expect(container!.textContent).toContain('+573001234567')
+    // Hook sends reAuthPhone as-is (no normalization)
+    expect(mocks.sendOtp).toHaveBeenCalledWith('573001234567')
+    expect(container!.textContent).toContain('573001234567')
   })
 
   it('shows error and stays on phone step when sendOtp throws', async () => {
@@ -214,7 +220,8 @@ describe('handleSendOtp', () => {
 
     await goToOtpStep('+573001234567')
 
-    expect(container!.textContent).toContain('Failed to send verification code')
+    // Hook sets reAuthError to err.message directly
+    expect(container!.textContent).toContain('Rate limit exceeded')
     // Still on phone step (tel input visible)
     expect(container!.querySelector('input[type="tel"]')).not.toBeNull()
   })
@@ -262,7 +269,8 @@ describe('handleVerifyOtp', () => {
     await goToOtpStep()
     await goToVerifyStep()
 
-    expect(container!.textContent).toContain('Verification failed')
+    // Hook sets reAuthError to err.message directly
+    expect(container!.textContent).toContain('Invalid OTP')
     // Still on OTP step (text input for OTP visible)
     expect(container!.querySelector('input[type="text"]')).not.toBeNull()
   })
@@ -276,10 +284,11 @@ describe('handleVerifyOtp', () => {
     await goToOtpStep()
     await goToVerifyStep()
 
-    expect(container!.textContent).toContain('Verification failed')
+    // Hook sets reAuthError to err.message directly
+    expect(container!.textContent).toContain('Auth failed')
   })
 
-  it('shows no-wallet error when user has no EVM accounts', async () => {
+  it('authenticates even when user has no EVM accounts (no-wallet check removed from hook)', async () => {
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token')
     mocks.authenticateWithJWT.mockResolvedValue({
@@ -290,7 +299,9 @@ describe('handleVerifyOtp', () => {
     await goToOtpStep()
     await goToVerifyStep()
 
-    expect(container!.textContent).toContain('Verification failed')
+    // Hook does not check wallet presence — sets isAuthenticated = true
+    expect(mocks.storeToken).toHaveBeenCalledWith('jwt-token')
+    expect(container!.textContent).toContain('Wallet Security')
   })
 })
 
@@ -499,10 +510,11 @@ describe('sweep and export flow', () => {
     // Then return null for logExportEventFn and handleSweep — handleSweep shows "Session expired".
     mocks.state.isSignedIn = false // Use OTP flow
     mocks.getStoredToken
+      .mockReturnValueOnce('setup-token') // useSessionGuard hook useState lazy init
       .mockReturnValueOnce('setup-token') // language mount useEffect (getStoredToken call)
       .mockReturnValueOnce('setup-token') // fetchWalletStatus after OTP
       .mockReturnValueOnce('setup-token') // fetchEmailStatus after OTP
-      .mockReturnValue(null)              // null for logExportEventFn + handleSweep
+      .mockReturnValue(null)              // fetchPrivacyStatus (early return) + export flow null tokens
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token')
     mocks.authenticateWithJWT.mockResolvedValue({

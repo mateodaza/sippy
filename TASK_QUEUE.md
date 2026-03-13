@@ -366,7 +366,7 @@
 > **Deliverable:** M1 #3
 > **Priority:** P2
 
-#### WS-001 [ ] Session guard hook for authenticated pages
+#### WS-001 [x] Session guard hook for authenticated pages
 - **What:** `useSessionGuard()` hook that wraps token checking + re-auth flow.
 - **Acceptance criteria:**
   - New hook: `apps/web/lib/useSessionGuard.ts`
