@@ -281,7 +281,7 @@
 - **Context:** M1_PLAN.md Phase 4.1
 - **Files:** `apps/backend/app/utils/message_parser.ts`, `apps/backend/app/controllers/webhook_controller.ts`, `apps/backend/app/utils/messages.ts`, `apps/backend/app/types/index.ts`, `apps/backend/start/env.ts`
 
-#### TX-002 [ ] Self-send block + concurrent send protection
+#### TX-002 [x] Self-send block + concurrent send protection
 - **What:** Block sending to yourself. Block multiple simultaneous sends from same user.
 - **Acceptance criteria:**
   - Self-send: `fromPhone === toPhone` (after canonicalization) → "You cannot send money to yourself." (trilingual)

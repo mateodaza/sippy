@@ -37,6 +37,8 @@ import {
   formatConfirmationPrompt,
   formatTransferCancelled,
   formatNoPendingTransfer,
+  formatSelfSendMessage,
+  formatConcurrentSendMessage,
 } from '#utils/messages'
 
 import UserPreference from '#models/user_preference'
@@ -49,8 +51,10 @@ import { canonicalizePhone } from '#utils/phone'
 
 // Exported so tests can seed/inspect state directly
 export const pendingTransactions = new Map<string, PendingTransaction>()
+export const activeSends = new Set<string>()
 
 const CONFIRM_THRESHOLD_DEFAULT = 5
+const ACTIVE_SEND_TIMEOUT_MS = 60_000  // safety valve — clears stuck sends
 const PENDING_TX_TTL_MS = 2 * 60 * 1000  // 2 minutes
 
 // GC interval — removes entries that were never confirmed/cancelled.
@@ -161,7 +165,9 @@ export async function routeCommand(
   sendHandler: typeof handleSendCommand = handleSendCommand,
   generateResponseFn: typeof generateResponse = generateResponse,
   sendMessageFn: typeof sendTextMessage = sendTextMessage,
-  pendingTxs: Map<string, PendingTransaction> = pendingTransactions
+  pendingTxs: Map<string, PendingTransaction> = pendingTransactions,
+  activeSendsSet: Set<string> = activeSends,
+  activeSendTimeoutMs: number = ACTIVE_SEND_TIMEOUT_MS
 ): Promise<void> {
   try {
     switch (command.command) {
@@ -181,21 +187,38 @@ export async function routeCommand(
         await balanceHandler(phoneNumber, lang, rateCtx.senderRate, rateCtx.senderCurrency)
         break
 
-      case 'send':
+      case 'send': {
+        // Self-send check — before any processing (fail fast)
+        const canonicalRecipient = command.recipient ? canonicalizePhone(command.recipient) : null
+        if (canonicalRecipient && canonicalRecipient === phoneNumber) {
+          await sendMessageFn(phoneNumber, formatSelfSendMessage(lang), lang)
+          return
+        }
         if (command.amount && command.recipient) {
           const threshold = env.get('CONFIRM_THRESHOLD') ?? CONFIRM_THRESHOLD_DEFAULT
           if (command.amount <= threshold) {
-            // At or below threshold — execute immediately
-            await sendHandler(
-              phoneNumber,
-              command.amount,
-              command.recipient,
-              lang,
-              rateCtx.senderRate,
-              rateCtx.senderCurrency,
-              rateCtx.recipientRate,
-              rateCtx.recipientCurrency
-            )
+            // At or below threshold — concurrent guard + execute immediately
+            if (activeSendsSet.has(phoneNumber)) {
+              await sendMessageFn(phoneNumber, formatConcurrentSendMessage(lang), lang)
+              return
+            }
+            activeSendsSet.add(phoneNumber)
+            const safetyTimer = setTimeout(() => activeSendsSet.delete(phoneNumber), activeSendTimeoutMs)
+            try {
+              await sendHandler(
+                phoneNumber,
+                command.amount,
+                command.recipient,
+                lang,
+                rateCtx.senderRate,
+                rateCtx.senderCurrency,
+                rateCtx.recipientRate,
+                rateCtx.recipientCurrency
+              )
+            } finally {
+              clearTimeout(safetyTimer)
+              activeSendsSet.delete(phoneNumber)
+            }
           } else {
             // Above threshold — store pending, ask for confirmation
             // New send overwrites any existing pending tx (one per user)
@@ -215,6 +238,7 @@ export async function routeCommand(
           await sendMessageFn(phoneNumber, formatInvalidSendFormat(lang), lang)
         }
         break
+      }
 
       case 'confirm': {
         const pending = pendingTxs.get(phoneNumber)
@@ -223,6 +247,12 @@ export async function routeCommand(
           if (pending) pendingTxs.delete(phoneNumber)  // clean up expired entry
           await sendMessageFn(phoneNumber, formatNoPendingTransfer(lang), lang)
         } else {
+          // Guard 2: concurrent-send check — BEFORE consuming pending tx
+          // If in-flight, reject and leave pending tx intact for retry
+          if (activeSendsSet.has(phoneNumber)) {
+            await sendMessageFn(phoneNumber, formatConcurrentSendMessage(lang), lang)
+            return
+          }
           // Atomic consume: delete BEFORE awaiting sendHandler.
           // A second concurrent confirm will find no entry and get "No pending transfer."
           // No rollback on failure: if sendHandler returns false or throws after the
@@ -230,13 +260,20 @@ export async function routeCommand(
           // would allow a second YES to double-execute the transfer.
           // The send paths guarantee they return true on a successful transfer regardless
           // of notification outcome, so false/throw here means the transfer did not occur.
-          // The outer try/catch (line 318) handles any throw and sends formatCommandErrorMessage.
+          // The outer try/catch handles any throw and sends formatCommandErrorMessage.
           pendingTxs.delete(phoneNumber)
-          await sendHandler(
-            phoneNumber, pending.amount, pending.recipient, pending.lang,
-            rateCtx.senderRate, rateCtx.senderCurrency,
-            rateCtx.recipientRate, rateCtx.recipientCurrency
-          )
+          activeSendsSet.add(phoneNumber)
+          const safetyTimer = setTimeout(() => activeSendsSet.delete(phoneNumber), activeSendTimeoutMs)
+          try {
+            await sendHandler(
+              phoneNumber, pending.amount, pending.recipient, pending.lang,
+              rateCtx.senderRate, rateCtx.senderCurrency,
+              rateCtx.recipientRate, rateCtx.recipientCurrency
+            )
+          } finally {
+            clearTimeout(safetyTimer)
+            activeSendsSet.delete(phoneNumber)
+          }
         }
         break
       }
@@ -338,7 +375,8 @@ export async function dispatchCommand(
   context: import('#services/db').ContextMessage[] = [],
   balanceHandler: typeof handleBalanceCommand = handleBalanceCommand,
   sendHandler: typeof handleSendCommand = handleSendCommand,
-  pendingTxs: Map<string, PendingTransaction> = pendingTransactions
+  pendingTxs: Map<string, PendingTransaction> = pendingTransactions,
+  activeSendsSet: Set<string> = activeSends
 ): Promise<void> {
   // Cancel stale pending tx if user sends an unrelated command
   clearPendingIfUnrelated(from, command, pendingTxs)
@@ -349,7 +387,7 @@ export async function dispatchCommand(
     undefined
   const rateCtx = await fetchRateContext(from, recipientPhone)
   await routeCommand(from, command, lang, rateCtx, context, balanceHandler, sendHandler,
-    generateResponse, sendTextMessage, pendingTxs)
+    generateResponse, sendTextMessage, pendingTxs, activeSendsSet)
 }
 
 export default class WebhookController {

@@ -865,3 +865,21 @@ export function formatNoPendingTransfer(lang: Lang): string {
   }
   return m[lang]()
 }
+
+export function formatSelfSendMessage(lang: Lang): string {
+  const m = {
+    en: () => `You cannot send money to yourself.`,
+    es: () => `No puedes enviarte dinero a ti mismo.`,
+    pt: () => `Voce nao pode enviar dinheiro para voce mesmo.`,
+  }
+  return m[lang]()
+}
+
+export function formatConcurrentSendMessage(lang: Lang): string {
+  const m = {
+    en: () => `A transfer is already in progress. Please wait.`,
+    es: () => `Ya hay una transferencia en proceso. Por favor espera.`,
+    pt: () => `Uma transferencia ja esta em andamento. Por favor aguarde.`,
+  }
+  return m[lang]()
+}
