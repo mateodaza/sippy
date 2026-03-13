@@ -53,3 +53,24 @@ export const webSendEventSchema = z.object({
 })
 
 export type WebSendEvent = z.infer<typeof webSendEventSchema>
+
+/**
+ * Schema for POST /api/send body validation.
+ * Enforces positive amount, $10,000 cap, and max 6 decimal places (USDC).
+ */
+export const sendFromWebBodySchema = z.object({
+  to: z.string().min(1),
+  amount: z.coerce.number()
+    .positive()
+    .max(10_000)
+    .refine(
+      (n) => {
+        const str = n.toString()
+        const dot = str.indexOf('.')
+        return dot === -1 || str.length - dot - 1 <= 6
+      },
+      { message: 'Amount cannot have more than 6 decimal places' }
+    ),
+})
+
+export type SendFromWebBody = z.infer<typeof sendFromWebBodySchema>

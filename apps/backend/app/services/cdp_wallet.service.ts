@@ -12,6 +12,17 @@ import { type UserWallet, type SecurityLimits, type TransferResult } from '#type
 import { query } from '#services/db'
 import { registerWalletWithIndexer } from '#services/indexer.service'
 
+/**
+ * Compatibility helper: queries phone_registry with canonical phone first,
+ * falls back to bare-digit format for pre-SH-003 rows.
+ * Remove after SH-003 backfill is confirmed complete.
+ */
+async function lookupByPhone(phoneNumber: string): Promise<{ rows: any[] }> {
+  const result = await query('SELECT * FROM phone_registry WHERE phone_number = $1', [phoneNumber])
+  if (result.rows.length > 0 || !phoneNumber.startsWith('+')) return result
+  return query('SELECT * FROM phone_registry WHERE phone_number = $1', [phoneNumber.slice(1)])
+}
+
 // USDC contract on Arbitrum (native USDC)
 const USDC_CONTRACT = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
 const USDC_DECIMALS = 6
@@ -28,9 +39,12 @@ function getCDPClient(): CdpClient {
   return cdpClient
 }
 
+export const DAILY_LIMIT_UNVERIFIED = 50   // $50 USD
+export const DAILY_LIMIT_VERIFIED   = 500  // $500 USD
+
 // Security limits for MVP
 const SECURITY_LIMITS: SecurityLimits = {
-  dailyLimit: 500, // $500 USD per day
+  dailyLimit: DAILY_LIMIT_VERIFIED, // $500 USD per day
   transactionLimit: 100, // $100 USD per transaction
   sessionDurationHours: 24, // 24 hour sessions
 }
@@ -40,7 +54,7 @@ const SECURITY_LIMITS: SecurityLimits = {
  */
 export async function createUserWallet(phoneNumber: string): Promise<UserWallet> {
   try {
-    logger.info(`Creating CDP wallet for +${phoneNumber}...`)
+    logger.info(`Creating CDP wallet for ${phoneNumber}...`)
 
     const cdp = getCDPClient()
 
@@ -107,15 +121,17 @@ export async function createUserWallet(phoneNumber: string): Promise<UserWallet>
  */
 export async function getUserWallet(phoneNumber: string): Promise<UserWallet | null> {
   try {
-    const result = await query<{
-      phone_number: string
-      cdp_wallet_name: string
-      wallet_address: string
-      created_at: string
-      last_activity: string
-      daily_spent: string
-      last_reset_date: string
-    }>('SELECT * FROM phone_registry WHERE phone_number = $1', [phoneNumber])
+    const result = (await lookupByPhone(phoneNumber)) as {
+      rows: Array<{
+        phone_number: string
+        cdp_wallet_name: string
+        wallet_address: string
+        created_at: string
+        last_activity: string
+        daily_spent: string
+        last_reset_date: string
+      }>
+    }
 
     if (result.rows.length === 0) {
       return null
@@ -152,19 +168,30 @@ export async function updateLastActivity(phoneNumber: string): Promise<boolean> 
     let dailySpent = userWallet.dailySpent
     if (userWallet.lastResetDate !== today) {
       dailySpent = 0
-      logger.info(`Daily spending reset for +${phoneNumber}`)
+      logger.info(`Daily spending reset for ${phoneNumber}`)
     }
 
-    await query(
+    let updateResult = await query(
       `UPDATE phone_registry
        SET last_activity = $1, daily_spent = $2, last_reset_date = $3
        WHERE phone_number = $4`,
       [now, dailySpent, today, phoneNumber]
     )
 
+    // Compatibility: fall back to bare-digit format for pre-SH-003 rows.
+    // Remove after SH-003 backfill is confirmed complete.
+    if (updateResult.rowCount === 0 && phoneNumber.startsWith('+')) {
+      updateResult = await query(
+        `UPDATE phone_registry
+         SET last_activity = $1, daily_spent = $2, last_reset_date = $3
+         WHERE phone_number = $4`,
+        [now, dailySpent, today, phoneNumber.slice(1)]
+      )
+    }
+
     return true
   } catch (error) {
-    logger.error(`Failed to update activity for +${phoneNumber}: %o`, error)
+    logger.error(`Failed to update activity for ${phoneNumber}: %o`, error)
     return false
   }
 }
@@ -183,35 +210,70 @@ export async function isSessionValid(phoneNumber: string): Promise<boolean> {
 }
 
 /**
+ * Pure helper: compute whether a transfer is allowed given email verification status.
+ * No DB calls — directly unit-testable.
+ */
+export function computeSecurityLimits(
+  emailVerified: boolean,
+  dailySpent: number,
+  amount: number
+): { allowed: boolean; reason?: string; emailVerified?: boolean; limitType?: 'transaction' | 'daily' } {
+  const effectiveLimit = emailVerified ? DAILY_LIMIT_VERIFIED : DAILY_LIMIT_UNVERIFIED
+
+  if (amount > SECURITY_LIMITS.transactionLimit) {
+    return {
+      allowed: false,
+      reason: `Transaction limit exceeded. Max: $${SECURITY_LIMITS.transactionLimit} per transaction`,
+      limitType: 'transaction',
+    }
+  }
+
+  if (dailySpent + amount > effectiveLimit) {
+    const remaining = effectiveLimit - dailySpent
+    return {
+      allowed: false,
+      reason: `Daily limit exceeded. Remaining: $${remaining.toFixed(2)}`,
+      emailVerified,
+      limitType: 'daily',
+    }
+  }
+
+  return { allowed: true, emailVerified }
+}
+
+/**
  * Check if transfer amount is within security limits
  */
 export async function checkSecurityLimits(
   phoneNumber: string,
   amount: number
-): Promise<{ allowed: boolean; reason?: string }> {
+): Promise<{ allowed: boolean; reason?: string; emailVerified?: boolean; limitType?: 'transaction' | 'daily' }> {
   const userWallet = await getUserWallet(phoneNumber)
   if (!userWallet) {
     return { allowed: false, reason: 'User wallet not found' }
   }
 
-  // Check transaction limit
-  if (amount > SECURITY_LIMITS.transactionLimit) {
-    return {
-      allowed: false,
-      reason: `Transaction limit exceeded. Max: $${SECURITY_LIMITS.transactionLimit} per transaction`,
+  // Look up email_verified from user_preferences.
+  // During SH-003 transition, a canonical (+...) row with email_verified = false/null
+  // can coexist with a bare-digit row with email_verified = true (documented at
+  // db.ts — setUserLanguage comment). Check both formats: if either has email_verified
+  // = true, treat the user as verified. Remove after SH-003 backfill confirmed complete.
+  const canonicalResult = await query(
+    'SELECT email_verified FROM user_preferences WHERE phone_number = $1',
+    [phoneNumber]
+  )
+  let emailVerified = canonicalResult.rows[0]?.email_verified === true
+  if (!emailVerified && phoneNumber.startsWith('+')) {
+    const bareResult = await query(
+      'SELECT email_verified FROM user_preferences WHERE phone_number = $1',
+      [phoneNumber.slice(1)]
+    )
+    if (bareResult.rows[0]?.email_verified === true) {
+      emailVerified = true
     }
   }
 
-  // Check daily limit
-  if (userWallet.dailySpent + amount > SECURITY_LIMITS.dailyLimit) {
-    const remaining = SECURITY_LIMITS.dailyLimit - userWallet.dailySpent
-    return {
-      allowed: false,
-      reason: `Daily limit exceeded. Remaining: $${remaining.toFixed(2)}`,
-    }
-  }
-
-  return { allowed: true }
+  return computeSecurityLimits(emailVerified, userWallet.dailySpent, amount)
 }
 
 /**
@@ -345,7 +407,7 @@ export async function getAllWallets(): Promise<
     )
 
     return result.rows.map((row) => ({
-      phone: `+${row.phone_number}`,
+      phone: row.phone_number.startsWith('+') ? row.phone_number : `+${row.phone_number}`,
       wallet: row.cdp_wallet_name,
       address: row.wallet_address,
     }))
@@ -360,4 +422,61 @@ export async function getAllWallets(): Promise<
  */
 export function getSecurityLimits(): SecurityLimits {
   return { ...SECURITY_LIMITS }
+}
+
+/**
+ * Pure helper: compute accumulated daily_spent after a transfer.
+ * Resets to `amount` if `lastResetDate` differs from `today`; otherwise accumulates.
+ */
+export function computeNewDailySpent(
+  currentDailySpent: number,
+  lastResetDate: string,
+  amount: number,
+  today: string
+): number {
+  return lastResetDate !== today ? amount : currentDailySpent + amount
+}
+
+/**
+ * Get the security limit status for a user (daily spent, effective limit, remaining).
+ * Works for both legacy and embedded wallet users.
+ * Never returns null.
+ */
+export async function getSecurityLimitStatus(phoneNumber: string): Promise<{
+  dailySpent: number
+  effectiveLimit: number
+  remaining: number
+  emailVerified: boolean
+}> {
+  // Dual-format email_verified lookup (SH-003 transition)
+  const canonicalResult = await query(
+    'SELECT email_verified FROM user_preferences WHERE phone_number = $1',
+    [phoneNumber]
+  )
+  let emailVerified = canonicalResult.rows[0]?.email_verified === true
+  if (!emailVerified && phoneNumber.startsWith('+')) {
+    const bareResult = await query(
+      'SELECT email_verified FROM user_preferences WHERE phone_number = $1',
+      [phoneNumber.slice(1)]
+    )
+    if (bareResult.rows[0]?.email_verified === true) {
+      emailVerified = true
+    }
+  }
+
+  const userWallet = await getUserWallet(phoneNumber)
+  const today = new Date().toDateString()
+  let dailySpent = userWallet?.dailySpent ?? 0
+  if (userWallet && userWallet.lastResetDate !== today) {
+    dailySpent = 0
+  }
+
+  const effectiveLimit = emailVerified ? DAILY_LIMIT_VERIFIED : DAILY_LIMIT_UNVERIFIED
+
+  return {
+    dailySpent,
+    effectiveLimit,
+    remaining: Math.max(0, effectiveLimit - dailySpent),
+    emailVerified,
+  }
 }

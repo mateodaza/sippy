@@ -4,6 +4,7 @@ import {
   getUserBalance,
   isSessionValid,
   updateLastActivity,
+  getSecurityLimitStatus,
 } from '#services/cdp_wallet.service'
 import {
   getEmbeddedWallet,
@@ -20,9 +21,19 @@ import {
   formatBalanceErrorMessage,
   formatSpendingLimitBalance,
   formatCompleteSetupMessage,
+  formatDailySecurityLimitBalance,
 } from '#utils/messages'
 import { toUserErrorMessage } from '#utils/errors'
 import { getRefuelService } from '#services/refuel.service'
+
+export function appendSecurityLimitSuffix(
+  limitStatus: { remaining: number; effectiveLimit: number },
+  lang: Lang
+): string {
+  const remaining = limitStatus.remaining.toFixed(2)
+  const total = limitStatus.effectiveLimit.toFixed(2)
+  return `\n\n${formatDailySecurityLimitBalance(remaining, total, lang)}`
+}
 
 export async function handleBalanceCommand(
   phoneNumber: string,
@@ -85,6 +96,9 @@ export async function handleBalanceCommand(
       message += `\n\n${formatLowTransferBalanceMessage(lang)}`
     }
 
+    const limitStatus = await getSecurityLimitStatus(phoneNumber)
+    message += appendSecurityLimitSuffix(limitStatus, lang)
+
     await sendTextMessage(phoneNumber, message, lang)
 
     logger.info(`Balance sent to +${phoneNumber}: ${balance} USD`)
@@ -136,6 +150,9 @@ async function handleEmbeddedBalance(
   } else {
     message += `\n\n${formatCompleteSetupMessage(phoneNumber, lang)}`
   }
+
+  const limitStatus = await getSecurityLimitStatus(phoneNumber)
+  message += appendSecurityLimitSuffix(limitStatus, lang)
 
   await sendTextMessage(phoneNumber, message, lang)
 

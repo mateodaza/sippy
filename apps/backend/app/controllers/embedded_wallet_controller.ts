@@ -22,16 +22,24 @@ import {
   sendToAddress,
   sendToPhoneNumber,
 } from '#services/embedded_wallet.service'
-import { getUserWallet } from '#services/cdp_wallet.service'
+import { getUserWallet, checkSecurityLimits } from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
 import { registerWalletWithIndexer } from '#services/indexer.service'
-import { exportEventSchema, webSendEventSchema } from '#types/schemas'
+import { exportEventSchema, webSendEventSchema, sendFromWebBodySchema } from '#types/schemas'
 import { NETWORK, USDC_ADDRESSES, USDC_DECIMALS } from '#config/network'
 import UserPreference from '#models/user_preference'
 import { emailService } from '#services/email_service'
+import { canonicalizePhone } from '#utils/phone'
+import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
+import { velocityService } from '#services/velocity_service'
 
-// CDP client for spend permission queries
-const cdp = new CdpClient()
+// CDP client for spend permission queries — lazy to avoid crashing on import
+// when CDP credentials are not configured (e.g., in test environments)
+let _cdp: CdpClient | null = null
+function getCdpClient(): CdpClient {
+  if (!_cdp) _cdp = new CdpClient()
+  return _cdp
+}
 
 // Required for phone hashing in export audit logs and web send logs
 const EXPORT_AUDIT_SECRET = env.get('EXPORT_AUDIT_SECRET', '')
@@ -50,30 +58,48 @@ export default class EmbeddedWalletController {
     try {
       const { phoneNumber, walletAddress } = cdpUser!
 
-      // Normalize phone number (remove leading +)
-      const normalizedPhone = phoneNumber.replace(/^\+/, '')
+      const canonicalPhone = canonicalizePhone(phoneNumber)
+      if (!canonicalPhone) {
+        return response.status(400).json({ error: 'Invalid phone number' })
+      }
 
-      logger.info(`Registering embedded wallet for +${normalizedPhone}: ${walletAddress}`)
+      logger.info(`Registering embedded wallet for ${canonicalPhone}: ${walletAddress}`)
 
-      // Upsert the wallet - all users are embedded (no legacy migration needed)
-      await query(
-        `INSERT INTO phone_registry (phone_number, cdp_wallet_name, wallet_address, created_at, last_activity, daily_spent, last_reset_date)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (phone_number) DO UPDATE SET
-           wallet_address = $3,
-           last_activity = $5`,
-        [
-          normalizedPhone,
-          `embedded-${normalizedPhone}`, // Use embedded prefix for wallet name
-          walletAddress,
-          Date.now(),
-          Date.now(),
-          0,
-          new Date().toDateString(),
-        ]
-      )
+      // Compatibility: if a bare-digit row exists (pre-SH-003), update it in place to
+      // avoid creating a duplicate row (ON CONFLICT won't match bare-digit vs canonical key).
+      // Remove after SH-003 backfill is confirmed complete.
+      let registered = false
+      if (canonicalPhone.startsWith('+')) {
+        const bareResult = await query(
+          `UPDATE phone_registry
+           SET cdp_wallet_name = $1, wallet_address = $2, last_activity = $3
+           WHERE phone_number = $4`,
+          [`embedded-${canonicalPhone}`, walletAddress, Date.now(), canonicalPhone.slice(1)]
+        )
+        registered = bareResult.rowCount > 0
+      }
 
-      logger.info(`Embedded wallet registered for +${normalizedPhone}`)
+      if (!registered) {
+        // No pre-SH-003 row — upsert with canonical phone
+        await query(
+          `INSERT INTO phone_registry (phone_number, cdp_wallet_name, wallet_address, created_at, last_activity, daily_spent, last_reset_date)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (phone_number) DO UPDATE SET
+             wallet_address = $3,
+             last_activity = $5`,
+          [
+            canonicalPhone,
+            `embedded-${canonicalPhone}`,
+            walletAddress,
+            Date.now(),
+            Date.now(),
+            0,
+            new Date().toDateString(),
+          ]
+        )
+      }
+
+      logger.info(`Embedded wallet registered for ${canonicalPhone}`)
 
       // Auto-refuel new wallet so user has gas for spend permission creation
       const refuelService = getRefuelService()
@@ -90,7 +116,7 @@ export default class EmbeddedWalletController {
       }
 
       // Register with indexer (fire-and-forget — never blocks signup)
-      registerWalletWithIndexer(walletAddress, normalizedPhone).catch((err) =>
+      registerWalletWithIndexer(walletAddress, canonicalPhone).catch((err) =>
         logger.warn('Indexer registration failed (non-blocking): %o', err)
       )
 
@@ -116,7 +142,7 @@ export default class EmbeddedWalletController {
       const { phoneNumber, walletAddress } = cdpUser!
       const { dailyLimit } = request.body()
 
-      logger.info(`Registering spend permission for +${phoneNumber.replace(/^\+/, '')}`)
+      logger.info(`Registering spend permission for ${phoneNumber}`)
       logger.info(`   Wallet: ${walletAddress}`)
       logger.info(`   Daily limit: $${dailyLimit}`)
 
@@ -125,7 +151,7 @@ export default class EmbeddedWalletController {
       const spenderAddress = spenderAccount.address
 
       // Find the permission onchain by matching criteria
-      const allPermissions = await cdp.evm.listSpendPermissions({
+      const allPermissions = await getCdpClient().evm.listSpendPermissions({
         address: walletAddress as `0x${string}`,
       })
 
@@ -177,16 +203,26 @@ export default class EmbeddedWalletController {
       }
 
       // Store the permission with onchain-derived limit
-      const normalizedPhone = phoneNumber.replace(/^\+/, '')
-      await query(
+      const canonicalPhone = phoneNumber  // already canonical from cdpUser JWT
+
+      // Try UPDATE with canonical phone; fall back to bare-digit for pre-SH-003 rows
+      let updateResult = await query(
         `UPDATE phone_registry
          SET spend_permission_hash = $1, daily_limit = $2, permission_created_at = $3
          WHERE phone_number = $4`,
-        [permissionHash, onchainAllowance, Date.now(), normalizedPhone]
+        [permissionHash, onchainAllowance, Date.now(), canonicalPhone]
       )
+      if (updateResult.rowCount === 0 && canonicalPhone.startsWith('+')) {
+        updateResult = await query(
+          `UPDATE phone_registry
+           SET spend_permission_hash = $1, daily_limit = $2, permission_created_at = $3
+           WHERE phone_number = $4`,
+          [permissionHash, onchainAllowance, Date.now(), canonicalPhone.slice(1)]
+        )
+      }
 
       logger.info(
-        `Spend permission registered for +${normalizedPhone} with $${onchainAllowance}/day limit`
+        `Spend permission registered for ${canonicalPhone} with $${onchainAllowance}/day limit`
       )
 
       return response.json({ success: true, permissionHash, dailyLimit: onchainAllowance })
@@ -207,10 +243,10 @@ export default class EmbeddedWalletController {
   async revokePermission({ request, response, cdpUser }: HttpContext) {
     try {
       const { phoneNumber } = cdpUser!
-      const dbPhone = phoneNumber.replace(/^\+/, '')
+      const dbPhone = phoneNumber  // already canonical from cdpUser JWT
 
       // Gate enforcement: if user has a verified email, require a valid gateToken.
-      const pref = await UserPreference.findBy('phoneNumber', dbPhone)
+      const pref = await findUserPrefByPhone(dbPhone)
       if (pref?.emailVerified === true) {
         const gateToken = request.body()?.gateToken
         if (!gateToken || typeof gateToken !== 'string') {
@@ -222,9 +258,10 @@ export default class EmbeddedWalletController {
         }
       }
 
-      logger.info(`Revoking spend permission for +${dbPhone}`)
+      logger.info(`Revoking spend permission for ${dbPhone}`)
 
-      await query(
+      // Try UPDATE with canonical phone; fall back to bare-digit for pre-SH-003 rows
+      let revokeResult = await query(
         `UPDATE phone_registry
          SET spend_permission_hash = NULL,
              daily_limit = NULL,
@@ -232,8 +269,18 @@ export default class EmbeddedWalletController {
          WHERE phone_number = $1`,
         [dbPhone]
       )
+      if (revokeResult.rowCount === 0 && dbPhone.startsWith('+')) {
+        await query(
+          `UPDATE phone_registry
+           SET spend_permission_hash = NULL,
+               daily_limit = NULL,
+               permission_created_at = NULL
+           WHERE phone_number = $1`,
+          [dbPhone.slice(1)]
+        )
+      }
 
-      logger.info(`Spend permission revoked for +${dbPhone}`)
+      logger.info(`Spend permission revoked for ${dbPhone}`)
 
       return response.json({ success: true })
     } catch (error) {
@@ -315,9 +362,9 @@ export default class EmbeddedWalletController {
   async walletStatus({ response, cdpUser }: HttpContext) {
     try {
       const { phoneNumber } = cdpUser!
-      const normalizedPhone = phoneNumber.replace(/^\+/, '')
+      const normalizedPhone = phoneNumber  // already canonical from cdpUser JWT
 
-      const result = await query<{
+      let result = await query<{
         wallet_address: string
         spend_permission_hash: string | null
         daily_limit: string | null
@@ -327,6 +374,20 @@ export default class EmbeddedWalletController {
          WHERE phone_number = $1`,
         [normalizedPhone]
       )
+
+      // Compatibility: fall back to bare-digit format for pre-SH-003 rows
+      if (result.rows.length === 0 && normalizedPhone.startsWith('+')) {
+        result = await query<{
+          wallet_address: string
+          spend_permission_hash: string | null
+          daily_limit: string | null
+        }>(
+          `SELECT wallet_address, spend_permission_hash, daily_limit
+           FROM phone_registry
+           WHERE phone_number = $1`,
+          [normalizedPhone.slice(1)]
+        )
+      }
 
       if (result.rows.length === 0) {
         return response.json({
@@ -418,9 +479,12 @@ export default class EmbeddedWalletController {
         return response.status(400).json({ error: 'Phone number is required' })
       }
 
-      const cleanPhone = phone.replace(/^\+/, '')
+      const canonicalPhone = canonicalizePhone(phone)
+      if (!canonicalPhone) {
+        return response.status(400).json({ error: 'Invalid phone number' })
+      }
 
-      const wallet = await getUserWallet(cleanPhone)
+      const wallet = await getUserWallet(canonicalPhone)
 
       if (!wallet) {
         const sippyWhatsAppNumber = env.get('SIPPY_WHATSAPP_NUMBER', '')
@@ -431,14 +495,14 @@ export default class EmbeddedWalletController {
         return response.status(404).json({
           error: 'Wallet not found',
           message: `This phone number hasn't started using Sippy yet.`,
-          phone: `+${cleanPhone}`,
+          phone: canonicalPhone,
           ...(whatsappLink && { whatsappLink }),
         })
       }
 
       return response.json({
         address: wallet.walletAddress,
-        phone: `+${cleanPhone}`,
+        phone: canonicalPhone,
         isNew: !wallet.lastActivity || wallet.lastActivity === wallet.createdAt,
       })
     } catch (error) {
@@ -504,30 +568,57 @@ export default class EmbeddedWalletController {
   async sendFromWeb({ request, response, cdpUser }: HttpContext) {
     try {
       const { phoneNumber } = cdpUser!
-      const fromPhone = phoneNumber.replace(/^\+/, '')
+      const fromPhone = phoneNumber  // already canonical from cdpUser JWT
 
-      const { to, amount } = request.body() as { to?: unknown; amount?: unknown }
-
-      if (!to || typeof to !== 'string') {
-        return response.status(422).json({ error: 'Invalid recipient' })
+      const parsed = sendFromWebBodySchema.safeParse(request.body())
+      if (!parsed.success) {
+        return response.status(422).json({ error: 'Invalid request' })
       }
 
-      const numAmount = Number.parseFloat(String(amount))
-      if (Number.isNaN(numAmount) || numAmount <= 0) {
-        return response.status(422).json({ error: 'Invalid amount' })
-      }
+      const { to, amount: numAmount } = parsed.data
 
       const isAddress = /^0x[a-fA-F0-9]{40}$/.test(to)
-      const cleanPhone = to.replace(/[\s\-().]/g, '').replace(/^\+/, '')
-      const isPhone = !isAddress && /^[1-9]\d{7,14}$/.test(cleanPhone)
 
-      if (!isAddress && !isPhone) {
-        return response.status(422).json({ error: 'Recipient must be a phone number or 0x address' })
+      // Resolve recipient for phone-based sends
+      let canonicalRecipient: string | null = null
+      if (!isAddress) {
+        canonicalRecipient = canonicalizePhone(to)
+        if (!canonicalRecipient) {
+          return response.status(422).json({ error: 'Recipient must be a phone number or 0x address' })
+        }
+        // Self-send check (phone)
+        if (canonicalRecipient === fromPhone) {
+          return response.status(422).json({ error: 'Cannot send to yourself' })
+        }
+      } else {
+        // Self-send check (address)
+        const senderAddress = cdpUser!.walletAddress
+        if (to.toLowerCase() === senderAddress.toLowerCase()) {
+          return response.status(422).json({ error: 'Cannot send to yourself' })
+        }
       }
 
-      const result = isAddress
-        ? await sendToAddress(fromPhone, to, numAmount)
-        : await sendToPhoneNumber(fromPhone, cleanPhone, numAmount)
+      // Security limits (tiered daily limit: $50 unverified / $500 verified)
+      const limitsCheck = await checkSecurityLimits(fromPhone, numAmount)
+      if (!limitsCheck.allowed) {
+        return response.status(422).json({ error: limitsCheck.reason || 'Daily limit exceeded' })
+      }
+
+      // Velocity check (rate, volume, fan-out limits)
+      const velocityCheck = velocityService.check(fromPhone, canonicalRecipient || to, numAmount, 'en')
+      if (!velocityCheck.allowed) {
+        return response.status(429).json({ error: velocityCheck.reason || 'Too many sends' })
+      }
+
+      let result
+      if (canonicalRecipient) {
+        result = await sendToPhoneNumber(fromPhone, canonicalRecipient, numAmount)
+      } else {
+        result = await sendToAddress(fromPhone, to, numAmount)
+      }
+
+      // Record velocity after successful send
+      velocityService.recordSend(fromPhone, canonicalRecipient || to, numAmount)
 
       return response.json({
         success: true,
@@ -535,9 +626,106 @@ export default class EmbeddedWalletController {
         remainingAllowance: result.remainingAllowance,
       })
     } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Send failed'
       logger.error('sendFromWeb error: %o', error)
-      return response.status(500).json({ error: msg })
+      const msg = error instanceof Error ? error.message : ''
+      const safeMessages = ['Insufficient balance', 'Amount has too many decimal places']
+      const userMsg = safeMessages.some((s) => msg.includes(s)) ? msg : 'Internal server error'
+      return response.status(500).json({ error: userMsg })
+    }
+  }
+
+  /**
+   * POST /api/set-privacy
+   *
+   * Updates the phone_visible preference for the authenticated user.
+   */
+  async setPrivacy(ctx: HttpContext) {
+    const { request, response } = ctx
+    try {
+      const body = request.body() as { phoneVisible?: unknown }
+      if (typeof body.phoneVisible !== 'boolean') {
+        return response.status(422).json({ error: 'phoneVisible must be a boolean' })
+      }
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const prefKey = await resolveUserPrefKey(dbPhone)
+      await UserPreference.updateOrCreate(
+        { phoneNumber: prefKey },
+        { phoneVisible: body.phoneVisible }
+      )
+      return response.status(200).json({ success: true })
+    } catch (error) {
+      logger.error('setPrivacy error: %o', error)
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * GET /api/privacy-status
+   *
+   * Returns the phone_visible preference for the authenticated user.
+   */
+  async privacyStatus(ctx: HttpContext) {
+    const { response } = ctx
+    try {
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
+      return response.status(200).json({ phoneVisible: pref?.phoneVisible ?? true })
+    } catch (error) {
+      logger.error('privacyStatus error: %o', error)
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * GET /api/profile
+   *
+   * Public endpoint — returns wallet address, canonical phone, and phone_visible
+   * preference for the given phone number. Used by public profile pages.
+   */
+  async getProfile({ request, response }: HttpContext) {
+    try {
+      const phone = request.input('phone') as string | undefined
+      if (!phone || typeof phone !== 'string') {
+        return response.status(400).json({ error: 'Phone number is required' })
+      }
+
+      const canonicalPhone = canonicalizePhone(phone)
+      if (!canonicalPhone) {
+        return response.status(400).json({ error: 'Invalid phone number' })
+      }
+
+      // Query phone_registry for wallet_address
+      let result = await query<{ wallet_address: string }>(
+        `SELECT wallet_address FROM phone_registry WHERE phone_number = $1`,
+        [canonicalPhone]
+      )
+
+      // Compatibility: bare-digit fallback for pre-SH-003 rows
+      if (result.rows.length === 0 && canonicalPhone.startsWith('+')) {
+        result = await query<{ wallet_address: string }>(
+          `SELECT wallet_address FROM phone_registry WHERE phone_number = $1`,
+          [canonicalPhone.slice(1)]
+        )
+      }
+
+      if (result.rows.length === 0) {
+        return response.status(404).json({ error: 'Wallet not found' })
+      }
+
+      const row = result.rows[0]
+
+      // Query user_preferences for phone_visible (with pre-SH-003 fallback)
+      const pref = await findUserPrefByPhone(canonicalPhone)
+      const phoneVisible = pref?.phoneVisible ?? true
+
+      return response.json({
+        address: row.wallet_address,
+        phone: canonicalPhone,
+        phoneVisible,
+      })
+    } catch (error) {
+      logger.error('Get profile error: %o', error)
+      return response.status(500).json({ error: 'Internal server error' })
     }
   }
 }

@@ -113,11 +113,15 @@ class OtpService {
 
   startCleanupTimer(): void {
     this.cleanupTimer = setInterval(() => {
-      const now = Date.now()
-      for (const [phone, entry] of this.otpStore) {
-        if (now > entry.expiresAt) this.otpStore.delete(phone)
+      try {
+        const now = Date.now()
+        for (const [phone, entry] of this.otpStore) {
+          if (now > entry.expiresAt) this.otpStore.delete(phone)
+        }
+        this.purgeExpiredRateLimitBuckets()
+      } catch (err) {
+        console.error('OtpService cleanup error:', err)
       }
-      this.purgeExpiredRateLimitBuckets()
     }, CLEANUP_INTERVAL)
   }
 

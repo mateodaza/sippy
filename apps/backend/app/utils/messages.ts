@@ -7,6 +7,9 @@
 
 export type Lang = 'en' | 'es' | 'pt'
 
+import { DAILY_LIMIT_VERIFIED } from '#services/cdp_wallet.service'
+import type { AmountErrorCode } from '#types/index'
+
 const RECEIPT_BASE_URL = process.env.RECEIPT_BASE_URL || 'https://www.sippy.lat/receipt/'
 const FUND_URL = process.env.FUND_URL || 'https://www.sippy.lat/fund'
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.sippy.lat'
@@ -447,7 +450,7 @@ export function formatInvalidSendFormat(lang: Lang = 'en'): string {
 }
 
 export function formatHistoryMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const url = `https://www.sippy.lat/profile/+${phoneNumber}`
+  const url = `https://www.sippy.lat/profile/${phoneNumber}`
   const m = {
     en: () => `Transaction history\n\nView your activity at:\n${url}`,
     es: () => `Historial de transacciones\n\nVer tu actividad en:\n${url}`,
@@ -457,7 +460,7 @@ export function formatHistoryMessage(phoneNumber: string, lang: Lang = 'en'): st
 }
 
 export function formatSettingsMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
       `Manage your Sippy settings:\n\n${settingsUrl}\n\n` +
@@ -522,7 +525,7 @@ export function formatTransferFailedMessage(errorMessage: string, lang: Lang = '
 }
 
 export function formatSetupRequiredMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
       `You need to complete your wallet setup before sending.\n\nPlease finish setup here:\n${setupUrl}`,
@@ -539,7 +542,7 @@ export function formatDailyLimitExceededMessage(
   phoneNumber: string,
   lang: Lang = 'en'
 ): string {
-  const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
       `Amount exceeds your daily limit of $${dailyLimit}.\n\nYou can change your limit here:\n${settingsUrl}`,
@@ -549,6 +552,29 @@ export function formatDailyLimitExceededMessage(
       `O valor excede seu limite diario de $${dailyLimit}.\n\nVoce pode alterar seu limite aqui:\n${settingsUrl}`,
   }
   return m[lang]()
+}
+
+export function formatTieredDailyLimitExceededMessage(
+  dailyLimit: number,
+  _phoneNumber: string,
+  lang: Lang = 'en',
+  emailVerified: boolean
+): string {
+  if (emailVerified) {
+    const m = {
+      en: `You've reached your daily limit of $${dailyLimit}. Try again tomorrow.`,
+      es: `Has alcanzado tu limite diario de $${dailyLimit}. Intenta de nuevo manana.`,
+      pt: `Voce atingiu seu limite diario de $${dailyLimit}. Tente novamente amanha.`,
+    }
+    return m[lang]
+  } else {
+    const m = {
+      en: `You've reached your daily limit of $${dailyLimit}. Add a recovery email at sippy.lat/settings to increase it to $${DAILY_LIMIT_VERIFIED}/day.`,
+      es: `Has alcanzado tu limite diario de $${dailyLimit}. Agrega un correo de recuperacion en sippy.lat/settings para aumentarlo a $${DAILY_LIMIT_VERIFIED}/dia.`,
+      pt: `Voce atingiu seu limite diario de $${dailyLimit}. Adicione um email de recuperacao em sippy.lat/settings para aumenta-lo para $${DAILY_LIMIT_VERIFIED}/dia.`,
+    }
+    return m[lang]
+  }
 }
 
 export function formatSpendingLimitInfo(
@@ -586,8 +612,21 @@ export function formatSpendingLimitBalance(
   return m[lang]()
 }
 
+export function formatDailySecurityLimitBalance(
+  remaining: string,
+  total: string,
+  lang: Lang = 'en'
+): string {
+  const m = {
+    en: () => `Daily limit: $${remaining} remaining of $${total}`,
+    es: () => `Limite diario: $${remaining} restante de $${total}`,
+    pt: () => `Limite diario: $${remaining} restante de $${total}`,
+  }
+  return m[lang]()
+}
+
 export function formatCompleteSetupMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () => `Complete setup to enable sending:\n${setupUrl}`,
     es: () => `Completa la configuracion para habilitar envios:\n${setupUrl}`,
@@ -597,7 +636,7 @@ export function formatCompleteSetupMessage(phoneNumber: string, lang: Lang = 'en
 }
 
 export function formatWalletNotFullySetupMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
       `Your wallet is created but not fully set up.\n\nPlease complete the setup to enable sending:\n${setupUrl}`,
@@ -610,7 +649,7 @@ export function formatWalletNotFullySetupMessage(phoneNumber: string, lang: Lang
 }
 
 export function formatNewUserSetupMessage(phoneNumber: string, lang: Lang = 'en'): string {
-  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent('+' + phoneNumber)}`
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
       `Welcome to Sippy.\n\n` +
@@ -675,6 +714,39 @@ export function formatLanguageSetMessage(langName: string, lang: Lang = 'en'): s
     en: () => `Language set to ${langName}.`,
     es: () => `Idioma establecido a ${langName}.`,
     pt: () => `Idioma definido para ${langName}.`,
+  }
+  return m[lang]()
+}
+
+export function formatPrivacySetMessage(action: 'on' | 'off', lang: Lang = 'en'): string {
+  const m = {
+    en: () => action === 'on'
+      ? 'Your phone number is now visible on your profile.'
+      : 'Your phone number is now hidden on your profile.',
+    es: () => action === 'on'
+      ? 'Tu numero de telefono ahora es visible en tu perfil.'
+      : 'Tu numero de telefono ahora esta oculto en tu perfil.',
+    pt: () => action === 'on'
+      ? 'Seu numero de telefone agora esta visivel no seu perfil.'
+      : 'Seu numero de telefone agora esta oculto no seu perfil.',
+  }
+  return m[lang]()
+}
+
+export function formatAccountSuspendedMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `Your account has been temporarily suspended.`,
+    es: () => `Tu cuenta ha sido suspendida temporalmente.`,
+    pt: () => `Sua conta foi suspensa temporariamente.`,
+  }
+  return m[lang]()
+}
+
+export function formatMaintenanceMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `Sippy is undergoing maintenance.`,
+    es: () => `Sippy esta en mantenimiento.`,
+    pt: () => `Sippy esta em manutencao.`,
   }
   return m[lang]()
 }
@@ -749,4 +821,169 @@ export function buttonBalance(lang: Lang = 'en'): string {
 export function buttonHelp(lang: Lang = 'en'): string {
   const m = { en: 'Help', es: 'Ayuda', pt: 'Ajuda' }
   return m[lang]
+}
+
+// ============================================================================
+// Transaction confirmation helpers
+// ============================================================================
+
+// Country codes that are exactly 1 digit (NANP block: US, Canada, Caribbean)
+const ONE_DIGIT_CC_PREFIXES = new Set(['+1'])
+
+// Country codes that are exactly 3 digits — LATAM region coverage
+// Bolivia +591, Ecuador +593, Paraguay +595, Uruguay +598
+// Central America: Guatemala +502, El Salvador +503, Honduras +504,
+//                  Nicaragua +505, Costa Rica +506, Panama +507, Haiti +509
+// Caribbean/Guiana: Curaçao/Sint Maarten +599, Aruba +297, Suriname +597,
+//                   Belize +501, Guyana +592
+const THREE_DIGIT_CC_PREFIXES = new Set([
+  '+297', '+501', '+502', '+503', '+504', '+505', '+506', '+507', '+509',
+  '+591', '+592', '+593', '+595', '+597', '+598', '+599',
+])
+
+function maskPhoneForConfirmation(phone: string): string {
+  // phone is always E.164 (starts with '+')
+  // Output: +CC***XXXX — full country code visible, subscriber masked, last 4 shown
+  if (!phone.startsWith('+') || phone.length < 6) return phone
+  let prefixLen: number
+  if (ONE_DIGIT_CC_PREFIXES.has(phone.slice(0, 2))) {
+    prefixLen = 2  // +1XXXXXXXXXX  → "+1"
+  } else if (THREE_DIGIT_CC_PREFIXES.has(phone.slice(0, 4))) {
+    prefixLen = 4  // +591XXXXXXX   → "+591"
+  } else {
+    prefixLen = 3  // +52/+55/+57…  → "+57" (2-digit CC default)
+  }
+  return `${phone.slice(0, prefixLen)}***${phone.slice(-4)}`
+}
+
+export function formatConfirmationPrompt(amount: number, recipient: string, lang: Lang): string {
+  const amt = formatCurrencyUSD(amount)
+  const to = maskPhoneForConfirmation(recipient)
+  const m = {
+    en: () => `Send ${amt} to ${to}? Reply YES to confirm or NO to cancel.`,
+    es: () => `¿Enviar ${amt} a ${to}? Responde SI para confirmar o NO para cancelar.`,
+    pt: () => `Enviar ${amt} para ${to}? Responda SIM para confirmar ou NAO para cancelar.`,
+  }
+  return m[lang]()
+}
+
+export function formatTransferCancelled(lang: Lang): string {
+  const m = {
+    en: () => `Transfer cancelled.`,
+    es: () => `Transferencia cancelada.`,
+    pt: () => `Transferência cancelada.`,
+  }
+  return m[lang]()
+}
+
+export function formatNoPendingTransfer(lang: Lang): string {
+  const m = {
+    en: () => `No pending transfer.`,
+    es: () => `No hay transferencia pendiente.`,
+    pt: () => `Nenhuma transferência pendente.`,
+  }
+  return m[lang]()
+}
+
+export function formatSelfSendMessage(lang: Lang): string {
+  const m = {
+    en: () => `You cannot send money to yourself.`,
+    es: () => `No puedes enviarte dinero a ti mismo.`,
+    pt: () => `Voce nao pode enviar dinheiro para voce mesmo.`,
+  }
+  return m[lang]()
+}
+
+export function formatConcurrentSendMessage(lang: Lang): string {
+  const m = {
+    en: () => `A transfer is already in progress. Please wait.`,
+    es: () => `Ya hay una transferencia en proceso. Por favor espera.`,
+    pt: () => `Uma transferencia ja esta em andamento. Por favor aguarde.`,
+  }
+  return m[lang]()
+}
+
+// ============================================================================
+// TX-004: Amount validation error messages
+// ============================================================================
+
+export function formatAmountZeroMessage(lang: Lang): string {
+  const m = {
+    en: () => `Amount must be greater than zero.`,
+    es: () => `El monto debe ser mayor que cero.`,
+    pt: () => `O valor deve ser maior que zero.`,
+  }
+  return m[lang]()
+}
+
+export function formatAmountTooLargeMessage(lang: Lang): string {
+  const m = {
+    en: () => `Amount exceeds the $10,000 limit.`,
+    es: () => `El monto supera el limite de $10,000.`,
+    pt: () => `O valor excede o limite de $10,000.`,
+  }
+  return m[lang]()
+}
+
+export function formatAmountTooManyDecimalsMessage(lang: Lang): string {
+  const m = {
+    en: () => `Amounts can't have more than 2 decimal places (e.g., 10.50).`,
+    es: () => `Los montos no pueden tener mas de 2 decimales (ej: 10.50).`,
+    pt: () => `Os valores nao podem ter mais de 2 casas decimais (ex: 10.50).`,
+  }
+  return m[lang]()
+}
+
+export function formatAmountAmbiguousMessage(lang: Lang): string {
+  const m = {
+    en: () => `That amount is ambiguous. Did you mean the number with a decimal or a thousands separator? Please write it without separators (e.g., 1000 or 10.50).`,
+    es: () => `Ese monto es ambiguo. Escribelo sin separadores (ej: 1000 o 10.50).`,
+    pt: () => `Esse valor e ambiguo. Escreva-o sem separadores (ex: 1000 ou 10.50).`,
+  }
+  return m[lang]()
+}
+
+export function formatAmountInvalidMessage(lang: Lang): string {
+  const m = {
+    en: () => `That doesn't look like a valid amount.`,
+    es: () => `Eso no parece un monto valido.`,
+    pt: () => `Isso nao parece um valor valido.`,
+  }
+  return m[lang]()
+}
+
+export function formatInvalidPhoneNumberMessage(lang: Lang): string {
+  const m = {
+    en: () => `That doesn't look like a phone number.`,
+    es: () => `Eso no parece un numero de telefono.`,
+    pt: () => `Isso nao parece um numero de telefone.`,
+  }
+  return m[lang]()
+}
+
+export function formatAmountError(code: AmountErrorCode, lang: Lang): string {
+  switch (code) {
+    case 'ZERO':               return formatAmountZeroMessage(lang)
+    case 'TOO_LARGE':          return formatAmountTooLargeMessage(lang)
+    case 'TOO_MANY_DECIMALS':  return formatAmountTooManyDecimalsMessage(lang)
+    case 'AMBIGUOUS_SEPARATOR': return formatAmountAmbiguousMessage(lang)
+    case 'INVALID_FORMAT':     return formatAmountInvalidMessage(lang)
+  }
+}
+
+export function formatConfirmationPromptWithWarning(
+  amount: number,
+  recipient: string,
+  isLargeAmount: boolean,
+  lang: Lang
+): string {
+  const base = formatConfirmationPrompt(amount, recipient, lang)
+  if (!isLargeAmount) return base
+
+  const warning = {
+    en: `This is a large transfer.`,
+    es: `Esta es una transferencia grande.`,
+    pt: `Esta e uma transferencia grande.`,
+  }
+  return base + `\n\n${warning[lang]}`
 }

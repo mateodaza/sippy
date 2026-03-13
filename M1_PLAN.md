@@ -13,11 +13,11 @@
 |---|------------|--------|-------|
 | 1 | Onramp integration (API, testing, user flow) | Blocked (waiting on Maash) | P6 |
 | 2 | Non-custodial wallet refinements | 98% | P1 (done), P2, Sweep+Wallet (done), custom auth + dual-wallet web UI (done) |
-| 3 | Security hardening (rate limits, tx checks, error handling) | 92% | P4.6 custom auth done, email gates + squatting fix done, tx confirmation + velocity pending |
+| 3 | Security hardening (rate limits, tx checks, error handling) | 70% | P4.6 custom auth done, email gates done. Pending: phone sanitization (SH), tx confirmation (TX), velocity checks, tiered limits (EL), backend audit (AU) |
 | 4 | Dual currency display (USD + local) | 100% | P3 (26 LATAM currencies, 24h cache) |
-| 5 | Privacy controls + Email Recovery | 90% | P5 (email recovery done, phone visibility pending) |
-| 6 | User settings (daily limits via settings page) | 95% | P5 (email mgmt + limits + export done, language UI pending) |
-| 7 | Monitoring infrastructure (error tracking, uptime) | 70% | P7 (indexer deployed, admin analytics + users showing real on-chain data) |
+| 5 | Privacy controls + Email Recovery | 85% | P5 (email recovery done, phone visibility pending — see PV tasks) |
+| 6 | User settings (daily limits via settings page) | 85% | P5 (email mgmt + export done. Pending: language auto-detect (LN), tiered limit display (EL), privacy toggle (PV)) |
+| 7 | Monitoring infrastructure (error tracking, uptime) | 70% | P7 (indexer deployed, admin analytics live. Pending: Sentry, health endpoint, structured logging) |
 | 8 | Legal entity establishment | External | — |
 | 9 | WhatsApp production number active | 100% | Done |
 | 10 | Closed beta: 50 testers + onramp | 0% | P8 |
@@ -1009,35 +1009,34 @@ UNPLANNED WORK (ate ~8h):
   - writeDb workaround for Ponder read-only API
 ```
 
-### Remaining Plan (3 weeks left)
+### Remaining Plan (2 weeks left — as of Mar 12)
+
+**Completed:** P1, P3 (dual currency), P4.6 (custom auth), P5.6.1 (email recovery), P5.7 (sweep+wallet), P7.6 (indexer)
 
 ```
-Week 3 (Mar 6-12):                           Mateo        Carlos
-  P4.6: Custom Auth (Twilio + JWT) .........              [8-10h] ← CRITICAL PATH
-  P4: Security (4.1 tx confirm, 4.2 webhook) [6-8h]
-  Fix: indexer restart mechanism (#1 above)   [2-3h]
-  Maash: Mar 10 deadline → Path B trigger?    [1h]
-
-Week 4 (Mar 13-19):
-  P4.7: Session Robustness .................              [6-8h] (depends on P4.6)
-  P4: Security (4.3-4.4 velocity, edges) ... [8-10h]
-  P2: Onboarding Tightening ................              [4-5h]
-  P7: Monitoring (Sentry, health, logging) .. [4-5h]
+Week 4 (Mar 13-19):                           Mateo        Carlos
+  SH: Phone sanitization (SH-001→003) .....  [6-8h]
+  TX: Tx confirm + velocity (TX-001→004) ... [8-10h]
+  EL: Tiered limits (EL-001→004) ...........              [4-6h]
+  LN: Language auto-detect (LN-001→003) ....              [4-6h]
 
 Week 5 (Mar 20-26):
-  P3: Dual Currency Display ................              [6-8h]
-  P5: Privacy + Settings (5.1-5.5) .........              [6-8h]
-  P5.6.1: Recovery email ................... [6-8h]
-  P4.5: Admin Controls ..................... [3-4h]
+  PV: Phone visibility (PV-001→004) ........              [4-6h]
+  AU: Backend audit (AU-001→002) ........... [6-8h]
+  WS: Web session robustness (WS-001) ......              [4-6h]
+  AC: Admin controls (AC-001) .............. [3-4h]
+  MO: Monitoring (MO-001→002) ..............              [4-5h]
+  BP: Beta prep (BP-001) ................... [4-5h]        [4-5h]
   P6: Onramp if unblocked, else Path B ..... [split]      [split]
-  P8: Beta Launch Prep ..................... [4-5h]        [4-5h]
   Buffer for audit fixes + edge cases ...... [4-6h]
 ```
 
-**Critical path:** P4.6 (Custom Auth) → P4.7 (Session Robustness) → P5.6.1 (Recovery Email) → P8 (Beta Prep).
-P2, P3, P5.1-5.5, and P7 can parallelize.
+**Critical path:** SH (phone sanitization) → TX (tx security) → AU (audit) → BP (beta prep).
+EL, LN, PV, WS, MO can parallelize.
 **External dependency:** Onramp (P6) blocked on Maash. Everything else ships independently. See "Onramp Acceptance Criteria" above for fallback plan.
 **Indexer**: Deployed and live. See "Indexer Known Issues" in Phase 7 for items Carlos should be aware of.
+
+**Task Queue:** All remaining work is tracked in `TASK_QUEUE.md`. Completed tasks archived in `COMPLETED_TASK_QUEUES.md`.
 
 ---
 

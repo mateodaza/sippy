@@ -84,6 +84,7 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // Feature flags
   DEMO_SHOW_REFUEL: Env.schema.string.optional(),
+  CONFIRM_THRESHOLD: Env.schema.number.optional(),
 
   // Indexer
   INDEXER_URL: Env.schema.string.optional(),
@@ -93,6 +94,10 @@ export default await Env.create(new URL('../', import.meta.url), {
   INDEXER_DB_USER: Env.schema.string.optional(),
   INDEXER_DB_PASSWORD: Env.schema.string.optional(),
   INDEXER_DB_DATABASE: Env.schema.string.optional(),
+
+  // PostHog
+  POSTHOG_API_KEY: Env.schema.string.optional(),
+  POSTHOG_HOST: Env.schema.string.optional(),
 
   // Infrastructure
   TRUST_PROXY: Env.schema.string.optional(),

@@ -23,6 +23,7 @@ const AuthApiController = () => import('#controllers/auth_api_controller')
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
 router.get('/api/health', [HealthController, 'apiHealth'])
+router.get('/health', [HealthController, 'health'])
 
 // ── WhatsApp webhook (exact paths registered in Meta) ───────────────────────
 router.get('/webhook/whatsapp', [WebhookController, 'verify'])
@@ -31,6 +32,7 @@ router.post('/webhook/whatsapp', [WebhookController, 'handle'])
 // ── Public resolution ───────────────────────────────────────────────────────
 router.get('/resolve-phone', [ResolveController, 'byPhone']).use(middleware.ipThrottle())
 router.get('/resolve-address', [ResolveController, 'byAddress']).use(middleware.ipThrottle())
+router.get('/api/profile', [EmbeddedWalletController, 'getProfile']).use(middleware.ipThrottle())
 
 // ── Notifications (require shared secret) ───────────────────────────────────
 router.post('/notify-fund', [NotifyController, 'fund'])
@@ -68,6 +70,10 @@ router
     router.post('/auth/send-gate-code', [AuthApiController, 'sendGateCode'])
     router.post('/auth/verify-gate-code', [AuthApiController, 'verifyGateCode'])
     router.post('/auth/validate-export-gate', [AuthApiController, 'validateExportGate'])
+    router.get('/user-language', [AuthApiController, 'userLanguage'])
+    router.post('/set-language', [AuthApiController, 'setLanguage'])
+    router.post('/set-privacy', [EmbeddedWalletController, 'setPrivacy'])
+    router.get('/privacy-status', [EmbeddedWalletController, 'privacyStatus'])
   })
   .prefix('/api')
   .use(middleware.jwtAuth())
@@ -78,6 +84,7 @@ const DashboardController = () => import('#controllers/admin/dashboard_controlle
 const AdminUsersController = () => import('#controllers/admin/users_controller')
 const AnalyticsController = () => import('#controllers/admin/analytics_controller')
 const RolesController = () => import('#controllers/admin/roles_controller')
+const ModerationController = () => import('#controllers/admin/moderation_controller')
 
 // Public admin routes
 router.get('/admin/login', [AdminAuthController, 'showLogin'])
@@ -94,6 +101,10 @@ router
     router.get('/parse-patterns', [AnalyticsController, 'parsePatterns'])
     router.get('/roles', [RolesController, 'index'])
     router.put('/roles/:id', [RolesController, 'update'])
+    router.post('/block-user', [ModerationController, 'blockUser'])
+    router.post('/unblock-user', [ModerationController, 'unblockUser'])
+    router.post('/pause', [ModerationController, 'pause'])
+    router.post('/resume', [ModerationController, 'resume'])
   })
   .prefix('/admin')
   .use(middleware.auth({ guards: ['web'] }))

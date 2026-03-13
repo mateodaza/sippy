@@ -3,6 +3,7 @@
 **Last Updated:** March 12, 2026
 **Current Milestone:** M1 — Production Ready (deadline Mar 26, 2026)
 **Detailed Plan:** [M1_PLAN.md](./M1_PLAN.md)
+**Task Queue:** [TASK_QUEUE.md](./TASK_QUEUE.md)
 
 ---
 
@@ -11,15 +12,27 @@
 | # | Deliverable | Status | Notes |
 |---|------------|--------|-------|
 | 1 | Onramp integration | Blocked | Waiting on Maash API response |
-| 2 | Non-custodial wallet refinements | 95% | CDP Embedded Wallets working, sweep-to-EOA + web wallet done |
-| 3 | Security hardening | 90% | Rate limits + spam + auth + custom auth + email gates + email squatting fix done, tx confirmation + velocity pending |
+| 2 | Non-custodial wallet refinements | 98% | CDP Embedded Wallets, sweep-to-EOA, web wallet, dual-wallet UI, custom auth — all done |
+| 3 | Security hardening | 70% | Done: rate limits, spam, auth, custom auth, email gates, email squatting fix. Pending: phone sanitization (SH), tx confirmation (TX), velocity checks, tiered limits (EL), backend audit (AU) |
 | 4 | Dual currency display (USD + local) | 100% | 26 LATAM currencies, phone prefix mapping, 24h cache, all separators |
-| 5 | Privacy controls + Email Recovery | 90% | Email collection, verification, gate tokens, recovery design — phone visibility toggle pending |
-| 6 | User settings | 95% | Settings page + email management + daily limits + key export, language UI pending |
-| 7 | Monitoring infrastructure | 70% | Indexer deployed, admin analytics + users showing real on-chain data, Sentry pending |
+| 5 | Privacy controls + Email Recovery | 85% | Email collection, verification, gate tokens, recovery design done. Pending: phone visibility toggle (PV) |
+| 6 | User settings | 85% | Settings page, email management, daily limits, key export done. Pending: language auto-detect (LN), tiered limit display (EL), privacy toggle (PV) |
+| 7 | Monitoring infrastructure | 70% | Indexer deployed, admin analytics + users with real on-chain data. Pending: Sentry (MO), health endpoint, structured logging |
 | 8 | Legal entity | External | In progress separately |
 | 9 | WhatsApp production number | 100% | Active, approved |
 | 10 | Closed beta: 50 testers | 0% | Depends on security + onramp completion |
+
+---
+
+## Current Focus: Backend Security (Week 4)
+
+Priority tasks in [TASK_QUEUE.md](./TASK_QUEUE.md):
+
+1. **SH — Phone Sanitization (P0):** Unify phone normalization to single canonical E.164 format, DB constraints to prevent duplicates
+2. **TX — Transaction Security (P0):** Confirmation flow, self-send block, concurrent send protection, velocity limiter, amount hardening
+3. **EL — Tiered Limits (P1):** $50/day default, $500/day for email-verified users
+4. **LN — Language Auto-Detection (P1):** Phone prefix → website language (US→EN, BR→PT, else→ES)
+5. **PV — Phone Visibility (P2):** Privacy toggle for phone number on public profile
 
 ---
 
@@ -100,50 +113,14 @@
 
 ---
 
-## What's In Progress
+## Known Issues
 
-### Phase 4.6: Custom Auth — DONE
-
-- Replaced CDP's `useSignInWithSms` with Twilio OTP + `useAuthenticateWithJWT`
-- Backend: `otp_service.ts` (Twilio raw SMS, trilingual) + `jwt_service.ts` (RS256 + JWKS) + `jwt_auth_middleware.ts`
-- Frontend: all 3 pages migrated (`/setup`, `/settings`, `/wallet`), CDP provider configured with `customAuth.getJwt`
-- CDP Portal configured (JWKS URL + issuer registered, verified live Mar 12)
-
-### Phase 2: Onboarding Tightening — Not Started
-
-- Smart welcome based on user state (new / wallet-no-permission / fully set up)
-- Post-registration WhatsApp nudges
-- Setup page error recovery + progress indicator
-- Empty balance guidance with fund link
-
-### Phase 3: Dual Currency Display — DONE
-
-- 26 LATAM currencies supported via phone prefix → currency mapping
-- Exchange rate service with 24h cache (open.er-api.com, no API key)
-- All balance/transfer messages show USD + local equivalent
-- Correct thousands separators per currency (period vs comma)
-- USD-pegged countries (Ecuador, Panama, El Salvador) skip local display
-
-### Phase 4: Security Hardening — Partially Done (90%)
-
-- Done: rate limiting, spam protection, message deduplication, daily spending limits, amount validation, authenticated phone resolution, IP rate limiting, web send audit logging, custom auth (Twilio+JWT), email verification gates, email bypass fix, email squatting fix (partial unique index)
-- Pending: transaction confirmation flow, webhook signature validation, velocity checks, self-send block, concurrent send protection, admin controls
-
-### Phase 5: Privacy Controls + Email Recovery — Partially Done (90%)
-
-- Done: sweep-to-EOA in export flow, webapp fallback wallet (/wallet), cross-nav between /settings and /wallet, email collection (setup + settings), email verification (6-digit code via Resend), gate tokens for sensitive ops, recovery design doc
-- Pending: phone visibility toggle, language preference UI, WhatsApp privacy command
-
-### Phase 6: Onramp — BLOCKED
-
-- Waiting on Maash API docs and credentials
-- Everything else ships independently
-
-### Phase 8: Beta Launch Prep — Not Started
-
-- End-to-end test matrix
-- 50 tester onboarding
-- Production environment hardening
+- **Phone format inconsistency:** Two normalization functions, phone stored without `+` in DB but with `+` in JWT. Fix: SH-001→003 in TASK_QUEUE.md
+- **No tx confirmation flow:** Sends execute immediately without user confirmation. Fix: TX-001
+- **Flat daily limit:** All users get $500/day regardless of verification status. Fix: EL-001→004
+- **No phone visibility toggle:** Profile always shows full phone number. Fix: PV-001→004
+- **No website language detection:** Website doesn't auto-detect language from phone. Fix: LN-001→003
+- **Onramp blocked:** Waiting on Maash API. Fallback Path B documented in M1_PLAN.md
 
 ---
 
@@ -161,58 +138,6 @@ sippy/                      ← Turborepo + pnpm workspaces
     gas-refuel/             ← Hardhat (GasRefuel.sol)
   archive/
     express-backend/        ← Legacy Express (archived)
-```
-
-```
-┌──────────────┐
-│   WhatsApp   │  message: "enviar 10 a +573001234567"
-│   User       │
-└──────┬───────┘
-       │
-       ▼
-┌──────────────────────────────────────────┐
-│  Backend (AdonisJS v7)                   │
-│                                          │
-│  ┌─────────────────────┐                 │
-│  │  Regex Parser       │  <1ms, zero cost│
-│  │  (trilingual)       │  80%+ of msgs   │
-│  └────────┬────────────┘                 │
-│           │ unknown?                     │
-│           ▼                              │
-│  ┌─────────────────────┐                 │
-│  │  LLM Fallback       │  Groq free tier │
-│  │  (Zod-validated)    │  ~20% of msgs   │
-│  │  (no send commands) │                 │
-│  └────────┬────────────┘                 │
-│           │                              │
-│           ▼                              │
-│  ┌─────────────────────┐                 │
-│  │  Command Handler    │                 │
-│  │  → balance, send,   │                 │
-│  │    start, help, etc │                 │
-│  └────────┬────────────┘                 │
-│           │                              │
-│           ▼                              │
-│  ┌─────────────────────┐   ┌───────────┐│
-│  │  CDP Embedded       │   │ GasRefuel ││
-│  │  Wallets            │   │ Contract  ││
-│  │  (non-custodial)    │   │ (auto-gas)││
-│  └────────┬────────────┘   └─────┬─────┘│
-└───────────┼──────────────────────┼───────┘
-            │                      │
-            ▼                      ▼
-      ┌───────────────────────────────┐
-      │        Arbitrum One           │
-      │        (USDC transfers)       │
-      └──────────────┬────────────────┘
-                     │
-                     ▼
-      ┌───────────────────────────────┐
-      │  Ponder Indexer               │
-      │  (USDC + GasRefuel events)    │
-      │  → 15+ Hono API endpoints    │
-      │  → Dashboard analytics        │
-      └───────────────────────────────┘
 ```
 
 ---
@@ -235,18 +160,13 @@ sippy/                      ← Turborepo + pnpm workspaces
 
 ## Recent Changes
 
+**Mar 12** — Task queue restructured: completed tasks archived to `COMPLETED_TASK_QUEUES.md`, new TASK_QUEUE.md with SH (phone sanitization), TX (tx security), EL (tiered limits), LN (language detection), PV (phone visibility), AU (audit), MO (monitoring), AC (admin controls), WS (session robustness), BP (beta prep). M1_PLAN timeline updated for weeks 4-5.
 **Mar 12** — Dual-wallet web UI: WhatsApp EOA wallet + smart account shown as selectable cards, auto-selects funded wallet, `POST /api/send` for EOA sends via SpendPermission. CDP Portal configured (JWKS URL + issuer live). Dual currency COMPLETE (26 LATAM currencies, 24h cache). Email recovery infrastructure COMPLETE (collection, verification, gate tokens, Resend integration). Security fixes: email bypass vulnerability patched, email squatting blocked via partial unique index. 437 tests passing.
 **Mar 11** — P4.6 Custom Auth COMPLETE: Twilio raw SMS OTP (trilingual) + RS256 JWT + JWKS endpoint. Backend: jwt_service, otp_service, jwt_auth_middleware replacing CDP auth. Frontend: all 3 pages migrated to `authenticateWithJWT()`. CDP Portal config pending (manual).
 **Mar 6** — Doc cleanup: removed stale planning docs (ADONISJS-POC-PLAN, PONDER plans, loyalty-network). M1_PLAN.md updated with Carlos handoff priorities — custom auth (P4.6) is now #1.
 **Mar 5** — Admin analytics fixes: Top Users now ranks by total volume (sent + received), daily volume chart renders with pixel-based bar heights. Users page shows real on-chain data from indexer.
 **Mar 2** — Ponder on-chain indexer built (phases 7.6.1–7.6.8): 5 on-chain tables, 6 event handlers, 15+ Hono API routes, backend integration with fire-and-forget wallet registration. Repo now runs as a Turborepo/pnpm workspace with apps under `apps/backend`, `apps/web`, and `apps/indexer`. Admin dashboard COMPLETE (Inertia.js + React + Tailwind CSS v4, 6 pages).
 **Feb 28** — AdonisJS migration COMPLETE: all 18 Express routes ported to AdonisJS v7, 103 tests passing (unit + functional), same JSON responses — frontend-compatible. Key fixes: `forceExit: true`, `$N→?` placeholder conversion for Lucid, phone length validation.
-**Feb 21** — Sweep-to-EOA in export flow, webapp fallback wallet (/wallet), authenticated phone resolution, web send audit logging, IP rate limiting, repo cleanup (22 outdated docs removed)
-**Feb 20** — Regex greetings/social phrases, media message handling, language continuity fix
-**Feb 19** — Trilingual sanitizer fallback, recipient language in notifications
-**Feb 18** — PYUSD → USDC migration, Zod validation, parse observability logging
-**Feb 17** — Regex-first parser, trilingual message catalog, language detection + persistence
-**Feb 16** — LLM system prompt rewrite, personality + product knowledge
 
 ---
 

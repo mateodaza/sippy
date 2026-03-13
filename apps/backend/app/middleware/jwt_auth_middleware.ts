@@ -26,14 +26,17 @@ export default class JwtAuthMiddleware {
       const payload = await jwtService.verifyToken(token)
       const phoneNumber = payload.sub // E.164, e.g. "+573001234567"
 
-      // Strip "+" prefix for DB lookup — phone_registry stores without "+"
-      const dbPhone = phoneNumber.replace(/^\+/, '')
-
       const isRegisterWallet = ctx.request.url() === REGISTER_WALLET_PATH
 
       if (isRegisterWallet) {
         // DB is always queried first — DB is the source of truth
-        const record = await PhoneRegistry.findBy('phoneNumber', dbPhone)
+        // Try canonical lookup first
+        let record = await PhoneRegistry.findBy('phoneNumber', phoneNumber)
+
+        // Compatibility: fall back to bare-digit format (pre-SH-003 rows)
+        if (!record && phoneNumber.startsWith('+')) {
+          record = await PhoneRegistry.findBy('phoneNumber', phoneNumber.slice(1))
+        }
 
         if (record) {
           // Tier 1: DB record exists (returning user) — DB wins unconditionally
@@ -56,7 +59,13 @@ export default class JwtAuthMiddleware {
       }
 
       // Branch B — all other routes
-      const record = await PhoneRegistry.findBy('phoneNumber', dbPhone)
+      // Try canonical lookup first
+      let record = await PhoneRegistry.findBy('phoneNumber', phoneNumber)
+
+      // Compatibility: fall back to bare-digit format (pre-SH-003 rows)
+      if (!record && phoneNumber.startsWith('+')) {
+        record = await PhoneRegistry.findBy('phoneNumber', phoneNumber.slice(1))
+      }
 
       if (!record) {
         logger.warn('JWT auth: phone not in registry for route %s', ctx.request.url())
