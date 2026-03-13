@@ -23,6 +23,7 @@ const AuthApiController = () => import('#controllers/auth_api_controller')
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
 router.get('/api/health', [HealthController, 'apiHealth'])
+router.get('/health', [HealthController, 'health'])
 
 // ── WhatsApp webhook (exact paths registered in Meta) ───────────────────────
 router.get('/webhook/whatsapp', [WebhookController, 'verify'])

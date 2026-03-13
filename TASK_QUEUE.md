@@ -386,7 +386,7 @@
 > **Deliverable:** M1 #7
 > **Priority:** P2
 
-#### MO-001 [ ] Health endpoint
+#### MO-001 [x] Health endpoint
 - **What:** `GET /health` returning DB status, uptime, GasRefuel balance level.
 - **Acceptance criteria:**
   - Returns JSON: `{ db: 'ok'|'error', uptime: seconds, gasRefuel: 'healthy'|'low'|'critical', whatsapp: 'ok'|'error', timestamp }`
