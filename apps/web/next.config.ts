@@ -24,6 +24,8 @@ const nextConfig: NextConfig = {
       'pino-pretty': false,
     };
 
+    config.optimization.minimize = false;
+
     return config;
   },
 };

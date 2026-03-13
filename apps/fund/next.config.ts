@@ -8,7 +8,6 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:
       process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
   },
-  turbopack: {},
   webpack: (config) => {
     config.resolve.fallback = {
       fs: false,
@@ -21,6 +20,8 @@ const nextConfig: NextConfig = {
       ...config.resolve.alias,
       'pino-pretty': false,
     };
+
+    config.optimization.minimize = false;
 
     return config;
   },
