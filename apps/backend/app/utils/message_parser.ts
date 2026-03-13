@@ -87,6 +87,13 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
   ],
 }
 
+/** Privacy patterns — each paired with the language it signals */
+const PRIVACY_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
+  { pattern: /^privacy\s+(on|off)$/i,     lang: 'en' },
+  { pattern: /^privacidad\s+(on|off)$/i,  lang: 'es' },
+  { pattern: /^privacidade\s+(on|off)$/i, lang: 'pt' },
+]
+
 /** Trilingual send patterns — strict format, must extract amount + recipient */
 const SEND_PATTERNS: RegExp[] = [
   // EN: "send 10 to +573001234567" or "send $10 to ..."
@@ -118,6 +125,15 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
     if (command === 'language') continue // Already handled above
     if (patterns.some((p) => p.test(normalizedText))) {
       return { command: command as ParsedCommand['command'], originalText: text }
+    }
+  }
+
+  // Check privacy command (needs capture group for action + language signal)
+  for (const { pattern, lang } of PRIVACY_PATTERNS) {
+    const match = normalizedText.match(pattern)
+    if (match) {
+      const privacyAction = match[1].toLowerCase() as 'on' | 'off'
+      return { command: 'privacy', privacyAction, detectedLanguage: lang, originalText: text }
     }
   }
 

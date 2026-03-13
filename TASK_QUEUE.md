@@ -242,7 +242,7 @@
 - **Dependencies:** PV-001
 - **Files:** `apps/web/app/settings/page.tsx`
 
-#### PV-004 [ ] WhatsApp privacy command
+#### PV-004 [x] WhatsApp privacy command
 - **What:** Regex command to toggle phone visibility from WhatsApp.
 - **Acceptance criteria:**
   - Regex patterns: `privacy on/off`, `privacidad on/off`, `privacidade on/off`

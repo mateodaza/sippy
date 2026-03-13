@@ -33,14 +33,30 @@ import {
   formatGreetingMessage,
   formatSocialReplyMessage,
   formatTextOnlyMessage,
+  formatPrivacySetMessage,
 } from '#utils/messages'
 
+import UserPreference from '#models/user_preference'
 import { handleStartCommand } from '#commands/start_command'
 import { handleBalanceCommand } from '#commands/balance_command'
 import { handleSendCommand } from '#commands/send_command'
 import { generateResponse } from '#services/llm.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
 import { canonicalizePhone } from '#utils/phone'
+
+/**
+ * Returns the phone key to use for updateOrCreate on user_preferences.
+ * If a bare-digit row already exists (pre-SH-003), returns bare digits to
+ * avoid creating a duplicate row.
+ * Remove after SH-003 backfill is confirmed complete.
+ */
+async function resolveWebhookUserPrefKey(phoneNumber: string): Promise<string> {
+  if (phoneNumber.startsWith('+')) {
+    const existing = await UserPreference.findBy('phoneNumber', phoneNumber.slice(1))
+    if (existing) return phoneNumber.slice(1)
+  }
+  return phoneNumber
+}
 
 export interface RateContext {
   senderRate: number | null
@@ -175,6 +191,17 @@ export async function routeCommand(
         const langName =
           langNames[command.detectedLanguage || ''] || command.detectedLanguage || ''
         await sendMessageFn(phoneNumber, formatLanguageSetMessage(langName, lang), lang)
+        break
+      }
+
+      case 'privacy': {
+        const visible = command.privacyAction === 'on'
+        const prefKey = await resolveWebhookUserPrefKey(phoneNumber)
+        await UserPreference.updateOrCreate(
+          { phoneNumber: prefKey },
+          { phoneVisible: visible }
+        )
+        await sendMessageFn(phoneNumber, formatPrivacySetMessage(command.privacyAction!, lang), lang)
         break
       }
 

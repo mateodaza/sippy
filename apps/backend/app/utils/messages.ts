@@ -717,6 +717,21 @@ export function formatLanguageSetMessage(langName: string, lang: Lang = 'en'): s
   return m[lang]()
 }
 
+export function formatPrivacySetMessage(action: 'on' | 'off', lang: Lang = 'en'): string {
+  const m = {
+    en: () => action === 'on'
+      ? 'Your phone number is now visible on your profile.'
+      : 'Your phone number is now hidden on your profile.',
+    es: () => action === 'on'
+      ? 'Tu numero de telefono ahora es visible en tu perfil.'
+      : 'Tu numero de telefono ahora esta oculto en tu perfil.',
+    pt: () => action === 'on'
+      ? 'Seu numero de telefone agora esta visivel no seu perfil.'
+      : 'Seu numero de telefone agora esta oculto no seu perfil.',
+  }
+  return m[lang]()
+}
+
 export function formatCommandErrorMessage(lang: Lang = 'en'): string {
   const m = {
     en: () => `Error processing your command. Please try again.`,

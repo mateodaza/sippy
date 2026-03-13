@@ -33,9 +33,11 @@ export interface ParsedCommand {
     | 'language'
     | 'greeting'
     | 'social'
+    | 'privacy'
     | 'unknown'
   amount?: number
   recipient?: string
+  privacyAction?: 'on' | 'off'
   originalText?: string
   helpfulMessage?: string // Natural, conversational response for unknown commands
   detectedLanguage?: 'en' | 'es' | 'pt' | 'ambiguous' // Language detected from current message
