@@ -208,7 +208,7 @@
 > - **WhatsApp:** `privacy on/off` command
 > - **Profile page:** If hidden → show masked phone (***1234) + "Private account"
 
-#### PV-001 [ ] Add phone_visible column + API endpoints
+#### PV-001 [x] Add phone_visible column + API endpoints
 - **What:** DB migration + backend API for phone visibility toggle.
 - **Acceptance criteria:**
   - New migration: ADD `phone_visible BOOLEAN NOT NULL DEFAULT true` to `user_preferences`

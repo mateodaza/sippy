@@ -41,6 +41,19 @@ async function findEmbeddedUserPref(phoneNumber: string): Promise<UserPreference
   return UserPreference.findBy('phoneNumber', phoneNumber.slice(1))
 }
 
+/**
+ * Returns the phone key to use for updateOrCreate on user_preferences.
+ * If a bare-digit row already exists, returns bare digits to avoid creating a duplicate row.
+ * Remove after SH-003 backfill is confirmed complete.
+ */
+async function resolveEmbeddedUserPrefKey(phoneNumber: string): Promise<string> {
+  if (phoneNumber.startsWith('+')) {
+    const existing = await UserPreference.findBy('phoneNumber', phoneNumber.slice(1))
+    if (existing) return phoneNumber.slice(1)
+  }
+  return phoneNumber
+}
+
 // CDP client for spend permission queries
 const cdp = new CdpClient()
 
@@ -610,6 +623,46 @@ export default class EmbeddedWalletController {
       const msg = error instanceof Error ? error.message : 'Send failed'
       logger.error('sendFromWeb error: %o', error)
       return response.status(500).json({ error: msg })
+    }
+  }
+
+  /**
+   * POST /api/set-privacy
+   *
+   * Updates the phone_visible preference for the authenticated user.
+   */
+  async setPrivacy(ctx: HttpContext) {
+    const { request, response } = ctx
+    try {
+      const body = request.body() as { phoneVisible?: unknown }
+      if (typeof body.phoneVisible !== 'boolean') {
+        return response.status(422).json({ error: 'phoneVisible must be a boolean' })
+      }
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const prefKey = await resolveEmbeddedUserPrefKey(dbPhone)
+      await UserPreference.updateOrCreate(
+        { phoneNumber: prefKey },
+        { phoneVisible: body.phoneVisible }
+      )
+      return response.status(200).json({ success: true })
+    } catch {
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * GET /api/privacy-status
+   *
+   * Returns the phone_visible preference for the authenticated user.
+   */
+  async privacyStatus(ctx: HttpContext) {
+    const { response } = ctx
+    try {
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findEmbeddedUserPref(dbPhone)
+      return response.status(200).json({ phoneVisible: pref?.phoneVisible ?? true })
+    } catch {
+      return response.status(500).json({ error: 'Internal server error' })
     }
   }
 }

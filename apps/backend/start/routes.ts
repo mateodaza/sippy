@@ -70,6 +70,8 @@ router
     router.post('/auth/validate-export-gate', [AuthApiController, 'validateExportGate'])
     router.get('/user-language', [AuthApiController, 'userLanguage'])
     router.post('/set-language', [AuthApiController, 'setLanguage'])
+    router.post('/set-privacy', [EmbeddedWalletController, 'setPrivacy'])
+    router.get('/privacy-status', [EmbeddedWalletController, 'privacyStatus'])
   })
   .prefix('/api')
   .use(middleware.jwtAuth())
