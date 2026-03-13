@@ -69,6 +69,7 @@ router
     router.post('/auth/verify-gate-code', [AuthApiController, 'verifyGateCode'])
     router.post('/auth/validate-export-gate', [AuthApiController, 'validateExportGate'])
     router.get('/user-language', [AuthApiController, 'userLanguage'])
+    router.post('/set-language', [AuthApiController, 'setLanguage'])
   })
   .prefix('/api')
   .use(middleware.jwtAuth())

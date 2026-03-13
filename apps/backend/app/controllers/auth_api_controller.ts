@@ -403,6 +403,34 @@ export default class AuthApiController {
   }
 
   /**
+   * POST /api/set-language
+   *
+   * Saves or clears the user's preferred language.
+   */
+  async setLanguage(ctx: HttpContext) {
+    const { request, response } = ctx
+    const VALID_LANGUAGES = ['en', 'es', 'pt'] as const
+    try {
+      const body = request.body() as { language?: unknown }
+      const { language } = body
+
+      if (language !== null && !(VALID_LANGUAGES as readonly unknown[]).includes(language)) {
+        return response.status(400).json({ error: 'invalid_language' })
+      }
+
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const prefKey = await resolveUserPrefKey(dbPhone)
+      await UserPreference.updateOrCreate(
+        { phoneNumber: prefKey },
+        { preferredLanguage: language as string | null }
+      )
+      return response.status(200).json({ ok: true })
+    } catch {
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
    * GET /api/auth/.well-known/jwks.json
    *
    * Returns the public key set for JWT verification.

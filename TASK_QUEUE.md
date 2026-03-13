@@ -181,7 +181,7 @@
 - **Dependencies:** LN-001
 - **Files:** `apps/web/lib/auth.ts`, `apps/web/lib/i18n.ts` (new if needed), `apps/backend/start/routes.ts`, `apps/backend/app/controllers/auth_api_controller.ts`
 
-#### LN-003 [ ] Add language selector to settings page (manual override)
+#### LN-003 [x] Add language selector to settings page (manual override)
 - **What:** Users can manually override auto-detected language. This saves to `user_preferences.preferred_language` which then takes priority over phone detection.
 - **Acceptance criteria:**
   - Language selector in settings: English, Espanol, Portugues

@@ -244,6 +244,12 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.errSendEmailCode': 'Failed to send email code',
     'settings.errVerifyEmailCode': 'Failed to verify email code',
     'settings.errGeneric': 'Something went wrong. Please try again.',
+    'settings.languageTitle': 'Language',
+    'settings.langEn': 'English',
+    'settings.langEs': 'Español',
+    'settings.langPt': 'Português',
+    'settings.langAuto': 'Auto-detect',
+    'settings.langSaveError': 'Failed to save language preference',
 
     // activity component
     'activity.noActivity': 'No recent activity yet',
@@ -485,6 +491,12 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.errSendEmailCode': 'No se pudo enviar el código de correo',
     'settings.errVerifyEmailCode': 'No se pudo verificar el código de correo',
     'settings.errGeneric': 'Algo salió mal. Intenta de nuevo.',
+    'settings.languageTitle': 'Idioma',
+    'settings.langEn': 'Inglés',
+    'settings.langEs': 'Español',
+    'settings.langPt': 'Portugués',
+    'settings.langAuto': 'Detección automática',
+    'settings.langSaveError': 'Error al guardar el idioma',
 
     // activity component
     'activity.noActivity': 'Sin actividad reciente',
@@ -726,6 +738,12 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.errSendEmailCode': 'Falha ao enviar código de e-mail',
     'settings.errVerifyEmailCode': 'Falha ao verificar código de e-mail',
     'settings.errGeneric': 'Algo deu errado. Tente novamente.',
+    'settings.languageTitle': 'Idioma',
+    'settings.langEn': 'Inglês',
+    'settings.langEs': 'Espanhol',
+    'settings.langPt': 'Português',
+    'settings.langAuto': 'Detecção automática',
+    'settings.langSaveError': 'Erro ao salvar idioma',
 
     // activity component
     'activity.noActivity': 'Nenhuma atividade recente',

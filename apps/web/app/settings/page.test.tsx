@@ -28,6 +28,9 @@ const mocks = vi.hoisted(() => ({
   ensureGasReady: vi.fn(async () => true),
   getBalances: vi.fn(async () => ({ usdc: '10.5' })),
   searchParamsGet: vi.fn((_: string) => null as string | null),
+  storeLanguage: vi.fn(),
+  clearLanguage: vi.fn(),
+  resolveLanguage: vi.fn(async () => 'en' as const),
   state: {
     isSignedIn: false as boolean | undefined,
     currentUser: null as unknown,
@@ -62,10 +65,11 @@ vi.mock('../../lib/i18n', async () => {
   return {
     ...real,
     getStoredLanguage: () => 'en' as const,
-    storeLanguage: () => {},
+    storeLanguage: (...args: unknown[]) => mocks.storeLanguage(...args),
+    clearLanguage: () => mocks.clearLanguage(),
     detectLanguageFromPhone: () => 'en' as const,
     fetchUserLanguage: async () => ({ language: 'en' as const, source: 'phone' as const }),
-    resolveLanguage: async () => 'en' as const,
+    resolveLanguage: (...args: unknown[]) => mocks.resolveLanguage(...args),
   }
 })
 
@@ -165,6 +169,7 @@ beforeEach(() => {
   mocks.searchParamsGet.mockReturnValue(null)
   mocks.getStoredToken.mockReturnValue(null)
   mocks.refetchPermissions.mockResolvedValue(undefined)
+  mocks.resolveLanguage.mockResolvedValue('en')
   vi.stubEnv('NEXT_PUBLIC_CDP_PROJECT_ID', 'test-project-id')
   vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', '')
   vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '')
@@ -1056,5 +1061,136 @@ describe('source integrity', () => {
   it('settings/page.tsx does not contain useGetAccessToken', () => {
     const source = readFileSync(join(__dir, 'page.tsx'), 'utf-8')
     expect(source).not.toMatch(/useGetAccessToken/)
+  })
+})
+
+// Helper: render the page in authenticated state with verifiedPhone set
+async function renderAuthenticated(opts: {
+  backendUrl?: string
+  phoneNumber?: string
+  walletStatusExtra?: Record<string, unknown>
+} = {}) {
+  const backendUrl = opts.backendUrl ?? 'http://localhost:3001'
+  const phoneNumber = opts.phoneNumber ?? '+5511999990000'
+  vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', backendUrl)
+  mocks.state.isSignedIn = true
+  mocks.state.currentUser = {
+    evmSmartAccounts: ['0xSMART456'],
+    evmSmartAccountObjects: [{ address: '0xSMART456' }],
+    evmAccounts: ['0xEOA123'],
+  }
+  mocks.state.evmAccounts = [{ address: '0xEOA123' }]
+  mocks.getStoredToken.mockReturnValue('mock-token')
+  const mockFetch = vi.fn(async (url: string) => {
+    if ((url as string).includes('/api/auth/email-status')) {
+      return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+    }
+    if ((url as string).includes('/api/set-language')) {
+      return { ok: true, json: async () => ({ ok: true }) }
+    }
+    // wallet-status
+    return {
+      ok: true,
+      json: async () => ({
+        hasPermission: true,
+        dailyLimit: 100,
+        phoneNumber,
+        ...(opts.walletStatusExtra ?? {}),
+      }),
+    }
+  })
+  vi.stubGlobal('fetch', mockFetch)
+  await renderPage()
+  return mockFetch
+}
+
+describe('handleSetLanguage', () => {
+  it('TC-LN-003-F01: language buttons render after auth (en/es/pt/auto all present)', async () => {
+    await renderAuthenticated()
+    expect(container!.textContent).toContain('Language')
+    expect(findButton('English')).not.toBeNull()
+    expect(findButton('Español')).not.toBeNull()
+    expect(findButton('Português')).not.toBeNull()
+    expect(findButton('Auto-detect')).not.toBeNull()
+  })
+
+  it('TC-LN-003-F02: clicking Español POSTs {language:es} and storeLanguage(es) called', async () => {
+    const mockFetch = await renderAuthenticated()
+
+    await act(async () => {
+      findButton('Español')!.click()
+    })
+
+    const setLangCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
+    )
+    expect(setLangCall).toBeDefined()
+    expect(JSON.parse((setLangCall![1] as RequestInit).body as string)).toEqual({ language: 'es' })
+    expect(mocks.storeLanguage).toHaveBeenCalledWith('es')
+  })
+
+  it('TC-LN-003-F03: clicking Português POSTs {language:pt} and lang updates to pt', async () => {
+    const mockFetch = await renderAuthenticated()
+
+    await act(async () => {
+      findButton('Português')!.click()
+    })
+
+    const setLangCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
+    )
+    expect(setLangCall).toBeDefined()
+    expect(JSON.parse((setLangCall![1] as RequestInit).body as string)).toEqual({ language: 'pt' })
+    expect(mocks.storeLanguage).toHaveBeenCalledWith('pt')
+    // Verify the UI re-rendered: the Português button should now be highlighted (lang === 'pt')
+    expect(findButton('Português')!.className).toContain('border-emerald-600')
+  })
+
+  it('TC-LN-003-F04: clicking Auto-detect POSTs {language:null}, clears language, calls resolveLanguage with verifiedPhone', async () => {
+    const mockFetch = await renderAuthenticated({ phoneNumber: '+5511999990000' })
+
+    await act(async () => {
+      findButton('Auto-detect')!.click()
+    })
+
+    const setLangCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
+    )
+    expect(setLangCall).toBeDefined()
+    expect(JSON.parse((setLangCall![1] as RequestInit).body as string)).toEqual({ language: null })
+    expect(mocks.clearLanguage).toHaveBeenCalled()
+    expect(mocks.resolveLanguage).toHaveBeenCalledWith('+5511999990000', expect.anything(), expect.anything())
+  })
+
+  it('TC-LN-003-F05: POST fails → error message shown', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = {
+      evmSmartAccounts: ['0xSMART456'],
+      evmSmartAccountObjects: [{ address: '0xSMART456' }],
+      evmAccounts: ['0xEOA123'],
+    }
+    mocks.state.evmAccounts = [{ address: '0xEOA123' }]
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if ((url as string).includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+      }
+      if ((url as string).includes('/api/set-language')) {
+        return { ok: false, json: async () => ({ error: 'internal_error' }) }
+      }
+      return {
+        ok: true,
+        json: async () => ({ hasPermission: true, dailyLimit: 100, phoneNumber: '+5511999990000' }),
+      }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    await act(async () => {
+      findButton('English')!.click()
+    })
+
+    expect(container!.textContent).toContain('Failed to save language preference')
   })
 })

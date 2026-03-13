@@ -7,7 +7,7 @@ import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '../.
 import { parseUnits } from 'viem';
 import { getBalances } from '../../lib/blockscout';
 import { ensureGasReady, buildUsdcTransferCall } from '../../lib/usdc-transfer';
-import { Language, getStoredLanguage, storeLanguage, detectLanguageFromPhone, fetchUserLanguage, resolveLanguage, localizeError, t } from '../../lib/i18n';
+import { Language, getStoredLanguage, storeLanguage, clearLanguage, detectLanguageFromPhone, fetchUserLanguage, resolveLanguage, localizeError, t } from '../../lib/i18n';
 
 /**
  * Settings Page for Embedded Wallets
@@ -122,6 +122,10 @@ function SettingsContent() {
   const [emailGateError, setEmailGateError] = useState<string | null>(null);
   const [emailGateLoading, setEmailGateLoading] = useState(false);
   const [emailGateToken, setEmailGateToken] = useState<string | null>(null);
+
+  // Language selector state
+  const [langSaving, setLangSaving] = useState(false);
+  const [langSaveError, setLangSaveError] = useState<string | null>(null);
 
   // CDP Hooks
   const { authenticateWithJWT } = useAuthenticateWithJWT();
@@ -356,6 +360,39 @@ function SettingsContent() {
       setEmailError(localizeError({}, 'email-verify', lang));
     } finally {
       setEmailLoading(false);
+    }
+  };
+
+  // Set preferred language
+  const handleSetLanguage = async (newLang: Language | 'auto') => {
+    setLangSaving(true);
+    setLangSaveError(null);
+    try {
+      const accessToken = getStoredToken();
+      const res = await fetch(`${BACKEND_URL}/api/set-language`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ language: newLang === 'auto' ? null : newLang }),
+      });
+      if (res.ok) {
+        if (newLang === 'auto') {
+          clearLanguage();
+          const resolved = await resolveLanguage(verifiedPhone || null, accessToken, BACKEND_URL);
+          setLang(resolved);
+        } else {
+          storeLanguage(newLang);
+          setLang(newLang);
+        }
+      } else {
+        setLangSaveError(t('settings.langSaveError', lang));
+      }
+    } catch {
+      setLangSaveError(t('settings.langSaveError', lang));
+    } finally {
+      setLangSaving(false);
     }
   };
 
@@ -1413,6 +1450,37 @@ function SettingsContent() {
           )}
 
           {emailError && <p className='text-red-600 text-sm mt-2'>{emailError}</p>}
+        </div>
+
+        {/* Language selector */}
+        <div className='border-t pt-6 mb-6'>
+          <h2 className='text-sm font-medium text-gray-700 mb-3'>
+            {t('settings.languageTitle', lang)}
+          </h2>
+          <div className='grid grid-cols-2 gap-2'>
+            {[
+              { value: 'en',   label: t('settings.langEn',   lang) },
+              { value: 'es',   label: t('settings.langEs',   lang) },
+              { value: 'pt',   label: t('settings.langPt',   lang) },
+              { value: 'auto', label: t('settings.langAuto', lang) },
+            ].map(({ value, label }) => (
+              <button
+                key={value}
+                disabled={langSaving}
+                onClick={() => handleSetLanguage(value as Language | 'auto')}
+                className={`py-2 px-3 rounded-lg border-2 text-sm font-medium
+                  ${(value !== 'auto' && lang === value)
+                    ? 'border-emerald-600 bg-emerald-50'
+                    : 'border-gray-200 hover:border-gray-300'}
+                  disabled:opacity-50`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {langSaveError && (
+            <p className='text-sm text-red-600 mt-2'>{langSaveError}</p>
+          )}
         </div>
 
         {/* Wallet Security */}
