@@ -1,6 +1,6 @@
 import app from '@adonisjs/core/services/app'
 import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
-import sentryService from '#services/sentry_service'
+import { captureException } from '#services/posthog_service'
 
 export default class HttpExceptionHandler extends ExceptionHandler {
   /**
@@ -24,7 +24,10 @@ export default class HttpExceptionHandler extends ExceptionHandler {
    * @note You should not attempt to send a response from this method.
    */
   async report(error: unknown, ctx: HttpContext) {
-    sentryService.captureException(error, { url: ctx.request.url() })
+    captureException(error, ctx.request.ip(), {
+      url: ctx.request.url(),
+      method: ctx.request.method(),
+    })
     return super.report(error, ctx)
   }
 }

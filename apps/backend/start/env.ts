@@ -95,12 +95,11 @@ export default await Env.create(new URL('../', import.meta.url), {
   INDEXER_DB_PASSWORD: Env.schema.string.optional(),
   INDEXER_DB_DATABASE: Env.schema.string.optional(),
 
+  // PostHog
+  POSTHOG_API_KEY: Env.schema.string.optional(),
+  POSTHOG_HOST: Env.schema.string.optional(),
+
   // Infrastructure
   TRUST_PROXY: Env.schema.string.optional(),
   RAILWAY_ENVIRONMENT: Env.schema.string.optional(),
-
-  // Sentry
-  SENTRY_DSN: Env.schema.string.optional(),
-  SENTRY_ENVIRONMENT: Env.schema.string.optional(),
-  SENTRY_RELEASE: Env.schema.string.optional(),
 })

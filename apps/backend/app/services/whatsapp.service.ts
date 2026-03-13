@@ -8,7 +8,6 @@ import env from '#start/env'
 import logger from '@adonisjs/core/services/logger'
 import { type WhatsAppAPIResponse, type WhatsAppAPIError } from '#types/index'
 import { sanitizeOutboundMessage } from '#utils/sanitize'
-import sentryService from '#services/sentry_service'
 
 const WHATSAPP_API_URL = 'https://graph.facebook.com/v18.0'
 const PHONE_NUMBER_ID = env.get('WHATSAPP_PHONE_NUMBER_ID')
@@ -125,9 +124,7 @@ export async function sendTextMessage(
     }
   }
 
-  sentryService.captureMessage('WhatsApp send failure: all retries exhausted', 'error', {
-    to: normalizedTo,
-  })
+  logger.error('WhatsApp send failure: all retries exhausted — to: %s', normalizedTo)
   throw new Error('Failed to send message after retries')
 }
 

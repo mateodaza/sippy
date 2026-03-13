@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import * as Sentry from '@sentry/nextjs';
 import {
   useSendUserOperation,
 } from '@coinbase/cdp-hooks';
@@ -745,16 +744,14 @@ function WalletContent() {
 
 export default function WalletPage() {
   return (
-    <Sentry.ErrorBoundary fallback={<p>Something went wrong.</p>}>
-      <Suspense
-        fallback={
-          <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center'>
-            <div className='text-gray-600'>Loading...</div>
-          </div>
-        }
-      >
-        <WalletContent />
-      </Suspense>
-    </Sentry.ErrorBoundary>
+    <Suspense
+      fallback={
+        <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center'>
+          <div className='text-gray-600'>Loading...</div>
+        </div>
+      }
+    >
+      <WalletContent />
+    </Suspense>
   );
 }

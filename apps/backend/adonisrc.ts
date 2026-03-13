@@ -79,10 +79,6 @@ export default defineConfig({
       file: () => import('#start/indexer_sync'),
       environment: ['web'],
     },
-    {
-      file: () => import('#start/sentry'),
-      environment: ['web'],
-    },
   ],
 
   /*

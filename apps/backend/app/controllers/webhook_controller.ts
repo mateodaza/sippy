@@ -52,7 +52,6 @@ import { handleSendCommand } from '#commands/send_command'
 import { generateResponse } from '#services/llm.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
 import { canonicalizePhone } from '#utils/phone'
-import sentryService from '#services/sentry_service'
 import { getIsPaused } from '#controllers/admin/moderation_controller'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 
@@ -363,7 +362,7 @@ export async function routeCommand(
     }
   } catch (error) {
     logger.error('Error handling command: %o', error)
-    sentryService.captureException(error, { phone: phoneNumber })
+    logger.error('Command exception for %s: %o', phoneNumber, error)
     await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
   }
 }
