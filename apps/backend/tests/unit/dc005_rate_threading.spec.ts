@@ -365,7 +365,8 @@ test.group('AC2b routeCommand | context forwarded to generateResponse', () => {
     const rateCtx: RateContext = { senderRate: null, senderCurrency: null, recipientRate: null, recipientCurrency: null }
     const cmd: ParsedCommand = { command: 'greeting', originalText: 'buenos días' }
 
-    await routeCommand('573001234567', cmd, 'es', rateCtx, incomingContext, undefined, undefined, fakeGenerateResponse)
+    const noopSend = async () => ({ messaging_product: 'whatsapp' })
+    await routeCommand('573001234567', cmd, 'es', rateCtx, incomingContext, undefined, undefined, fakeGenerateResponse, noopSend)
 
     assert.deepEqual(capturedContext, incomingContext, 'context must be forwarded to generateResponse unchanged')
   })
@@ -386,7 +387,8 @@ test.group('AC2b routeCommand | context forwarded to generateResponse', () => {
     const rateCtx: RateContext = { senderRate: null, senderCurrency: null, recipientRate: null, recipientCurrency: null }
     const cmd: ParsedCommand = { command: 'social', originalText: 'gracias' }
 
-    await routeCommand('573001234567', cmd, 'es', rateCtx, incomingContext, undefined, undefined, fakeGenerateResponse)
+    const noopSend = async () => ({ messaging_product: 'whatsapp' })
+    await routeCommand('573001234567', cmd, 'es', rateCtx, incomingContext, undefined, undefined, fakeGenerateResponse, noopSend)
 
     assert.deepEqual(capturedContext, incomingContext, 'context must be forwarded to generateResponse unchanged')
   })
@@ -406,7 +408,8 @@ test.group('AC2b routeCommand | context forwarded to generateResponse', () => {
     const rateCtx: RateContext = { senderRate: null, senderCurrency: null, recipientRate: null, recipientCurrency: null }
     const cmd: ParsedCommand = { command: 'greeting', originalText: 'hi' }
 
-    await routeCommand('13105551234', cmd, 'en', rateCtx, [], undefined, undefined, fakeGenerateResponse)
+    const noopSend = async () => ({ messaging_product: 'whatsapp' })
+    await routeCommand('13105551234', cmd, 'en', rateCtx, [], undefined, undefined, fakeGenerateResponse, noopSend)
 
     assert.deepEqual(capturedContext, [], 'empty context must still be forwarded, not replaced with undefined')
   })

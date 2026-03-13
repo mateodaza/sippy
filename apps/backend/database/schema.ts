@@ -26,6 +26,17 @@ export class AdminUserSchema extends BaseModel {
   declare updatedAt: DateTime
 }
 
+export class ConversationContextSchema extends BaseModel {
+  static $columns = ['phoneNumber', 'messages', 'updatedAt'] as const
+  $columns = ConversationContextSchema.$columns
+  @column()
+  declare phoneNumber: string
+  @column()
+  declare messages: any
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
 export class ExportAuditLogSchema extends BaseModel {
   static $columns = ['id', 'attemptId', 'event', 'phoneHash', 'walletAddress', 'createdAt'] as const
   $columns = ExportAuditLogSchema.$columns
@@ -44,7 +55,7 @@ export class ExportAuditLogSchema extends BaseModel {
 }
 
 export class ParseLogSchema extends BaseModel {
-  static $columns = ['id', 'messageId', 'phoneNumber', 'parseSource', 'intent', 'model', 'promptTokens', 'completionTokens', 'latencyMs', 'status', 'detectedLanguage', 'createdAt'] as const
+  static $columns = ['id', 'messageId', 'phoneNumber', 'parseSource', 'intent', 'model', 'promptTokens', 'completionTokens', 'latencyMs', 'status', 'detectedLanguage', 'createdAt', 'matchedPhrase'] as const
   $columns = ParseLogSchema.$columns
   @column({ isPrimary: true })
   declare id: number
@@ -70,6 +81,8 @@ export class ParseLogSchema extends BaseModel {
   declare detectedLanguage: string | null
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
+  @column()
+  declare matchedPhrase: string | null
 }
 
 export class PhoneRegistrySchema extends BaseModel {
@@ -97,19 +110,8 @@ export class PhoneRegistrySchema extends BaseModel {
   declare permissionCreatedAt: bigint | number | null
 }
 
-export class TransactionSchema extends BaseModel {
-  static $columns = ['id', 'createdAt', 'updatedAt'] as const
-  $columns = TransactionSchema.$columns
-  @column({ isPrimary: true })
-  declare id: number
-  @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime | null
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
-}
-
 export class UserPreferenceSchema extends BaseModel {
-  static $columns = ['phoneNumber', 'preferredLanguage', 'updatedAt'] as const
+  static $columns = ['phoneNumber', 'preferredLanguage', 'updatedAt', 'emailEncrypted', 'emailHash', 'emailVerified', 'emailVerifiedAt'] as const
   $columns = UserPreferenceSchema.$columns
   @column()
   declare phoneNumber: string
@@ -117,47 +119,14 @@ export class UserPreferenceSchema extends BaseModel {
   declare preferredLanguage: string | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
-}
-
-export class UserSchema extends BaseModel {
-  static $columns = ['id', 'phoneNumber', 'cdpWalletName', 'walletAddress', 'status', 'kycStatus', 'kycLevel', 'displayName', 'language', 'notificationsEnabled', 'isPublic', 'dailyLimit', 'transactionLimit', 'dailySpent', 'lastResetDate', 'createdAt', 'updatedAt', 'lastActivity'] as const
-  $columns = UserSchema.$columns
-  @column({ isPrimary: true })
-  declare id: number
   @column()
-  declare phoneNumber: string
+  declare emailEncrypted: string | null
   @column()
-  declare cdpWalletName: string
+  declare emailHash: string | null
   @column()
-  declare walletAddress: string
-  @column()
-  declare status: string | null
-  @column()
-  declare kycStatus: string | null
-  @column()
-  declare kycLevel: number | null
-  @column()
-  declare displayName: string | null
-  @column()
-  declare language: string | null
-  @column()
-  declare notificationsEnabled: boolean | null
-  @column()
-  declare isPublic: boolean | null
-  @column()
-  declare dailyLimit: string | null
-  @column()
-  declare transactionLimit: string | null
-  @column()
-  declare dailySpent: string | null
+  declare emailVerified: boolean
   @column.dateTime()
-  declare lastResetDate: DateTime | null
-  @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime | null
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
-  @column.dateTime()
-  declare lastActivity: DateTime | null
+  declare emailVerifiedAt: DateTime | null
 }
 
 export class WebSendLogSchema extends BaseModel {

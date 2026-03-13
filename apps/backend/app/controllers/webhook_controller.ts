@@ -105,7 +105,8 @@ export async function routeCommand(
   context: import('#services/db').ContextMessage[] = [],
   balanceHandler: typeof handleBalanceCommand = handleBalanceCommand,
   sendHandler: typeof handleSendCommand = handleSendCommand,
-  generateResponseFn: typeof generateResponse = generateResponse
+  generateResponseFn: typeof generateResponse = generateResponse,
+  sendMessageFn: typeof sendTextMessage = sendTextMessage
 ): Promise<void> {
   try {
     switch (command.command) {
@@ -114,11 +115,11 @@ export async function routeCommand(
         break
 
       case 'help':
-        await sendTextMessage(phoneNumber, formatHelpMessage(lang), lang)
+        await sendMessageFn(phoneNumber, formatHelpMessage(lang), lang)
         break
 
       case 'about':
-        await sendTextMessage(phoneNumber, formatAboutMessage(lang), lang)
+        await sendMessageFn(phoneNumber, formatAboutMessage(lang), lang)
         break
 
       case 'balance':
@@ -138,29 +139,29 @@ export async function routeCommand(
             rateCtx.recipientCurrency
           )
         } else {
-          await sendTextMessage(phoneNumber, formatInvalidSendFormat(lang), lang)
+          await sendMessageFn(phoneNumber, formatInvalidSendFormat(lang), lang)
         }
         break
 
       case 'history':
-        await sendTextMessage(phoneNumber, formatHistoryMessage(phoneNumber, lang), lang)
+        await sendMessageFn(phoneNumber, formatHistoryMessage(phoneNumber, lang), lang)
         break
 
       case 'settings':
-        await sendTextMessage(phoneNumber, formatSettingsMessage(phoneNumber, lang), lang)
+        await sendMessageFn(phoneNumber, formatSettingsMessage(phoneNumber, lang), lang)
         break
 
       case 'greeting': {
         const text = command.originalText ?? ''
         const reply = text ? await generateResponseFn(text, lang, context) : null
-        await sendTextMessage(phoneNumber, reply ?? formatGreetingMessage(lang), lang)
+        await sendMessageFn(phoneNumber, reply ?? formatGreetingMessage(lang), lang)
         break
       }
 
       case 'social': {
         const text = command.originalText ?? ''
         const reply = text ? await generateResponseFn(text, lang, context) : null
-        await sendTextMessage(phoneNumber, reply ?? formatSocialReplyMessage(lang), lang)
+        await sendMessageFn(phoneNumber, reply ?? formatSocialReplyMessage(lang), lang)
         break
       }
 
@@ -172,17 +173,17 @@ export async function routeCommand(
         }
         const langName =
           langNames[command.detectedLanguage || ''] || command.detectedLanguage || ''
-        await sendTextMessage(phoneNumber, formatLanguageSetMessage(langName, lang), lang)
+        await sendMessageFn(phoneNumber, formatLanguageSetMessage(langName, lang), lang)
         break
       }
 
       case 'unknown':
         if (command.helpfulMessage) {
-          await sendTextMessage(phoneNumber, command.helpfulMessage, lang)
+          await sendMessageFn(phoneNumber, command.helpfulMessage, lang)
         } else {
           const rateLimitNote =
             command.llmStatus === 'rate-limited' ? `\n${formatRateLimitedMessage(lang)}\n\n` : ''
-          await sendTextMessage(
+          await sendMessageFn(
             phoneNumber,
             formatUnknownCommandMessage(command.originalText || '', lang) +
               (rateLimitNote ? `\n${rateLimitNote}` : ''),
@@ -196,7 +197,7 @@ export async function routeCommand(
     }
   } catch (error) {
     logger.error('Error handling command: %o', error)
-    await sendTextMessage(phoneNumber, formatCommandErrorMessage(lang), lang)
+    await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
   }
 }
 
