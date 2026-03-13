@@ -127,6 +127,11 @@ function SettingsContent() {
   const [langSaving, setLangSaving] = useState(false);
   const [langSaveError, setLangSaveError] = useState<string | null>(null);
 
+  // Privacy toggle state
+  const [phoneVisible, setPhoneVisible] = useState<boolean | null>(null);
+  const [privacySaving, setPrivacySaving] = useState(false);
+  const [privacySaveError, setPrivacySaveError] = useState<string | null>(null);
+
   // CDP Hooks
   const { authenticateWithJWT } = useAuthenticateWithJWT();
   const { createSpendPermission } = useCreateSpendPermission();
@@ -182,6 +187,27 @@ function SettingsContent() {
       // and the user can retry. Do NOT set emailStatus to a false-email
       // sentinel — that would route verified users into the bypass path.
       setEmailSectionStep('fetch_error');
+    }
+  };
+
+  const fetchPrivacyStatus = async () => {
+    const accessToken = getStoredToken();
+    if (!accessToken || !BACKEND_URL) {
+      setPhoneVisible(true);
+      return;
+    }
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/privacy-status`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPhoneVisible(data.phoneVisible ?? true);
+      } else {
+        setPhoneVisible(true);
+      }
+    } catch {
+      setPhoneVisible(true);
     }
   };
 
@@ -262,6 +288,7 @@ function SettingsContent() {
           }
           console.log('Wallet status restored:', status);
           await fetchEmailStatus();
+          await fetchPrivacyStatus();
         }
 
         // Session restored - go directly to authenticated view
@@ -396,6 +423,31 @@ function SettingsContent() {
     }
   };
 
+  const handleSetPhoneVisible = async (visible: boolean) => {
+    setPrivacySaving(true);
+    setPrivacySaveError(null);
+    try {
+      const accessToken = getStoredToken();
+      const res = await fetch(`${BACKEND_URL}/api/set-privacy`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phoneVisible: visible }),
+      });
+      if (res.ok) {
+        setPhoneVisible(visible);
+      } else {
+        setPrivacySaveError('Failed to save privacy setting');
+      }
+    } catch {
+      setPrivacySaveError('Failed to save privacy setting');
+    } finally {
+      setPrivacySaving(false);
+    }
+  };
+
   // Step 1: Send SMS OTP
   const handleSendOtp = async () => {
     setIsLoading(true);
@@ -454,6 +506,7 @@ function SettingsContent() {
       // Fetch current wallet status
       await fetchWalletStatus();
       await fetchEmailStatus();
+      await fetchPrivacyStatus();
     } catch (err) {
       console.error('OTP verification failed:', err);
       setError(localizeError(err instanceof Error ? err : {}, 'otp-verify', lang));
@@ -1480,6 +1533,31 @@ function SettingsContent() {
           </div>
           {langSaveError && (
             <p className='text-sm text-red-600 mt-2'>{langSaveError}</p>
+          )}
+        </div>
+
+        {/* Privacy */}
+        <div className='border-t pt-6 mb-6'>
+          <h2 className='text-sm font-medium text-gray-700 mb-3'>Privacy</h2>
+          <label className='flex items-center justify-between cursor-pointer'>
+            <div>
+              <span className='text-sm text-gray-900'>Show phone number on profile</span>
+              <p className='text-xs text-gray-500 mt-0.5'>
+                When off, your phone number is hidden on your public profile
+              </p>
+            </div>
+            <input
+              type='checkbox'
+              role='switch'
+              className='sr-only peer'
+              checked={phoneVisible ?? true}
+              disabled={privacySaving || phoneVisible === null}
+              onChange={(e) => handleSetPhoneVisible(e.target.checked)}
+            />
+            <div className='relative w-11 h-6 bg-gray-200 rounded-full peer-checked:bg-emerald-600 peer-disabled:opacity-50 after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5 ml-3 flex-shrink-0' />
+          </label>
+          {privacySaveError && (
+            <p className='text-sm text-red-600 mt-2'>{privacySaveError}</p>
           )}
         </div>
 

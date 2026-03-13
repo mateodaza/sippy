@@ -230,7 +230,7 @@
 - **Dependencies:** PV-001
 - **Files:** `apps/web/app/profile/[phone]/page.tsx`, `apps/backend/app/controllers/embedded_wallet_controller.ts`
 
-#### PV-003 [ ] Add privacy toggle to settings page
+#### PV-003 [x] Add privacy toggle to settings page
 - **What:** Toggle switch on settings page for phone visibility.
 - **Acceptance criteria:**
   - New section: "Privacy" in settings page

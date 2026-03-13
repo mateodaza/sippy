@@ -1194,3 +1194,144 @@ describe('handleSetLanguage', () => {
     expect(container!.textContent).toContain('Failed to save language preference')
   })
 })
+
+describe('privacy toggle', () => {
+  it('TC-PV-003-W-01: GET /api/privacy-status called on session restore with Bearer token', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
+      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
+      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: true }) }
+      return { ok: true, json: async () => ({}) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    const privacyCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/privacy-status')
+    )
+    expect(privacyCall).toBeDefined()
+    expect((privacyCall![1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
+  })
+
+  it('TC-PV-003-W-02: toggle renders checked when phoneVisible: true', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
+      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
+      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: true }) }
+      return { ok: true, json: async () => ({}) }
+    }))
+    await renderPage()
+
+    const checkbox = container!.querySelector('input[role="switch"]') as HTMLInputElement
+    expect(checkbox).not.toBeNull()
+    expect(checkbox.checked).toBe(true)
+  })
+
+  it('TC-PV-003-W-03: toggle renders unchecked when phoneVisible: false', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
+      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
+      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: false }) }
+      return { ok: true, json: async () => ({}) }
+    }))
+    await renderPage()
+
+    const checkbox = container!.querySelector('input[role="switch"]') as HTMLInputElement
+    expect(checkbox).not.toBeNull()
+    expect(checkbox.checked).toBe(false)
+  })
+
+  it('TC-PV-003-W-04: toggling off calls POST /api/set-privacy with {phoneVisible:false} and Bearer', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
+      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
+      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: true }) }
+      if (url.includes('/api/set-privacy')) return { ok: true, json: async () => ({}) }
+      return { ok: true, json: async () => ({}) }
+    })
+    vi.stubGlobal('fetch', mockFetch)
+    await renderPage()
+
+    const checkbox = container!.querySelector('input[role="switch"]') as HTMLInputElement
+    await act(async () => {
+      checkbox.click()
+    })
+
+    const setPrivacyCall = mockFetch.mock.calls.find(
+      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-privacy')
+    )
+    expect(setPrivacyCall).toBeDefined()
+    expect(JSON.parse((setPrivacyCall![1] as RequestInit).body as string)).toEqual({ phoneVisible: false })
+    expect((setPrivacyCall![1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
+  })
+
+  it('TC-PV-003-W-05: toggle is disabled while privacySaving (save in-flight)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    let resolveSetPrivacy!: () => void
+    const setPrivacyPromise = new Promise<void>((resolve) => { resolveSetPrivacy = resolve })
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
+      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
+      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: true }) }
+      if (url.includes('/api/set-privacy')) {
+        await setPrivacyPromise
+        return { ok: true, json: async () => ({}) }
+      }
+      return { ok: true, json: async () => ({}) }
+    }))
+    await renderPage()
+
+    const checkbox = container!.querySelector('input[role="switch"]') as HTMLInputElement
+    // Trigger toggle without awaiting completion — use sync act so state flushes but fetch stays pending
+    act(() => {
+      checkbox.click()
+    })
+
+    // While save is in-flight, checkbox should be disabled
+    expect(checkbox.disabled).toBe(true)
+
+    // Cleanup: resolve the promise
+    await act(async () => { resolveSetPrivacy() })
+  })
+
+  it('TC-PV-003-W-06: error from POST /api/set-privacy shows error text', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
+      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
+      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: true }) }
+      if (url.includes('/api/set-privacy')) return { ok: false, json: async () => ({}) }
+      return { ok: true, json: async () => ({}) }
+    }))
+    await renderPage()
+
+    const checkbox = container!.querySelector('input[role="switch"]') as HTMLInputElement
+    await act(async () => {
+      checkbox.click()
+    })
+
+    expect(container!.textContent).toContain('Failed to save privacy setting')
+  })
+})
