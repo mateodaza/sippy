@@ -417,7 +417,7 @@
 > **Deliverable:** M1 #3
 > **Priority:** P2
 
-#### AC-001 [ ] User block/unblock + global pause
+#### AC-001 [x] User block/unblock + global pause
 - **What:** Admin endpoints to block users and pause all processing.
 - **Acceptance criteria:**
   - New migration: ADD `blocked BOOLEAN NOT NULL DEFAULT false` to `user_preferences`
@@ -439,7 +439,7 @@
 > **Deliverable:** M1 #10
 > **Priority:** P2 — last phase before submission
 
-#### BP-001 [ ] End-to-end test matrix
+#### BP-001 [x] End-to-end test matrix
 - **What:** Manual test checklist covering all user flows.
 - **Acceptance criteria:**
   - `docs/E2E-TEST-MATRIX.md` with checkboxes for:

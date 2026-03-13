@@ -41,6 +41,8 @@ import {
   formatAmountError,
   formatInvalidPhoneNumberMessage,
   formatConfirmationPromptWithWarning,
+  formatAccountSuspendedMessage,
+  formatMaintenanceMessage,
 } from '#utils/messages'
 
 import UserPreference from '#models/user_preference'
@@ -51,6 +53,7 @@ import { generateResponse } from '#services/llm.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
 import { canonicalizePhone } from '#utils/phone'
 import sentryService from '#services/sentry_service'
+import { isPaused } from '#controllers/admin/moderation_controller'
 
 // Exported so tests can seed/inspect state directly
 export const pendingTransactions = new Map<string, PendingTransaction>()
@@ -543,6 +546,23 @@ export default class WebhookController {
     if (rateLimitService.isSpamming(from)) {
       logger.warn('Spam detected from %s, ignoring', from)
       // Mark as processed so Meta doesn't retry spam
+      rateLimitService.markProcessed(messageId)
+      return
+    }
+
+    // ── Global pause check ──────────────────────────────────────────
+    if (isPaused) {
+      const pauseLang = (await getUserLanguage(from)) || 'en'
+      await sendTextMessage(from, formatMaintenanceMessage(pauseLang), pauseLang)
+      rateLimitService.markProcessed(messageId)
+      return
+    }
+
+    // ── Blocked user check ────────────────────────────────────────────
+    const blockedPref = await UserPreference.findBy('phoneNumber', from)
+    if (blockedPref?.blocked) {
+      const blockedLang: Lang = (blockedPref.preferredLanguage as Lang) || (await getUserLanguage(from)) || 'en'
+      await sendTextMessage(from, formatAccountSuspendedMessage(blockedLang), blockedLang)
       rateLimitService.markProcessed(messageId)
       return
     }

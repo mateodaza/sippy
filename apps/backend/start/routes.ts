@@ -84,6 +84,7 @@ const DashboardController = () => import('#controllers/admin/dashboard_controlle
 const AdminUsersController = () => import('#controllers/admin/users_controller')
 const AnalyticsController = () => import('#controllers/admin/analytics_controller')
 const RolesController = () => import('#controllers/admin/roles_controller')
+const ModerationController = () => import('#controllers/admin/moderation_controller')
 
 // Public admin routes
 router.get('/admin/login', [AdminAuthController, 'showLogin'])
@@ -100,6 +101,10 @@ router
     router.get('/parse-patterns', [AnalyticsController, 'parsePatterns'])
     router.get('/roles', [RolesController, 'index'])
     router.put('/roles/:id', [RolesController, 'update'])
+    router.post('/block-user', [ModerationController, 'blockUser'])
+    router.post('/unblock-user', [ModerationController, 'unblockUser'])
+    router.post('/pause', [ModerationController, 'pause'])
+    router.post('/resume', [ModerationController, 'resume'])
   })
   .prefix('/admin')
   .use(middleware.auth({ guards: ['web'] }))

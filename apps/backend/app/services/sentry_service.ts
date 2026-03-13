@@ -11,8 +11,15 @@
  * - Wallet addresses (0x…): first 6 + last 4 hex chars visible
  */
 
-import * as Sentry from '@sentry/node'
 import env from '#start/env'
+
+let Sentry: any = null
+
+try {
+  Sentry = await import('@sentry/node')
+} catch {
+  // @sentry/node not installed — all methods become no-ops
+}
 
 /**
  * Redacts phone numbers and wallet addresses from a flat context object.
@@ -42,6 +49,7 @@ export function redactPii(data: Record<string, unknown>): Record<string, unknown
 }
 
 function init(): void {
+  if (!Sentry) return
   const dsn = env.get('SENTRY_DSN')
   if (!dsn) return
 
@@ -50,7 +58,7 @@ function init(): void {
     environment: env.get('SENTRY_ENVIRONMENT') ?? env.get('NODE_ENV'),
     release: env.get('SENTRY_RELEASE'),
     tracesSampleRate: 0,
-    beforeBreadcrumb(breadcrumb) {
+    beforeBreadcrumb(breadcrumb: any) {
       if (breadcrumb.data) {
         breadcrumb.data = redactPii(breadcrumb.data as Record<string, unknown>)
       }
@@ -60,8 +68,9 @@ function init(): void {
 }
 
 function captureException(error: unknown, context?: Record<string, unknown>): void {
+  if (!Sentry) return
   const redacted = context ? redactPii(context) : undefined
-  Sentry.withScope((scope) => {
+  Sentry.withScope((scope: any) => {
     if (redacted) scope.setExtras(redacted)
     Sentry.captureException(error)
   })
@@ -69,11 +78,12 @@ function captureException(error: unknown, context?: Record<string, unknown>): vo
 
 function captureMessage(
   message: string,
-  level: Sentry.SeverityLevel = 'error',
+  level: string = 'error',
   context?: Record<string, unknown>
 ): void {
+  if (!Sentry) return
   const redacted = context ? redactPii(context) : undefined
-  Sentry.withScope((scope) => {
+  Sentry.withScope((scope: any) => {
     if (redacted) scope.setExtras(redacted)
     Sentry.captureMessage(message, level)
   })

@@ -733,6 +733,24 @@ export function formatPrivacySetMessage(action: 'on' | 'off', lang: Lang = 'en')
   return m[lang]()
 }
 
+export function formatAccountSuspendedMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `Your account has been temporarily suspended.`,
+    es: () => `Tu cuenta ha sido suspendida temporalmente.`,
+    pt: () => `Sua conta foi suspensa temporariamente.`,
+  }
+  return m[lang]()
+}
+
+export function formatMaintenanceMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `Sippy is undergoing maintenance.`,
+    es: () => `Sippy esta en mantenimiento.`,
+    pt: () => `Sippy esta em manutencao.`,
+  }
+  return m[lang]()
+}
+
 export function formatCommandErrorMessage(lang: Lang = 'en'): string {
   const m = {
     en: () => `Error processing your command. Please try again.`,
