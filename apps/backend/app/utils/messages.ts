@@ -8,6 +8,7 @@
 export type Lang = 'en' | 'es' | 'pt'
 
 import { DAILY_LIMIT_VERIFIED } from '#services/cdp_wallet.service'
+import type { AmountErrorCode } from '#types/index'
 
 const RECEIPT_BASE_URL = process.env.RECEIPT_BASE_URL || 'https://www.sippy.lat/receipt/'
 const FUND_URL = process.env.FUND_URL || 'https://www.sippy.lat/fund'
@@ -882,4 +883,89 @@ export function formatConcurrentSendMessage(lang: Lang): string {
     pt: () => `Uma transferencia ja esta em andamento. Por favor aguarde.`,
   }
   return m[lang]()
+}
+
+// ============================================================================
+// TX-004: Amount validation error messages
+// ============================================================================
+
+export function formatAmountZeroMessage(lang: Lang): string {
+  const m = {
+    en: () => `Amount must be greater than zero.`,
+    es: () => `El monto debe ser mayor que cero.`,
+    pt: () => `O valor deve ser maior que zero.`,
+  }
+  return m[lang]()
+}
+
+export function formatAmountTooLargeMessage(lang: Lang): string {
+  const m = {
+    en: () => `Amount exceeds the $10,000 limit.`,
+    es: () => `El monto supera el limite de $10,000.`,
+    pt: () => `O valor excede o limite de $10,000.`,
+  }
+  return m[lang]()
+}
+
+export function formatAmountTooManyDecimalsMessage(lang: Lang): string {
+  const m = {
+    en: () => `Amounts can't have more than 2 decimal places (e.g., 10.50).`,
+    es: () => `Los montos no pueden tener mas de 2 decimales (ej: 10.50).`,
+    pt: () => `Os valores nao podem ter mais de 2 casas decimais (ex: 10.50).`,
+  }
+  return m[lang]()
+}
+
+export function formatAmountAmbiguousMessage(lang: Lang): string {
+  const m = {
+    en: () => `That amount is ambiguous. Did you mean the number with a decimal or a thousands separator? Please write it without separators (e.g., 1000 or 10.50).`,
+    es: () => `Ese monto es ambiguo. Escribelo sin separadores (ej: 1000 o 10.50).`,
+    pt: () => `Esse valor e ambiguo. Escreva-o sem separadores (ex: 1000 ou 10.50).`,
+  }
+  return m[lang]()
+}
+
+export function formatAmountInvalidMessage(lang: Lang): string {
+  const m = {
+    en: () => `That doesn't look like a valid amount.`,
+    es: () => `Eso no parece un monto valido.`,
+    pt: () => `Isso nao parece um valor valido.`,
+  }
+  return m[lang]()
+}
+
+export function formatInvalidPhoneNumberMessage(lang: Lang): string {
+  const m = {
+    en: () => `That doesn't look like a phone number.`,
+    es: () => `Eso no parece un numero de telefono.`,
+    pt: () => `Isso nao parece um numero de telefone.`,
+  }
+  return m[lang]()
+}
+
+export function formatAmountError(code: AmountErrorCode, lang: Lang): string {
+  switch (code) {
+    case 'ZERO':               return formatAmountZeroMessage(lang)
+    case 'TOO_LARGE':          return formatAmountTooLargeMessage(lang)
+    case 'TOO_MANY_DECIMALS':  return formatAmountTooManyDecimalsMessage(lang)
+    case 'AMBIGUOUS_SEPARATOR': return formatAmountAmbiguousMessage(lang)
+    case 'INVALID_FORMAT':     return formatAmountInvalidMessage(lang)
+  }
+}
+
+export function formatConfirmationPromptWithWarning(
+  amount: number,
+  recipient: string,
+  isLargeAmount: boolean,
+  lang: Lang
+): string {
+  const base = formatConfirmationPrompt(amount, recipient, lang)
+  if (!isLargeAmount) return base
+
+  const warning = {
+    en: `This is a large transfer.`,
+    es: `Esta es una transferencia grande.`,
+    pt: `Esta e uma transferencia grande.`,
+  }
+  return base + `\n\n${warning[lang]}`
 }

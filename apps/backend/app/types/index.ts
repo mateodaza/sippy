@@ -2,6 +2,13 @@
  * Type definitions for Sippy backend
  */
 
+export type AmountErrorCode =
+  | 'ZERO'
+  | 'TOO_LARGE'
+  | 'TOO_MANY_DECIMALS'
+  | 'AMBIGUOUS_SEPARATOR'
+  | 'INVALID_FORMAT'
+
 export interface Session {
   phoneNumber: string
   createdAt: number
@@ -63,6 +70,9 @@ export interface ParsedCommand {
     | 'error'
     | 'low-confidence'
     | 'validation-failed'
+  amountError?: AmountErrorCode      // set when send regex matched but amount is invalid
+  recipientError?: 'INVALID_PHONE'   // set when amount is valid but phone canonicalization fails
+  isLargeAmount?: boolean            // true iff amount > 500 and no amountError
 }
 
 export interface WalletInfo {

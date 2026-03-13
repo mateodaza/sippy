@@ -34,11 +34,13 @@ import {
   formatSocialReplyMessage,
   formatTextOnlyMessage,
   formatPrivacySetMessage,
-  formatConfirmationPrompt,
   formatTransferCancelled,
   formatNoPendingTransfer,
   formatSelfSendMessage,
   formatConcurrentSendMessage,
+  formatAmountError,
+  formatInvalidPhoneNumberMessage,
+  formatConfirmationPromptWithWarning,
 } from '#utils/messages'
 
 import UserPreference from '#models/user_preference'
@@ -188,6 +190,18 @@ export async function routeCommand(
         break
 
       case 'send': {
+        // NEW: amount validation error — specific message, bail early
+        if (command.amountError) {
+          await sendMessageFn(phoneNumber, formatAmountError(command.amountError, lang), lang)
+          return
+        }
+
+        // NEW: phone canonicalization failed — specific message, bail early
+        if (command.recipientError === 'INVALID_PHONE') {
+          await sendMessageFn(phoneNumber, formatInvalidPhoneNumberMessage(lang), lang)
+          return
+        }
+
         // Self-send check — before any processing (fail fast)
         const canonicalRecipient = command.recipient ? canonicalizePhone(command.recipient) : null
         if (canonicalRecipient && canonicalRecipient === phoneNumber) {
@@ -230,7 +244,12 @@ export async function routeCommand(
             })
             await sendMessageFn(
               phoneNumber,
-              formatConfirmationPrompt(command.amount, command.recipient, lang),
+              formatConfirmationPromptWithWarning(
+                command.amount,
+                command.recipient,
+                command.isLargeAmount ?? false,
+                lang
+              ),
               lang
             )
           }

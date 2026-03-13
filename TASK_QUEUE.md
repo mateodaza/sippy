@@ -311,7 +311,7 @@
 - **Context:** `apps/backend/app/services/rate_limit_service.ts` (follow pattern)
 - **Files:** `apps/backend/app/services/velocity_service.ts` (new), `apps/backend/tests/unit/velocity_service.spec.ts` (new)
 
-#### TX-004 [ ] Amount sanity checks + input hardening
+#### TX-004 [x] Amount sanity checks + input hardening
 - **What:** Block obviously abusive or malformed amounts before they reach the chain.
 - **Acceptance criteria:**
   - Block amounts > $10,000 (hard ceiling)
