@@ -219,7 +219,7 @@
 - **Dependencies:** None
 - **Files:** `apps/backend/database/migrations/*_add_phone_visible.ts` (new), `apps/backend/app/models/user_preference.ts`, `apps/backend/app/controllers/embedded_wallet_controller.ts`, `apps/backend/start/routes.ts`
 
-#### PV-002 [ ] Profile page respects phone visibility
+#### PV-002 [x] Profile page respects phone visibility
 - **What:** Public profile page checks `phone_visible` before showing the phone number.
 - **Acceptance criteria:**
   - `GET /api/profile/:phone` (or equivalent) returns `phoneVisible` flag

@@ -212,6 +212,15 @@ export default class RateLimitService {
     this.loginThrottle.delete(ip)
   }
 
+  /**
+   * Clear all IP resolve throttle entries.
+   * Intended for use in functional tests to reset the shared budget between
+   * test groups that hit throttled endpoints.
+   */
+  resetIpThrottle(): void {
+    this.ipResolveThrottle.clear()
+  }
+
   // ── Map 4: Per-User Phone Resolution Throttle ──────────────────────────────
 
   /**

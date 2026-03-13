@@ -111,7 +111,7 @@ export class PhoneRegistrySchema extends BaseModel {
 }
 
 export class UserPreferenceSchema extends BaseModel {
-  static $columns = ['phoneNumber', 'preferredLanguage', 'updatedAt', 'emailEncrypted', 'emailHash', 'emailVerified', 'emailVerifiedAt'] as const
+  static $columns = ['phoneNumber', 'preferredLanguage', 'updatedAt', 'emailEncrypted', 'emailHash', 'emailVerified', 'emailVerifiedAt', 'phoneVisible'] as const
   $columns = UserPreferenceSchema.$columns
   @column()
   declare phoneNumber: string
@@ -127,6 +127,8 @@ export class UserPreferenceSchema extends BaseModel {
   declare emailVerified: boolean
   @column.dateTime()
   declare emailVerifiedAt: DateTime | null
+  @column()
+  declare phoneVisible: boolean
 }
 
 export class WebSendLogSchema extends BaseModel {

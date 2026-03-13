@@ -54,8 +54,13 @@ async function resolveEmbeddedUserPrefKey(phoneNumber: string): Promise<string> 
   return phoneNumber
 }
 
-// CDP client for spend permission queries
-const cdp = new CdpClient()
+// CDP client for spend permission queries — lazy to avoid crashing on import
+// when CDP credentials are not configured (e.g., in test environments)
+let _cdp: CdpClient | null = null
+function getCdpClient(): CdpClient {
+  if (!_cdp) _cdp = new CdpClient()
+  return _cdp
+}
 
 // Required for phone hashing in export audit logs and web send logs
 const EXPORT_AUDIT_SECRET = env.get('EXPORT_AUDIT_SECRET', '')
@@ -167,7 +172,7 @@ export default class EmbeddedWalletController {
       const spenderAddress = spenderAccount.address
 
       // Find the permission onchain by matching criteria
-      const allPermissions = await cdp.evm.listSpendPermissions({
+      const allPermissions = await getCdpClient().evm.listSpendPermissions({
         address: walletAddress as `0x${string}`,
       })
 
@@ -662,6 +667,59 @@ export default class EmbeddedWalletController {
       const pref = await findEmbeddedUserPref(dbPhone)
       return response.status(200).json({ phoneVisible: pref?.phoneVisible ?? true })
     } catch {
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * GET /api/profile
+   *
+   * Public endpoint — returns wallet address, canonical phone, and phone_visible
+   * preference for the given phone number. Used by public profile pages.
+   */
+  async getProfile({ request, response }: HttpContext) {
+    try {
+      const phone = request.input('phone') as string | undefined
+      if (!phone || typeof phone !== 'string') {
+        return response.status(400).json({ error: 'Phone number is required' })
+      }
+
+      const canonicalPhone = canonicalizePhone(phone)
+      if (!canonicalPhone) {
+        return response.status(400).json({ error: 'Invalid phone number' })
+      }
+
+      // Query phone_registry for wallet_address
+      let result = await query<{ wallet_address: string }>(
+        `SELECT wallet_address FROM phone_registry WHERE phone_number = $1`,
+        [canonicalPhone]
+      )
+
+      // Compatibility: bare-digit fallback for pre-SH-003 rows
+      if (result.rows.length === 0 && canonicalPhone.startsWith('+')) {
+        result = await query<{ wallet_address: string }>(
+          `SELECT wallet_address FROM phone_registry WHERE phone_number = $1`,
+          [canonicalPhone.slice(1)]
+        )
+      }
+
+      if (result.rows.length === 0) {
+        return response.status(404).json({ error: 'Wallet not found' })
+      }
+
+      const row = result.rows[0]
+
+      // Query user_preferences for phone_visible (with pre-SH-003 fallback)
+      const pref = await findEmbeddedUserPref(canonicalPhone)
+      const phoneVisible = pref?.phoneVisible ?? true
+
+      return response.json({
+        address: row.wallet_address,
+        phone: canonicalPhone,
+        phoneVisible,
+      })
+    } catch (error) {
+      logger.error('Get profile error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }

@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { Metadata } from 'next';
 import { ProfileHeader } from '@/components/profile/ProfileHeader';
 import { ActivityList } from '@/components/activity/ActivityList';
@@ -10,51 +11,76 @@ interface ProfilePageProps {
   }>;
 }
 
+type ProfileResult =
+  | { status: 'found'; address: string; phoneVisible: boolean }
+  | { status: 'not_found' }
+  | { status: 'error' };
+
+// React cache() deduplicates calls within the same request lifecycle,
+// so generateMetadata and the page component share a single backend fetch.
+const fetchProfileData = cache(async (phone: string): Promise<ProfileResult> => {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+    const response = await fetch(
+      `${baseUrl}/api/profile?phone=${encodeURIComponent(phone)}`,
+      { cache: 'no-store' }
+    );
+
+    if (response.status === 404) {
+      return { status: 'not_found' };
+    }
+
+    if (!response.ok) {
+      console.error(
+        `Failed to fetch profile for ${phone}:`,
+        response.status,
+        await response.text()
+      );
+      return { status: 'error' };
+    }
+
+    const data = await response.json();
+    if (!data.address) return { status: 'not_found' };
+    return {
+      status: 'found',
+      address: data.address,
+      phoneVisible: data.phoneVisible ?? true,
+    };
+  } catch (error) {
+    console.error('Failed to fetch profile data:', error);
+    return { status: 'error' };
+  }
+});
+
 export async function generateMetadata({
   params,
 }: ProfilePageProps): Promise<Metadata> {
   const { phone } = await params;
   const decodedPhone = decodeURIComponent(phone);
+  const result = await fetchProfileData(decodedPhone);
+
+  // On error (transient failures, 429, etc.) default to private metadata so
+  // we never leak the phone number for an account that may have it hidden.
+  if (result.status === 'error' || (result.status === 'found' && !result.phoneVisible)) {
+    return {
+      title: 'Private Profile | Sippy',
+      description: "This account's phone number is private.",
+    };
+  }
+
   return {
     title: `Profile: ${decodedPhone} | Sippy`,
     description: `View wallet balance and transaction history for ${decodedPhone} on Arbitrum One`,
   };
 }
 
-async function resolvePhoneToAddress(phone: string): Promise<string | null> {
-  try {
-    // Use Next.js API route instead of calling backend directly
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const response = await fetch(
-      `${baseUrl}/api/resolve-phone?phone=${encodeURIComponent(phone)}`,
-      { cache: 'no-store' }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(
-        `Failed to resolve phone ${phone}:`,
-        response.status,
-        errorText
-      );
-      return null;
-    }
-
-    const data = await response.json();
-    return data.address || null;
-  } catch (error) {
-    console.error('Failed to resolve phone to address:', error);
-    return null;
-  }
-}
-
 export default async function ProfilePage({ params }: ProfilePageProps) {
   const { phone } = await params;
   const decodedPhone = decodeURIComponent(phone);
 
-  const address = await resolvePhoneToAddress(decodedPhone);
+  const result = await fetchProfileData(decodedPhone);
 
-  if (!address) {
+  if (result.status !== 'found') {
     return (
       <div className='min-h-screen flex items-center justify-center px-4'>
         <div className='text-center max-w-md'>
@@ -76,6 +102,8 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       </div>
     );
   }
+
+  const { address, phoneVisible } = result;
 
   // Fetch balances and activity in parallel
   const [balances, activity] = await Promise.all([
@@ -113,6 +141,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
             address={address}
             balances={balances}
             phoneNumber={decodedPhone}
+            phoneVisible={phoneVisible}
           />
 
           {/* Activity List */}
