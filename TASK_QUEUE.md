@@ -293,7 +293,7 @@
 - **Dependencies:** SH-001 (needs canonicalizePhone for self-send check)
 - **Files:** `apps/backend/app/controllers/webhook_controller.ts`, `apps/backend/app/utils/messages.ts`
 
-#### TX-003 [ ] Velocity limiter service
+#### TX-003 [x] Velocity limiter service
 - **What:** Per-user send velocity tracking to prevent abuse.
 - **Acceptance criteria:**
   - New service: `app/services/velocity_service.ts`
