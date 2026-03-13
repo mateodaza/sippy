@@ -77,6 +77,36 @@ export function normalizePhoneNumber(rawPhone: string, originalText?: string): s
   return digitsOnly
 }
 
+export function canonicalizePhone(input: string): string | null {
+  if (!input) return null
+
+  const stripped = input.replace(/[\s\-().]/g, '')
+
+  let rawDigits: string
+  if (stripped.startsWith('+')) {
+    rawDigits = stripped.slice(1)
+  } else if (stripped.startsWith('00')) {
+    rawDigits = stripped.slice(2)
+  } else {
+    rawDigits = stripped
+  }
+
+  if (!/^\d+$/.test(rawDigits)) return null
+  if (rawDigits.length < 10) return null
+  if (rawDigits.length > 15) return null
+
+  if (rawDigits.length === 10) {
+    const cc = (process.env.DEFAULT_COUNTRY_CODE ?? '').replace(/\D/g, '')
+    if (!cc) return null
+    rawDigits = cc + rawDigits
+  }
+
+  if (rawDigits.length > 15) return null
+  if (rawDigits[0] === '0') return null
+
+  return '+' + rawDigits
+}
+
 export type SendVerificationMismatch = 'amount' | 'recipient' | 'invalid'
 
 export interface SendVerificationResult {

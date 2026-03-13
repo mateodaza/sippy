@@ -32,7 +32,7 @@
 >
 > **Current state:** Two separate normalization functions exist (`utils/phone.ts:normalizePhoneNumber` for WhatsApp and `auth_api_controller.ts:normalizePhone` for API auth). Phone is stored WITHOUT `+` prefix in `phone_registry` but WITH `+` prefix in JWT `sub` claims. This inconsistency is a ticking bomb.
 
-#### SH-001 [ ] Unify phone normalization into a single canonical function
+#### SH-001 [x] Unify phone normalization into a single canonical function
 - **What:** Create one definitive `canonicalizePhone(input: string): string | null` function that ALL code paths use. Output: E.164 format WITH `+` prefix (e.g., `+573001234567`). This becomes the single source of truth.
 - **Acceptance criteria:**
   - New function in `app/utils/phone.ts`: `canonicalizePhone(input: string): string | null`
