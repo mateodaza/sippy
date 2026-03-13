@@ -555,31 +555,25 @@ export function formatDailyLimitExceededMessage(
 
 export function formatTieredDailyLimitExceededMessage(
   dailyLimit: number,
-  phoneNumber: string,
+  _phoneNumber: string,
   lang: Lang = 'en',
   emailVerified: boolean
 ): string {
-  const settingsUrl = `${FRONTEND_URL}/settings?phone=${encodeURIComponent(phoneNumber)}`
-  const upsell = {
-    en: `Verify your email to raise your daily limit to $${DAILY_LIMIT_VERIFIED}`,
-    es: `Verifica tu correo electronico para aumentar tu limite diario a $${DAILY_LIMIT_VERIFIED}`,
-    pt: `Verifique seu email para aumentar seu limite diario para $${DAILY_LIMIT_VERIFIED}`,
+  if (emailVerified) {
+    const m = {
+      en: `You've reached your daily limit of $${dailyLimit}. Try again tomorrow.`,
+      es: `Has alcanzado tu limite diario de $${dailyLimit}. Intenta de nuevo manana.`,
+      pt: `Voce atingiu seu limite diario de $${dailyLimit}. Tente novamente amanha.`,
+    }
+    return m[lang]
+  } else {
+    const m = {
+      en: `You've reached your daily limit of $${dailyLimit}. Add a recovery email at sippy.lat/settings to increase it to $${DAILY_LIMIT_VERIFIED}/day.`,
+      es: `Has alcanzado tu limite diario de $${dailyLimit}. Agrega un correo de recuperacion en sippy.lat/settings para aumentarlo a $${DAILY_LIMIT_VERIFIED}/dia.`,
+      pt: `Voce atingiu seu limite diario de $${dailyLimit}. Adicione um email de recuperacao em sippy.lat/settings para aumenta-lo para $${DAILY_LIMIT_VERIFIED}/dia.`,
+    }
+    return m[lang]
   }
-  const m = {
-    en: () => {
-      const base = `Amount exceeds your daily limit of $${dailyLimit}.\n\nYou can change your limit here:\n${settingsUrl}`
-      return emailVerified ? base : `${base}\n\n${upsell.en}`
-    },
-    es: () => {
-      const base = `El monto excede tu limite diario de $${dailyLimit}.\n\nPuedes cambiar tu limite aqui:\n${settingsUrl}`
-      return emailVerified ? base : `${base}\n\n${upsell.es}`
-    },
-    pt: () => {
-      const base = `O valor excede seu limite diario de $${dailyLimit}.\n\nVoce pode alterar seu limite aqui:\n${settingsUrl}`
-      return emailVerified ? base : `${base}\n\n${upsell.pt}`
-    },
-  }
-  return m[lang]()
 }
 
 export function formatSpendingLimitInfo(

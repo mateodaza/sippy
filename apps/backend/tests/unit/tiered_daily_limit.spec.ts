@@ -74,35 +74,50 @@ test.group('computeSecurityLimits | transaction limit ($100, checked first)', ()
 test.group('formatTieredDailyLimitExceededMessage | English', () => {
   test('TC-EL-08: unverified EN → contains upsell', ({ assert }) => {
     const msg = formatTieredDailyLimitExceededMessage(50, '+573001234567', 'en', false)
-    assert.include(msg, 'Verify your email to raise your daily limit to $500')
+    assert.include(msg, "You've reached your daily limit of $50")
+    assert.include(msg, 'recovery email')
+    assert.include(msg, 'sippy.lat/settings')
+    assert.include(msg, '$500/day')
   })
 
   test('TC-EL-09: verified EN → no upsell', ({ assert }) => {
     const msg = formatTieredDailyLimitExceededMessage(500, '+573001234567', 'en', true)
-    assert.notInclude(msg, 'Verify your email')
+    assert.include(msg, "You've reached your daily limit of $500")
+    assert.include(msg, 'Try again tomorrow')
+    assert.notInclude(msg, 'sippy.lat/settings')
   })
 })
 
 test.group('formatTieredDailyLimitExceededMessage | Spanish', () => {
   test('TC-EL-10: unverified ES → contains upsell', ({ assert }) => {
     const msg = formatTieredDailyLimitExceededMessage(50, '+573001234567', 'es', false)
-    assert.include(msg, 'Verifica tu correo electronico para aumentar tu limite diario a $500')
+    assert.include(msg, 'Has alcanzado tu limite diario de $50')
+    assert.include(msg, 'correo de recuperacion')
+    assert.include(msg, 'sippy.lat/settings')
+    assert.include(msg, '$500/dia')
   })
 
   test('TC-EL-12: verified ES → no upsell', ({ assert }) => {
     const msg = formatTieredDailyLimitExceededMessage(500, '+573001234567', 'es', true)
-    assert.notInclude(msg, 'Verifica tu correo')
+    assert.include(msg, 'Has alcanzado tu limite diario de $500')
+    assert.include(msg, 'manana')
+    assert.notInclude(msg, 'sippy.lat/settings')
   })
 })
 
 test.group('formatTieredDailyLimitExceededMessage | Portuguese', () => {
   test('TC-EL-11: unverified PT → contains upsell', ({ assert }) => {
     const msg = formatTieredDailyLimitExceededMessage(50, '+573001234567', 'pt', false)
-    assert.include(msg, 'Verifique seu email para aumentar seu limite diario para $500')
+    assert.include(msg, 'Voce atingiu seu limite diario de $50')
+    assert.include(msg, 'email de recuperacao')
+    assert.include(msg, 'sippy.lat/settings')
+    assert.include(msg, '$500/dia')
   })
 
   test('TC-EL-13: verified PT → no upsell', ({ assert }) => {
     const msg = formatTieredDailyLimitExceededMessage(500, '+573001234567', 'pt', true)
-    assert.notInclude(msg, 'Verifique seu email')
+    assert.include(msg, 'Voce atingiu seu limite diario de $500')
+    assert.include(msg, 'amanha')
+    assert.notInclude(msg, 'sippy.lat/settings')
   })
 })

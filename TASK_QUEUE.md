@@ -116,7 +116,7 @@
 - **Dependencies:** EL-001
 - **Files:** `apps/web/app/settings/page.tsx`
 
-#### EL-003 [ ] Update WhatsApp limit messages with tier info
+#### EL-003 [x] Update WhatsApp limit messages with tier info
 - **What:** When user hits daily limit via WhatsApp, tell them their tier and how to upgrade.
 - **Acceptance criteria:**
   - Unverified user hits $50 limit: "You've reached your daily limit of $50. Add a recovery email at sippy.lat/settings to increase it to $500/day."
