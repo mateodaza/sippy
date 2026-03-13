@@ -22,7 +22,7 @@ import {
   sendToAddress,
   sendToPhoneNumber,
 } from '#services/embedded_wallet.service'
-import { getUserWallet } from '#services/cdp_wallet.service'
+import { getUserWallet, checkSecurityLimits } from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
 import { registerWalletWithIndexer } from '#services/indexer.service'
 import { exportEventSchema, webSendEventSchema, sendFromWebBodySchema } from '#types/schemas'
@@ -31,6 +31,7 @@ import UserPreference from '#models/user_preference'
 import { emailService } from '#services/email_service'
 import { canonicalizePhone } from '#utils/phone'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
+import { velocityService } from '#services/velocity_service'
 
 // CDP client for spend permission queries — lazy to avoid crashing on import
 // when CDP credentials are not configured (e.g., in test environments)
@@ -571,27 +572,53 @@ export default class EmbeddedWalletController {
 
       const parsed = sendFromWebBodySchema.safeParse(request.body())
       if (!parsed.success) {
-        return response.status(422).json({ error: 'Invalid request', details: parsed.error.issues })
+        return response.status(422).json({ error: 'Invalid request' })
       }
 
       const { to, amount: numAmount } = parsed.data
 
       const isAddress = /^0x[a-fA-F0-9]{40}$/.test(to)
 
+      // Resolve recipient for phone-based sends
+      let canonicalRecipient: string | null = null
       if (!isAddress) {
-        const canonicalRecipient = canonicalizePhone(to)
+        canonicalRecipient = canonicalizePhone(to)
         if (!canonicalRecipient) {
           return response.status(422).json({ error: 'Recipient must be a phone number or 0x address' })
         }
-        const result = await sendToPhoneNumber(fromPhone, canonicalRecipient, numAmount)
-        return response.json({
-          success: true,
-          txHash: result.transactionHash,
-          remainingAllowance: result.remainingAllowance,
-        })
+        // Self-send check (phone)
+        if (canonicalRecipient === fromPhone) {
+          return response.status(422).json({ error: 'Cannot send to yourself' })
+        }
+      } else {
+        // Self-send check (address)
+        const senderAddress = cdpUser!.walletAddress
+        if (to.toLowerCase() === senderAddress.toLowerCase()) {
+          return response.status(422).json({ error: 'Cannot send to yourself' })
+        }
       }
 
-      const result = await sendToAddress(fromPhone, to, numAmount)
+      // Security limits (tiered daily limit: $50 unverified / $500 verified)
+      const limitsCheck = await checkSecurityLimits(fromPhone, numAmount)
+      if (!limitsCheck.allowed) {
+        return response.status(422).json({ error: limitsCheck.reason || 'Daily limit exceeded' })
+      }
+
+      // Velocity check (rate, volume, fan-out limits)
+      const velocityCheck = velocityService.check(fromPhone, canonicalRecipient || to, numAmount, 'en')
+      if (!velocityCheck.allowed) {
+        return response.status(429).json({ error: velocityCheck.reason || 'Too many sends' })
+      }
+
+      let result
+      if (canonicalRecipient) {
+        result = await sendToPhoneNumber(fromPhone, canonicalRecipient, numAmount)
+      } else {
+        result = await sendToAddress(fromPhone, to, numAmount)
+      }
+
+      // Record velocity after successful send
+      velocityService.recordSend(fromPhone, canonicalRecipient || to, numAmount)
 
       return response.json({
         success: true,
@@ -600,7 +627,10 @@ export default class EmbeddedWalletController {
       })
     } catch (error) {
       logger.error('sendFromWeb error: %o', error)
-      return response.status(500).json({ error: 'Internal server error' })
+      const msg = error instanceof Error ? error.message : ''
+      const safeMessages = ['Insufficient balance', 'Amount has too many decimal places']
+      const userMsg = safeMessages.some((s) => msg.includes(s)) ? msg : 'Internal server error'
+      return response.status(500).json({ error: userMsg })
     }
   }
 
@@ -623,7 +653,8 @@ export default class EmbeddedWalletController {
         { phoneVisible: body.phoneVisible }
       )
       return response.status(200).json({ success: true })
-    } catch {
+    } catch (error) {
+      logger.error('setPrivacy error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
@@ -639,7 +670,8 @@ export default class EmbeddedWalletController {
       const dbPhone = ctx.cdpUser!.phoneNumber
       const pref = await findUserPrefByPhone(dbPhone)
       return response.status(200).json({ phoneVisible: pref?.phoneVisible ?? true })
-    } catch {
+    } catch (error) {
+      logger.error('privacyStatus error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }

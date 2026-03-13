@@ -60,7 +60,7 @@ export type WebSendEvent = z.infer<typeof webSendEventSchema>
  */
 export const sendFromWebBodySchema = z.object({
   to: z.string().min(1),
-  amount: z.number()
+  amount: z.coerce.number()
     .positive()
     .max(10_000)
     .refine(

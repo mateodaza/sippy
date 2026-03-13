@@ -228,7 +228,7 @@ function SettingsContent() {
   const fetchPrivacyStatus = async () => {
     const accessToken = getStoredToken();
     if (!accessToken || !BACKEND_URL) {
-      setPhoneVisible(true);
+      setPhoneVisible(null);
       return;
     }
     try {
@@ -239,10 +239,12 @@ function SettingsContent() {
         const data = await res.json();
         setPhoneVisible(data.phoneVisible ?? true);
       } else {
-        setPhoneVisible(true);
+        console.error('Privacy status fetch failed:', res.status);
+        setPhoneVisible(null);
       }
-    } catch {
-      setPhoneVisible(true);
+    } catch (err) {
+      console.error('Privacy status fetch error:', err);
+      setPhoneVisible(null);
     }
   };
 

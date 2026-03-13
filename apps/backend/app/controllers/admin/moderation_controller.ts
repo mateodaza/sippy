@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
 import UserPreference from '#models/user_preference'
 import { canonicalizePhone } from '#utils/phone'
+import { resolveUserPrefKey } from '#utils/user_pref_lookup'
 
 /**
  * In-memory global pause flag.
@@ -34,10 +35,16 @@ export default class ModerationController {
       return response.status(422).json({ error: 'Invalid phone number' })
     }
 
-    await UserPreference.updateOrCreate(
-      { phoneNumber: canonical },
-      { blocked: true }
-    )
+    try {
+      const prefKey = await resolveUserPrefKey(canonical)
+      await UserPreference.updateOrCreate(
+        { phoneNumber: prefKey },
+        { blocked: true }
+      )
+    } catch (error) {
+      logger.error('Failed to block user %s: %o', canonical, error)
+      return response.status(500).json({ error: 'Failed to block user' })
+    }
 
     logger.info('User blocked: %s — reason: %s', canonical, reason ?? '(none)')
     return response.status(200).json({ success: true, phone: canonical, blocked: true })
@@ -59,10 +66,16 @@ export default class ModerationController {
       return response.status(422).json({ error: 'Invalid phone number' })
     }
 
-    await UserPreference.updateOrCreate(
-      { phoneNumber: canonical },
-      { blocked: false }
-    )
+    try {
+      const prefKey = await resolveUserPrefKey(canonical)
+      await UserPreference.updateOrCreate(
+        { phoneNumber: prefKey },
+        { blocked: false }
+      )
+    } catch (error) {
+      logger.error('Failed to unblock user %s: %o', canonical, error)
+      return response.status(500).json({ error: 'Failed to unblock user' })
+    }
 
     logger.info('User unblocked: %s', canonical)
     return response.status(200).json({ success: true, phone: canonical, blocked: false })

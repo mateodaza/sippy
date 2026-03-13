@@ -172,7 +172,9 @@ function SetupContent() {
         try {
           clearToken();
           await signOut();
-        } catch {}
+        } catch (cleanupErr) {
+          console.error('Session cleanup failed:', cleanupErr);
+        }
       } finally {
         setIsCheckingSession(false);
       }
@@ -465,7 +467,9 @@ function SetupContent() {
                 },
               });
             }
-          } catch {}
+          } catch (regErr) {
+            console.error('Wallet re-registration failed:', regErr);
+          }
         }
       } else {
         setError(
