@@ -356,11 +356,11 @@ function CoinbaseOnrampTab({ address }: { address: string }) {
     const top = Math.round((screen.height - h) / 2);
     const popup = window.open(onrampUrl, 'coinbase-onramp', `width=${w},height=${h},left=${left},top=${top}`);
 
-    // Poll for popup close
+    // Poll for popup close — show confirmation message when done
     const timer = setInterval(() => {
       if (!popup || popup.closed) {
         clearInterval(timer);
-        setStatus((prev) => (prev === 'loading' ? 'idle' : prev));
+        setStatus('success');
       }
     }, 500);
   }, [address]);
@@ -369,9 +369,9 @@ function CoinbaseOnrampTab({ address }: { address: string }) {
     return (
       <div className='bg-white rounded-3xl shadow-lg p-8 text-center'>
         <CheckCircle2 className='w-16 h-16 text-[#059669] mx-auto mb-4' />
-        <h3 className='text-xl font-bold text-gray-900 mb-2'>Purchase Started</h3>
+        <h3 className='text-xl font-bold text-gray-900 mb-2'>Purchase Complete?</h3>
         <p className='text-gray-600 mb-4'>
-          Your USDC purchase is being processed. It will arrive in the recipient's Sippy account shortly.
+          If your purchase completed, the USDC will arrive in the Sippy account shortly. Check the balance on WhatsApp to confirm.
         </p>
         <button
           onClick={() => setStatus('idle')}
