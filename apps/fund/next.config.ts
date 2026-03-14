@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:
       process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
   },
+  turbopack: {},
   webpack: (config) => {
     config.resolve.fallback = {
       fs: false,

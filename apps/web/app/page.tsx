@@ -90,7 +90,7 @@ export default function HomePage() {
                   <ArrowRight className='w-5 h-5 group-hover:translate-x-0.5 transition-transform' />
                 </a>
                 <a
-                  href='/fund'
+                  href='https://fund.sippy.lat'
                   className='px-7 py-3.5 bg-white border border-gray-200 rounded-xl text-gray-700 font-semibold hover:bg-gray-50 hover:border-gray-300 active:scale-[0.98] transition-all duration-200 shadow-[0_10px_30px_rgba(15,23,42,0.08)] hover:shadow-[0_16px_40px_rgba(15,23,42,0.12)]'
                 >
                   Fund a Phone
@@ -469,7 +469,7 @@ export default function HomePage() {
                 <p className='mx-auto max-w-xs text-sm md:text-base text-[#d0fae5] leading-[1.7] mb-4'>
                   Receive dollars from anyone, or use our{' '}
                   <a
-                    href='/fund'
+                    href='https://fund.sippy.lat'
                     className='text-white font-semibold underline decoration-[#34d399] decoration-2 underline-offset-2 hover:decoration-white transition-colors'
                   >
                     web interface

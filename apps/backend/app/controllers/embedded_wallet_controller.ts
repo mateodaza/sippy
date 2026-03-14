@@ -29,6 +29,7 @@ import { exportEventSchema, webSendEventSchema, sendFromWebBodySchema } from '#t
 import { NETWORK, USDC_ADDRESSES, USDC_DECIMALS } from '#config/network'
 import UserPreference from '#models/user_preference'
 import { emailService } from '#services/email_service'
+import { DateTime } from 'luxon'
 import { canonicalizePhone } from '#utils/phone'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { velocityService } from '#services/velocity_service'
@@ -398,11 +399,17 @@ export default class EmbeddedWalletController {
       }
 
       const row = result.rows[0]
+
+      // Check ToS acceptance
+      const pref = await findUserPrefByPhone(normalizedPhone)
+      const tosAccepted = !!pref?.tosAcceptedAt
+
       return response.json({
         hasWallet: true,
         walletAddress: row.wallet_address,
         hasPermission: !!row.spend_permission_hash,
         dailyLimit: row.daily_limit ? Number.parseFloat(row.daily_limit) : null,
+        tosAccepted,
         phoneNumber,
       })
     } catch (error) {
@@ -672,6 +679,53 @@ export default class EmbeddedWalletController {
       return response.status(200).json({ phoneVisible: pref?.phoneVisible ?? true })
     } catch (error) {
       logger.error('privacyStatus error: %o', error)
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * POST /api/accept-tos
+   *
+   * Records the user's acceptance of the Terms of Service.
+   * Must be called before spend permission creation.
+   */
+  async acceptTos(ctx: HttpContext) {
+    const { request, response } = ctx
+    try {
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const body = request.body() as { version?: unknown }
+      const version = typeof body.version === 'string' ? body.version : '1.0'
+
+      const prefKey = await resolveUserPrefKey(dbPhone)
+      await UserPreference.updateOrCreate(
+        { phoneNumber: prefKey },
+        { tosAcceptedAt: DateTime.now(), tosVersion: version }
+      )
+
+      logger.info(`ToS v${version} accepted by ${dbPhone}`)
+      return response.json({ success: true, version })
+    } catch (error) {
+      logger.error('acceptTos error: %o', error)
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * GET /api/tos-status
+   *
+   * Returns whether the user has accepted the current ToS.
+   */
+  async tosStatus(ctx: HttpContext) {
+    const { response } = ctx
+    try {
+      const dbPhone = ctx.cdpUser!.phoneNumber
+      const pref = await findUserPrefByPhone(dbPhone)
+      return response.json({
+        accepted: !!pref?.tosAcceptedAt,
+        version: pref?.tosVersion ?? null,
+      })
+    } catch (error) {
+      logger.error('tosStatus error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }

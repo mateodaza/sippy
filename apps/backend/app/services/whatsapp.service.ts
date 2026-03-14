@@ -206,6 +206,72 @@ export async function sendButtonMessage(
 }
 
 /**
+ * Template parameter component for WhatsApp template messages.
+ */
+interface TemplateComponent {
+  type: 'body' | 'header' | 'button'
+  parameters: Array<{ type: 'text'; text: string }>
+  sub_type?: string
+  index?: number
+}
+
+/**
+ * Send a template message to a WhatsApp number.
+ *
+ * Template messages (HSM) can be sent outside the 24-hour session window,
+ * so they work for proactive notifications like "you received money".
+ * The template must be pre-approved in Meta Business Manager.
+ *
+ * Best-effort: failures are logged but don't throw.
+ */
+export async function sendTemplateMessage(
+  to: string,
+  templateName: string,
+  languageCode: string,
+  components: TemplateComponent[] = []
+): Promise<WhatsAppAPIResponse | null> {
+  const normalizedTo = to.startsWith('+') ? to.slice(1) : to
+
+  logger.info(`Sending template "${templateName}" (${languageCode}) to +${normalizedTo}`)
+
+  try {
+    const response = await fetch(`${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: normalizedTo,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: languageCode },
+          ...(components.length > 0 && { components }),
+        },
+      }),
+    })
+
+    const data = (await response.json()) as WhatsAppAPIResponse & WhatsAppAPIError
+
+    if (!response.ok) {
+      logger.warn('Failed to send template message: %s', data.error?.message)
+      return null
+    }
+
+    logger.info('Template message sent successfully!')
+    if (data.messages && data.messages.length > 0) {
+      logger.info('   Message ID: %s', data.messages[0].id)
+    }
+    return data
+  } catch (error) {
+    logger.warn('Error sending template message: %s', (error as Error).message)
+    return null
+  }
+}
+
+/**
  * Mark a message as read
  */
 export async function markAsRead(messageId: string): Promise<any> {

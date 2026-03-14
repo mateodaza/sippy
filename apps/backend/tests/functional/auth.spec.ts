@@ -17,7 +17,7 @@ test.group('Auth | GET /api/auth/.well-known/jwks.json', () => {
   test('returns 200 with keys array', async ({ client, assert }) => {
     const response = await client.get('/api/auth/.well-known/jwks.json')
     response.assertStatus(200)
-    const body = response.body()
+    const body = response.body() as { keys?: unknown[] }
     assert.property(body, 'keys')
     assert.isArray(body.keys)
   })

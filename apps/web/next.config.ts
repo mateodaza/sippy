@@ -3,6 +3,15 @@ import path from 'path';
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(__dirname, '../..'),
+  async redirects() {
+    return [
+      {
+        source: '/fund',
+        destination: 'https://fund.sippy.lat',
+        permanent: true,
+      },
+    ];
+  },
   env: {
     NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:
       process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,

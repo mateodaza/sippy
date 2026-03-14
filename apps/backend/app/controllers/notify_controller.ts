@@ -11,8 +11,7 @@ import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import { getUserLanguage } from '#services/db'
 import { getUserWallet } from '#services/cdp_wallet.service'
-import { sendTextMessage } from '#services/whatsapp.service'
-import { formatFundETHReceivedMessage, formatFundUSDReceivedMessage } from '#utils/messages'
+import { notifyFundReceived } from '#services/notification.service'
 import { canonicalizePhone } from '#utils/phone'
 
 export default class NotifyController {
@@ -76,15 +75,15 @@ export default class NotifyController {
         })
       }
 
-      // Format message in recipient's language
+      // Send WhatsApp template notification (works outside 24h session window)
       const fundLang = (await getUserLanguage(canonicalPhone)) || 'en'
-      const message =
-        type === 'eth'
-          ? formatFundETHReceivedMessage({ amount, txHash }, fundLang)
-          : formatFundUSDReceivedMessage({ amount, txHash }, fundLang)
-
-      // Send WhatsApp notification
-      await sendTextMessage(canonicalPhone, message, fundLang)
+      await notifyFundReceived({
+        recipientPhone: canonicalPhone,
+        amount,
+        type,
+        txHash,
+        lang: fundLang,
+      })
 
       logger.info(`Notification sent to ${canonicalPhone}`)
 

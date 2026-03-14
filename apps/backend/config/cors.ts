@@ -14,6 +14,8 @@ const corsConfig = defineConfig({
    * Restrict origins to known frontends. Falls back to localhost for dev.
    */
   origin: (origin) => {
+    // Allow any localhost port in development
+    if (origin.match(/^http:\/\/localhost:\d+$/)) return true
     const allowed = [
       env.get('FRONTEND_URL', 'http://localhost:3000'),
       env.get('APP_URL', 'http://localhost:3333'),

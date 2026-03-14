@@ -6,6 +6,21 @@ import { useAuthenticateWithJWT, useCreateSpendPermission, useCurrentUser, useIs
 import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '../../lib/auth';
 import { Language, getStoredLanguage, storeLanguage, detectLanguageFromPhone, fetchUserLanguage, resolveLanguage, localizeError, t } from '../../lib/i18n';
 import { parseUnits } from 'viem';
+import { PhoneInput } from 'react-international-phone';
+import 'react-international-phone/style.css';
+
+// LATAM-first country ordering for the phone picker
+const PREFERRED_COUNTRIES = ['co', 'mx', 'br', 'ar', 'cl', 'pe', 've', 'ec', 'us'] as const;
+
+function detectDefaultCountry(): string {
+  if (typeof navigator === 'undefined') return 'co';
+  const region = (navigator.language || '').split('-')[1]?.toLowerCase();
+  const map: Record<string, string> = {
+    co: 'co', us: 'us', ca: 'us', br: 'br', mx: 'mx',
+    ar: 'ar', cl: 'cl', pe: 'pe', ve: 've', ec: 'ec',
+  };
+  return map[region || ''] || 'co';
+}
 
 /**
  * Setup Page for Embedded Wallets
@@ -31,13 +46,18 @@ const USDC_ADDRESSES: Record<string, string> = {
 };
 const USDC_ADDRESS = USDC_ADDRESSES[NETWORK] || USDC_ADDRESSES.arbitrum;
 
-type Step = 'phone' | 'otp' | 'email' | 'permission' | 'done';
+type Step = 'phone' | 'otp' | 'email' | 'tos' | 'permission' | 'done';
+
+const TOS_VERSION = '1.0';
+const TOS_URL = 'https://www.sippy.lat/terms';
 
 function SetupContent() {
   const searchParams = useSearchParams();
 
   // Phone number from WhatsApp link - LOCKED (user cannot change)
-  const phoneFromUrl = searchParams.get('phone') || '';
+  // Strip everything except digits, re-add '+' for E.164
+  const rawPhone = (searchParams.get('phone') || '').replace(/[^\d]/g, '');
+  const phoneFromUrl = rawPhone ? `+${rawPhone}` : '';
 
   const [step, setStep] = useState<Step>('phone');
   const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl);
@@ -54,6 +74,7 @@ function SetupContent() {
   const [emailCode, setEmailCode] = useState('');
   const [emailSent, setEmailSent] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
+  const [tosChecked, setTosChecked] = useState(false);
   const [lang, setLang] = useState<Language>('en');
 
   // CDP Hooks
@@ -69,16 +90,25 @@ function SetupContent() {
   // Check if CDP is configured
   const isCdpConfigured = !!CDP_PROJECT_ID;
 
-  // Language init: two-phase (instant cache, then authoritative API)
+  // Language init: phone prefix wins immediately, then API can override for returning users
   useEffect(() => {
-    const cached = getStoredLanguage()
-    if (cached) setLang(cached)
+    if (phoneFromUrl) {
+      const detected = detectLanguageFromPhone(phoneFromUrl);
+      storeLanguage(detected);
+      setLang(detected);
+    } else {
+      const cached = getStoredLanguage();
+      if (cached) setLang(cached);
+    }
 
-    const token = getStoredToken()
-    resolveLanguage(phoneFromUrl || null, token, BACKEND_URL)
-      .then(resolved => { if (resolved !== cached) setLang(resolved) })
-      .catch(() => {})
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    // Only check API for language if no phone in URL (phone prefix is authoritative during setup)
+    if (!phoneFromUrl) {
+      const token = getStoredToken();
+      resolveLanguage(null, token, BACKEND_URL)
+        .then(resolved => { storeLanguage(resolved); setLang(resolved) })
+        .catch(() => {})
+    }
+  }, [phoneFromUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recovery: Check for existing session on mount (only once)
   useEffect(() => {
@@ -149,22 +179,25 @@ function SetupContent() {
                 // Already complete
                 console.log('User already has permission, going to done');
                 setStep('done');
-              } else {
-                // Wallet registered but no permission — resume at permission step.
-                // Email step is only shown in the initial fresh flow, not on recovery.
-                // This covers skipped-email and mid-email recovery without re-prompting.
-                console.log('Wallet registered but no permission, resuming at permission step');
+              } else if (status.tosAccepted) {
+                // ToS accepted, resume at permission step
+                console.log('ToS accepted, resuming at permission step');
                 setStep('permission');
+              } else {
+                // Wallet registered but ToS not accepted — resume at ToS step.
+                // Email step is only shown in the initial fresh flow, not on recovery.
+                console.log('Wallet registered but ToS not accepted, resuming at tos step');
+                setStep('tos');
               }
             } else {
-              // wallet-status returned non-OK — resume at permission step (safe default).
-              console.log('Wallet status unavailable, resuming at permission step');
-              setStep('permission');
+              // wallet-status returned non-OK — resume at tos step (safe default).
+              console.log('Wallet status unavailable, resuming at tos step');
+              setStep('tos');
             }
           }
         } else {
-          // No backend, just go to permission step
-          setStep('permission');
+          // No backend, just go to tos step
+          setStep('tos');
         }
       } catch (err) {
         console.error('Session recovery failed:', err);
@@ -236,9 +269,14 @@ function SetupContent() {
     setError(null);
 
     try {
-      // Phone number must be in E.164 format (e.g., +573001234567)
+      // PhoneInput already provides E.164 format; normalize just in case
       const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
       setPhoneNumber(formattedPhone);
+
+      // Detect language from phone prefix before sending OTP so the UI switches immediately
+      const phoneLang = detectLanguageFromPhone(formattedPhone);
+      storeLanguage(phoneLang);
+      setLang(phoneLang);
 
       console.log('Sending OTP to:', formattedPhone);
       await sendOtp(formattedPhone);
@@ -357,7 +395,7 @@ function SetupContent() {
       });
       if (response.ok) {
         setEmailVerified(true);
-        setTimeout(() => setStep('permission'), 1500);
+        setTimeout(() => setStep('tos'), 1500);
       } else {
         setError(localizeError(response, 'email-verify', lang));
       }
@@ -370,7 +408,45 @@ function SetupContent() {
 
   // Step 3c: Skip email
   const handleSkipEmail = () => {
-    setStep('permission');
+    setStep('tos');
+  };
+
+  // Step 4a: Accept ToS
+  const handleAcceptTos = async () => {
+    if (!tosChecked) {
+      setError(t('setup.tosRequired', lang));
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      if (BACKEND_URL) {
+        const accessToken = getStoredToken();
+        if (accessToken) {
+          const response = await fetch(`${BACKEND_URL}/api/accept-tos`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ version: TOS_VERSION }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to record ToS acceptance');
+          }
+        }
+      }
+
+      setStep('permission');
+    } catch (err) {
+      console.error('ToS acceptance failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to accept Terms of Service');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Step 4: Create Spend Permission
@@ -500,13 +576,13 @@ function SetupContent() {
       <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
         {/* Progress indicator */}
         <div className='flex justify-between mb-8'>
-          {['phone', 'otp', 'email', 'permission', 'done'].map((s, i) => (
+          {(['phone', 'otp', 'email', 'tos', 'permission', 'done'] as const).map((s, i) => (
             <div
               key={s}
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
                 step === s
                   ? 'bg-emerald-600 text-white'
-                  : ['phone', 'otp', 'email', 'permission', 'done'].indexOf(step) > i
+                  : (['phone', 'otp', 'email', 'tos', 'permission', 'done'] as const).indexOf(step) > i
                     ? 'bg-emerald-200 text-emerald-800'
                     : 'bg-gray-200 text-gray-500'
               }`}
@@ -539,16 +615,17 @@ function SetupContent() {
             <p className='text-gray-600 mb-6'>
               {t('setup.subtitle', lang)}
             </p>
-            <input
-              type='tel'
-              value={phoneNumber}
-              onChange={(e) => !isPhoneLocked && setPhoneNumber(e.target.value)}
-              placeholder={t('setup.phonePlaceholder', lang)}
-              disabled={isPhoneLocked}
-              className={`w-full p-3 border rounded-lg mb-4 text-gray-900 ${
-                isPhoneLocked ? 'bg-gray-100 text-gray-600' : ''
-              }`}
-            />
+            <div className='mb-4'>
+              <PhoneInput
+                defaultCountry={detectDefaultCountry()}
+                preferredCountries={[...PREFERRED_COUNTRIES]}
+                value={phoneNumber}
+                onChange={(val) => !isPhoneLocked && setPhoneNumber(val)}
+                forceDialCode
+                hideDropdown={isPhoneLocked}
+                inputProps={{ readOnly: isPhoneLocked }}
+              />
+            </div>
             {isPhoneLocked && (
               <p className='text-sm text-gray-500 mb-4'>
                 {t('setup.phoneFromWhatsapp', lang)}
@@ -556,7 +633,7 @@ function SetupContent() {
             )}
             <button
               onClick={handleSendOtp}
-              disabled={isLoading || !phoneNumber || !isCdpConfigured}
+              disabled={isLoading || !phoneNumber || phoneNumber.replace(/\D/g, '').length < 7 || !isCdpConfigured}
               className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {isLoading ? t('setup.sending', lang) : t('setup.sendCode', lang)}
@@ -666,7 +743,46 @@ function SetupContent() {
           </div>
         )}
 
-        {/* Step 4: Spend Permission */}
+        {/* Step 4: Terms of Service */}
+        {step === 'tos' && (
+          <div>
+            <h1 className='text-2xl font-bold mb-4 text-gray-900'>
+              {t('setup.tosTitle', lang)}
+            </h1>
+            <p className='text-gray-600 mb-6'>
+              {t('setup.tosSubtitle', lang)}
+            </p>
+
+            <a
+              href={TOS_URL}
+              target='_blank'
+              rel='noopener noreferrer'
+              className='block w-full p-4 mb-4 bg-gray-50 border border-gray-200 rounded-lg text-emerald-700 font-semibold hover:bg-gray-100 transition-colors text-center'
+            >
+              {t('setup.tosLink', lang)} ↗
+            </a>
+
+            <label className='flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer mb-6 transition-colors border-gray-200 hover:border-emerald-300'>
+              <input
+                type='checkbox'
+                checked={tosChecked}
+                onChange={(e) => { setTosChecked(e.target.checked); setError(null); }}
+                className='mt-0.5 w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500'
+              />
+              <span className='text-gray-900 text-sm'>{t('setup.tosCheckbox', lang)}</span>
+            </label>
+
+            <button
+              onClick={handleAcceptTos}
+              disabled={isLoading || !tosChecked}
+              className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+            >
+              {isLoading ? '...' : t('setup.tosContinue', lang)}
+            </button>
+          </div>
+        )}
+
+        {/* Step 5: Spend Permission */}
         {step === 'permission' && (
           <div>
             <h1 className='text-2xl font-bold mb-4 text-gray-900'>

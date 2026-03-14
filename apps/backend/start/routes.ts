@@ -74,6 +74,8 @@ router
     router.post('/set-language', [AuthApiController, 'setLanguage'])
     router.post('/set-privacy', [EmbeddedWalletController, 'setPrivacy'])
     router.get('/privacy-status', [EmbeddedWalletController, 'privacyStatus'])
+    router.post('/accept-tos', [EmbeddedWalletController, 'acceptTos'])
+    router.get('/tos-status', [EmbeddedWalletController, 'tosStatus'])
   })
   .prefix('/api')
   .use(middleware.jwtAuth())

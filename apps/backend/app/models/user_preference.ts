@@ -27,6 +27,12 @@ export default class UserPreference extends BaseModel {
   declare blocked: boolean
 
   @column.dateTime()
+  declare tosAcceptedAt: DateTime | null
+
+  @column()
+  declare tosVersion: string | null
+
+  @column.dateTime()
   declare emailVerifiedAt: DateTime | null
 
   @column.dateTime({ autoCreate: true, autoUpdate: true })

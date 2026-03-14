@@ -11,7 +11,7 @@ import { DAILY_LIMIT_VERIFIED } from '#services/cdp_wallet.service'
 import type { AmountErrorCode } from '#types/index'
 
 const RECEIPT_BASE_URL = process.env.RECEIPT_BASE_URL || 'https://www.sippy.lat/receipt/'
-const FUND_URL = process.env.FUND_URL || 'https://www.sippy.lat/fund'
+const FUND_URL = process.env.FUND_URL || 'https://fund.sippy.lat'
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.sippy.lat'
 
 // ============================================================================

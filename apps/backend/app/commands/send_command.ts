@@ -22,7 +22,6 @@ import {
   type Lang,
   formatSendProcessingMessage,
   formatSendSuccessMessage,
-  formatSendRecipientMessage,
   formatInsufficientBalanceMessage,
   formatNoWalletMessage,
   formatSessionExpiredMessage,
@@ -42,6 +41,7 @@ import { toUserErrorMessage } from '#utils/errors'
 import { getUserLanguage } from '#services/db'
 import logger from '@adonisjs/core/services/logger'
 import { velocityService } from '#services/velocity_service'
+import { notifyPaymentReceived } from '#services/notification.service'
 
 export async function handleSendCommand(
   fromPhoneNumber: string,
@@ -186,19 +186,16 @@ export async function handleSendCommand(
 
     await sendTextMessage(fromPhoneNumber, successMessage, lang)
 
+    // Notify recipient via template message (works outside 24h session window)
     const recipientLang = (await getUserLanguage(toPhoneNumber)) || 'en'
-    const recipientMessage = formatSendRecipientMessage(
-      {
-        amount,
-        fromPhone: fromPhoneNumber,
-        txHash: result.transactionHash,
-        localRate: recipientRate,
-        localCurrency: recipientCurrency,
-      },
-      recipientLang
-    )
-
-    await sendTextMessage(toPhoneNumber, recipientMessage, recipientLang)
+    await notifyPaymentReceived({
+      recipientPhone: toPhoneNumber,
+      amount: amount.toFixed(2),
+      asset: 'USDC',
+      senderPhone: fromPhoneNumber,
+      txHash: result.transactionHash,
+      lang: recipientLang,
+    })
 
     await sendButtonMessage(
       fromPhoneNumber,
@@ -241,8 +238,8 @@ async function handleEmbeddedSend(
   lang: Lang,
   senderRate: number | null,
   senderCurrency: string | null,
-  recipientRate: number | null,
-  recipientCurrency: string | null
+  _recipientRate: number | null,
+  _recipientCurrency: string | null
 ): Promise<boolean> {
   if (!senderWallet.spendPermissionHash) {
     await sendTextMessage(
@@ -358,19 +355,17 @@ async function handleEmbeddedSend(
     logger.error('Failed to send success notification to sender: %o', notifyError)
   }
 
+  // Notify recipient via template message (works outside 24h session window)
   try {
     const recipientLang = (await getUserLanguage(toPhoneNumber)) || 'en'
-    const recipientMessage = formatSendRecipientMessage(
-      {
-        amount,
-        fromPhone: fromPhoneNumber,
-        txHash: result.transactionHash,
-        localRate: recipientRate,
-        localCurrency: recipientCurrency,
-      },
-      recipientLang
-    )
-    await sendTextMessage(toPhoneNumber, recipientMessage, recipientLang)
+    await notifyPaymentReceived({
+      recipientPhone: toPhoneNumber,
+      amount: amount.toFixed(2),
+      asset: 'USDC',
+      senderPhone: fromPhoneNumber,
+      txHash: result.transactionHash,
+      lang: recipientLang,
+    })
   } catch (notifyError) {
     logger.error('Failed to send notification to recipient: %o', notifyError)
   }

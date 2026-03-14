@@ -1,20 +1,57 @@
 'use client';
 
-import { Suspense, useState, useEffect, useSyncExternalStore } from 'react';
+import { Suspense, useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import {
   ArrowLeft,
   Wallet,
   Loader2,
   AlertCircle,
   CheckCircle2,
+  CreditCard,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { LiFiWidget, WidgetEvent, type WidgetConfig, WidgetSkeleton, widgetEvents } from '@lifi/widget';
 import { ChainType } from '@lifi/sdk';
+import { generateOnRampURL } from '@coinbase/cbpay-js';
 
 const SIPPY_HOME = 'https://www.sippy.lat';
 const USDC_ARBITRUM = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
+const COINBASE_APP_ID = process.env.NEXT_PUBLIC_COINBASE_APP_ID || '';
+
+// Countries where Coinbase Onramp is available (ISO 3166-1 alpha-2, lowercase).
+// Source: https://www.coinbase.com/places — most of LATAM is restricted.
+const COINBASE_ALLOWED_COUNTRIES = new Set([
+  'us', 'gb', 'de', 'fr', 'es', 'it', 'nl', 'at', 'be', 'ie', 'pt', 'fi',
+  'se', 'dk', 'no', 'ch', 'pl', 'cz', 'sk', 'hr', 'bg', 'ro', 'hu', 'lt',
+  'lv', 'ee', 'si', 'mt', 'cy', 'lu', 'gr', 'ca', 'au', 'sg', 'jp', 'kr',
+  'br', // Brazil is supported
+]);
+
+function detectUserCountry(): string {
+  if (typeof navigator === 'undefined') return '';
+  // Try Intl first (most reliable), then parse navigator.languages
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const tzCountryMap: Record<string, string> = {
+      'America/Bogota': 'co', 'America/Mexico_City': 'mx', 'America/Sao_Paulo': 'br',
+      'America/Argentina/Buenos_Aires': 'ar', 'America/Santiago': 'cl',
+      'America/Lima': 'pe', 'America/Caracas': 've', 'America/Guayaquil': 'ec',
+      'America/New_York': 'us', 'America/Chicago': 'us', 'America/Los_Angeles': 'us',
+      'America/Denver': 'us', 'America/Toronto': 'ca', 'Europe/London': 'gb',
+      'Europe/Berlin': 'de', 'Europe/Paris': 'fr', 'Europe/Madrid': 'es',
+      'Europe/Rome': 'it', 'Asia/Tokyo': 'jp', 'Asia/Seoul': 'kr',
+      'Australia/Sydney': 'au', 'Asia/Singapore': 'sg', 'America/Havana': 'cu',
+    };
+    if (tzCountryMap[tz]) return tzCountryMap[tz];
+  } catch {}
+  // Fallback: parse region from language tags
+  for (const lang of navigator.languages || [navigator.language]) {
+    const region = lang.split('-')[1]?.toLowerCase();
+    if (region && region.length === 2) return region;
+  }
+  return '';
+}
 
 function useHydrated() {
   return useSyncExternalStore(
@@ -28,6 +65,8 @@ interface RecipientInfo {
   maskedPhone: string;
   address: string;
 }
+
+type FundTab = 'crypto' | 'card';
 
 export default function FundPage() {
   return (
@@ -57,6 +96,8 @@ function FundPageContent() {
   );
   const [loading, setLoading] = useState(!!token && !directAddress);
   const [error, setError] = useState('');
+  const coinbaseAvailable = COINBASE_APP_ID && COINBASE_ALLOWED_COUNTRIES.has(detectUserCountry());
+  const [activeTab, setActiveTab] = useState<FundTab>(coinbaseAvailable ? 'card' : 'crypto');
 
   useEffect(() => {
     if (!token || directAddress) return;
@@ -168,14 +209,17 @@ function FundPageContent() {
       container: {
         boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
         borderRadius: '24px',
+        maxWidth: '100%',
+        width: '100%',
       },
     },
   };
 
   return (
     <Shell>
-      <div className='max-w-lg mx-auto mb-6'>
-        <div className='p-4 bg-gradient-to-r from-[#f0fdf4] to-[#dcfce7] rounded-2xl border border-[#bbf7d0]'>
+      {/* Recipient card */}
+      <div className='max-w-xl mx-auto mb-4'>
+        <div className='p-3 bg-gradient-to-r from-[#f0fdf4] to-[#dcfce7] rounded-2xl border border-[#bbf7d0]'>
           <div className='flex items-center gap-3'>
             <div className='w-10 h-10 bg-[#059669] rounded-full flex items-center justify-center'>
               <CheckCircle2 className='w-5 h-5 text-white' />
@@ -192,8 +236,39 @@ function FundPageContent() {
         </div>
       </div>
 
-      <div className='max-w-lg mx-auto'>
-        {hydrated ? (
+      {/* Tab toggle */}
+      <div className='max-w-xl mx-auto mb-4'>
+        <div className='flex bg-gray-100 rounded-xl p-1 gap-1'>
+          <button
+            onClick={() => setActiveTab('card')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'card'
+                ? 'bg-white text-[#0f172a] shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <CreditCard className='w-4 h-4' />
+            Card / Bank
+          </button>
+          <button
+            onClick={() => setActiveTab('crypto')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'crypto'
+                ? 'bg-white text-[#0f172a] shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <ArrowLeftRight className='w-4 h-4' />
+            From Crypto
+          </button>
+        </div>
+      </div>
+
+      {/* Active tab content */}
+      <div className='max-w-xl mx-auto'>
+        {activeTab === 'card' ? (
+          <CardBankTab address={recipient.address} coinbaseAvailable={!!coinbaseAvailable} />
+        ) : hydrated ? (
           <LiFiWidget config={widgetConfig} integrator='sippy' />
         ) : (
           <WidgetSkeleton config={widgetConfig} />
@@ -201,10 +276,140 @@ function FundPageContent() {
       </div>
 
       <p className='text-center text-sm text-gray-500 mt-6 max-w-md mx-auto'>
-        Connect your wallet, pick a token, and it arrives as USDC in their
-        Sippy account on Arbitrum.
+        {activeTab === 'card'
+          ? 'Buy USDC with your card or bank account. It arrives directly in their Sippy account on Arbitrum.'
+          : 'Connect your wallet, pick a token, and it arrives as USDC in their Sippy account on Arbitrum.'}
       </p>
     </Shell>
+  );
+}
+
+function CardBankTab({ address, coinbaseAvailable }: { address: string; coinbaseAvailable: boolean }) {
+  return (
+    <div className='space-y-4'>
+      {coinbaseAvailable ? (
+        <CoinbaseOnrampTab address={address} />
+      ) : (
+        <div className='bg-white rounded-3xl shadow-lg p-8 text-center opacity-50'>
+          <div className='w-16 h-16 bg-[#0052FF]/10 rounded-2xl mx-auto mb-4 flex items-center justify-center'>
+            <CreditCard className='w-8 h-8 text-[#0052FF]' />
+          </div>
+          <h3 className='text-xl font-bold text-gray-900 mb-2'>Coinbase</h3>
+          <p className='text-gray-500 text-sm'>Not available in your country</p>
+        </div>
+      )}
+      <div className='bg-white rounded-3xl shadow-lg p-8 text-center opacity-50'>
+        <div className='w-16 h-16 bg-[#059669]/10 rounded-2xl mx-auto mb-4 flex items-center justify-center'>
+          <CreditCard className='w-8 h-8 text-[#059669]' />
+        </div>
+        <h3 className='text-xl font-bold text-gray-900 mb-2'>Pay with Card or Bank</h3>
+        <p className='text-gray-600 mb-4 text-sm'>
+          Buy USDC using your local card, bank transfer, or payment method.
+        </p>
+        <button
+          disabled
+          className='w-full bg-[#059669] text-white py-3.5 rounded-xl font-semibold opacity-50 cursor-not-allowed'
+        >
+          Coming Soon
+        </button>
+        <p className='text-xs text-gray-400 mt-3'>Local payment methods</p>
+      </div>
+    </div>
+  );
+}
+
+function CoinbaseOnrampTab({ address }: { address: string }) {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
+  const handleOpen = useCallback(async () => {
+    setStatus('loading');
+
+    // Fetch a one-time session token from our API route
+    let sessionToken: string;
+    try {
+      const res = await fetch('/api/onramp-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address }),
+      });
+      if (!res.ok) throw new Error(`Token request failed: ${res.status}`);
+      const data = await res.json();
+      sessionToken = data.token;
+    } catch (err) {
+      console.error('Failed to get onramp session token:', err);
+      setStatus('error');
+      return;
+    }
+
+    // Generate the Coinbase Onramp URL with the session token
+    const onrampUrl = generateOnRampURL({
+      sessionToken,
+      addresses: { [address]: ['arbitrum'] },
+      assets: ['USDC'],
+      defaultNetwork: 'arbitrum',
+    });
+
+    // Open in a popup window
+    const w = 500;
+    const h = 720;
+    const left = Math.round((screen.width - w) / 2);
+    const top = Math.round((screen.height - h) / 2);
+    const popup = window.open(onrampUrl, 'coinbase-onramp', `width=${w},height=${h},left=${left},top=${top}`);
+
+    // Poll for popup close
+    const timer = setInterval(() => {
+      if (!popup || popup.closed) {
+        clearInterval(timer);
+        setStatus((prev) => (prev === 'loading' ? 'idle' : prev));
+      }
+    }, 500);
+  }, [address]);
+
+  if (status === 'success') {
+    return (
+      <div className='bg-white rounded-3xl shadow-lg p-8 text-center'>
+        <CheckCircle2 className='w-16 h-16 text-[#059669] mx-auto mb-4' />
+        <h3 className='text-xl font-bold text-gray-900 mb-2'>Purchase Started</h3>
+        <p className='text-gray-600 mb-4'>
+          Your USDC purchase is being processed. It will arrive in the recipient's Sippy account shortly.
+        </p>
+        <button
+          onClick={() => setStatus('idle')}
+          className='text-[#059669] font-semibold hover:underline'
+        >
+          Fund again
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className='bg-white rounded-3xl shadow-lg p-8'>
+      <div className='text-center'>
+        <div className='w-16 h-16 bg-[#0052FF]/10 rounded-2xl mx-auto mb-4 flex items-center justify-center'>
+          <CreditCard className='w-8 h-8 text-[#0052FF]' />
+        </div>
+        <h3 className='text-xl font-bold text-gray-900 mb-2'>Buy with Card or Bank</h3>
+        <p className='text-gray-600 mb-6 text-sm'>
+          Purchase USDC using your debit card, credit card, or bank transfer via Coinbase.
+        </p>
+        <button
+          onClick={handleOpen}
+          disabled={status === 'loading'}
+          className='w-full bg-[#0052FF] text-white py-3.5 rounded-xl font-semibold hover:bg-[#0040CC] transition-colors disabled:opacity-50'
+        >
+          {status === 'loading' ? (
+            <span className='flex items-center justify-center gap-2'>
+              <Loader2 className='w-4 h-4 animate-spin' />
+              Opening Coinbase...
+            </span>
+          ) : (
+            'Buy USDC'
+          )}
+        </button>
+        <p className='text-xs text-gray-400 mt-3'>Powered by Coinbase</p>
+      </div>
+    </div>
   );
 }
 
@@ -258,7 +463,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <div className='absolute bottom-[-180px] left-[-120px] w-[520px] h-[520px] bg-[#bfdbfe]/22 blur-[170px]' />
         </div>
 
-        <div className='relative z-10 max-w-4xl mx-auto px-6 py-12 md:py-16'>
+        <div className='relative z-10 max-w-4xl mx-auto px-6 py-6 md:py-8'>
           {children}
         </div>
       </section>
