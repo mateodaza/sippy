@@ -125,10 +125,22 @@ const LOOSE_COMMAND_PATTERNS: Record<string, RegExp> = {
 const SEND_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
   // EN: "send 10 to +573001234567" or "send $10 to ..." or "send 10,50 to ..."
   { pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)\s+to\s+(.+)$/i, lang: 'en' },
-  // ES: "enviar 10 a +573001234567" / "envía 10 a ..."
-  { pattern: /^env[ií]a?r?\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
-  // PT: "enviar 10 para +573001234567"
-  { pattern: /^enviar?\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i, lang: 'pt' },
+  // ES: "enviar/envía/envia/envíe/envie 10 a ..." (infinitive, imperative, subjunctive)
+  { pattern: /^env[ií][ae]?r?\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
+  // PT: "enviar/envie 10 para ..."
+  { pattern: /^env[ií][ae]?r?\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i, lang: 'pt' },
+  // ES casual: "manda/mandá/mande 5 a ..." / "transfiere/transferir 5 a ..." / "paga/pague 5 a ..."
+  { pattern: /^(?:mand[aáe]|transfier[ae]|transferir|pague?|pagar?)\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
+  // PT casual: "manda/mande 5 para ..." / "transfere/transferir 5 para ..." / "pague 5 para ..."
+  { pattern: /^(?:mand[aáe]|transfere|transferir|pague?)\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i, lang: 'pt' },
+  // EN alt verbs: "transfer 5 to ..." / "pay 5 to ..."
+  { pattern: /^(?:transfer|pay)\s+\$?(\d+(?:[.,]\d+)?)\s+to\s+(.+)$/i, lang: 'en' },
+  // Cross-language: "send 5 a ..." (EN verb + ES preposition)
+  { pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
+  // Cross-language: "send 5 para ..." (EN verb + PT preposition)
+  { pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i, lang: 'pt' },
+  // Cross-language: "enviar/envie 5 to ..." (ES/PT verb + EN preposition)
+  { pattern: /^env[ií][ae]?r?\s+\$?(\d+(?:[.,]\d+)?)\s+to\s+(.+)$/i, lang: 'en' },
 ]
 
 /**

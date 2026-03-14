@@ -118,6 +118,33 @@ test.group('Message Parser | Send Command Parsing & Safety', () => {
     { input: 'send 100 to +573001234567', expectedCmd: 'send', expectedAmount: 100 },
     { input: 'send $50 to +573001234567', expectedCmd: 'send', expectedAmount: 50 },
     { input: 'send 25.5 to +573001234567', expectedCmd: 'send', expectedAmount: 25.5 },
+    // ES verbs
+    { input: 'envía 10 a +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    { input: 'enviar 20 a +573001234567', expectedCmd: 'send', expectedAmount: 20 },
+    { input: 'manda 5 a +573001234567', expectedCmd: 'send', expectedAmount: 5 },
+    { input: 'transfiere 15 a +573001234567', expectedCmd: 'send', expectedAmount: 15 },
+    // PT verbs
+    { input: 'enviar 10 para +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    { input: 'manda 5 para +573001234567', expectedCmd: 'send', expectedAmount: 5 },
+    // EN alt verbs
+    { input: 'transfer 10 to +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    { input: 'pay 25 to +573001234567', expectedCmd: 'send', expectedAmount: 25 },
+    // Imperative/subjunctive forms
+    { input: 'envie 10 a +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    { input: 'envíe 10 a +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    { input: 'envie 10 para +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    { input: 'pague 10 a +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    { input: 'pague 10 para +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    { input: 'mande 5 a +573001234567', expectedCmd: 'send', expectedAmount: 5 },
+    // Argentine voseo
+    { input: 'mandá 10 a +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    // Infinitive transferir
+    { input: 'transferir 10 a +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    { input: 'transferir 10 para +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    // Cross-language
+    { input: 'send 10 a +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    { input: 'send 10 para +573001234567', expectedCmd: 'send', expectedAmount: 10 },
+    { input: 'enviar 10 to +573001234567', expectedCmd: 'send', expectedAmount: 10 },
   ]
 
   for (const t of tests) {
@@ -128,6 +155,27 @@ test.group('Message Parser | Send Command Parsing & Safety', () => {
       assert.approximately(result.amount!, t.expectedAmount, 0.01)
     })
   }
+
+  // Language detection on send commands
+  test('"envía 10 a ..." detects Spanish', async ({ assert }) => {
+    const result = await parseMessage('envía 10 a +573001234567')
+    assert.equal(result.detectedLanguage, 'es')
+  })
+
+  test('"enviar 10 para ..." detects Portuguese', async ({ assert }) => {
+    const result = await parseMessage('enviar 10 para +573001234567')
+    assert.equal(result.detectedLanguage, 'pt')
+  })
+
+  test('"send 10 to ..." detects English', async ({ assert }) => {
+    const result = await parseMessage('send 10 to +573001234567')
+    assert.equal(result.detectedLanguage, 'en')
+  })
+
+  test('"send 10 a ..." detects Spanish (cross-language)', async ({ assert }) => {
+    const result = await parseMessage('send 10 a +573001234567')
+    assert.equal(result.detectedLanguage, 'es')
+  })
 })
 
 test.group('Message Parser | Phone Number Validation', () => {
