@@ -30,8 +30,9 @@ WhatsApp message
 │                                 │
 │  Message Parser (regex-first)   │
 │  → Trilingual: EN / ES / PT    │
-│  → LLM fallback for questions  │
-│  → Send = regex only (no LLM)  │
+│  → LLM classifier for NL       │
+│  → LLM normalizer for slang    │
+│  → Regex always validates send  │
 │                                 │
 │  Coinbase CDP Embedded Wallets  │
 │  → Non-custodial (user-owned)  │
@@ -52,12 +53,13 @@ WhatsApp message
 
 **WhatsApp Bot**
 - Trilingual commands: English, Spanish, Portuguese
-- Regex-first parsing — 80%+ of messages resolved at zero cost, <1ms
-- LLM fallback (Groq / Llama 3.3 70B) for natural language questions
-- Send commands are regex-only — LLM never triggers money movement
+- Regex-first parsing -- 80%+ of messages resolved at zero cost, <1ms
+- LLM classifier (Groq / Llama 4 Scout) for natural language questions
+- LLM normalizer (llama-3.1-8b) for slang sends -- reformats to standard format, regex always validates, anti-injection checks amount + phone against original text
+- Tiered fallback: Scout primary, Qwen3-32b fallback, 8B normalizer
 - Zod-validated LLM outputs
 - Language auto-detection with persistence (follows the user)
-- Professional tone, no emojis
+- Casual, friendly tone -- like a friend on WhatsApp
 
 **Wallets**
 - Coinbase CDP Embedded Wallets (non-custodial)
@@ -92,7 +94,7 @@ WhatsApp message
 | Runtime | Node.js 20 + TypeScript |
 | Framework | AdonisJS v7 |
 | Wallets | Coinbase CDP Embedded Wallets (non-custodial) |
-| LLM | Groq (Llama 3.3 70B, free tier) |
+| LLM | Groq (Llama 4 Scout + Qwen3-32b + 8B, free tier) |
 | Validation | Zod |
 | Blockchain | Arbitrum One (USDC) |
 | Smart Contract | GasRefuel.sol (gasless transfers) |
@@ -113,7 +115,7 @@ sippy/
 │   │   │   ├── services/                  # CDP wallets, WhatsApp, LLM, refuel
 │   │   │   ├── models/                    # Lucid ORM models
 │   │   │   └── utils/                     # Regex parser, messages, phone
-│   │   └── tests/                         # 172 tests (unit + functional)
+│   │   └── tests/                         # 850+ tests (unit + functional + live LLM)
 │   │
 │   ├── web/                               # Next.js 16 frontend
 │   │   ├── app/
@@ -196,9 +198,8 @@ pnpm dev:indexer  # indexer only
 
 ```
 User: hola
-Bot:  Hola, bienvenido a Sippy.
-      Puedes enviar dolares a cualquier numero, consultar tu saldo o agregar fondos.
-      Prueba "saldo", "ayuda" o "enviar 5 a +57..."
+Bot:  Hola! Soy Sippy. Puedes enviar dolares a cualquier numero de telefono desde aqui.
+      Solo dime que necesitas — ver tu saldo, enviar dinero, o di "ayuda".
 
 User: saldo
 Bot:  Saldo
@@ -210,13 +211,15 @@ Bot:  Transferencia completada.
       Monto: 10.00 USDC
       Destinatario: +57***4567
 
+User: pasale 10 lucas al 3116613414
+Bot:  (normalizer rewrites to "enviar 10 a 3116613414" → regex validates → executes)
+
 User: help
-Bot:  Available commands:
-      balance — Check your balance
-      send [amount] to [phone] — Send USDC
-      history — View transactions
-      settings — Manage your account
-      about — Learn about Sippy
+Bot:  Here's what you can do:
+      Send money — just say "send 5 to +573001234567"
+      Check your balance — "balance"
+      See your history — "history"
+      Manage limits — "settings"
 ```
 
 ---
