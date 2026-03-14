@@ -73,7 +73,7 @@ test.group('Conversation | Personality — No Robotic Language', () => {
       assert.isTrue(msg.length < 100, `social reply too long: ${msg.length} chars`)
     })
 
-    test(`text-only message (${lang}) sounds natural`, ({ assert }) => {
+    test(`text-only message (${lang}) sounds natural`, () => {
       const msg = formatTextOnlyMessage(lang)
       assertNotRobotic(msg, `textOnly(${lang})`)
     })
@@ -84,7 +84,7 @@ test.group('Conversation | Personality — No Robotic Language', () => {
       assert.isFalse(msg.toLowerCase().includes('natural language'), `should not say "natural language"`)
     })
 
-    test(`error message (${lang}) sounds natural`, ({ assert }) => {
+    test(`error message (${lang}) sounds natural`, () => {
       const msg = formatCommandErrorMessage(lang)
       assertNotRobotic(msg, `error(${lang})`)
     })
