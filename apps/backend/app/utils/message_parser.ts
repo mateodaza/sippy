@@ -2,7 +2,9 @@
  * Message Parser
  *
  * Regex-first parser with LLM fallback for ambiguous messages.
- * Send commands are regex-only — LLM never triggers money movement.
+ * Send commands use regex for final validation — the LLM normalizer
+ * can reformat slang but regex always validates the output, and
+ * amount + recipient must appear in the original text (anti-injection).
  */
 
 import { type ParsedCommand, type AmountErrorCode } from '../types/index.js'
@@ -10,6 +12,7 @@ import {
   isLLMEnabled,
   isRateLimited,
   parseMessageWithLLM,
+  normalizeSendCommand,
   type CallMeta,
 } from '../services/llm.service.js'
 import logger from '@adonisjs/core/services/logger'
@@ -31,7 +34,7 @@ export interface ParseContext {
 // Pre-LLM send attempt detector
 // ============================================================================
 
-const SEND_KEYWORDS = /\b(send|transfer|pay|enviar|transferir|pagar|envie|mande|mandar)\b/i
+const SEND_KEYWORDS = /\b(send|transfer|pay|enviar?|transferir|pagar?|envie|enviale|mand[aáe]|mandale|mandar|pasale?|pas[aá])\b/i
 const HAS_NUMBER = /\d+/
 
 function isAttemptedSend(text: string): boolean {
@@ -126,11 +129,12 @@ const SEND_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
   // EN: "send 10 to +573001234567" or "send $10 to ..." or "send 10,50 to ..."
   { pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)\s+to\s+(.+)$/i, lang: 'en' },
   // ES: "enviar/envía/envia/envíe/envie 10 a ..." (infinitive, imperative, subjunctive)
-  { pattern: /^env[ií][ae]?r?\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
+  // Also handles pronoun suffixes: "enviale/envíale/enviales 10 a ..."
+  { pattern: /^env[ií][ae]?r?(?:le|les|lo|la|los|las)?\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
   // PT: "enviar/envie 10 para ..."
   { pattern: /^env[ií][ae]?r?\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i, lang: 'pt' },
-  // ES casual: "manda/mandá/mande 5 a ..." / "transfiere/transferir 5 a ..." / "paga/pague 5 a ..."
-  { pattern: /^(?:mand[aáe]|transfier[ae]|transferir|pague?|pagar?)\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
+  // ES casual: "manda/mandá/mande/mandale 5 a ..." / "transfiere/transferir 5 a ..." / "pasa/pasale 5 a ..." / "paga/pague 5 a ..."
+  { pattern: /^(?:mand[aáe]|transfier[ae]|transferir|pas[aá]|pague?|pagar?)(?:le|les|lo|la|los|las)?\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
   // PT casual: "manda/mande 5 para ..." / "transfere/transferir 5 para ..." / "pague 5 para ..."
   { pattern: /^(?:mand[aáe]|transfere|transferir|pague?)\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i, lang: 'pt' },
   // EN alt verbs: "transfer 5 to ..." / "pay 5 to ..."
@@ -319,8 +323,40 @@ export async function parseMessage(
     return result
   }
 
-  // Step 2: Malformed send detector (before LLM — financial safety)
+  // Step 2: Malformed send detector → LLM normalizer → re-parse
+  // The normalizer uses llama-3.1-8b-instant which has its own internal rate limiter
+  // (14.4K RPD), so we only gate on isLLMEnabled() — not isRateLimited() which
+  // checks the primary model (1K RPD) and would block the normalizer unnecessarily.
   if (isAttemptedSend(text)) {
+    // Try LLM normalizer: turn slang into standard "enviar X a Y"
+    if (isLLMEnabled()) {
+      try {
+        const normalized = await normalizeSendCommand(text)
+        if (normalized) {
+          const reparse = parseMessageWithRegex(normalized)
+          if (reparse.command === 'send' && reparse.amount && reparse.recipient) {
+            // Safety: verify amount and recipient from LLM output exist in the original text.
+            // This prevents prompt injection from fabricating amounts or recipients.
+            const amountStr = String(reparse.amount)
+            const recipientDigits = reparse.recipient.replace(/\+/g, '')
+            if (!text.includes(amountStr) || !text.includes(recipientDigits)) {
+              logger.warn('normalizeSendCommand: LLM output contains data not in original text — original: "%s", normalized: "%s"', text, normalized)
+              // Fall through to format hint
+            } else {
+              const result: ParsedCommand = { ...reparse, originalText: text, usedLLM: true, llmStatus: 'normalized' }
+              if (ctx) {
+                logParse(ctx, result, 'llm', 'normalized-send', Date.now() - startTime)
+              }
+              return result
+            }
+          }
+        }
+      } catch (error) {
+        logger.warn('normalizeSendCommand failed: %o', error)
+      }
+    }
+
+    // Normalizer didn't help — return format hint
     const result: ParsedCommand = {
       command: 'send',
       originalText: text,

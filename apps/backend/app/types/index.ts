@@ -69,6 +69,7 @@ export interface ParsedCommand {
     | 'timeout'
     | 'error'
     | 'low-confidence'
+    | 'normalized'
     | 'validation-failed'
   amountError?: AmountErrorCode      // set when send regex matched but amount is invalid
   recipientError?: 'INVALID_PHONE'   // set when amount is valid but phone canonicalization fails

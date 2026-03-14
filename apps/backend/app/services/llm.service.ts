@@ -50,7 +50,15 @@ interface ModelConfig {
 }
 
 const MODEL_CATALOG: Record<string, ModelConfig> = {
-  'qwen/qwen3-32b': { id: 'qwen/qwen3-32b', rpm: 30, rpd: 1000, timeout: 5000, maxTokens: 512 },
+  // Primary classifier — Llama 4 Scout MoE: better JSON, 2.5x higher TPM, 3x cheaper if paid
+  'meta-llama/llama-4-scout-17b-16e-instruct': {
+    id: 'meta-llama/llama-4-scout-17b-16e-instruct',
+    rpm: 30,
+    rpd: 1000,
+    timeout: 4000,
+    maxTokens: 200,
+  },
+  // Normalizer + greetings — highest free quota (14.4K RPD), cheapest paid ($0.05/M)
   'llama-3.1-8b-instant': {
     id: 'llama-3.1-8b-instant',
     rpm: 30,
@@ -58,18 +66,14 @@ const MODEL_CATALOG: Record<string, ModelConfig> = {
     timeout: 3000,
     maxTokens: 150,
   },
+  // Tiering fallback — 60 RPM (double others), good quality for classification
+  'qwen/qwen3-32b': { id: 'qwen/qwen3-32b', rpm: 60, rpd: 1000, timeout: 5000, maxTokens: 512 },
+  // Legacy — kept for rollback if Scout has issues
   'llama-3.3-70b-versatile': {
     id: 'llama-3.3-70b-versatile',
     rpm: 30,
     rpd: 1000,
     timeout: 5000,
-    maxTokens: 200,
-  },
-  'meta-llama/llama-4-scout-17b-16e-instruct': {
-    id: 'meta-llama/llama-4-scout-17b-16e-instruct',
-    rpm: 30,
-    rpd: 1000,
-    timeout: 4000,
     maxTokens: 200,
   },
 }
@@ -78,8 +82,8 @@ function getModelConfig(modelId: string): ModelConfig {
   return MODEL_CATALOG[modelId] || { id: modelId, rpm: 25, rpd: 900, timeout: 5000, maxTokens: 200 }
 }
 
-const PRIMARY_MODEL = env.get('PRIMARY_LLM_MODEL', 'llama-3.3-70b-versatile')
-const FALLBACK_MODEL = env.get('FALLBACK_LLM_MODEL', 'llama-3.1-8b-instant')
+const PRIMARY_MODEL = env.get('PRIMARY_LLM_MODEL', 'meta-llama/llama-4-scout-17b-16e-instruct')
+const FALLBACK_MODEL = env.get('FALLBACK_LLM_MODEL', 'qwen/qwen3-32b')
 const TIERING_ENABLED = env.get('LLM_TIERING', 'false').toLowerCase() === 'true'
 
 // ============================================================================
@@ -188,52 +192,47 @@ function getGroqClient(): Groq | null {
 // System Prompt
 // ============================================================================
 
-const SYSTEM_PROMPT = `You are Sippy, a friendly WhatsApp wallet assistant.
+const SYSTEM_PROMPT = `You are Sippy, a chill WhatsApp money assistant for Latin America.
 
-Your job: parse the user's message into a structured command AND provide a helpful response when needed.
+Your job: parse the user's message into a structured command AND reply naturally when needed.
 
 Available commands: balance, start, history, settings, about, help, unknown.
-NOTE: "send" is NOT a valid command for you. Send commands are handled separately by regex.
+NOTE: "send" is NOT a valid command for you. Send commands are handled separately.
 
-ABOUT SIPPY (use these facts when answering questions — never guess):
-- Sippy is a WhatsApp wallet for sending digital dollars (USDC) via phone number
-- Zero fees on transfers between Sippy users
+ABOUT SIPPY (use these facts — never guess):
+- Send dollars to any phone number, right from WhatsApp
+- Zero fees between Sippy users
 - Transfers arrive in seconds
-- Available in 3 languages: English, Spanish, Portuguese
-- Sippy works on Arbitrum network (but never say "blockchain" or "crypto" to users)
-- Money is held in USDC (digital dollars pegged 1:1 to USD)
+- Works in English, Spanish, and Portuguese
+- Money stays in digital dollars, always worth $1
 
-COMMAND NAMES BY LANGUAGE (always use the correct language when suggesting commands):
-- EN: "send 10 to +57...", "balance", "start", "help", "history", "settings"
-- ES: "enviar 10 a +57...", "saldo", "comenzar", "ayuda", "historial", "ajustes"
-- PT: "enviar 10 para +55...", "saldo", "começar", "ajuda", "historico", "ajustes"
+HOW TO SUGGEST ACTIONS (always in the user's language):
+- EN: "send 10 to +57...", "balance", "help"
+- ES: "enviar 10 a +57...", "saldo", "ayuda"
+- PT: "enviar 10 para +55...", "saldo", "ajuda"
+- Don't list commands — just mention one or two naturally, like "try checking your balance" or "dime cuanto quieres enviar"
 
 PERSONALITY:
-- Warm and conversational — like a friend over WhatsApp, not a support agent
-- Match the user's energy: casual greetings get casual replies, serious questions get clear answers
-- Always guide toward action: after answering, suggest what they can do next
-- No emojis. Short sentences. Natural rhythm. Occasional warmth is fine.
-- Use the facts above to give specific, accurate answers. Never make up features.
-
-GREETINGS (hola, hi, hey, oi, que tal, etc.):
-- command: "unknown", helpfulMessage: greet warmly in 1-2 sentences
-- Say what Sippy does and suggest one action to try
-- Vary the opener — avoid starting every greeting the same way
+- Talk like a friend on WhatsApp. Short, natural, zero corporate tone.
+- Never say "command" — Sippy doesn't have "commands", you just tell it what you need.
+- Match the user's vibe. If they're chill, be chill. If they need help, be clear.
+- No emojis. 1-2 sentences max. Don't over-explain.
+- If someone says "hola" just say hi back naturally and mention one thing they can do.
+- If someone asks something off-topic, keep it brief and steer back. No lectures.
 
 EDGE CASES:
-- Insults, profanity, trolling: command "unknown", stay calm, don't engage, redirect to wallet features
-- Random gibberish: command "unknown", say you didn't understand, suggest "ayuda"/"ajuda"/"help"
-- Off-topic questions (weather, math, jokes): command "unknown", brief friendly deflection + redirect
-- If you don't know the answer: say so honestly, suggest the help command in the user's language
+- Insults/trolling: stay calm, don't engage, redirect
+- Gibberish: say you didn't catch that, suggest trying "ayuda"/"help"
+- Off-topic: brief friendly deflection, one sentence max
 
 RULES:
 - Detect the user's language (en, es, pt, or ambiguous)
-- When responding, ALWAYS use command names in the detected language (e.g. Spanish response must say "comenzar" not "start", "saldo" not "balance")
+- Always respond in the detected language
 - Never mention: crypto, cryptocurrency, blockchain, Web3, DeFi, smart contract, token
-- helpfulMessage: max 2-3 sentences, always in the detected language
-- Do NOT include any reasoning, thinking, or explanation. Output ONLY the JSON object.
+- helpfulMessage: 1-2 sentences max, always in detected language
+- Output ONLY the JSON object, nothing else.
 
-Return ONLY valid JSON (no text before or after):
+Return ONLY valid JSON:
 {"command": "balance"|"start"|"history"|"settings"|"about"|"help"|"unknown", "amount": null, "recipient": null, "confidence": 0.0-1.0, "helpfulMessage": string|null, "detectedLanguage": "en"|"es"|"pt"|"ambiguous"}`
 
 // ============================================================================
@@ -412,12 +411,12 @@ export interface CallMeta {
 // Personality Response Generator (greeting / social intents)
 // ============================================================================
 
-const RESPONSE_SYSTEM_PROMPT = `You are Sippy, a friendly WhatsApp money assistant for LATAM.
+const RESPONSE_SYSTEM_PROMPT = `You are Sippy, a chill WhatsApp money assistant for Latin America.
 
-The user sent a greeting or acknowledgment. Respond warmly in 1-2 sentences.
-Match their language (English, Spanish, or Portuguese).
-Keep it short and natural — like a friend, not a support bot.
-No emojis. Return only the response text, nothing else.`
+The user sent a greeting or casual message. Reply like a friend would on WhatsApp.
+Match their language. 1-2 sentences max. No emojis.
+Don't say "command" — just naturally mention what they can do (check balance, send money, etc).
+Return only the response text, nothing else.`
 
 /**
  * Generate a short conversational reply for greeting and social intents.
@@ -472,6 +471,85 @@ export async function generateResponse(
       logger.warn('generateResponse: timeout on %s', modelId)
     } else {
       logger.error('generateResponse: error on %s: %o', modelId, error)
+    }
+    return null
+  }
+}
+
+// ============================================================================
+// Send Normalizer — turns slang/casual text into standard send format
+// ============================================================================
+
+const NORMALIZER_PROMPT = `You normalize casual WhatsApp messages into a standard send command format.
+
+The user tried to send money but used slang, typos, or informal language that the system didn't understand.
+
+Your ONLY job: rewrite their message into this exact format:
+  enviar <amount> a <phone>
+
+Rules:
+- Extract the amount (number) and recipient (phone number or name)
+- Output ONLY the normalized command, nothing else
+- If the message has a phone number, keep it exactly as written
+- If the message has a name instead of a phone number, keep the name exactly as written
+- If you can't figure out the amount or recipient, output exactly: UNCLEAR
+- Never add information that wasn't in the original message
+- Never guess amounts or recipients
+
+Examples:
+  "pasale 10 lucas al 3116613414" → "enviar 10 a 3116613414"
+  "dale 5 dolares a mama +573001234567" → "enviar 5 a +573001234567"
+  "mete 20 a la cuenta de +573109876543" → "enviar 20 a +573109876543"
+  "echale 15 al numero 3116613414" → "enviar 15 a 3116613414"
+  "quiero mandarle plata a mi hermano" → UNCLEAR
+  "hola como estas" → UNCLEAR`
+
+/**
+ * Normalize a casual/slang send attempt into standard "enviar <amount> a <recipient>" format.
+ *
+ * Called when regex can't parse a message but isAttemptedSend() detected send intent.
+ * Returns the normalized string or null if the LLM can't extract amount + recipient.
+ *
+ * Uses llama-3.1-8b-instant (fast, cheap, 14.4K RPD) since the task is simple extraction.
+ */
+export async function normalizeSendCommand(text: string): Promise<string | null> {
+  const client = getGroqClient()
+  if (!client) return null
+
+  const modelId = 'llama-3.1-8b-instant'
+  const limiter = getLimiter(modelId)
+
+  if (!limiter.canMakeRequest()) {
+    logger.warn('normalizeSendCommand: rate limit reached for %s', modelId)
+    return null
+  }
+
+  limiter.recordRequest()
+
+  try {
+    const completion = await Promise.race([
+      client.chat.completions.create({
+        messages: [
+          { role: 'system', content: NORMALIZER_PROMPT },
+          { role: 'user', content: text },
+        ],
+        model: modelId,
+        temperature: 0.1,
+        max_tokens: 60,
+      }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000)),
+    ])
+
+    const result = completion.choices[0]?.message?.content?.trim()
+    if (!result || result === 'UNCLEAR' || result.length > 100) return null
+
+    logger.info('normalizeSendCommand: "%s" → "%s"', text, result)
+    return result
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Timeout') {
+      logger.warn('normalizeSendCommand: timeout')
+    } else {
+      logger.error('normalizeSendCommand: error: %o', error)
     }
     return null
   }
