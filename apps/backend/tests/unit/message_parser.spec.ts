@@ -85,7 +85,6 @@ test.group('Message Parser | Loose Keyword Matching (Natural Language)', () => {
     { input: 'where are the settings?', expected: 'settings' },
     { input: 'como cambio la configuración?', expected: 'settings' },
     { input: 'what is sippy exactly?', expected: 'about' },
-    { input: 'hola quiero comenzar', expected: 'start' },
   ]
 
   for (const t of tests) {
@@ -94,6 +93,24 @@ test.group('Message Parser | Loose Keyword Matching (Natural Language)', () => {
       assert.equal(result.command, t.expected)
     })
   }
+
+  // False positive guards — these should NOT match loose patterns
+  test('"that was really helpful" → unknown (not help)', async ({ assert }) => {
+    const result = await parseMessage('that was really helpful')
+    assert.notEqual(result.command, 'help')
+  })
+
+  // Accented boundary: cuánto (with accent) should match
+  test('"cuánto tengo?" → balance (accented)', async ({ assert }) => {
+    const result = await parseMessage('hola cuánto tengo?')
+    assert.equal(result.command, 'balance')
+  })
+
+  // Multi-keyword: first match wins (balance before help)
+  test('"I need help checking my balance" → balance (first match)', async ({ assert }) => {
+    const result = await parseMessage('I need help checking my balance')
+    assert.equal(result.command, 'balance')
+  })
 })
 
 test.group('Message Parser | Send Command Parsing & Safety', () => {

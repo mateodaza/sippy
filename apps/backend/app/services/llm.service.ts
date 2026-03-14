@@ -169,6 +169,7 @@ function getGroqClient(): Groq | null {
   if (!groqClient) {
     const apiKey = env.get('GROQ_API_KEY', '')
     if (!apiKey || apiKey === 'your_groq_api_key_here') {
+      logger.warn('GROQ_API_KEY is not configured — LLM features are unavailable')
       return null
     }
 
@@ -273,9 +274,18 @@ async function callModel(
   ])
 
   const content = completion.choices[0]?.message?.content
-  if (!content) return { parsed: null, model: modelId }
+  if (!content) {
+    logger.warn('LLM returned empty content (%s), finish_reason: %s', modelId, completion.choices[0]?.finish_reason)
+    return { parsed: null, model: modelId }
+  }
 
-  const raw = JSON.parse(content)
+  let raw: unknown
+  try {
+    raw = JSON.parse(content)
+  } catch {
+    logger.warn('LLM returned invalid JSON (%s): %s', modelId, content.slice(0, 200))
+    return { parsed: null, model: modelId }
+  }
 
   const zodResult = llmResultSchema.safeParse(raw)
   if (!zodResult.success) {

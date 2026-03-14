@@ -12,6 +12,7 @@ import {
   parseMessageWithLLM,
   type CallMeta,
 } from '../services/llm.service.js'
+import logger from '@adonisjs/core/services/logger'
 import { canonicalizePhone } from './phone.js'
 import { logParseResult, type ParseLogEntry, type ContextMessage } from '../services/db.js'
 
@@ -105,16 +106,19 @@ const PRIVACY_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
  * Matched when strict regex fails — catches natural language like
  * "Hola sippy! cuanto es mi balance?" without needing the LLM.
  * Only safe (non-financial) commands are included here.
+ *
+ * Uses (?:^|\s) / (?:\s|$) instead of \b because JS \b treats accented
+ * characters (á, ó, ç, ã, õ) as non-word — breaks Spanish/Portuguese patterns.
+ * Order matters: earlier entries take priority when multiple patterns match.
  */
 const LOOSE_COMMAND_PATTERNS: Record<string, RegExp> = {
   balance:
-    /\b(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi)\b/i,
-  help: /\b(help|ayuda|ajuda)\b/i,
+    /(?:^|\s)(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi)(?:\s|$)/i,
+  help: /(?:^|\s)(help(?!ful|less|ing|er|ed)|ayuda|ajuda)(?:\s|$)/i,
   history:
-    /\b(history|historial|hist[oó]rico|transactions?|transacciones?|transa[cç][oõ]es?)\b/i,
-  settings: /\b(settings?|configuraci[oó]n|configura[cç][aã]o|ajustes)\b/i,
-  about: /\b(what is sippy|whats sippy|what's sippy|qu[eé] es sippy|o que [eé] sippy)\b/i,
-  start: /\b(start|begin|comenzar|iniciar|come[cç]ar)\b/i,
+    /(?:^|\s)(history|historial|hist[oó]rico|transactions?|transacciones?|transa[cç][oõ]es?)(?:\s|$)/i,
+  settings: /(?:^|\s)(settings?|configuraci[oó]n|configura[cç][aã]o|ajustes)(?:\s|$)/i,
+  about: /(?:^|\s)(what is sippy|whats sippy|what's sippy|qu[eé] es sippy|o que [eé] sippy)(?:\s|$)/i,
 }
 
 /** Trilingual send patterns — strict format, must extract amount + recipient */
@@ -178,7 +182,7 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
  * Only fires when strict regex returned 'unknown'.
  */
 function matchLooseCommand(text: string): ParsedCommand | null {
-  const normalized = text.trim().toLowerCase()
+  const normalized = text.trim().toLowerCase().replace(/[?!.,;:¿¡]+/g, '').trim()
   for (const [command, pattern] of Object.entries(LOOSE_COMMAND_PATTERNS)) {
     if (pattern.test(normalized)) {
       return { command: command as ParsedCommand['command'], originalText: text }
@@ -317,7 +321,13 @@ export async function parseMessage(
   }
 
   // Step 3: LLM — primary classifier for natural language
-  if (isLLMEnabled() && !isRateLimited()) {
+  let fallbackLlmStatus: ParsedCommand['llmStatus']
+  if (!isLLMEnabled()) {
+    fallbackLlmStatus = 'disabled'
+  } else if (isRateLimited()) {
+    fallbackLlmStatus = 'rate-limited'
+  } else {
+    fallbackLlmStatus = 'low-confidence' // default — overwritten on error/timeout
     try {
       const llmResponse = await parseMessageWithLLM(text, context)
 
@@ -339,11 +349,15 @@ export async function parseMessage(
         logParse(ctx, { ...regexResult, usedLLM: true, llmStatus: 'low-confidence' }, 'llm', 'llm-rejected', Date.now() - startTime, llmResponse?.meta)
       }
     } catch (error) {
-      const status: ParsedCommand['llmStatus'] =
-        error instanceof Error && error.message === 'Timeout' ? 'timeout' : 'error'
-      const logStatus = status === 'timeout' ? 'llm-timeout' : 'llm-error'
+      const isTimeout = error instanceof Error && error.message === 'Timeout'
+      fallbackLlmStatus = isTimeout ? 'timeout' : 'error'
+      if (isTimeout) {
+        logger.warn('LLM timeout in parseMessage')
+      } else {
+        logger.error('LLM error in parseMessage: %o', error)
+      }
       if (ctx) {
-        logParse(ctx, { ...regexResult, usedLLM: true, llmStatus: status }, 'llm', logStatus, Date.now() - startTime)
+        logParse(ctx, { ...regexResult, usedLLM: true, llmStatus: fallbackLlmStatus }, 'llm', isTimeout ? 'llm-timeout' : 'llm-error', Date.now() - startTime)
       }
       // Fall through to loose matching
     }
@@ -352,8 +366,7 @@ export async function parseMessage(
   // Step 4: Loose keyword matching (safety net when LLM unavailable/failed)
   const looseResult = matchLooseCommand(text)
   if (looseResult) {
-    const llmStatus: ParsedCommand['llmStatus'] = !isLLMEnabled() ? 'disabled' : isRateLimited() ? 'rate-limited' : 'error'
-    const result: ParsedCommand = { ...looseResult, usedLLM: false, llmStatus }
+    const result: ParsedCommand = { ...looseResult, usedLLM: false, llmStatus: fallbackLlmStatus }
     if (ctx) {
       logParse(ctx, result, 'regex', 'loose-matched', Date.now() - startTime)
     }
@@ -361,10 +374,9 @@ export async function parseMessage(
   }
 
   // Nothing matched — return unknown
-  const llmStatus: ParsedCommand['llmStatus'] = !isLLMEnabled() ? 'disabled' : isRateLimited() ? 'rate-limited' : 'error'
-  const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus }
+  const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: fallbackLlmStatus }
   if (ctx) {
-    logParse(ctx, result, 'regex', llmStatus === 'disabled' ? 'llm-disabled' : 'fallback-miss', Date.now() - startTime)
+    logParse(ctx, result, 'regex', fallbackLlmStatus === 'disabled' ? 'llm-disabled' : 'fallback-miss', Date.now() - startTime)
   }
   return result
 }
