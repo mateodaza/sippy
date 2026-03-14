@@ -17,7 +17,8 @@ export default await Env.create(new URL('../', import.meta.url), {
   WHATSAPP_PHONE_NUMBER_ID: Env.schema.string(),
   WHATSAPP_ACCESS_TOKEN: Env.schema.string(),
   WHATSAPP_VERIFY_TOKEN: Env.schema.string(),
-  WHATSAPP_APP_SECRET: Env.schema.string.optional(),
+  WHATSAPP_APP_SECRET: Env.schema.string(),
+  WHATSAPP_API_VERSION: Env.schema.string.optional(),
   WHATSAPP_BUTTONS: Env.schema.string.optional(),
   SIPPY_WHATSAPP_NUMBER: Env.schema.string.optional(),
 

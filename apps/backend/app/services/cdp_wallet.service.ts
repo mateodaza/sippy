@@ -11,6 +11,25 @@ import { ethers } from 'ethers'
 import { type UserWallet, type SecurityLimits, type TransferResult } from '#types/index'
 import { query } from '#services/db'
 import { registerWalletWithIndexer } from '#services/indexer.service'
+import { getRpcUrl } from '#config/network'
+
+const CDP_TIMEOUT_MS = 30_000
+
+export class CdpTimeoutError extends Error {
+  constructor(label: string) {
+    super(`CDP timeout: ${label} exceeded ${CDP_TIMEOUT_MS}ms`)
+    this.name = 'CdpTimeoutError'
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new CdpTimeoutError(label)), CDP_TIMEOUT_MS)
+    ),
+  ])
+}
 
 /**
  * Compatibility helper: queries phone_registry with canonical phone first,
@@ -65,7 +84,7 @@ export async function createUserWallet(phoneNumber: string): Promise<UserWallet>
     logger.info(`   Sanitized account name: ${accountName}`)
 
     // Create new account using CDP v2
-    const account = await cdp.evm.createAccount({ name: accountName })
+    const account = await withTimeout(cdp.evm.createAccount({ name: accountName }), 'createAccount')
     const walletAddress = account.address
 
     logger.info(`CDP Wallet created:`)
@@ -289,7 +308,7 @@ export async function getUserBalance(phoneNumber: string): Promise<number> {
     logger.info(`Getting USDC balance for ${phoneNumber}...`)
 
     // Use ethers to check USDC balance directly
-    const provider = new ethers.providers.JsonRpcProvider('https://arb1.arbitrum.io/rpc')
+    const provider = new ethers.providers.JsonRpcProvider(getRpcUrl())
     const usdcContract = new ethers.Contract(USDC_CONTRACT, USDC_ABI, provider)
 
     const balance = await usdcContract.balanceOf(userWallet.walletAddress)
@@ -323,7 +342,7 @@ export async function sendUSDC(
 
     // Get account by name
     const accountName = userWallet.cdpWalletId
-    const account = await cdp.evm.getOrCreateAccount({ name: accountName })
+    const account = await withTimeout(cdp.evm.getOrCreateAccount({ name: accountName }), 'getOrCreateAccount')
 
     logger.info(`Account loaded: ${account.address}`)
 
@@ -341,23 +360,30 @@ export async function sendUSDC(
     logger.info(`   Sending transaction...`)
 
     // Send transaction via CDP v2
-    const result = await cdp.evm.sendTransaction({
+    const result = await withTimeout(cdp.evm.sendTransaction({
       address: account.address,
       transaction: {
         to: USDC_CONTRACT as `0x${string}`,
         data: callData,
       },
       network: 'arbitrum' as any,
-    })
+    }), 'sendTransaction')
 
     logger.info(`Transfer successful! Hash: ${result.transactionHash}`)
 
     // Update daily spending in database
     const newDailySpent = userWallet.dailySpent + amount
-    await query(
+    const updateResult = await query(
       'UPDATE phone_registry SET daily_spent = $1, last_activity = $2 WHERE phone_number = $3',
       [newDailySpent, Date.now(), fromPhoneNumber]
     )
+    // SH-003 fallback: retry with bare-digit format. Remove after backfill confirmed.
+    if ((updateResult.rowCount ?? 0) === 0 && fromPhoneNumber.startsWith('+')) {
+      await query(
+        'UPDATE phone_registry SET daily_spent = $1, last_activity = $2 WHERE phone_number = $3',
+        [newDailySpent, Date.now(), fromPhoneNumber.slice(1)]
+      )
+    }
 
     return {
       transactionHash: result.transactionHash,

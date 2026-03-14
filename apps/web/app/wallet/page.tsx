@@ -69,6 +69,9 @@ function WalletContent() {
   // Language state
   const [lang, setLang] = useState<Language>('en');
 
+  // Keep html lang attribute in sync for screen readers
+  useEffect(() => { document.documentElement.lang = lang }, [lang])
+
   // Wallet state — two wallets
   const [eoaAddress, setEoaAddress] = useState<string | null>(null);
   const [eoaBalances, setEoaBalances] = useState<Balance | null>(null);
@@ -389,6 +392,7 @@ function WalletContent() {
               </p>
               <input
                 type='text'
+                inputMode='numeric'
                 value={reAuthOtp}
                 onChange={(e) => setReAuthOtp(e.target.value.replace(/\D/g, ''))}
                 placeholder='123456'
@@ -452,7 +456,8 @@ function WalletContent() {
                   value={reAuthPhone}
                   onChange={(e) => setReAuthPhone(e.target.value)}
                   placeholder='+573001234567'
-                  className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+                  disabled={!!reAuthPhone}
+                  className='w-full p-3 border rounded-lg mb-3 text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed'
                 />
                 <button
                   onClick={handleReAuthSendOtp}
@@ -468,6 +473,7 @@ function WalletContent() {
                 <p className='text-gray-600 mb-3 text-sm'>{t('wallet.codeSentTo', lang)} {reAuthPhone}</p>
                 <input
                   type='text'
+                  inputMode='numeric'
                   value={reAuthOtp}
                   onChange={(e) => setReAuthOtp(e.target.value.replace(/\D/g, ''))}
                   placeholder='123456'

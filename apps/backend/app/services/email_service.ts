@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import crypto from 'node:crypto'
+import logger from '@adonisjs/core/services/logger'
 
 const DEFAULT_FROM = 'noreply@sippy.app'
 
@@ -156,7 +157,7 @@ class EmailService {
       try {
         this.cleanup()
       } catch (err) {
-        console.error('EmailService cleanup error:', err)
+        logger.error('EmailService cleanup error: %o', err)
       }
     }, CLEANUP_INTERVAL)
   }

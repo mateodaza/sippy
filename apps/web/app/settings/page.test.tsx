@@ -388,7 +388,8 @@ describe('backend API calls use getStoredToken', () => {
     await act(async () => {
       findButton('Continue Anyway')!.click()
     })
-    await act(async () => {}) // wait for handleRevoke
+    // wait for handleRevoke (includes 100ms setTimeout for permissionsDataRef settle)
+    await act(async () => { await new Promise(r => setTimeout(r, 200)) })
 
     const revokeCall = mockFetch.mock.calls.find(
       (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/revoke-permission')
@@ -509,8 +510,12 @@ describe('sweep and export flow', () => {
     // so emailSectionStep transitions out of 'loading' and the export button becomes clickable.
     // Then return null for logExportEventFn and handleSweep — handleSweep shows "Session expired".
     mocks.state.isSignedIn = false // Use OTP flow
+    // useSessionGuard now calls getStoredToken() in mount effect for JWT re-auth;
+    // return expired so it skips authenticateWithJWT and proceeds to OTP flow
+    mocks.isTokenExpired.mockReturnValueOnce(true)
     mocks.getStoredToken
       .mockReturnValueOnce('setup-token') // useSessionGuard hook useState lazy init
+      .mockReturnValueOnce('setup-token') // useSessionGuard mount effect getStoredToken()
       .mockReturnValueOnce('setup-token') // language mount useEffect (getStoredToken call)
       .mockReturnValueOnce('setup-token') // fetchWalletStatus after OTP
       .mockReturnValueOnce('setup-token') // fetchEmailStatus after OTP
@@ -1030,6 +1035,9 @@ describe('email management', () => {
     mocks.state.isSignedIn = false
     mocks.state.currentUser = null
     mocks.state.evmAccounts = [{ address: '0xEOA123' }]
+    // useSessionGuard now calls getStoredToken() + isTokenExpired() on mount for JWT re-auth;
+    // return expired so it skips authenticateWithJWT and proceeds to OTP flow
+    mocks.isTokenExpired.mockReturnValueOnce(true)
     mocks.getStoredToken.mockReturnValue('mock-token')
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token')

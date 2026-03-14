@@ -7,6 +7,7 @@ import {
   checkSecurityLimits,
   DAILY_LIMIT_VERIFIED,
   DAILY_LIMIT_UNVERIFIED,
+  CdpTimeoutError,
 } from '#services/cdp_wallet.service'
 import {
   getEmbeddedWallet,
@@ -213,6 +214,20 @@ export async function handleSendCommand(
       logger.error('Post-transfer notification failed: %o', error)
       return true
     }
+
+    if (error instanceof CdpTimeoutError) {
+      // Timeout does NOT mean the transaction failed — it may still complete on-chain.
+      // Tell the user the outcome is unknown so they check balance before retrying.
+      logger.error('CDP transaction timeout (outcome unknown): %o', error)
+      const msg = {
+        en: 'The transfer is taking longer than expected. Please check your balance before trying again — the transfer may still complete.',
+        es: 'La transferencia esta tardando mas de lo esperado. Revisa tu saldo antes de intentar de nuevo — la transferencia podria completarse.',
+        pt: 'A transferencia esta demorando mais do que o esperado. Verifique seu saldo antes de tentar novamente — a transferencia pode ser concluida.',
+      }
+      await sendTextMessage(fromPhoneNumber, msg[lang] || msg.en, lang)
+      return false
+    }
+
     logger.error('Failed to send USDC: %o', error)
 
     const errorMessage = toUserErrorMessage(error, lang)
@@ -306,79 +321,86 @@ async function handleEmbeddedSend(
   logger.info('Executing embedded wallet transfer via spend permission...')
 
   const result = await sendToPhoneNumber(fromPhoneNumber, toPhoneNumber, amount)
-  velocityService.recordSend(fromPhoneNumber, toPhoneNumber, amount)
-
-  logger.info(`Embedded transfer completed. Hash: ${result.transactionHash}`)
-
-  let successMessage = formatSendSuccessMessage(
-    {
-      amount,
-      toPhone: toPhoneNumber,
-      txHash: result.transactionHash,
-      gasCovered: true,
-      localRate: senderRate,
-      localCurrency: senderCurrency,
-    },
-    lang
-  )
-
-  if (result.remainingAllowance !== undefined) {
-    const remaining = result.remainingAllowance.toFixed(2)
-    let resetInfo = ''
-    if (result.periodEndsAt) {
-      const daysUntilReset = Math.ceil(
-        (result.periodEndsAt - Date.now()) / (1000 * 60 * 60 * 24)
-      )
-      if (daysUntilReset <= 1) {
-        resetInfo =
-          lang === 'en'
-            ? ' (resets tomorrow)'
-            : lang === 'es'
-              ? ' (se renueva manana)'
-              : ' (renova amanha)'
-      } else {
-        resetInfo =
-          lang === 'en'
-            ? ` (resets in ${daysUntilReset} days)`
-            : lang === 'es'
-              ? ` (se renueva en ${daysUntilReset} dias)`
-              : ` (renova em ${daysUntilReset} dias)`
-      }
-    }
-    successMessage += `\n\n${formatSpendingLimitInfo(remaining, resetInfo, lang)}`
-  }
-
-  // Send notifications - errors here are non-critical since transfer succeeded
-  try {
-    await sendTextMessage(fromPhoneNumber, successMessage, lang)
-  } catch (notifyError) {
-    logger.error('Failed to send success notification to sender: %o', notifyError)
-  }
-
-  // Notify recipient via template message (works outside 24h session window)
-  try {
-    const recipientLang = (await getUserLanguage(toPhoneNumber)) || 'en'
-    await notifyPaymentReceived({
-      recipientPhone: toPhoneNumber,
-      amount: amount.toFixed(2),
-      asset: 'USDC',
-      senderPhone: fromPhoneNumber,
-      txHash: result.transactionHash,
-      lang: recipientLang,
-    })
-  } catch (notifyError) {
-    logger.error('Failed to send notification to recipient: %o', notifyError)
-  }
+  // Transfer on-chain; post-transfer failures must not return false
 
   try {
-    await sendButtonMessage(
-      fromPhoneNumber,
-      buttonNeedAnythingElse(lang),
-      [{ title: buttonBalance(lang) }, { title: buttonHelp(lang) }],
+    velocityService.recordSend(fromPhoneNumber, toPhoneNumber, amount)
+
+    logger.info(`Embedded transfer completed. Hash: ${result.transactionHash}`)
+
+    let successMessage = formatSendSuccessMessage(
+      {
+        amount,
+        toPhone: toPhoneNumber,
+        txHash: result.transactionHash,
+        gasCovered: true,
+        localRate: senderRate,
+        localCurrency: senderCurrency,
+      },
       lang
     )
-  } catch (notifyError) {
-    logger.error('Failed to send button message: %o', notifyError)
+
+    if (result.remainingAllowance !== undefined) {
+      const remaining = result.remainingAllowance.toFixed(2)
+      let resetInfo = ''
+      if (result.periodEndsAt) {
+        const daysUntilReset = Math.ceil(
+          (result.periodEndsAt - Date.now()) / (1000 * 60 * 60 * 24)
+        )
+        if (daysUntilReset <= 1) {
+          resetInfo =
+            lang === 'en'
+              ? ' (resets tomorrow)'
+              : lang === 'es'
+                ? ' (se renueva manana)'
+                : ' (renova amanha)'
+        } else {
+          resetInfo =
+            lang === 'en'
+              ? ` (resets in ${daysUntilReset} days)`
+              : lang === 'es'
+                ? ` (se renueva en ${daysUntilReset} dias)`
+                : ` (renova em ${daysUntilReset} dias)`
+        }
+      }
+      successMessage += `\n\n${formatSpendingLimitInfo(remaining, resetInfo, lang)}`
+    }
+
+    // Send notifications - errors here are non-critical since transfer succeeded
+    try {
+      await sendTextMessage(fromPhoneNumber, successMessage, lang)
+    } catch (notifyError) {
+      logger.error('Failed to send success notification to sender: %o', notifyError)
+    }
+
+    // Notify recipient via template message (works outside 24h session window)
+    try {
+      const recipientLang = (await getUserLanguage(toPhoneNumber)) || 'en'
+      await notifyPaymentReceived({
+        recipientPhone: toPhoneNumber,
+        amount: amount.toFixed(2),
+        asset: 'USDC',
+        senderPhone: fromPhoneNumber,
+        txHash: result.transactionHash,
+        lang: recipientLang,
+      })
+    } catch (notifyError) {
+      logger.error('Failed to send notification to recipient: %o', notifyError)
+    }
+
+    try {
+      await sendButtonMessage(
+        fromPhoneNumber,
+        buttonNeedAnythingElse(lang),
+        [{ title: buttonBalance(lang) }, { title: buttonHelp(lang) }],
+        lang
+      )
+    } catch (notifyError) {
+      logger.error('Failed to send button message: %o', notifyError)
+    }
+  } catch (postTransferError) {
+    logger.error('Post-transfer operation failed (transfer already completed): %o', postTransferError)
   }
+
   return true
 }

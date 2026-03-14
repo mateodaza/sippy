@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts, useSendUserOperation } from '@coinbase/cdp-hooks';
 import { getStoredToken, clearToken } from '../../lib/auth';
@@ -107,6 +107,9 @@ function SettingsContent() {
   // Language state
   const [lang, setLang] = useState<Language>('en');
 
+  // Keep html lang attribute in sync for screen readers
+  useEffect(() => { document.documentElement.lang = lang }, [lang])
+
   // Permission state
   const [walletStatus, setWalletStatus] = useState<WalletStatus | null>(null);
   const [newLimit, setNewLimit] = useState('100');
@@ -159,6 +162,10 @@ function SettingsContent() {
   const { refetch: refetchPermissions, data: permissionsData } = useListSpendPermissions({
     network: NETWORK as 'arbitrum',
   });
+  // Keep a ref to permissionsData so async callbacks always read the
+  // latest value instead of a stale closure capture.
+  const permissionsDataRef = useRef(permissionsData);
+  permissionsDataRef.current = permissionsData;
   const { currentUser } = useCurrentUser();
   const { isSignedIn } = useIsSignedIn();
   const { signOut } = useSignOut();
@@ -414,16 +421,33 @@ function SettingsContent() {
 
       // STEP 1: Onchain revoke via CDP SDK.
       console.log('Finding spend permission to revoke...');
-      // refetch() returns void on CDP hooks, so we trigger it for side-effect
-      // then read from permissionsData (already current after the await).
-      await refetchPermissions();
 
-      const sippyPermission = permissionsData?.spendPermissions?.find(
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (p: any) =>
-          p.permission?.spender?.toLowerCase() === SIPPY_SPENDER_ADDRESS.toLowerCase() &&
-          !p.revoked
-      );
+      // refetch() returns void on CDP hooks, so we trigger it for side-effect.
+      // permissionsData in this closure is stale after refetch because React
+      // state updates are async. We read from permissionsDataRef instead,
+      // giving React a tick to flush the new state.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const findSippyPermission = (data: any) =>
+        data?.spendPermissions?.find(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (p: any) =>
+            p.permission?.spender?.toLowerCase() === SIPPY_SPENDER_ADDRESS.toLowerCase() &&
+            !p.revoked
+        );
+
+      await refetchPermissions();
+      // Give React a tick to flush the state update from refetch
+      await new Promise((r) => setTimeout(r, 100));
+
+      let sippyPermission = findSippyPermission(permissionsDataRef.current);
+
+      if (!sippyPermission) {
+        // Retry once: wait longer for React to settle, then refetch again
+        await new Promise((r) => setTimeout(r, 1500));
+        await refetchPermissions();
+        await new Promise((r) => setTimeout(r, 500));
+        sippyPermission = findSippyPermission(permissionsDataRef.current);
+      }
 
       if (!sippyPermission) {
         throw new Error('No active Sippy permission found to revoke.');
@@ -469,7 +493,7 @@ function SettingsContent() {
       setError(err instanceof Error ? err.message : localizeError(err, 'revoke-permission', lang));
       setPermissionStatus('error');
     }
-  }, [walletAddress, emailStatus, permissionsData, refetchPermissions, revokeSpendPermission, lang]);
+  }, [walletAddress, emailStatus, refetchPermissions, revokeSpendPermission, lang]);
 
   // Create/update permission with new limit
   const handleChangeLimit = async () => {
@@ -814,6 +838,8 @@ function SettingsContent() {
       await navigator.clipboard.writeText(exportedKey);
       setHasCopied(true);
       logExportEventFn('copied');
+      // Clear key from memory after a short delay to reduce exposure window
+      setTimeout(() => setExportedKey(null), 2000);
     } catch {
       // Fallback for mobile browsers that block clipboard API
       const textarea = document.createElement('textarea');
@@ -826,6 +852,7 @@ function SettingsContent() {
       document.body.removeChild(textarea);
       setHasCopied(true);
       logExportEventFn('copied');
+      setTimeout(() => setExportedKey(null), 2000);
     }
   };
 

@@ -77,7 +77,7 @@ const _pendingTxCleanupInterval = setInterval(() => {
       }
     }
   } catch (err) {
-    console.error('pendingTx cleanup error:', err)
+    logger.error('pendingTx cleanup error: %o', err)
   }
 }, 30_000)
 _pendingTxCleanupInterval.unref()
@@ -135,8 +135,8 @@ export async function fetchRateContext(
         recipientRate = await exchangeRateService.getLocalRate(recipientCurrency)
       }
     }
-  } catch {
-    // Non-blocking: unexpected error → fall back to USD-only
+  } catch (err) {
+    logger.warn('fetchRateContext error (falling back to USD-only): %o', err)
   }
 
   return { senderRate, senderCurrency, recipientRate, recipientCurrency }
@@ -636,11 +636,14 @@ export default class WebhookController {
 
     // ── Route to command handler ──────────────────────────────────────
     const lang: Lang = userLang || 'en'
-    await this.handleCommand(from, command, lang, rateCtx, context)
-
-    // Only mark as processed after successful handling — allows Meta retry on failure
-    rateLimitService.markProcessed(messageId)
-    logger.info('Message %s processed successfully', messageId)
+    try {
+      await this.handleCommand(from, command, lang, rateCtx, context)
+      logger.info('Message %s processed successfully', messageId)
+    } finally {
+      // Always mark as processed to prevent infinite Meta retries.
+      // Individual handlers (e.g. send) have their own idempotency guards.
+      rateLimitService.markProcessed(messageId)
+    }
   }
 
   /**

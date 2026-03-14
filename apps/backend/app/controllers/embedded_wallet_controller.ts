@@ -34,6 +34,9 @@ import { canonicalizePhone } from '#utils/phone'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { velocityService } from '#services/velocity_service'
 
+// Concurrency guard: prevent duplicate web sends from the same user
+const webActiveSends = new Set<string>()
+
 // CDP client for spend permission queries — lazy to avoid crashing on import
 // when CDP credentials are not configured (e.g., in test environments)
 let _cdp: CdpClient | null = null
@@ -573,10 +576,17 @@ export default class EmbeddedWalletController {
    * SpendPermission on-chain. Accepts a phone number or 0x address as recipient.
    */
   async sendFromWeb({ request, response, cdpUser }: HttpContext) {
-    try {
-      const { phoneNumber } = cdpUser!
-      const fromPhone = phoneNumber  // already canonical from cdpUser JWT
+    const { phoneNumber } = cdpUser!
+    const fromPhone = phoneNumber  // already canonical from cdpUser JWT
 
+    // Concurrency guard: reject if a send is already in-flight for this user
+    if (webActiveSends.has(fromPhone)) {
+      return response.status(429).json({ error: 'A send is already in progress' })
+    }
+    webActiveSends.add(fromPhone)
+    const timer = setTimeout(() => webActiveSends.delete(fromPhone), 60_000)
+
+    try {
       const parsed = sendFromWebBodySchema.safeParse(request.body())
       if (!parsed.success) {
         return response.status(422).json({ error: 'Invalid request' })
@@ -638,6 +648,9 @@ export default class EmbeddedWalletController {
       const safeMessages = ['Insufficient balance', 'Amount has too many decimal places']
       const userMsg = safeMessages.some((s) => msg.includes(s)) ? msg : 'Internal server error'
       return response.status(500).json({ error: userMsg })
+    } finally {
+      clearTimeout(timer)
+      webActiveSends.delete(fromPhone)
     }
   }
 

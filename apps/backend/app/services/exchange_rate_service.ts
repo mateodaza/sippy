@@ -1,3 +1,5 @@
+import logger from '@adonisjs/core/services/logger'
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1_000  // 24 hours (rates update daily)
@@ -113,7 +115,7 @@ class ExchangeRateService {
     } catch (err) {
       // Keep existing cache intact — stale rates are better than breaking callers.
       // If cache is empty (first fetch failed), getLocalRate() will return null.
-      console.error('ExchangeRateService: fetch failed:', err instanceof Error ? err.message : err)
+      logger.error('ExchangeRateService: fetch failed: %s', err instanceof Error ? err.message : err)
     }
   }
 

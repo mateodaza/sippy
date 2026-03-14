@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createFundToken, verifyFundToken } from '@/lib/fund-token';
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || (process.env.NODE_ENV === 'production' ? (() => { throw new Error('NEXT_PUBLIC_BACKEND_URL is required in production') })() : 'http://localhost:3001');
 
 /**
  * POST /api/fund-token — Create a signed fund link for a phone number.

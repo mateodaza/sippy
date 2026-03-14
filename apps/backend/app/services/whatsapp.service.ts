@@ -9,7 +9,7 @@ import logger from '@adonisjs/core/services/logger'
 import { type WhatsAppAPIResponse, type WhatsAppAPIError } from '#types/index'
 import { sanitizeOutboundMessage } from '#utils/sanitize'
 
-const WHATSAPP_API_URL = 'https://graph.facebook.com/v18.0'
+const WHATSAPP_API_URL = `https://graph.facebook.com/${env.get('WHATSAPP_API_VERSION', 'v21.0')}`
 const PHONE_NUMBER_ID = env.get('WHATSAPP_PHONE_NUMBER_ID')
 const ACCESS_TOKEN = env.get('WHATSAPP_ACCESS_TOKEN')
 

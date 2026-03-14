@@ -45,7 +45,8 @@ export default class AuthApiController {
         return response.status(422).json({ error: 'Invalid phone number' })
       }
 
-      const result = await otpService.sendOtp(normalizedPhone)
+      const lang = getLanguageForPhone(normalizedPhone)
+      const result = await otpService.sendOtp(normalizedPhone, lang)
 
       if ('error' in result && result.error === 'rate_limited') {
         return response.status(429).json({ error: 'Too Many Requests', retryAfter: result.retryAfter })

@@ -82,12 +82,28 @@ export function useSessionGuard(): SessionGuardResult {
       if (isSignedIn === undefined) return
       if (isSignedIn && !currentUser) return
 
-      setHasCheckedSession(true)
-
       if (!isSignedIn) {
+        // CDP hooks may not have settled yet (e.g. navigating from setup).
+        // If we have a valid JWT, re-authenticate with CDP before giving up.
+        const storedJwt = getStoredToken()
+        if (storedJwt && !isTokenExpired(storedJwt)) {
+          try {
+            await authenticateWithJWT()
+            // authenticateWithJWT will cause isSignedIn to flip true,
+            // triggering this effect again. Don't set hasCheckedSession yet
+            // so the next run can proceed to the token-validation path.
+            return
+          } catch {
+            // JWT auth failed — clear stale token and fall through
+            clearToken()
+          }
+        }
+        setHasCheckedSession(true)
         setIsCheckingSession(false)
         return
       }
+
+      setHasCheckedSession(true)
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const addr = (currentUser as any)?.evmSmartAccounts?.[0] || (currentUser as any)?.evmAccounts?.[0]
@@ -116,7 +132,7 @@ export function useSessionGuard(): SessionGuardResult {
     }
 
     checkExistingSession()
-  }, [isSignedIn, currentUser, hasCheckedSession])
+  }, [isSignedIn, currentUser, hasCheckedSession, authenticateWithJWT])
 
   // Detect CDP sign-out (isSignedIn transitions true → false) and update auth state
   useEffect(() => {

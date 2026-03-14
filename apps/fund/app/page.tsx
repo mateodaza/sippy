@@ -8,6 +8,7 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
+  Clock,
   CreditCard,
   ArrowLeftRight,
 } from 'lucide-react';
@@ -88,8 +89,8 @@ function FundPageContent() {
   const hydrated = useHydrated();
   const searchParams = useSearchParams();
   const token = searchParams.get('t');
-  // Direct address bypass — useful for testing or wallet-to-wallet funding
-  const directAddress = searchParams.get('address');
+  // Direct address bypass — dev-only, gated to prevent production abuse
+  const directAddress = process.env.NODE_ENV === 'development' ? searchParams.get('address') : null;
 
   const [recipient, setRecipient] = useState<RecipientInfo | null>(
     directAddress ? { maskedPhone: directAddress, address: directAddress } : null
@@ -132,12 +133,12 @@ function FundPageContent() {
       const processes = (lastStep as any)?.execution?.process ?? [];
       const txHash = [...processes].reverse().find((p: any) => p.txHash)?.txHash;
       if (!txHash) return;
-      const amount = (Number(route.toAmountMin) / 1e6).toFixed(2);
+      const amount = (Number(route.toAmount) / 1e6).toFixed(2);
       fetch('/api/notify-fund', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address: recipient.address, type: 'usdc', amount, txHash }),
-      }).catch(() => {});
+      }).catch((err) => console.error('Fund notification failed:', err));
     });
     return unsubscribe;
   }, [recipient]);
@@ -319,7 +320,7 @@ function CardBankTab({ address, coinbaseAvailable }: { address: string; coinbase
 }
 
 function CoinbaseOnrampTab({ address }: { address: string }) {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'checking' | 'error'>('idle');
 
   const handleOpen = useCallback(async () => {
     setStatus('loading');
@@ -360,24 +361,24 @@ function CoinbaseOnrampTab({ address }: { address: string }) {
     const timer = setInterval(() => {
       if (!popup || popup.closed) {
         clearInterval(timer);
-        setStatus('success');
+        setStatus('checking');
       }
     }, 500);
   }, [address]);
 
-  if (status === 'success') {
+  if (status === 'checking') {
     return (
       <div className='bg-white rounded-3xl shadow-lg p-8 text-center'>
-        <CheckCircle2 className='w-16 h-16 text-[#059669] mx-auto mb-4' />
-        <h3 className='text-xl font-bold text-gray-900 mb-2'>Purchase Complete?</h3>
+        <Clock className='w-16 h-16 text-amber-500 mx-auto mb-4' />
+        <h3 className='text-xl font-bold text-gray-900 mb-2'>Checking Purchase...</h3>
         <p className='text-gray-600 mb-4'>
-          If your purchase completed, the USDC will arrive in the Sippy account shortly. Check the balance on WhatsApp to confirm.
+          If your purchase completed successfully, the USDC should appear in the Sippy account within a few minutes. Check the balance on WhatsApp to confirm.
         </p>
         <button
           onClick={() => setStatus('idle')}
           className='text-[#059669] font-semibold hover:underline'
         >
-          Fund again
+          Buy Again
         </button>
       </div>
     );

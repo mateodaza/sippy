@@ -23,11 +23,15 @@ export interface RefuelResult {
   error?: string
 }
 
+const BALANCE_CHECK_INTERVAL_MS = 30 * 60 * 1000 // 30 minutes
+const LOW_BALANCE_THRESHOLD_ETH = 0.005
+
 class RefuelService {
   private contract: ethers.Contract | null = null
   private provider: ethers.providers.JsonRpcProvider | null = null
   private signer: ethers.Wallet | null = null
   private contractAddress: string
+  private balanceMonitorTimer: ReturnType<typeof setInterval> | null = null
 
   constructor() {
     this.contractAddress = env.get('REFUEL_CONTRACT_ADDRESS', '')
@@ -61,6 +65,9 @@ class RefuelService {
 
       // Log contract status on startup
       this.logContractStatus()
+
+      // Start periodic balance monitoring
+      this.startBalanceMonitor()
     } catch (error) {
       logger.error('Failed to initialize RefuelService: %o', error)
     }
@@ -86,6 +93,37 @@ class RefuelService {
     } catch (error) {
       logger.error('Failed to check contract status: %o', error)
     }
+  }
+
+  /**
+   * Start periodic balance monitoring (every 30 minutes).
+   * Logs an error when the GasRefuel contract balance drops below threshold.
+   */
+  private startBalanceMonitor(): void {
+    this.balanceMonitorTimer = setInterval(async () => {
+      try {
+        const balance = await this.getContractBalance()
+        const balanceNum = Number.parseFloat(balance)
+
+        if (balanceNum < LOW_BALANCE_THRESHOLD_ETH) {
+          logger.error(
+            'GasRefuel contract balance critically low: %s ETH (threshold: %s ETH). Contract: %s',
+            balance,
+            LOW_BALANCE_THRESHOLD_ETH,
+            this.contractAddress
+          )
+        } else {
+          logger.info('GasRefuel balance check: %s ETH', balance)
+        }
+      } catch (error) {
+        logger.error('Periodic balance check failed: %o', error)
+      }
+    }, BALANCE_CHECK_INTERVAL_MS)
+
+    // Don't keep the process alive just for this timer
+    this.balanceMonitorTimer.unref()
+
+    logger.info('  Balance monitor: every %d min', BALANCE_CHECK_INTERVAL_MS / 60_000)
   }
 
   /**

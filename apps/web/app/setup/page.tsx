@@ -77,6 +77,9 @@ function SetupContent() {
   const [tosChecked, setTosChecked] = useState(false);
   const [lang, setLang] = useState<Language>('en');
 
+  // Keep html lang attribute in sync for screen readers
+  useEffect(() => { document.documentElement.lang = lang }, [lang])
+
   // CDP Hooks
   const { authenticateWithJWT } = useAuthenticateWithJWT();
   const { createSpendPermission, status: permissionStatus } = useCreateSpendPermission();
@@ -156,6 +159,7 @@ function SetupContent() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${accessToken}`,
               },
+              body: JSON.stringify({ walletAddress: smartAccountAddress }),
             });
 
             if (registerResponse.ok) {
@@ -331,14 +335,24 @@ function SetupContent() {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${accessToken}`,
               },
+              body: JSON.stringify({ walletAddress: smartAccountAddress }),
             });
 
             if (!response.ok) {
-              console.warn('Failed to register wallet with backend:', await response.text());
+              const errText = await response.text();
+              console.error('Wallet registration failed:', errText);
+              setError(lang === 'es' ? 'Error registrando la billetera. Intenta de nuevo.' :
+                       lang === 'pt' ? 'Erro ao registrar a carteira. Tente novamente.' :
+                       'Failed to register wallet. Please try again.');
+              return;
             }
           }
         } catch (regErr) {
-          console.warn('Backend registration failed:', regErr);
+          console.error('Backend registration error:', regErr);
+          setError(lang === 'es' ? 'Error registrando la billetera. Intenta de nuevo.' :
+                   lang === 'pt' ? 'Erro ao registrar a carteira. Tente novamente.' :
+                   'Failed to register wallet. Please try again.');
+          return;
         }
       }
 
@@ -541,6 +555,7 @@ function SetupContent() {
                   'Content-Type': 'application/json',
                   'Authorization': `Bearer ${accessToken}`,
                 },
+                body: JSON.stringify({ walletAddress }),
               });
             }
           } catch (regErr) {
@@ -652,6 +667,7 @@ function SetupContent() {
             </p>
             <input
               type='text'
+              inputMode='numeric'
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
               placeholder={t('setup.codePlaceholder', lang)}
@@ -708,6 +724,7 @@ function SetupContent() {
                 <p className='text-gray-600 mb-4'>{t('setup.emailCodeSentTo', lang)} {email}</p>
                 <input
                   type='text'
+                  inputMode='numeric'
                   value={emailCode}
                   onChange={(e) => setEmailCode(e.target.value)}
                   placeholder={t('setup.emailCodePlaceholder', lang)}

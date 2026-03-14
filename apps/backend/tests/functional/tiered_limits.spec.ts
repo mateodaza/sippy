@@ -14,6 +14,7 @@
 import { test } from '@japa/runner'
 import { query } from '#services/db'
 import { checkSecurityLimits } from '#services/cdp_wallet.service'
+import { isDbAvailable } from '../helpers/skip_without_db.js'
 
 const NOW = Date.now()
 const TODAY = new Date().toDateString()
@@ -23,7 +24,11 @@ const TODAY = new Date().toDateString()
 // ---------------------------------------------------------------------------
 
 test.group('AC1 | checkSecurityLimits | unverified blocked at $50 (DB)', (group) => {
+  group.each.setup(async (t) => {
+    if (!(await isDbAvailable())) t.skip(true, 'No local DB')
+  })
   group.setup(async () => {
+    if (!(await isDbAvailable())) return
     await query(
       `INSERT INTO phone_registry
         (phone_number, cdp_wallet_name, wallet_address, created_at, last_activity, daily_spent, last_reset_date)
@@ -40,6 +45,7 @@ test.group('AC1 | checkSecurityLimits | unverified blocked at $50 (DB)', (group)
   })
 
   group.teardown(async () => {
+    if (!(await isDbAvailable())) return
     await query('DELETE FROM phone_registry WHERE phone_number = $1', ['+15550040001'])
     await query('DELETE FROM user_preferences WHERE phone_number = $1', ['+15550040001'])
   })
@@ -66,7 +72,11 @@ test.group('AC1 | checkSecurityLimits | unverified blocked at $50 (DB)', (group)
 // ---------------------------------------------------------------------------
 
 test.group('AC2 | checkSecurityLimits | verified allowed up to $500 (DB)', (group) => {
+  group.each.setup(async (t) => {
+    if (!(await isDbAvailable())) t.skip(true, 'No local DB')
+  })
   group.setup(async () => {
+    if (!(await isDbAvailable())) return
     await query(
       `INSERT INTO phone_registry
         (phone_number, cdp_wallet_name, wallet_address, created_at, last_activity, daily_spent, last_reset_date)
@@ -83,6 +93,7 @@ test.group('AC2 | checkSecurityLimits | verified allowed up to $500 (DB)', (grou
   })
 
   group.teardown(async () => {
+    if (!(await isDbAvailable())) return
     await query('DELETE FROM phone_registry WHERE phone_number = $1', ['+15550040002'])
     await query('DELETE FROM user_preferences WHERE phone_number = $1', ['+15550040002'])
   })
@@ -112,7 +123,11 @@ test.group('AC2 | checkSecurityLimits | verified allowed up to $500 (DB)', (grou
 // ---------------------------------------------------------------------------
 
 test.group('AC3 | checkSecurityLimits | mid-day verification change picked up immediately (DB)', (group) => {
+  group.each.setup(async (t) => {
+    if (!(await isDbAvailable())) t.skip(true, 'No local DB')
+  })
   group.setup(async () => {
+    if (!(await isDbAvailable())) return
     await query(
       `INSERT INTO phone_registry
         (phone_number, cdp_wallet_name, wallet_address, created_at, last_activity, daily_spent, last_reset_date)
@@ -129,6 +144,7 @@ test.group('AC3 | checkSecurityLimits | mid-day verification change picked up im
   })
 
   group.teardown(async () => {
+    if (!(await isDbAvailable())) return
     await query('DELETE FROM phone_registry WHERE phone_number = $1', ['+15550040003'])
     await query('DELETE FROM user_preferences WHERE phone_number = $1', ['+15550040003'])
   })
@@ -164,7 +180,10 @@ test.group('AC3 | checkSecurityLimits | mid-day verification change picked up im
 // AC1/AC2 — wallet not found returns not-allowed (guard clause)
 // ---------------------------------------------------------------------------
 
-test.group('AC1/AC2 | checkSecurityLimits | unknown phone → not-allowed guard', () => {
+test.group('AC1/AC2 | checkSecurityLimits | unknown phone → not-allowed guard', (group) => {
+  group.each.setup(async (t) => {
+    if (!(await isDbAvailable())) t.skip(true, 'No local DB')
+  })
   test('TC-EL-004-F08: no phone_registry row for phone → { allowed: false, reason: "User wallet not found" }', async ({
     assert,
   }) => {

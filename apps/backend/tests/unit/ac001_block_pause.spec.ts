@@ -10,6 +10,7 @@
 import { test } from '@japa/runner'
 import { formatAccountSuspendedMessage, formatMaintenanceMessage } from '#utils/messages'
 import { setIsPaused, getIsPaused } from '#controllers/admin/moderation_controller'
+import { isDbAvailable } from '../helpers/skip_without_db.js'
 
 // ── Trilingual message tests ─────────────────────────────────────────────────
 
@@ -146,6 +147,9 @@ function restoreUserPreference() {
 }
 
 test.group('AC-001 | ModerationController.blockUser', (group) => {
+  group.each.setup(async (t) => {
+    if (!(await isDbAvailable())) t.skip(true, 'No local DB')
+  })
   group.setup(async () => { await ensureController() })
   group.each.teardown(() => { restoreUserPreference() })
 
@@ -173,6 +177,9 @@ test.group('AC-001 | ModerationController.blockUser', (group) => {
 })
 
 test.group('AC-001 | ModerationController.unblockUser', (group) => {
+  group.each.setup(async (t) => {
+    if (!(await isDbAvailable())) t.skip(true, 'No local DB')
+  })
   group.setup(async () => { await ensureController() })
   group.each.teardown(() => { restoreUserPreference() })
 

@@ -8,8 +8,15 @@
  */
 
 import { test } from '@japa/runner'
+import app from '@adonisjs/core/services/app'
+import '#types/container'
 
-test.group('Resolve | GET /resolve-phone', () => {
+test.group('Resolve | GET /resolve-phone', (group) => {
+  // Reset throttle so tests from earlier spec files don't exhaust the budget
+  group.setup(async () => {
+    const rls = await app.container.make('rateLimitService')
+    rls.resetIpThrottle()
+  })
   test('missing phone param returns 400', async ({ client }) => {
     const response = await client.get('/resolve-phone')
     response.assertStatus(400)
@@ -34,7 +41,11 @@ test.group('Resolve | GET /resolve-phone', () => {
   })
 })
 
-test.group('Resolve | GET /resolve-address', () => {
+test.group('Resolve | GET /resolve-address', (group) => {
+  group.setup(async () => {
+    const rls = await app.container.make('rateLimitService')
+    rls.resetIpThrottle()
+  })
   test('missing address param returns 400', async ({ client }) => {
     const response = await client.get('/resolve-address')
     response.assertStatus(400)

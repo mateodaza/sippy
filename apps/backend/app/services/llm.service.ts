@@ -278,9 +278,12 @@ async function callModel(
     return { parsed: null, model: modelId }
   }
 
+  // Strip <think>…</think> blocks that some models (e.g. Qwen) prepend
+  const cleaned = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
+
   let raw: unknown
   try {
-    raw = JSON.parse(content)
+    raw = JSON.parse(cleaned)
   } catch {
     logger.warn('LLM returned invalid JSON (%s): %s', modelId, content.slice(0, 200))
     return { parsed: null, model: modelId }

@@ -11,6 +11,7 @@ import { test } from '@japa/runner'
 import { query } from '#services/db'
 import app from '@adonisjs/core/services/app'
 import '#types/container'
+import { isDbAvailable } from '../helpers/skip_without_db.js'
 
 const NOW = Date.now()
 
@@ -69,7 +70,10 @@ test.group('PV-002 | GET /api/profile | invalid phone → 400', (group) => {
 // 404 — phone not in phone_registry
 // ---------------------------------------------------------------------------
 
-test.group('PV-002 | GET /api/profile | unknown phone → 404', () => {
+test.group('PV-002 | GET /api/profile | unknown phone → 404', (group) => {
+  group.each.setup(async (t) => {
+    if (!(await isDbAvailable())) t.skip(true, 'No local DB')
+  })
   test('TC-PV-002-F03: phone not in registry returns 404', async ({ client }) => {
     const response = await client.get('/api/profile').qs({ phone: '+15550050099' })
     response.assertStatus(404)
@@ -81,8 +85,17 @@ test.group('PV-002 | GET /api/profile | unknown phone → 404', () => {
 // ---------------------------------------------------------------------------
 
 test.group('PV-002 | GET /api/profile | phone_visible = true (default)', (group) => {
-  group.setup(() => seedWallet('+15550050001', '0x0000000000000000000000000000000000000011'))
-  group.teardown(() => cleanupPhone('+15550050001'))
+  group.each.setup(async (t) => {
+    if (!(await isDbAvailable())) t.skip(true, 'No local DB')
+  })
+  group.setup(async () => {
+    if (!(await isDbAvailable())) return
+    await seedWallet('+15550050001', '0x0000000000000000000000000000000000000011')
+  })
+  group.teardown(async () => {
+    if (!(await isDbAvailable())) return
+    await cleanupPhone('+15550050001')
+  })
 
   test('TC-PV-002-F04: no preference row → phoneVisible defaults to true', async ({ client }) => {
     const response = await client.get('/api/profile').qs({ phone: '+15550050001' })
@@ -105,11 +118,16 @@ test.group('PV-002 | GET /api/profile | phone_visible = true (default)', (group)
 // ---------------------------------------------------------------------------
 
 test.group('PV-002 | GET /api/profile | phone_visible = false (private)', (group) => {
+  group.each.setup(async (t) => {
+    if (!(await isDbAvailable())) t.skip(true, 'No local DB')
+  })
   group.setup(async () => {
+    if (!(await isDbAvailable())) return
     await seedWallet('+15550050002', '0x0000000000000000000000000000000000000012')
     await seedPreference('+15550050002', false)
   })
   group.teardown(async () => {
+    if (!(await isDbAvailable())) return
     await cleanupPhone('+15550050002')
     // Reset throttle after profile tests finish so resolve.spec.ts starts fresh.
     const rls = await app.container.make('rateLimitService')

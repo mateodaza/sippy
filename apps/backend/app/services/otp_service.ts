@@ -1,4 +1,5 @@
 import axios from 'axios'
+import crypto from 'node:crypto'
 import UserPreference from '#models/user_preference'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -56,7 +57,7 @@ class OtpService {
       return { error: 'rate_limited', retryAfter: rateCheck.retryAfter! }
     }
 
-    const code = String(Math.floor(Math.random() * 1_000_000)).padStart(6, '0')
+    const code = String(crypto.randomInt(1_000_000)).padStart(6, '0')
 
     if (!this.otpStore.has(phone) && this.otpStore.size >= MAX_MAP_ENTRIES) {
       this.purgeExpiredOtpEntries()
@@ -120,7 +121,7 @@ class OtpService {
         }
         this.purgeExpiredRateLimitBuckets()
       } catch (err) {
-        console.error('OtpService cleanup error:', err)
+        console.error('OtpService cleanup error:', err) // OtpService can't use AdonisJS logger (class instantiated at module level)
       }
     }, CLEANUP_INTERVAL)
   }

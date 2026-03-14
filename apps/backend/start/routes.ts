@@ -31,7 +31,9 @@ router.post('/webhook/whatsapp', [WebhookController, 'handle'])
 
 // ── Public resolution ───────────────────────────────────────────────────────
 router.get('/resolve-phone', [ResolveController, 'byPhone']).use(middleware.ipThrottle())
-router.get('/resolve-address', [ResolveController, 'byAddress']).use(middleware.ipThrottle())
+router
+  .get('/resolve-address', [ResolveController, 'byAddress'])
+  .use(middleware.ipThrottle())
 router.get('/api/profile', [EmbeddedWalletController, 'getProfile']).use(middleware.ipThrottle())
 
 // ── Notifications (require shared secret) ───────────────────────────────────
