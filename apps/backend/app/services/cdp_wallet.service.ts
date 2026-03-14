@@ -104,14 +104,14 @@ export async function createUserWallet(phoneNumber: string): Promise<UserWallet>
       ]
     )
 
-    logger.info(`User wallet registered in database for +${phoneNumber}`)
+    logger.info(`User wallet registered in database for ${phoneNumber}`)
 
     // Register with indexer (fire-and-forget — never blocks wallet creation)
     registerWalletWithIndexer(walletAddress, phoneNumber).catch((err) => logger.warn('Indexer registration failed (non-blocking): %o', err))
 
     return userWallet
   } catch (error) {
-    logger.error(`Failed to create wallet for +${phoneNumber}: %o`, error)
+    logger.error(`Failed to create wallet for ${phoneNumber}: %o`, error)
     throw error
   }
 }
@@ -148,7 +148,7 @@ export async function getUserWallet(phoneNumber: string): Promise<UserWallet | n
       lastResetDate: row.last_reset_date,
     }
   } catch (error) {
-    logger.error(`Failed to get wallet for +${phoneNumber}: %o`, error)
+    logger.error(`Failed to get wallet for ${phoneNumber}: %o`, error)
     throw error
   }
 }
@@ -286,7 +286,7 @@ export async function getUserBalance(phoneNumber: string): Promise<number> {
   }
 
   try {
-    logger.info(`Getting USDC balance for +${phoneNumber}...`)
+    logger.info(`Getting USDC balance for ${phoneNumber}...`)
 
     // Use ethers to check USDC balance directly
     const provider = new ethers.providers.JsonRpcProvider('https://arb1.arbitrum.io/rpc')
@@ -298,7 +298,7 @@ export async function getUserBalance(phoneNumber: string): Promise<number> {
     logger.info(`Balance: ${balanceAmount} USDC`)
     return balanceAmount
   } catch (error) {
-    logger.error(`Failed to get balance for +${phoneNumber}: %o`, error)
+    logger.error(`Failed to get balance for ${phoneNumber}: %o`, error)
     throw error
   }
 }

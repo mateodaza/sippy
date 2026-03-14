@@ -155,7 +155,7 @@ export async function getEmbeddedWallet(phoneNumber: string): Promise<EmbeddedUs
       dailyLimit: row.daily_limit ? Number.parseFloat(row.daily_limit) : null,
     }
   } catch (error) {
-    logger.error(`Failed to get embedded wallet for +${phoneNumber}: %o`, error)
+    logger.error(`Failed to get embedded wallet for ${phoneNumber}: %o`, error)
     throw error
   }
 }
@@ -170,7 +170,7 @@ export async function getEmbeddedBalance(phoneNumber: string): Promise<number> {
   }
 
   try {
-    logger.info(`Getting USDC balance for +${phoneNumber}...`)
+    logger.info(`Getting USDC balance for ${phoneNumber}...`)
 
     const provider = new ethers.providers.JsonRpcProvider(getRpcUrl())
     const usdcContract = new ethers.Contract(getUsdcAddress(), USDC_ABI, provider)

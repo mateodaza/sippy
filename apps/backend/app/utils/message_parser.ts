@@ -122,13 +122,13 @@ const LOOSE_COMMAND_PATTERNS: Record<string, RegExp> = {
 }
 
 /** Trilingual send patterns — strict format, must extract amount + recipient */
-const SEND_PATTERNS: RegExp[] = [
+const SEND_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
   // EN: "send 10 to +573001234567" or "send $10 to ..." or "send 10,50 to ..."
-  /^send\s+\$?(\d+(?:[.,]\d+)?)\s+to\s+(.+)$/i,
+  { pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)\s+to\s+(.+)$/i, lang: 'en' },
   // ES: "enviar 10 a +573001234567" / "envía 10 a ..."
-  /^env[ií]a?r?\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i,
+  { pattern: /^env[ií]a?r?\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
   // PT: "enviar 10 para +573001234567"
-  /^enviar?\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i,
+  { pattern: /^enviar?\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i, lang: 'pt' },
 ]
 
 /**
@@ -166,10 +166,10 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
 
   // Check send patterns (need to extract amount + recipient)
   const trimmedText = text.trim()
-  for (const pattern of SEND_PATTERNS) {
+  for (const { pattern, lang } of SEND_PATTERNS) {
     const match = trimmedText.match(pattern)
     if (match) {
-      return parseSendMatch(match, text)
+      return parseSendMatch(match, text, lang)
     }
   }
 
@@ -245,20 +245,20 @@ export function parseAndValidateAmount(raw: string): AmountParseResult {
 // Send match extraction
 // ============================================================================
 
-function parseSendMatch(match: RegExpMatchArray, originalText: string): ParsedCommand {
+function parseSendMatch(match: RegExpMatchArray, originalText: string, lang: 'en' | 'es' | 'pt'): ParsedCommand {
   const rawAmount = match[1]   // literal text from regex, e.g. "10,50" or "1.000"
   const result = parseAndValidateAmount(rawAmount)
 
   if (result.errorCode !== null) {
     // Amount is invalid — carry error to controller for a specific reply
-    return { command: 'send', amountError: result.errorCode, originalText }
+    return { command: 'send', amountError: result.errorCode, detectedLanguage: lang, originalText }
   }
 
   const rawRecipient = match[2].trim()
   const canonicalRecipient = canonicalizePhone(rawRecipient)
   if (!canonicalRecipient) {
     // Amount is valid but phone is bad — carry error to controller
-    return { command: 'send', amount: result.value!, recipientError: 'INVALID_PHONE', originalText }
+    return { command: 'send', amount: result.value!, recipientError: 'INVALID_PHONE', detectedLanguage: lang, originalText }
   }
 
   return {
@@ -266,6 +266,7 @@ function parseSendMatch(match: RegExpMatchArray, originalText: string): ParsedCo
     amount: result.value!,
     recipient: canonicalRecipient,
     isLargeAmount: result.isLarge,
+    detectedLanguage: lang,
   }
 }
 

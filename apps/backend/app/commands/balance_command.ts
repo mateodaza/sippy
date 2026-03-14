@@ -41,7 +41,7 @@ export async function handleBalanceCommand(
   localRate: number | null,
   localCurrency: string | null
 ): Promise<void> {
-  logger.info(`BALANCE command from +${phoneNumber}`)
+  logger.info(`BALANCE command from ${phoneNumber}`)
 
   try {
     // Check for embedded wallet first (new self-custodial system)
@@ -66,7 +66,7 @@ export async function handleBalanceCommand(
 
     await updateLastActivity(phoneNumber)
 
-    logger.info(`Fetching balance for +${phoneNumber}...`)
+    logger.info(`Fetching balance for ${phoneNumber}...`)
     const balance = await getUserBalance(phoneNumber)
 
     let ethBalance: string | undefined
@@ -101,9 +101,9 @@ export async function handleBalanceCommand(
 
     await sendTextMessage(phoneNumber, message, lang)
 
-    logger.info(`Balance sent to +${phoneNumber}: ${balance} USD`)
+    logger.info(`Balance sent to ${phoneNumber}: ${balance} USD`)
   } catch (error) {
-    logger.error(`Failed to get balance for +${phoneNumber}: %o`, error)
+    logger.error(`Failed to get balance for ${phoneNumber}: %o`, error)
 
     const errorMessage = toUserErrorMessage(error, lang)
     await sendTextMessage(phoneNumber, formatBalanceErrorMessage(errorMessage, lang), lang)
@@ -122,7 +122,7 @@ async function handleEmbeddedBalance(
   localRate: number | null,
   localCurrency: string | null
 ): Promise<void> {
-  logger.info(`Fetching embedded wallet balance for +${phoneNumber}...`)
+  logger.info(`Fetching embedded wallet balance for ${phoneNumber}...`)
 
   const balance = await getEmbeddedBalance(phoneNumber)
 
@@ -156,5 +156,5 @@ async function handleEmbeddedBalance(
 
   await sendTextMessage(phoneNumber, message, lang)
 
-  logger.info(`Balance sent to +${phoneNumber}: ${balance} USD`)
+  logger.info(`Balance sent to ${phoneNumber}: ${balance} USD`)
 }

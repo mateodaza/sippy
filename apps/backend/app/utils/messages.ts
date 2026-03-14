@@ -354,11 +354,11 @@ export function formatSessionExpiredMessage(lang: Lang = 'en'): string {
 export function formatRecipientNotFoundMessage(phone: string, lang: Lang = 'en'): string {
   const m = {
     en: () =>
-      `Recipient not found.\n\n+${phone} is not registered with Sippy.\n\nAsk them to send "start" to this number to create their wallet.`,
+      `Recipient not found.\n\n${phone} is not registered with Sippy.\n\nAsk them to send "start" to this number to create their wallet.`,
     es: () =>
-      `Destinatario no encontrado.\n\n+${phone} no esta registrado en Sippy.\n\nPidele que envie "comenzar" a este numero para crear su billetera.`,
+      `Destinatario no encontrado.\n\n${phone} no esta registrado en Sippy.\n\nPidele que envie "comenzar" a este numero para crear su billetera.`,
     pt: () =>
-      `Destinatario nao encontrado.\n\n+${phone} nao esta registrado no Sippy.\n\nPeca para enviar "comecar" para este numero para criar a carteira.`,
+      `Destinatario nao encontrado.\n\n${phone} nao esta registrado no Sippy.\n\nPeca para enviar "comecar" para este numero para criar a carteira.`,
   }
   return m[lang]()
 }
