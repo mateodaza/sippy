@@ -35,9 +35,10 @@ export default function ScrollNav({
   return (
     <nav
       aria-label='Main navigation'
-      className={`fixed w-full z-50 pointer-events-none transition-all duration-300 ${
+      className={`group/nav fixed w-full z-50 pointer-events-none transition-all duration-300 ${
         hidden ? '-translate-y-full' : 'translate-y-0'
       } ${scrolled ? 'bg-white/70 backdrop-blur-xl shadow-sm' : ''}`}
+      data-scrolled={scrolled || undefined}
     >
       {children}
     </nav>

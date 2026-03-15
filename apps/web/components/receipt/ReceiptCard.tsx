@@ -77,7 +77,7 @@ export function ReceiptCard({
           <div className={`text-5xl sm:text-6xl mb-3 sm:mb-4 ${config.color}`}>
             {config.icon}
           </div>
-          <h1 className='text-xl sm:text-2xl font-bold text-[#0f172a] mb-2'>
+          <h1 className='text-xl sm:text-2xl font-bold text-brand-dark mb-2'>
             Payment Details
           </h1>
           <div
@@ -90,7 +90,7 @@ export function ReceiptCard({
         {/* Amount */}
         <div className='px-5 sm:px-8 py-5 sm:py-6 bg-white/90 backdrop-blur-sm'>
           <div className='text-center mb-5 sm:mb-6'>
-            <div className='text-4xl sm:text-5xl font-bold text-[#0f172a] mb-2'>
+            <div className='text-4xl sm:text-5xl font-bold text-brand-dark mb-2'>
               {parseFloat(transaction.amount).toFixed(
                 transaction.token === 'ETH' ? 4 : 2
               )}
@@ -127,7 +127,7 @@ export function ReceiptCard({
               <span className='text-sm sm:text-base text-gray-600 font-semibold flex-shrink-0'>
                 Date:
               </span>
-              <span className='text-xs sm:text-sm text-[#0f172a] font-medium text-right'>
+              <span className='text-xs sm:text-sm text-brand-dark font-medium text-right'>
                 {formatDate(transaction.timestamp)}
               </span>
             </div>
@@ -137,7 +137,7 @@ export function ReceiptCard({
               <span className='text-sm sm:text-base text-gray-600 font-semibold flex-shrink-0'>
                 Network:
               </span>
-              <span className='text-xs sm:text-sm text-[#0f172a] font-medium'>
+              <span className='text-xs sm:text-sm text-brand-dark font-medium'>
                 Arbitrum One
               </span>
             </div>
@@ -168,7 +168,7 @@ export function ReceiptCard({
           </a>
           <button
             onClick={copyLink}
-            className='block w-full px-4 sm:px-6 py-3 sm:py-3.5 bg-white hover:bg-gray-50 text-[#0f172a] text-sm sm:text-base font-semibold rounded-xl transition-all duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md active:scale-[0.98]'
+            className='block w-full px-4 sm:px-6 py-3 sm:py-3.5 bg-white hover:bg-gray-50 text-brand-dark text-sm sm:text-base font-semibold rounded-xl transition-all duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md active:scale-[0.98]'
           >
             {copied ? '✓ Link Copied!' : 'Copy Receipt Link'}
           </button>

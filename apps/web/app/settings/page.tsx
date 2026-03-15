@@ -859,11 +859,11 @@ function SettingsContent() {
   // Show loading while checking for existing session
   if (isCheckingSession) {
     return (
-      <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
-        <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center'>
+      <div className='min-h-screen bg-white flex items-center justify-center p-4'>
+        <div className='max-w-md w-full bg-white panel-frame rounded-2xl p-8 text-center'>
           <div className='animate-pulse'>
             <div className='text-4xl mb-4'>🔐</div>
-            <p className='text-gray-600'>{t('settings.loading', lang)}</p>
+            <p className='text-gray-500'>{t('settings.loading', lang)}</p>
           </div>
         </div>
       </div>
@@ -873,12 +873,12 @@ function SettingsContent() {
   // Render auth flow if not authenticated
   if (!isAuthenticated && !isCheckingSession) {
     return (
-      <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
-        <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
-          <h1 className='text-2xl font-bold mb-2 text-gray-900'>
+      <div className='min-h-screen bg-white flex items-center justify-center p-4'>
+        <div className='max-w-md w-full bg-white panel-frame rounded-2xl p-8'>
+          <h1 className='text-2xl font-bold mb-2 text-brand-dark'>
             {t('settings.authTitle', lang)}
           </h1>
-          <p className='text-gray-600 mb-6'>
+          <p className='text-gray-500 mb-6'>
             {t('settings.authSubtitle', lang)}
           </p>
 
@@ -903,8 +903,8 @@ function SettingsContent() {
                 onChange={(e) => !isPhoneLocked && setReAuthPhone(e.target.value)}
                 placeholder={t('settings.phonePlaceholder', lang)}
                 disabled={isPhoneLocked}
-                className={`w-full p-3 border rounded-lg mb-4 text-gray-900 ${
-                  isPhoneLocked ? 'bg-gray-100 text-gray-600' : ''
+                className={`w-full p-3 border rounded-lg mb-4 text-brand-dark ${
+                  isPhoneLocked ? 'bg-gray-100 text-gray-500' : ''
                 }`}
               />
               {isPhoneLocked && (
@@ -924,7 +924,7 @@ function SettingsContent() {
 
           {reAuthStep === 'otp' && (
             <>
-              <p className='text-gray-600 mb-4'>
+              <p className='text-gray-500 mb-4'>
                 {t('settings.codeSentTo', lang)} {reAuthPhone}
               </p>
               <input
@@ -933,7 +933,7 @@ function SettingsContent() {
                 onChange={(e) => setReAuthOtp(e.target.value.replace(/\D/g, ''))}
                 placeholder={t('settings.codePlaceholder', lang)}
                 maxLength={6}
-                className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-gray-900'
+                className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-brand-dark'
               />
               <button
                 onClick={handleReAuthVerifyOtp}
@@ -957,9 +957,9 @@ function SettingsContent() {
 
   // Settings UI for authenticated users
   return (
-    <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
-      <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
-        <h1 className='text-2xl font-bold mb-6 text-gray-900'>
+    <div className='min-h-screen bg-white flex items-center justify-center p-4'>
+      <div className='max-w-md w-full bg-white panel-frame rounded-2xl p-8'>
+        <h1 className='text-2xl font-bold mb-6 text-brand-dark'>
           {t('settings.title', lang)}
         </h1>
 
@@ -977,8 +977,8 @@ function SettingsContent() {
         {reAuthVisible && (
           <div className='mb-4 bg-amber-50 rounded-xl border border-amber-200 p-5'>
             <div className='flex items-center justify-between mb-3'>
-              <h2 className='text-base font-semibold text-gray-900'>Session expired</h2>
-              <button onClick={dismissReAuth} className='text-gray-400 hover:text-gray-600 text-xl leading-none'>&times;</button>
+              <h2 className='text-base font-semibold text-brand-dark'>Session expired</h2>
+              <button onClick={dismissReAuth} className='text-brand-dark/40 hover:text-gray-500 text-xl leading-none'>&times;</button>
             </div>
             {reAuthError && (
               <div className='mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
@@ -992,7 +992,7 @@ function SettingsContent() {
                   value={reAuthPhone}
                   onChange={(e) => setReAuthPhone(e.target.value)}
                   placeholder={t('settings.phonePlaceholder', lang)}
-                  className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+                  className='w-full p-3 border rounded-lg mb-3 text-brand-dark'
                 />
                 <button
                   onClick={handleReAuthSendOtp}
@@ -1005,14 +1005,14 @@ function SettingsContent() {
             )}
             {reAuthStep === 'otp' && (
               <>
-                <p className='text-gray-600 mb-3 text-sm'>{t('settings.codeSentTo', lang)} {reAuthPhone}</p>
+                <p className='text-gray-500 mb-3 text-sm'>{t('settings.codeSentTo', lang)} {reAuthPhone}</p>
                 <input
                   type='text'
                   value={reAuthOtp}
                   onChange={(e) => setReAuthOtp(e.target.value.replace(/\D/g, ''))}
                   placeholder={t('settings.codePlaceholder', lang)}
                   maxLength={6}
-                  className='w-full p-3 border rounded-lg mb-3 text-center text-2xl tracking-widest text-gray-900'
+                  className='w-full p-3 border rounded-lg mb-3 text-center text-2xl tracking-widest text-brand-dark'
                 />
                 <button
                   onClick={handleReAuthVerifyOtp}
@@ -1040,25 +1040,25 @@ function SettingsContent() {
 
         {/* Daily transfer limit */}
         <div className='mb-6 p-4 bg-gray-50 rounded-lg'>
-          <p className='text-sm text-gray-600'>{t('settings.dailyLimit', lang)}</p>
+          <p className='text-sm text-gray-500'>{t('settings.dailyLimit', lang)}</p>
           {emailSectionStep === 'loading' && (
-            <p className='text-2xl font-bold text-gray-400'>— {t('settings.perDay', lang)}</p>
+            <p className='text-2xl font-bold text-brand-dark/40'>— {t('settings.perDay', lang)}</p>
           )}
           {emailSectionStep === 'fetch_error' && (
             <>
-              <p className='text-2xl font-bold text-gray-400'>— {t('settings.perDay', lang)}</p>
-              <p className='text-xs text-gray-400 mt-1'>{t('settings.limitLoadError', lang)}</p>
+              <p className='text-2xl font-bold text-brand-dark/40'>— {t('settings.perDay', lang)}</p>
+              <p className='text-xs text-brand-dark/40 mt-1'>{t('settings.limitLoadError', lang)}</p>
             </>
           )}
           {(emailSectionStep === 'verified' || emailSectionStep === 'change_entry' || emailSectionStep === 'change_sent') && (
             <>
-              <p className='text-2xl font-bold text-gray-900'>${DAILY_LIMIT_VERIFIED}{t('settings.perDay', lang)}</p>
+              <p className='text-2xl font-bold text-brand-dark'>${DAILY_LIMIT_VERIFIED}{t('settings.perDay', lang)}</p>
               <p className='text-xs text-green-600 mt-1'>✓ {t('settings.emailVerified', lang)}</p>
             </>
           )}
           {emailSectionStep === 'unverified' && (
             <>
-              <p className='text-2xl font-bold text-gray-900'>${DAILY_LIMIT_UNVERIFIED}{t('settings.perDay', lang)}</p>
+              <p className='text-2xl font-bold text-brand-dark'>${DAILY_LIMIT_UNVERIFIED}{t('settings.perDay', lang)}</p>
               <div className='mt-3 border border-amber-400 bg-amber-50 rounded-lg p-3'>
                 <p className='text-sm text-amber-800 mb-2'>{t('settings.verifyEmailCta', lang)}</p>
                 <button
@@ -1072,7 +1072,7 @@ function SettingsContent() {
           )}
           {(emailSectionStep === 'no_email' || emailSectionStep === 'add_sent' || emailSectionStep === 'verify_entry') && (
             <>
-              <p className='text-2xl font-bold text-gray-900'>${DAILY_LIMIT_UNVERIFIED}{t('settings.perDay', lang)}</p>
+              <p className='text-2xl font-bold text-brand-dark'>${DAILY_LIMIT_UNVERIFIED}{t('settings.perDay', lang)}</p>
               <div className='mt-3 border border-amber-400 bg-amber-50 rounded-lg p-3'>
                 <p className='text-sm text-amber-800 mb-2'>{t('settings.verifyEmailCta', lang)}</p>
                 <button
@@ -1088,8 +1088,8 @@ function SettingsContent() {
 
         {/* Current permission status */}
         <div className='mb-6 p-4 bg-gray-50 rounded-lg'>
-          <p className='text-sm text-gray-600'>{t('settings.currentLimit', lang)}</p>
-          <p className='text-2xl font-bold text-gray-900'>
+          <p className='text-sm text-gray-500'>{t('settings.currentLimit', lang)}</p>
+          <p className='text-2xl font-bold text-brand-dark'>
             {walletStatus?.hasPermission && walletStatus.dailyLimit
               ? `$${walletStatus.dailyLimit}${t('settings.perDay', lang)}`
               : t('settings.noPermission', lang)}
@@ -1099,7 +1099,7 @@ function SettingsContent() {
         {/* Change limit */}
         {walletStatus?.hasPermission && (
           <div className='mb-6'>
-            <label className='block text-sm font-medium mb-2 text-gray-700'>
+            <label className='block text-sm font-medium mb-2 text-brand-dark/60'>
               {t('settings.changeLimitLabel', lang)}
             </label>
             <div className='space-y-3 mb-4'>
@@ -1110,10 +1110,10 @@ function SettingsContent() {
                   className={`w-full p-3 rounded-lg border-2 text-left ${
                     newLimit === amount
                       ? 'border-emerald-600 bg-emerald-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                      : 'border-brand-primary/20 hover:border-brand-primary/30'
                   }`}
                 >
-                  <span className='font-bold text-gray-900'>${amount}{t('settings.perDay', lang)}</span>
+                  <span className='font-bold text-brand-dark'>${amount}{t('settings.perDay', lang)}</span>
                   {amount === '100' && (
                     <span className='ml-2 text-sm text-emerald-600'>
                       {t('settings.recommended', lang)}
@@ -1122,15 +1122,15 @@ function SettingsContent() {
                 </button>
               ))}
 
-              <div className='flex items-center gap-2 p-3 border-2 border-gray-200 rounded-lg'>
-                <span className='text-gray-700'>{t('settings.customPrefix', lang)}</span>
+              <div className='flex items-center gap-2 p-3 border-2 border-brand-primary/20 rounded-lg'>
+                <span className='text-brand-dark/60'>{t('settings.customPrefix', lang)}</span>
                 <input
                   type='number'
                   value={newLimit}
                   onChange={(e) => setNewLimit(e.target.value)}
-                  className='w-24 p-2 border rounded text-gray-900'
+                  className='w-24 p-2 border rounded text-brand-dark'
                 />
-                <span className='text-gray-700'>{t('settings.perDay', lang)}</span>
+                <span className='text-brand-dark/60'>{t('settings.perDay', lang)}</span>
               </div>
             </div>
 
@@ -1153,7 +1153,7 @@ function SettingsContent() {
             <h2 className='text-lg font-semibold mb-2 text-red-600'>
               {t('settings.disableTitle', lang)}
             </h2>
-            <p className='text-sm text-gray-600 mb-4'>
+            <p className='text-sm text-gray-500 mb-4'>
               {t('settings.disableDesc', lang)}
             </p>
             {!(emailGateContext === 'revoke' && emailGateStep !== 'idle') && (
@@ -1182,7 +1182,7 @@ function SettingsContent() {
                   ⚠️ {t('settings.emailWarning', lang)}
                 </p>
                 <div className='flex gap-2'>
-                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
+                  <button className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
                   <button className='w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700' onClick={() => proceedWithGatedOperation()}>{t('settings.continueAnyway', lang)}</button>
                 </div>
               </div>
@@ -1203,7 +1203,7 @@ function SettingsContent() {
                   {emailGateLoading ? t('settings.emailSending', lang) : t('settings.emailSendCode', lang)}
                 </button>
                 {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
-                <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
+                <button className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
               </div>
             )}
             {emailGateStep === 'code_sent' && emailGateContext === 'revoke' && (
@@ -1216,7 +1216,7 @@ function SettingsContent() {
                   value={emailGateCode}
                   onChange={(e) => setEmailGateCode(e.target.value.replace(/\D/g, ''))}
                   placeholder={t('settings.emailCodePlaceholder', lang)}
-                  className='w-full p-3 border rounded-lg text-gray-900'
+                  className='w-full p-3 border rounded-lg text-brand-dark'
                 />
                 <button
                   className='w-full py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -1227,8 +1227,8 @@ function SettingsContent() {
                 </button>
                 {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
                 <div className='flex gap-2'>
-                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={() => setEmailGateStep('code_entry')}>{t('settings.back', lang)}</button>
-                  <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
+                  <button className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60' onClick={() => setEmailGateStep('code_entry')}>{t('settings.back', lang)}</button>
+                  <button className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
                 </div>
               </div>
             )}
@@ -1238,10 +1238,10 @@ function SettingsContent() {
         {/* Re-enable permission */}
         {walletStatus && !walletStatus.hasPermission && (
           <div>
-            <h2 className='text-lg font-semibold mb-2 text-gray-900'>
+            <h2 className='text-lg font-semibold mb-2 text-brand-dark'>
               {t('settings.enableTitle', lang)}
             </h2>
-            <p className='text-gray-600 mb-4'>
+            <p className='text-gray-500 mb-4'>
               {t('settings.disableDesc', lang)}
             </p>
 
@@ -1253,10 +1253,10 @@ function SettingsContent() {
                   className={`w-full p-3 rounded-lg border-2 text-left ${
                     newLimit === amount
                       ? 'border-emerald-600 bg-emerald-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                      : 'border-brand-primary/20 hover:border-brand-primary/30'
                   }`}
                 >
-                  <span className='font-bold text-gray-900'>${amount}{t('settings.perDay', lang)}</span>
+                  <span className='font-bold text-brand-dark'>${amount}{t('settings.perDay', lang)}</span>
                   {amount === '100' && (
                     <span className='ml-2 text-sm text-emerald-600'>
                       {t('settings.recommended', lang)}
@@ -1279,7 +1279,7 @@ function SettingsContent() {
         {/* Wallet info */}
         {walletAddress && (
           <div className='mt-6 pt-6 border-t'>
-            <p className='text-sm text-gray-600 mb-2'>{t('settings.walletAddress', lang)}</p>
+            <p className='text-sm text-gray-500 mb-2'>{t('settings.walletAddress', lang)}</p>
             <p className='font-mono text-xs text-gray-500 break-all'>
               {walletAddress}
             </p>
@@ -1288,7 +1288,7 @@ function SettingsContent() {
 
         {/* Recovery Email */}
         <div id='recovery-email' className='mt-6 pt-6 border-t'>
-          <h2 className='text-lg font-semibold mb-3 text-gray-900'>
+          <h2 className='text-lg font-semibold mb-3 text-brand-dark'>
             {t('settings.recoveryEmail', lang)}
           </h2>
 
@@ -1307,13 +1307,13 @@ function SettingsContent() {
                   <button onClick={() => setBannerDismissed(true)} className='ml-2 text-blue-600 hover:text-blue-800'>✕</button>
                 </div>
               )}
-              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
+              <label className='block text-sm font-medium mb-2 text-brand-dark/60'>{t('settings.emailLabel', lang)}</label>
               <input
                 type='email'
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
                 placeholder={t('settings.emailPlaceholder', lang)}
-                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+                className='w-full p-3 border rounded-lg mb-3 text-brand-dark'
               />
               <button
                 onClick={() => handleSendEmailCode(emailInput)}
@@ -1327,15 +1327,15 @@ function SettingsContent() {
 
           {emailSectionStep === 'add_sent' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
-              <p className='text-sm text-gray-600 mb-3'>{t('settings.emailCodeSentTo', lang)} {emailInput}</p>
+              <label className='block text-sm font-medium mb-2 text-brand-dark/60'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-500 mb-3'>{t('settings.emailCodeSentTo', lang)} {emailInput}</p>
               <input
                 type='text'
                 value={emailCode}
                 onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
                 placeholder={t('settings.emailCodeInput', lang)}
                 maxLength={6}
-                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+                className='w-full p-3 border rounded-lg mb-3 text-brand-dark'
               />
               <button
                 onClick={handleVerifyEmailCode}
@@ -1347,7 +1347,7 @@ function SettingsContent() {
               <button
                 onClick={() => handleSendEmailCode(emailInput)}
                 disabled={emailLoading}
-                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+                className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60'
               >
                 {t('settings.resendCode', lang)}
               </button>
@@ -1356,8 +1356,8 @@ function SettingsContent() {
 
           {emailSectionStep === 'unverified' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
-              <p className='text-sm text-gray-600 mb-3'>{emailStatus?.maskedEmail} — {t('settings.emailNotVerified', lang)}</p>
+              <label className='block text-sm font-medium mb-2 text-brand-dark/60'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-500 mb-3'>{emailStatus?.maskedEmail} — {t('settings.emailNotVerified', lang)}</p>
               <button
                 onClick={() => setEmailSectionStep('verify_entry')}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 mb-2'
@@ -1366,7 +1366,7 @@ function SettingsContent() {
               </button>
               <button
                 onClick={() => setEmailSectionStep('verify_entry')}
-                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+                className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60'
               >
                 {t('settings.resendCode', lang)}
               </button>
@@ -1375,14 +1375,14 @@ function SettingsContent() {
 
           {emailSectionStep === 'verify_entry' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
-              <p className='text-sm text-gray-600 mb-3'>{t('settings.emailEnterToVerify', lang)} ({emailStatus?.maskedEmail})</p>
+              <label className='block text-sm font-medium mb-2 text-brand-dark/60'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-500 mb-3'>{t('settings.emailEnterToVerify', lang)} ({emailStatus?.maskedEmail})</p>
               <input
                 type='email'
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
                 placeholder={t('settings.emailPlaceholder', lang)}
-                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+                className='w-full p-3 border rounded-lg mb-3 text-brand-dark'
               />
               <input
                 type='text'
@@ -1390,7 +1390,7 @@ function SettingsContent() {
                 onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
                 placeholder={t('settings.emailCodeInput', lang)}
                 maxLength={6}
-                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+                className='w-full p-3 border rounded-lg mb-3 text-brand-dark'
               />
               <button
                 onClick={handleVerifyEmailCode}
@@ -1402,7 +1402,7 @@ function SettingsContent() {
               <button
                 onClick={() => handleSendEmailCode(emailInput)}
                 disabled={!emailInput || emailLoading}
-                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+                className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60'
               >
                 {t('settings.resendCode', lang)}
               </button>
@@ -1411,8 +1411,8 @@ function SettingsContent() {
 
           {emailSectionStep === 'verified' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
-              <p className='text-sm text-gray-600 mb-3'>{emailStatus?.maskedEmail} ✓ {t('settings.emailVerified', lang)}</p>
+              <label className='block text-sm font-medium mb-2 text-brand-dark/60'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-500 mb-3'>{emailStatus?.maskedEmail} ✓ {t('settings.emailVerified', lang)}</p>
               <button
                 onClick={() => { setEmailInput(''); setEmailCode(''); setEmailSectionStep('change_entry'); }}
                 className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
@@ -1424,14 +1424,14 @@ function SettingsContent() {
 
           {emailSectionStep === 'change_entry' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
-              <p className='text-sm text-gray-600 mb-3'>{t('settings.emailEnterToVerify', lang)}</p>
+              <label className='block text-sm font-medium mb-2 text-brand-dark/60'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-500 mb-3'>{t('settings.emailEnterToVerify', lang)}</p>
               <input
                 type='email'
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
                 placeholder={t('settings.emailPlaceholder', lang)}
-                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+                className='w-full p-3 border rounded-lg mb-3 text-brand-dark'
               />
               <button
                 onClick={() => handleSendEmailCode(emailInput)}
@@ -1445,15 +1445,15 @@ function SettingsContent() {
 
           {emailSectionStep === 'change_sent' && (
             <>
-              <label className='block text-sm font-medium mb-2 text-gray-700'>{t('settings.emailLabel', lang)}</label>
-              <p className='text-sm text-gray-600 mb-3'>{t('settings.emailCodeSentTo', lang)} {emailInput}</p>
+              <label className='block text-sm font-medium mb-2 text-brand-dark/60'>{t('settings.emailLabel', lang)}</label>
+              <p className='text-sm text-gray-500 mb-3'>{t('settings.emailCodeSentTo', lang)} {emailInput}</p>
               <input
                 type='text'
                 value={emailCode}
                 onChange={(e) => setEmailCode(e.target.value.replace(/\D/g, ''))}
                 placeholder={t('settings.emailCodeInput', lang)}
                 maxLength={6}
-                className='w-full p-3 border rounded-lg mb-3 text-gray-900'
+                className='w-full p-3 border rounded-lg mb-3 text-brand-dark'
               />
               <button
                 onClick={handleVerifyEmailCode}
@@ -1465,7 +1465,7 @@ function SettingsContent() {
               <button
                 onClick={() => handleSendEmailCode(emailInput)}
                 disabled={emailLoading}
-                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+                className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60'
               >
                 {t('settings.resendCode', lang)}
               </button>
@@ -1477,7 +1477,7 @@ function SettingsContent() {
 
         {/* Language selector */}
         <div className='border-t pt-6 mb-6'>
-          <h2 className='text-sm font-medium text-gray-700 mb-3'>
+          <h2 className='text-sm font-medium text-brand-dark/60 mb-3'>
             {t('settings.languageTitle', lang)}
           </h2>
           <div className='grid grid-cols-2 gap-2'>
@@ -1494,7 +1494,7 @@ function SettingsContent() {
                 className={`py-2 px-3 rounded-lg border-2 text-sm font-medium
                   ${(value !== 'auto' && lang === value)
                     ? 'border-emerald-600 bg-emerald-50'
-                    : 'border-gray-200 hover:border-gray-300'}
+                    : 'border-brand-primary/20 hover:border-brand-primary/30'}
                   disabled:opacity-50`}
               >
                 {label}
@@ -1508,10 +1508,10 @@ function SettingsContent() {
 
         {/* Privacy */}
         <div className='border-t pt-6 mb-6'>
-          <h2 className='text-sm font-medium text-gray-700 mb-3'>Privacy</h2>
+          <h2 className='text-sm font-medium text-brand-dark/60 mb-3'>Privacy</h2>
           <label className='flex items-center justify-between cursor-pointer'>
             <div>
-              <span className='text-sm text-gray-900'>Show phone number on profile</span>
+              <span className='text-sm text-brand-dark'>Show phone number on profile</span>
               <p className='text-xs text-gray-500 mt-0.5'>
                 When off, your phone number is hidden on your public profile
               </p>
@@ -1533,7 +1533,7 @@ function SettingsContent() {
 
         {/* Wallet Security */}
         <div className='mt-6 pt-6 border-t'>
-          <h2 className='text-lg font-semibold mb-3 text-gray-900'>
+          <h2 className='text-lg font-semibold mb-3 text-brand-dark'>
             {t('settings.walletSecurity', lang)}
           </h2>
 
@@ -1565,7 +1565,7 @@ function SettingsContent() {
                         ⚠️ {t('settings.emailWarning', lang)}
                       </p>
                       <div className='flex gap-2'>
-                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
+                        <button className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
                         <button className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700' onClick={() => proceedWithGatedOperation()}>{t('settings.continueAnyway', lang)}</button>
                       </div>
                     </div>
@@ -1586,7 +1586,7 @@ function SettingsContent() {
                         {emailGateLoading ? t('settings.emailSending', lang) : t('settings.emailSendCode', lang)}
                       </button>
                       {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
-                      <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
+                      <button className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
                     </div>
                   )}
                   {emailGateStep === 'code_sent' && emailGateContext === 'export' && (
@@ -1599,7 +1599,7 @@ function SettingsContent() {
                         value={emailGateCode}
                         onChange={(e) => setEmailGateCode(e.target.value.replace(/\D/g, ''))}
                         placeholder={t('settings.emailCodePlaceholder', lang)}
-                        className='w-full p-3 border rounded-lg text-gray-900'
+                        className='w-full p-3 border rounded-lg text-brand-dark'
                       />
                       <button
                         className='w-full py-3 bg-amber-600 text-white rounded-lg font-semibold hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -1610,14 +1610,14 @@ function SettingsContent() {
                       </button>
                       {emailGateError && <p className='text-sm text-red-600'>{emailGateError}</p>}
                       <div className='flex gap-2'>
-                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={() => setEmailGateStep('code_entry')}>{t('settings.back', lang)}</button>
-                        <button className='w-full py-2 text-gray-500 text-sm hover:text-gray-700' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
+                        <button className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60' onClick={() => setEmailGateStep('code_entry')}>{t('settings.back', lang)}</button>
+                        <button className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60' onClick={resetEmailGate}>{t('settings.cancel', lang)}</button>
                       </div>
                     </div>
                   )}
                 </>
               ) : (
-                <p className='text-xs text-gray-400'>
+                <p className='text-xs text-brand-dark/40'>
                   {t('settings.noExportAccount', lang)}
                 </p>
               )}
@@ -1649,7 +1649,7 @@ function SettingsContent() {
               <button
                 onClick={() => resetExport('cancelled')}
                 disabled={isExporting}
-                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+                className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60'
               >
                 {t('settings.cancel', lang)}
               </button>
@@ -1668,8 +1668,8 @@ function SettingsContent() {
               </div>
 
               <div className='p-4 bg-gray-50 rounded-lg'>
-                <p className='text-sm text-gray-600'>{t('settings.smartBalance', lang)}</p>
-                <p className='text-2xl font-bold text-gray-900'>
+                <p className='text-sm text-gray-500'>{t('settings.smartBalance', lang)}</p>
+                <p className='text-2xl font-bold text-brand-dark'>
                   ${parseFloat(smartAccountBalance || '0').toFixed(2)} USDC
                 </p>
                 {eoaAddress && (
@@ -1689,7 +1689,7 @@ function SettingsContent() {
               <button
                 onClick={handleExportContinue}
                 disabled={isExporting}
-                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+                className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60'
               >
                 {t('settings.skipShowKey', lang)}
               </button>
@@ -1704,7 +1704,7 @@ function SettingsContent() {
               {!sweepError ? (
                 <div className='text-center py-6'>
                   <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto mb-4' />
-                  <p className='text-gray-700 font-medium'>{t('settings.transferring', lang)}</p>
+                  <p className='text-brand-dark/60 font-medium'>{t('settings.transferring', lang)}</p>
                   <p className='text-sm text-gray-500 mt-1'>
                     {t('settings.movingFunds', lang)}
                   </p>
@@ -1723,7 +1723,7 @@ function SettingsContent() {
                   <button
                     onClick={handleExportContinue}
                     disabled={isExporting}
-                    className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+                    className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60'
                   >
                     {t('settings.skipAnyway', lang)}
                   </button>
@@ -1735,7 +1735,7 @@ function SettingsContent() {
           {exportStep === 'export_active' && exportedKey && (
             <div className='space-y-4'>
               <div className='flex justify-between items-center'>
-                <span className='text-sm font-medium text-gray-700'>
+                <span className='text-sm font-medium text-brand-dark/60'>
                   {t('settings.yourPrivateKey', lang)}
                 </span>
                 <span className={`text-sm font-mono ${exportCountdown <= 60 ? 'text-red-600' : 'text-gray-500'}`}>
@@ -1790,7 +1790,7 @@ function SettingsContent() {
               setWalletStatus(null);
               setVerifiedPhone(null);
             }}
-            className='text-sm text-gray-500 hover:text-gray-700'
+            className='text-sm text-gray-500 hover:text-brand-dark/60'
           >
             {t('settings.signOut', lang)}
           </button>
@@ -1815,8 +1815,8 @@ export default function SettingsPage() {
   return (
     <Suspense
       fallback={
-        <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center'>
-          <div className='text-gray-600'>Loading...</div>
+        <div className='min-h-screen bg-white flex items-center justify-center'>
+          <div className='text-gray-500'>Loading...</div>
         </div>
       }
     >

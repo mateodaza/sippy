@@ -53,7 +53,7 @@ export function ActivityList({ transactions, lang }: ActivityListProps) {
   return (
     <div className='bg-white/90 backdrop-blur-xl rounded-2xl sm:rounded-[32px] shadow-[0_20px_50px_rgba(15,23,42,0.12)] sm:shadow-[0_28px_70px_rgba(15,23,42,0.16)] border border-white/50 overflow-hidden animate-fade-in-up animation-delay-100'>
       <div className='px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100'>
-        <h2 className='text-lg sm:text-xl font-bold text-[#0f172a]'>
+        <h2 className='text-lg sm:text-xl font-bold text-brand-dark'>
           {t('activity.recentActivity', effectiveLang)}
         </h2>
         <p className='text-xs sm:text-sm text-gray-600 mt-1'>

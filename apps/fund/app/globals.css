@@ -2,13 +2,100 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 /* Brand tokens as CSS custom properties (for non-Tailwind contexts) */
 :root {
   --brand-primary: #00AFD7;
   --brand-primary-hover: #0098BD;
   --brand-crypto: #00D796;
-  --brand-dark: #1A1A2E;
+  --brand-dark: #0D0D1A;
   --semantic-success: #16A34A;
   --semantic-danger: #DC2626;
   --semantic-warning: #D97706;
+}
+
+@layer utilities {
+  /* Elegant fade-in animation */
+  .animate-fade-in-up {
+    animation: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+  }
+
+  /* ── Panel frame — equipment-style double border (light backgrounds) ── */
+  .panel-frame {
+    border: 1px solid var(--brand-primary);
+    position: relative;
+  }
+  .panel-frame::after {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    border: 1px solid var(--brand-primary);
+    pointer-events: none;
+    transition: border-color 0.2s;
+  }
+  .panel-frame:hover::after {
+    border-color: white;
+  }
+
+  /* ── Panel frame — white variant (for blue/dark backgrounds) ── */
+  .panel-frame-light {
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    position: relative;
+  }
+  .panel-frame-light::after {
+    content: '';
+    position: absolute;
+    inset: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    pointer-events: none;
+  }
+
+  /* ── Spec label — equipment annotation ── */
+  .spec-label {
+    font-family: var(--font-space-mono), monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--brand-primary);
+  }
+  .spec-label-muted {
+    color: rgba(0, 175, 215, 0.6);
+  }
+
+  /* Smooth transitions */
+  .transition-smooth {
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}
+
+/* Respect reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

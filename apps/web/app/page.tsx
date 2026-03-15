@@ -43,7 +43,7 @@ export default function HomePage() {
             </div>
           </a>
           {/* Centered wordmark — absolute center on viewport */}
-          <div className='pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2'>
+          <div className='pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1 bg-white/60 backdrop-blur-md group-data-[scrolled]/nav:bg-transparent group-data-[scrolled]/nav:backdrop-blur-none transition-all duration-300'>
             <Image
               src='/images/logos/sippy-wordmark-cheetah.svg'
               alt='Sippy'
@@ -54,11 +54,13 @@ export default function HomePage() {
             />
           </div>
           <a
-            href='mailto:hello@sippy.lat?subject=Request%20Beta%20Access&body=Hi%2C%20I%27d%20like%20to%20request%20access%20to%20Sippy%27s%20WhatsApp%20bot.'
+            href={`https://wa.me/${SIPPY_NUMBER.replace(/\D/g, '')}?text=${encodeURIComponent('Hey Sippy!')}`}
+            target='_blank'
+            rel='noopener noreferrer'
             className='pointer-events-auto shrink-0 border border-brand-primary px-2.5 py-2 sm:px-8 sm:py-3 font-display font-bold text-[9px] sm:text-sm uppercase tracking-wide sm:tracking-widest text-brand-primary hover:bg-brand-primary hover:text-white focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 transition-all bg-white'
           >
-            <span className='sm:hidden'>Access</span>
-            <span className='hidden sm:inline'>Get Early Access</span>
+            <span className='sm:hidden'>Try it</span>
+            <span className='hidden sm:inline'>Open WhatsApp</span>
           </a>
         </div>
       </ScrollNav>
@@ -100,10 +102,12 @@ export default function HomePage() {
               <BlurFade delay={0.5} yOffset={8}>
                 <div className='flex flex-col sm:flex-row gap-3 sm:gap-6 justify-center w-full max-w-md mx-auto'>
                   <a
-                    href='mailto:hello@sippy.lat?subject=Request%20Beta%20Access&body=Hi%2C%20I%27d%20like%20to%20request%20access%20to%20Sippy%27s%20WhatsApp%20bot.'
+                    href={`https://wa.me/${SIPPY_NUMBER.replace(/\D/g, '')}?text=${encodeURIComponent('Hey Sippy!')}`}
+                    target='_blank'
+                    rel='noopener noreferrer'
                     className='bg-white text-brand-primary px-6 py-3.5 sm:px-8 sm:py-4 font-bold text-base sm:text-lg hover:bg-brand-primary-light transition-all border border-white/30 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-primary text-center'
                   >
-                    Request Access
+                    Open WhatsApp
                   </a>
                   <a
                     href='https://fund.sippy.lat'
@@ -522,7 +526,7 @@ export default function HomePage() {
         </main>
 
       {/* ── Footer — Spec Sheet ── */}
-      <footer className='bg-white border-t border-brand-dark/10 relative overflow-hidden'>
+      <footer className='bg-white border-t border-brand-dark/20 relative overflow-hidden'>
         {/* Ruled grid background */}
         <div
           className='absolute inset-0 pointer-events-none'
@@ -545,9 +549,9 @@ export default function HomePage() {
                 alt='Sippy'
                 width={100}
                 height={28}
-                className='mb-3 opacity-80'
+                className='mb-3'
               />
-              <p className='font-mono text-[10px] text-brand-dark/40 tracking-[0.15em] uppercase leading-relaxed max-w-xs'>
+              <p className='font-mono text-[10px] text-brand-dark/60 tracking-[0.15em] uppercase leading-relaxed max-w-xs'>
                 WhatsApp-native digital dollar agent
                 <br />
                 for Latin America
@@ -565,7 +569,7 @@ export default function HomePage() {
                 <a
                   key={link.label}
                   href={link.href}
-                  className='text-brand-dark/50 hover:text-brand-primary focus-visible:text-brand-primary focus-visible:outline-none transition-colors py-1'
+                  className='text-brand-dark/60 hover:text-brand-primary focus-visible:text-brand-primary focus-visible:outline-none transition-colors py-1'
                 >
                   {link.label}
                 </a>
@@ -574,7 +578,7 @@ export default function HomePage() {
           </div>
 
           {/* Divider */}
-          <div className='border-t border-brand-dark/10' />
+          <div className='border-t border-brand-dark/20' />
 
           {/* Spec readout row */}
           <div className='py-6 sm:py-8 grid grid-cols-2 sm:grid-cols-4 gap-y-6 gap-x-4'>
@@ -585,10 +589,10 @@ export default function HomePage() {
               { label: 'Interface', value: 'WhatsApp' },
             ].map((spec) => (
               <div key={spec.label}>
-                <span className='font-mono text-[9px] text-brand-primary/60 tracking-[0.25em] uppercase block mb-1'>
+                <span className='font-mono text-[9px] text-brand-primary/80 tracking-[0.25em] uppercase block mb-1'>
                   {spec.label}
                 </span>
-                <span className='font-mono text-[11px] text-brand-dark/70 tracking-wide'>
+                <span className='font-mono text-[11px] text-brand-dark/80 tracking-wide'>
                   {spec.value}
                 </span>
               </div>
@@ -596,11 +600,11 @@ export default function HomePage() {
           </div>
 
           {/* Divider */}
-          <div className='border-t border-brand-dark/10' />
+          <div className='border-t border-brand-dark/20' />
 
           {/* Bottom row — legal + version stamp */}
           <div className='py-6 sm:py-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
-            <div className='flex items-center gap-4 sm:gap-6 font-mono text-[10px] text-brand-dark/40 tracking-[0.15em] sm:tracking-[0.2em] uppercase'>
+            <div className='flex items-center gap-4 sm:gap-6 font-mono text-[10px] text-brand-dark/50 tracking-[0.15em] sm:tracking-[0.2em] uppercase'>
               <span>&copy; 2026 Sippy</span>
               <a
                 href='/terms'
@@ -615,7 +619,7 @@ export default function HomePage() {
                 Privacy
               </a>
             </div>
-            <div className='font-mono text-[9px] text-brand-dark/30 tracking-[0.3em] uppercase flex items-center gap-3'>
+            <div className='font-mono text-[9px] text-brand-dark/40 tracking-[0.3em] uppercase flex items-center gap-3'>
               <span className='inline-block w-1.5 h-1.5 rounded-full bg-brand-crypto/40' />
               v0.1.0 // LATAM // 2026
             </div>

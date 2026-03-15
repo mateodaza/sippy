@@ -575,11 +575,11 @@ function SetupContent() {
   // Show loading while checking session
   if (isCheckingSession) {
     return (
-      <div className='min-h-screen bg-gradient-to-br from-white to-[#F5FDFF] flex items-center justify-center p-4'>
-        <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center'>
+      <div className='min-h-screen bg-white flex items-center justify-center p-4'>
+        <div className='max-w-md w-full bg-white panel-frame rounded-2xl p-8 text-center'>
           <div className='animate-pulse'>
             <div className='text-4xl mb-4'>🔍</div>
-            <p className='text-gray-600'>{t('setup.loading', lang)}</p>
+            <p className='text-gray-500'>{t('setup.loading', lang)}</p>
           </div>
         </div>
       </div>
@@ -587,8 +587,8 @@ function SetupContent() {
   }
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-white to-[#F5FDFF] flex items-center justify-center p-4'>
-      <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
+    <div className='min-h-screen bg-white flex items-center justify-center p-4'>
+      <div className='max-w-md w-full bg-white panel-frame rounded-2xl p-8'>
         {/* Progress indicator */}
         <div className='flex justify-between mb-8'>
           {(['phone', 'otp', 'email', 'tos', 'permission', 'done'] as const).map((s, i) => (
@@ -596,9 +596,9 @@ function SetupContent() {
               key={s}
               className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
                 step === s
-                  ? 'bg-[#00AFD7] text-white'
+                  ? 'bg-brand-primary text-white'
                   : (['phone', 'otp', 'email', 'tos', 'permission', 'done'] as const).indexOf(step) > i
-                    ? 'bg-[#B3E8F5] text-[#007A99]'
+                    ? 'bg-brand-primary-light text-brand-primary-hover'
                     : 'bg-gray-200 text-gray-500'
               }`}
             >
@@ -624,10 +624,10 @@ function SetupContent() {
         {/* Step 1: Phone Number */}
         {step === 'phone' && (
           <div>
-            <h1 className='text-2xl font-bold mb-4 text-gray-900'>
+            <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.title', lang)}
             </h1>
-            <p className='text-gray-600 mb-6'>
+            <p className='text-gray-500 mb-6'>
               {t('setup.subtitle', lang)}
             </p>
             <div className='mb-4'>
@@ -649,7 +649,7 @@ function SetupContent() {
             <button
               onClick={handleSendOtp}
               disabled={isLoading || !phoneNumber || phoneNumber.replace(/\D/g, '').length < 7 || !isCdpConfigured}
-              className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
+              className='w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {isLoading ? t('setup.sending', lang) : t('setup.sendCode', lang)}
             </button>
@@ -659,10 +659,10 @@ function SetupContent() {
         {/* Step 2: OTP Verification */}
         {step === 'otp' && (
           <div>
-            <h1 className='text-2xl font-bold mb-4 text-gray-900'>
+            <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.enterCode', lang)}
             </h1>
-            <p className='text-gray-600 mb-6'>
+            <p className='text-gray-500 mb-6'>
               {t('setup.codeSentTo', lang)} {phoneNumber}
             </p>
             <input
@@ -672,12 +672,12 @@ function SetupContent() {
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
               placeholder={t('setup.codePlaceholder', lang)}
               maxLength={6}
-              className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-gray-900'
+              className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-brand-dark'
             />
             <button
               onClick={handleVerifyOtp}
               disabled={isLoading || otp.length !== 6}
-              className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
+              className='w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {isLoading ? t('setup.verifying', lang) : t('setup.verify', lang)}
             </button>
@@ -693,10 +693,10 @@ function SetupContent() {
         {/* Step 3: Email (optional) */}
         {step === 'email' && (
           <div>
-            <h1 className='text-2xl font-bold mb-4 text-gray-900'>
+            <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.emailTitle', lang)}
             </h1>
-            <p className='text-gray-600 mb-6'>
+            <p className='text-gray-500 mb-6'>
               {t('setup.emailSubtitle', lang)}
             </p>
 
@@ -707,12 +707,12 @@ function SetupContent() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t('setup.emailPlaceholder', lang)}
-                  className='w-full p-3 border rounded-lg mb-4 text-gray-900'
+                  className='w-full p-3 border rounded-lg mb-4 text-brand-dark'
                 />
                 <button
                   onClick={handleSendEmailCode}
                   disabled={isLoading || !email}
-                  className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
+                  className='w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                   {isLoading ? t('setup.emailSending', lang) : t('setup.emailSendCode', lang)}
                 </button>
@@ -721,7 +721,7 @@ function SetupContent() {
 
             {emailSent && !emailVerified && (
               <>
-                <p className='text-gray-600 mb-4'>{t('setup.emailCodeSentTo', lang)} {email}</p>
+                <p className='text-gray-500 mb-4'>{t('setup.emailCodeSentTo', lang)} {email}</p>
                 <input
                   type='text'
                   inputMode='numeric'
@@ -729,12 +729,12 @@ function SetupContent() {
                   onChange={(e) => setEmailCode(e.target.value)}
                   placeholder={t('setup.emailCodePlaceholder', lang)}
                   maxLength={6}
-                  className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-gray-900'
+                  className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-brand-dark'
                 />
                 <button
                   onClick={handleVerifyEmailCode}
                   disabled={isLoading || !emailCode}
-                  className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
+                  className='w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                   {isLoading ? t('setup.emailVerifying', lang) : t('setup.emailVerify', lang)}
                 </button>
@@ -744,7 +744,7 @@ function SetupContent() {
             {emailVerified && (
               <div className='text-center py-4'>
                 <div className='text-4xl mb-2'>✅</div>
-                <p className='text-[#16A34A] font-semibold'>{t('setup.emailVerified', lang)}</p>
+                <p className='text-semantic-success font-semibold'>{t('setup.emailVerified', lang)}</p>
                 <p className='text-sm text-gray-500 mt-1'>{t('setup.continuingSetup', lang)}</p>
               </div>
             )}
@@ -763,10 +763,10 @@ function SetupContent() {
         {/* Step 4: Terms of Service */}
         {step === 'tos' && (
           <div>
-            <h1 className='text-2xl font-bold mb-4 text-gray-900'>
+            <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.tosTitle', lang)}
             </h1>
-            <p className='text-gray-600 mb-6'>
+            <p className='text-gray-500 mb-6'>
               {t('setup.tosSubtitle', lang)}
             </p>
 
@@ -774,25 +774,25 @@ function SetupContent() {
               href={TOS_URL}
               target='_blank'
               rel='noopener noreferrer'
-              className='block w-full p-4 mb-4 bg-gray-50 border border-gray-200 rounded-lg text-[#00AFD7] font-semibold hover:bg-gray-100 transition-colors text-center'
+              className='block w-full p-4 mb-4 bg-gray-50 border border-brand-primary/20 rounded-lg text-brand-primary font-semibold hover:bg-gray-100 transition-colors text-center'
             >
               {t('setup.tosLink', lang)} ↗
             </a>
 
-            <label className='flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer mb-6 transition-colors border-gray-200 hover:border-[#80D7EB]'>
+            <label className='flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer mb-6 transition-colors border-brand-primary/20 hover:border-brand-primary'>
               <input
                 type='checkbox'
                 checked={tosChecked}
                 onChange={(e) => { setTosChecked(e.target.checked); setError(null); }}
-                className='mt-0.5 w-5 h-5 rounded border-gray-300 text-[#00AFD7] focus:ring-[#00AFD7]'
+                className='mt-0.5 w-5 h-5 rounded border-gray-300 text-brand-primary focus:ring-brand-primary'
               />
-              <span className='text-gray-900 text-sm'>{t('setup.tosCheckbox', lang)}</span>
+              <span className='text-brand-dark text-sm'>{t('setup.tosCheckbox', lang)}</span>
             </label>
 
             <button
               onClick={handleAcceptTos}
               disabled={isLoading || !tosChecked}
-              className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
+              className='w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {isLoading ? '...' : t('setup.tosContinue', lang)}
             </button>
@@ -802,10 +802,10 @@ function SetupContent() {
         {/* Step 5: Spend Permission */}
         {step === 'permission' && (
           <div>
-            <h1 className='text-2xl font-bold mb-4 text-gray-900'>
+            <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.spendTitle', lang)}
             </h1>
-            <p className='text-gray-600 mb-6'>
+            <p className='text-gray-500 mb-6'>
               {t('setup.spendSubtitle', lang)}
             </p>
 
@@ -816,28 +816,28 @@ function SetupContent() {
                   onClick={() => setDailyLimit(amount)}
                   className={`w-full p-4 rounded-lg border-2 text-left ${
                     dailyLimit === amount
-                      ? 'border-[#00AFD7] bg-[#F0FAFD]'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-brand-primary bg-brand-primary-light'
+                      : 'border-brand-primary/20 hover:border-gray-300'
                   }`}
                 >
-                  <span className='font-bold text-gray-900'>${amount}{t('setup.perDay', lang)}</span>
+                  <span className='font-bold text-brand-dark'>${amount}{t('setup.perDay', lang)}</span>
                   {amount === '100' && (
-                    <span className='ml-2 text-sm text-[#00AFD7]'>
+                    <span className='ml-2 text-sm text-brand-primary'>
                       {t('setup.recommended', lang)}
                     </span>
                   )}
                 </button>
               ))}
 
-              <div className='flex items-center gap-2 p-4 border-2 border-gray-200 rounded-lg'>
-                <span className='text-gray-700'>{t('setup.customPrefix', lang)}</span>
+              <div className='flex items-center gap-2 p-4 border-2 border-brand-primary/20 rounded-lg'>
+                <span className='text-brand-dark/60'>{t('setup.customPrefix', lang)}</span>
                 <input
                   type='number'
                   value={dailyLimit}
                   onChange={(e) => setDailyLimit(e.target.value)}
-                  className='w-24 p-2 border rounded text-gray-900'
+                  className='w-24 p-2 border rounded text-brand-dark'
                 />
-                <span className='text-gray-700'>{t('setup.perDay', lang)}</span>
+                <span className='text-brand-dark/60'>{t('setup.perDay', lang)}</span>
               </div>
             </div>
 
@@ -854,7 +854,7 @@ function SetupContent() {
             <button
               onClick={handleApprovePermission}
               disabled={isLoading || isPreparingWallet}
-              className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
+              className='w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {isPreparingWallet
                 ? t('setup.preparingWallet', lang)
@@ -875,27 +875,27 @@ function SetupContent() {
         {step === 'done' && (
           <div className='text-center'>
             <div className='text-6xl mb-4'>🎉</div>
-            <h1 className='text-2xl font-bold mb-4 text-gray-900'>
+            <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.allSet', lang)}
             </h1>
-            <p className='text-gray-600 mb-6'>
+            <p className='text-gray-500 mb-6'>
               {t('setup.walletReady', lang)}
             </p>
 
             {walletAddress && (
               <div className='bg-gray-100 p-4 rounded-lg text-left text-sm mb-6'>
-                <p className='font-semibold mb-2 text-gray-900'>{t('setup.yourWallet', lang)}</p>
-                <p className='font-mono text-xs text-gray-600 break-all'>
+                <p className='font-semibold mb-2 text-brand-dark'>{t('setup.yourWallet', lang)}</p>
+                <p className='font-mono text-xs text-gray-500 break-all'>
                   {walletAddress}
                 </p>
               </div>
             )}
 
             <div className='bg-gray-100 p-4 rounded-lg text-left text-sm'>
-              <p className='font-semibold mb-2 text-gray-900'>
+              <p className='font-semibold mb-2 text-brand-dark'>
                 {t('setup.tryCommands', lang)}
               </p>
-              <ul className='space-y-1 font-mono text-gray-700'>
+              <ul className='space-y-1 font-mono text-brand-dark/60'>
                 <li>• {t('setup.cmdBalance', lang)}</li>
                 <li>• {t('setup.cmdSend', lang)}</li>
                 <li>• {t('setup.cmdHistory', lang)}</li>
@@ -923,8 +923,8 @@ export default function SetupPage() {
   return (
     <Suspense
       fallback={
-        <div className='min-h-screen bg-gradient-to-br from-white to-[#F5FDFF] flex items-center justify-center'>
-          <div className='text-gray-600'>Loading...</div>
+        <div className='min-h-screen bg-white flex items-center justify-center'>
+          <div className='text-gray-500'>Loading...</div>
         </div>
       }
     >

@@ -1,17 +1,19 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Space_Grotesk, Space_Mono } from 'next/font/google';
+import { Chakra_Petch, Electrolize, Space_Mono } from 'next/font/google';
 import './globals.css';
 import { Web3Provider } from './providers/Web3Provider';
 
-const inter = Inter({
+const chakraPetch = Chakra_Petch({
+  weight: ['400', '500', '600', '700'],
   subsets: ['latin', 'latin-ext'],
-  variable: '--font-inter',
+  variable: '--font-chakra-petch',
   display: 'swap',
 });
 
-const spaceGrotesk = Space_Grotesk({
-  subsets: ['latin', 'latin-ext'],
-  variable: '--font-space-grotesk',
+const electrolize = Electrolize({
+  weight: '400',
+  subsets: ['latin'],
+  variable: '--font-electrolize',
   display: 'swap',
 });
 
@@ -44,7 +46,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang='en' className={`${inter.variable} ${spaceGrotesk.variable} ${spaceMono.variable}`}>
+    <html lang='en' className={`${chakraPetch.variable} ${electrolize.variable} ${spaceMono.variable}`}>
       <body className='min-h-screen bg-white antialiased font-sans text-brand-dark'>
         <Web3Provider>{children}</Web3Provider>
       </body>

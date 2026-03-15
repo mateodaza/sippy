@@ -75,7 +75,7 @@ export default function FundPage() {
       fallback={
         <Shell>
           <div className='text-center py-20'>
-            <Loader2 className='w-12 h-12 text-[#00AFD7] animate-spin mx-auto' />
+            <Loader2 className='w-12 h-12 text-brand-primary animate-spin mx-auto' />
           </div>
         </Shell>
       }
@@ -151,8 +151,8 @@ function FundPageContent() {
     return (
       <Shell>
         <div className='text-center py-20'>
-          <Loader2 className='w-12 h-12 text-[#00AFD7] animate-spin mx-auto mb-4' />
-          <p className='text-gray-600'>Loading fund link...</p>
+          <Loader2 className='w-12 h-12 text-brand-primary animate-spin mx-auto mb-4' />
+          <p className='text-gray-500'>Loading fund link...</p>
         </div>
       </Shell>
     );
@@ -163,15 +163,15 @@ function FundPageContent() {
       <Shell>
         <div className='text-center py-20'>
           <AlertCircle className='w-12 h-12 text-red-400 mx-auto mb-4' />
-          <h2 className='text-xl font-bold text-gray-900 mb-2'>
+          <h2 className='font-display text-xl font-bold uppercase text-brand-dark mb-2'>
             {error || 'Something went wrong'}
           </h2>
-          <p className='text-gray-600 mb-6'>
+          <p className='text-gray-500 mb-6'>
             This fund link may be expired or invalid.
           </p>
           <a
             href={SIPPY_HOME}
-            className='inline-flex items-center gap-2 px-5 py-2.5 bg-[#00AFD7] text-white rounded-xl font-semibold hover:bg-[#0098BD] transition-colors'
+            className='inline-flex items-center gap-2 px-5 py-2.5 bg-brand-primary text-white rounded-xl font-semibold hover:bg-brand-primary-hover transition-smooth'
           >
             <ArrowLeft className='w-4 h-4' />
             Back to Home
@@ -220,14 +220,14 @@ function FundPageContent() {
     <Shell>
       {/* Recipient card */}
       <div className='max-w-xl mx-auto mb-4'>
-        <div className='p-3 bg-gradient-to-r from-[#f0fdf4] to-[#dcfce7] rounded-2xl border border-[#bbf7d0]'>
+        <div className='p-3 bg-brand-primary-light rounded-2xl border border-brand-primary/20'>
           <div className='flex items-center gap-3'>
-            <div className='w-10 h-10 bg-[#16A34A] rounded-full flex items-center justify-center'>
+            <div className='w-10 h-10 bg-brand-primary rounded-full flex items-center justify-center'>
               <CheckCircle2 className='w-5 h-5 text-white' />
             </div>
             <div>
-              <p className='text-sm text-[#166534] font-medium'>Sending to</p>
-              <p className='text-lg font-bold text-[#0f172a]'>
+              <p className='text-sm text-brand-primary font-medium'>Sending to</p>
+              <p className='text-lg font-bold text-brand-dark'>
                 {recipient.maskedPhone.startsWith('0x')
                   ? `${recipient.maskedPhone.slice(0, 6)}…${recipient.maskedPhone.slice(-4)}`
                   : recipient.maskedPhone}
@@ -239,13 +239,13 @@ function FundPageContent() {
 
       {/* Tab toggle */}
       <div className='max-w-xl mx-auto mb-4'>
-        <div className='flex bg-gray-100 rounded-xl p-1 gap-1'>
+        <div className='flex bg-brand-primary/5 rounded-xl p-1 gap-1'>
           <button
             onClick={() => setActiveTab('card')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
               activeTab === 'card'
-                ? 'bg-white text-[#0f172a] shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white text-brand-dark shadow-sm'
+                : 'text-gray-500 hover:text-brand-dark/60'
             }`}
           >
             <CreditCard className='w-4 h-4' />
@@ -255,8 +255,8 @@ function FundPageContent() {
             onClick={() => setActiveTab('crypto')}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
               activeTab === 'crypto'
-                ? 'bg-white text-[#0f172a] shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-white text-brand-dark shadow-sm'
+                : 'text-gray-500 hover:text-brand-dark/60'
             }`}
           >
             <ArrowLeftRight className='w-4 h-4' />
@@ -291,29 +291,29 @@ function CardBankTab({ address, coinbaseAvailable }: { address: string; coinbase
       {coinbaseAvailable ? (
         <CoinbaseOnrampTab address={address} />
       ) : (
-        <div className='bg-white rounded-3xl shadow-lg p-8 text-center opacity-50'>
+        <div className='bg-white panel-frame rounded-2xl p-8 text-center opacity-50'>
           <div className='w-16 h-16 bg-[#0052FF]/10 rounded-2xl mx-auto mb-4 flex items-center justify-center'>
             <CreditCard className='w-8 h-8 text-[#0052FF]' />
           </div>
-          <h3 className='text-xl font-bold text-gray-900 mb-2'>Coinbase</h3>
+          <h3 className='font-display text-xl font-bold uppercase text-brand-dark mb-2'>Coinbase</h3>
           <p className='text-gray-500 text-sm'>Not available in your country</p>
         </div>
       )}
-      <div className='bg-white rounded-3xl shadow-lg p-8 text-center opacity-50'>
-        <div className='w-16 h-16 bg-[#00AFD7]/10 rounded-2xl mx-auto mb-4 flex items-center justify-center'>
-          <CreditCard className='w-8 h-8 text-[#00AFD7]' />
+      <div className='bg-white panel-frame rounded-2xl p-8 text-center opacity-50'>
+        <div className='w-16 h-16 bg-brand-primary/10 rounded-2xl mx-auto mb-4 flex items-center justify-center'>
+          <CreditCard className='w-8 h-8 text-brand-primary' />
         </div>
-        <h3 className='text-xl font-bold text-gray-900 mb-2'>Pay with Card or Bank</h3>
-        <p className='text-gray-600 mb-4 text-sm'>
+        <h3 className='font-display text-xl font-bold uppercase text-brand-dark mb-2'>Pay with Card or Bank</h3>
+        <p className='text-gray-500 mb-4 text-sm'>
           Buy USDC using your local card, bank transfer, or payment method.
         </p>
         <button
           disabled
-          className='w-full bg-[#00AFD7] text-white py-3.5 rounded-xl font-semibold opacity-50 cursor-not-allowed'
+          className='w-full bg-brand-primary text-white py-3.5 rounded-xl font-semibold opacity-50 cursor-not-allowed'
         >
           Coming Soon
         </button>
-        <p className='text-xs text-gray-400 mt-3'>Local payment methods</p>
+        <p className='text-xs text-brand-dark/40 mt-3'>Local payment methods</p>
       </div>
     </div>
   );
@@ -368,15 +368,15 @@ function CoinbaseOnrampTab({ address }: { address: string }) {
 
   if (status === 'checking') {
     return (
-      <div className='bg-white rounded-3xl shadow-lg p-8 text-center'>
+      <div className='bg-white panel-frame rounded-2xl p-8 text-center'>
         <Clock className='w-16 h-16 text-amber-500 mx-auto mb-4' />
-        <h3 className='text-xl font-bold text-gray-900 mb-2'>Checking Purchase...</h3>
-        <p className='text-gray-600 mb-4'>
+        <h3 className='font-display text-xl font-bold uppercase text-brand-dark mb-2'>Checking Purchase...</h3>
+        <p className='text-gray-500 mb-4'>
           If your purchase completed successfully, the USDC should appear in the Sippy account within a few minutes. Check the balance on WhatsApp to confirm.
         </p>
         <button
           onClick={() => setStatus('idle')}
-          className='text-[#00AFD7] font-semibold hover:underline'
+          className='text-brand-primary font-semibold hover:underline'
         >
           Buy Again
         </button>
@@ -385,19 +385,19 @@ function CoinbaseOnrampTab({ address }: { address: string }) {
   }
 
   return (
-    <div className='bg-white rounded-3xl shadow-lg p-8'>
+    <div className='bg-white panel-frame rounded-2xl p-8'>
       <div className='text-center'>
         <div className='w-16 h-16 bg-[#0052FF]/10 rounded-2xl mx-auto mb-4 flex items-center justify-center'>
           <CreditCard className='w-8 h-8 text-[#0052FF]' />
         </div>
-        <h3 className='text-xl font-bold text-gray-900 mb-2'>Buy with Card or Bank</h3>
-        <p className='text-gray-600 mb-6 text-sm'>
+        <h3 className='font-display text-xl font-bold uppercase text-brand-dark mb-2'>Buy with Card or Bank</h3>
+        <p className='text-gray-500 mb-6 text-sm'>
           Purchase USDC using your debit card, credit card, or bank transfer via Coinbase.
         </p>
         <button
           onClick={handleOpen}
           disabled={status === 'loading'}
-          className='w-full bg-[#0052FF] text-white py-3.5 rounded-xl font-semibold hover:bg-[#0040CC] transition-colors disabled:opacity-50'
+          className='w-full bg-[#0052FF] text-white py-3.5 rounded-xl font-semibold hover:bg-[#0040CC] transition-smooth disabled:opacity-50'
         >
           {status === 'loading' ? (
             <span className='flex items-center justify-center gap-2'>
@@ -408,7 +408,7 @@ function CoinbaseOnrampTab({ address }: { address: string }) {
             'Buy USDC'
           )}
         </button>
-        <p className='text-xs text-gray-400 mt-3'>Powered by Coinbase</p>
+        <p className='text-xs text-brand-dark/40 mt-3'>Powered by Coinbase</p>
       </div>
     </div>
   );
@@ -418,19 +418,19 @@ function NoTokenView() {
   return (
     <Shell>
       <div className='text-center py-16'>
-        <div className='w-24 h-24 bg-gradient-to-br from-[#E6F7FB] to-[#CCF0F7] rounded-full mx-auto mb-8 flex items-center justify-center shadow-lg'>
-          <Wallet className='w-12 h-12 text-[#00AFD7]' />
+        <div className='w-24 h-24 bg-gradient-to-br from-brand-primary-light to-brand-primary-muted rounded-full mx-auto mb-8 flex items-center justify-center shadow-lg'>
+          <Wallet className='w-12 h-12 text-brand-primary' />
         </div>
-        <h1 className='text-3xl md:text-4xl font-black text-[#0f172a] leading-tight tracking-tight mb-4'>
+        <h1 className='font-display text-3xl md:text-4xl font-bold uppercase text-brand-dark leading-tight tracking-tight mb-4'>
           Fund a Sippy Account
         </h1>
-        <p className='text-lg text-gray-600 leading-relaxed max-w-md mx-auto mb-8'>
+        <p className='text-lg text-gray-500 leading-relaxed max-w-md mx-auto mb-8'>
           You need a fund link to send money to someone. Ask them to share their
           Sippy fund link with you.
         </p>
         <a
           href={SIPPY_HOME}
-          className='inline-flex items-center gap-2 px-6 py-3 bg-[#00AFD7] text-white rounded-xl font-semibold hover:bg-[#0098BD] transition-colors'
+          className='inline-flex items-center gap-2 px-6 py-3 bg-brand-primary text-white rounded-xl font-semibold hover:bg-brand-primary-hover transition-smooth'
         >
           <ArrowLeft className='w-4 h-4' />
           Back to Home
@@ -443,10 +443,10 @@ function NoTokenView() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className='min-h-screen'>
-      <nav className='sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-white/60'>
+      <nav className='sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-brand-primary/10'>
         <div className='max-w-7xl mx-auto px-6 py-4'>
           <a href={SIPPY_HOME} className='flex items-center gap-2 group w-fit'>
-            <ArrowLeft className='w-5 h-5 text-gray-600 group-hover:text-[#00AFD7] transition-colors' />
+            <ArrowLeft className='w-5 h-5 text-gray-500 group-hover:text-brand-primary transition-smooth' />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src='/images/logos/sippy-wordmark-cheetah-on-white.svg'
@@ -460,7 +460,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
       <section className='relative overflow-hidden'>
         <div className='absolute inset-0 pointer-events-none'>
-          <div className='absolute top-[-120px] right-[-160px] w-[560px] h-[560px] bg-[#00AFD7]/15 blur-[150px]' />
+          <div className='absolute top-[-120px] right-[-160px] w-[560px] h-[560px] bg-brand-primary/15 blur-[150px]' />
           <div className='absolute bottom-[-180px] left-[-120px] w-[520px] h-[520px] bg-[#bfdbfe]/22 blur-[170px]' />
         </div>
 

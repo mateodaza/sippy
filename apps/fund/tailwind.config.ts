@@ -16,7 +16,7 @@ const config: Config = {
           crypto: '#00D796',
           'crypto-hover': '#00B87F',
           'crypto-light': '#E6FBF3',
-          dark: '#1A1A2E',
+          dark: '#0D0D1A',
         },
         semantic: {
           success: '#16A34A',
@@ -28,8 +28,8 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-space-grotesk)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-chakra-petch)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-electrolize)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-space-mono)', 'monospace'],
       },
     },
