@@ -1,5 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Brand tokens as CSS custom properties (for non-Tailwind contexts) */
+:root {
+  --brand-primary: #00AFD7;
+  --brand-primary-hover: #0098BD;
+  --brand-crypto: #00D796;
+  --brand-dark: #1A1A2E;
+  --semantic-success: #16A34A;
+  --semantic-danger: #DC2626;
+  --semantic-warning: #D97706;
+}

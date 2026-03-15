@@ -328,7 +328,7 @@ function WalletContent() {
 
   if (isCheckingSession) {
     return (
-      <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
+      <div className='min-h-screen bg-gradient-to-br from-white to-[#F5FDFF] flex items-center justify-center p-4'>
         <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center'>
           <div className='animate-pulse'>
             <div className='text-4xl mb-4'>💰</div>
@@ -341,7 +341,7 @@ function WalletContent() {
 
   if (!isAuthenticated && !isCheckingSession) {
     return (
-      <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
+      <div className='min-h-screen bg-gradient-to-br from-white to-[#F5FDFF] flex items-center justify-center p-4'>
         <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
           <h1 className='text-2xl font-bold mb-6 text-gray-900'>{t('wallet.title', lang)}</h1>
           <p className='text-gray-600 mb-6'>
@@ -378,7 +378,7 @@ function WalletContent() {
               <button
                 onClick={handleReAuthSendOtp}
                 disabled={reAuthLoading || !reAuthPhone || !isCdpConfigured}
-                className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 {reAuthLoading ? t('wallet.sending', lang) : t('wallet.sendCode', lang)}
               </button>
@@ -402,7 +402,7 @@ function WalletContent() {
               <button
                 onClick={handleReAuthVerifyOtp}
                 disabled={reAuthLoading || reAuthOtp.length !== 6}
-                className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 {reAuthLoading ? t('wallet.verifying', lang) : t('wallet.verify', lang)}
               </button>
@@ -424,7 +424,7 @@ function WalletContent() {
   // ============================================================================
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 p-4'>
+    <div className='min-h-screen bg-gradient-to-br from-white to-[#F5FDFF] p-4'>
       <div className='max-w-md mx-auto space-y-4'>
 
         {/* Expiry warning banner */}
@@ -462,7 +462,7 @@ function WalletContent() {
                 <button
                   onClick={handleReAuthSendOtp}
                   disabled={reAuthLoading || !reAuthPhone}
-                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                  className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                   {reAuthLoading ? t('wallet.sending', lang) : t('wallet.sendCode', lang)}
                 </button>
@@ -483,7 +483,7 @@ function WalletContent() {
                 <button
                   onClick={handleReAuthVerifyOtp}
                   disabled={reAuthLoading || reAuthOtp.length !== 6}
-                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                  className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                   {reAuthLoading ? t('wallet.verifying', lang) : t('wallet.verify', lang)}
                 </button>
@@ -498,7 +498,7 @@ function WalletContent() {
           <button
             onClick={() => setSendFrom('whatsapp')}
             className={`bg-white rounded-2xl shadow p-4 text-left transition-all ${
-              sendFrom === 'whatsapp' ? 'ring-2 ring-emerald-500' : 'opacity-70'
+              sendFrom === 'whatsapp' ? 'ring-2 ring-[#00AFD7]' : 'opacity-70'
             }`}
           >
             <p className='text-xs text-gray-500 mb-1 font-medium'>{t('wallet.whatsappWallet', lang)}</p>
@@ -518,7 +518,7 @@ function WalletContent() {
           <button
             onClick={() => setSendFrom('web')}
             className={`bg-white rounded-2xl shadow p-4 text-left transition-all ${
-              sendFrom === 'web' ? 'ring-2 ring-emerald-500' : 'opacity-70'
+              sendFrom === 'web' ? 'ring-2 ring-[#00AFD7]' : 'opacity-70'
             }`}
           >
             <p className='text-xs text-gray-500 mb-1 font-medium'>{t('wallet.webWallet', lang)}</p>
@@ -556,7 +556,7 @@ function WalletContent() {
               const addr = sendFrom === 'whatsapp' ? eoaAddress : smartAccountAddress;
               if (addr) navigator.clipboard.writeText(addr);
             }}
-            className='text-xs text-emerald-600 hover:text-emerald-700 font-medium'
+            className='text-xs text-[#00AFD7] hover:text-[#0098BD] font-medium'
           >
             {t('wallet.copy', lang)}
           </button>
@@ -614,7 +614,7 @@ function WalletContent() {
               <button
                 onClick={handleSendReview}
                 disabled={!recipient || !amount}
-                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                className='w-full py-3 bg-[#00AFD7] text-white rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 {t('wallet.review', lang)}
               </button>
@@ -640,7 +640,7 @@ function WalletContent() {
               </div>
               <button
                 onClick={handleSendConfirm}
-                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
+                className='w-full py-3 bg-[#00AFD7] text-white rounded-lg font-semibold hover:bg-[#0098BD]'
               >
                 {t('wallet.confirmSend', lang)}
               </button>
@@ -655,7 +655,7 @@ function WalletContent() {
 
           {sendStep === 'sending' && (
             <div className='text-center py-6'>
-              <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto mb-4' />
+              <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-[#00AFD7] mx-auto mb-4' />
               <p className='text-gray-700 font-medium'>
                 {t('wallet.sendingProgress', lang)} ${parseFloat(amount).toFixed(2)} USDC...
               </p>
@@ -665,8 +665,8 @@ function WalletContent() {
           {sendStep === 'success' && (
             <div className='space-y-4'>
               <div className='text-center py-4'>
-                <div className='text-4xl mb-2'>&#10003;</div>
-                <p className='text-gray-900 font-semibold'>{t('wallet.sent', lang)}</p>
+                <div className='text-4xl mb-2 text-[#16A34A]'>&#10003;</div>
+                <p className='text-[#16A34A] font-semibold'>{t('wallet.sent', lang)}</p>
                 <p className='text-sm text-gray-600'>
                   ${parseFloat(amount).toFixed(2)} USDC {t('wallet.sentSuccess', lang)}
                 </p>
@@ -676,14 +676,14 @@ function WalletContent() {
                   href={getExplorerTxUrl(sendTxHash)}
                   target='_blank'
                   rel='noopener noreferrer'
-                  className='block text-center text-sm text-emerald-600 hover:text-emerald-700 underline'
+                  className='block text-center text-sm text-[#00AFD7] hover:text-[#0098BD] underline'
                 >
                   {t('wallet.viewOnBlockscout', lang)}
                 </a>
               )}
               <button
                 onClick={resetSend}
-                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
+                className='w-full py-3 bg-[#00AFD7] text-white rounded-lg font-semibold hover:bg-[#0098BD]'
               >
                 {t('wallet.sendAnother', lang)}
               </button>
@@ -699,7 +699,7 @@ function WalletContent() {
               </div>
               <button
                 onClick={handleSendConfirm}
-                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
+                className='w-full py-3 bg-[#00AFD7] text-white rounded-lg font-semibold hover:bg-[#0098BD]'
               >
                 {t('wallet.retry', lang)}
               </button>
@@ -720,7 +720,7 @@ function WalletContent() {
         <div className='bg-white rounded-2xl shadow-xl p-4 flex items-center justify-between'>
           <a
             href='/settings'
-            className='text-sm text-emerald-600 hover:text-emerald-700 font-medium'
+            className='text-sm text-[#00AFD7] hover:text-[#0098BD] font-medium'
           >
             {t('wallet.settings', lang)}
           </a>
@@ -752,7 +752,7 @@ export default function WalletPage() {
   return (
     <Suspense
       fallback={
-        <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center'>
+        <div className='min-h-screen bg-gradient-to-br from-white to-[#F5FDFF] flex items-center justify-center'>
           <div className='text-gray-600'>Loading...</div>
         </div>
       }

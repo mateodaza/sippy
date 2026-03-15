@@ -1,9 +1,31 @@
 import type { Metadata, Viewport } from 'next';
+import { Chakra_Petch, Electrolize, Space_Mono } from 'next/font/google';
 import './globals.css';
 import { Web3Provider } from './providers/Web3Provider';
 import { BlockscoutProvider } from './providers/BlockscoutProvider';
 import { CDPProvider } from './providers/cdp-provider';
 import { PostHogProvider } from './providers/PostHogProvider';
+
+const chakraPetch = Chakra_Petch({
+  weight: ['300', '400', '500', '600', '700'],
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-chakra-petch',
+  display: 'swap',
+});
+
+const electrolize = Electrolize({
+  weight: '400',
+  subsets: ['latin'],
+  variable: '--font-electrolize',
+  display: 'swap',
+});
+
+const spaceMono = Space_Mono({
+  weight: ['400', '700'],
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-space-mono',
+  display: 'swap',
+});
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -30,8 +52,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang='en'>
-      <body className='min-h-screen bg-gradient-to-br from-white via-[#eefaf4] to-[#f8fbff] antialiased'>
+    <html lang='en' className={`${chakraPetch.variable} ${electrolize.variable} ${spaceMono.variable}`}>
+      <body className='min-h-screen bg-white antialiased font-sans text-brand-dark'>
         <PostHogProvider>
           <BlockscoutProvider>
             <CDPProvider>
@@ -43,7 +65,7 @@ export default function RootLayout({
                       '@context': 'https://schema.org',
                       '@type': 'Organization',
                       name: 'Sippy',
-                      url: 'https://sippy.app',
+                      url: 'https://sippy.lat',
                     }),
                   }}
                 />

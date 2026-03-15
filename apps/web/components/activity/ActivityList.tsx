@@ -189,7 +189,7 @@ export function ActivityList({ transactions, lang }: ActivityListProps) {
             </div>
 
             {/* Receipt Icon - Hidden on mobile */}
-            <div className='hidden sm:block flex-shrink-0 text-gray-400 group-hover:text-[#059669] transition-colors'>
+            <div className='hidden sm:block flex-shrink-0 text-gray-400 group-hover:text-brand-primary transition-colors'>
               <svg
                 className='w-5 h-5'
                 fill='none'

@@ -23,7 +23,7 @@ export const wagmiConfig = createConfig(
     appName: 'Sippy - Fund My Phone',
     appDescription: 'Send USDC to phone numbers from any chain',
     appUrl: 'https://fund.sippy.lat',
-    appIcon: 'https://www.sippy.lat/images/logos/sippy-green.svg',
+    appIcon: 'https://www.sippy.lat/images/logos/sippy-s-mark-cheetah.svg',
 
     enableFamily: false,
     ssr: true,

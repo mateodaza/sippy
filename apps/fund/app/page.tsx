@@ -75,7 +75,7 @@ export default function FundPage() {
       fallback={
         <Shell>
           <div className='text-center py-20'>
-            <Loader2 className='w-12 h-12 text-[#059669] animate-spin mx-auto' />
+            <Loader2 className='w-12 h-12 text-[#00AFD7] animate-spin mx-auto' />
           </div>
         </Shell>
       }
@@ -151,7 +151,7 @@ function FundPageContent() {
     return (
       <Shell>
         <div className='text-center py-20'>
-          <Loader2 className='w-12 h-12 text-[#059669] animate-spin mx-auto mb-4' />
+          <Loader2 className='w-12 h-12 text-[#00AFD7] animate-spin mx-auto mb-4' />
           <p className='text-gray-600'>Loading fund link...</p>
         </div>
       </Shell>
@@ -171,7 +171,7 @@ function FundPageContent() {
           </p>
           <a
             href={SIPPY_HOME}
-            className='inline-flex items-center gap-2 px-5 py-2.5 bg-[#059669] text-white rounded-xl font-semibold hover:bg-[#047857] transition-colors'
+            className='inline-flex items-center gap-2 px-5 py-2.5 bg-[#00AFD7] text-white rounded-xl font-semibold hover:bg-[#0098BD] transition-colors'
           >
             <ArrowLeft className='w-4 h-4' />
             Back to Home
@@ -222,11 +222,11 @@ function FundPageContent() {
       <div className='max-w-xl mx-auto mb-4'>
         <div className='p-3 bg-gradient-to-r from-[#f0fdf4] to-[#dcfce7] rounded-2xl border border-[#bbf7d0]'>
           <div className='flex items-center gap-3'>
-            <div className='w-10 h-10 bg-[#059669] rounded-full flex items-center justify-center'>
+            <div className='w-10 h-10 bg-[#16A34A] rounded-full flex items-center justify-center'>
               <CheckCircle2 className='w-5 h-5 text-white' />
             </div>
             <div>
-              <p className='text-sm text-[#15803d] font-medium'>Sending to</p>
+              <p className='text-sm text-[#166534] font-medium'>Sending to</p>
               <p className='text-lg font-bold text-[#0f172a]'>
                 {recipient.maskedPhone.startsWith('0x')
                   ? `${recipient.maskedPhone.slice(0, 6)}…${recipient.maskedPhone.slice(-4)}`
@@ -300,8 +300,8 @@ function CardBankTab({ address, coinbaseAvailable }: { address: string; coinbase
         </div>
       )}
       <div className='bg-white rounded-3xl shadow-lg p-8 text-center opacity-50'>
-        <div className='w-16 h-16 bg-[#059669]/10 rounded-2xl mx-auto mb-4 flex items-center justify-center'>
-          <CreditCard className='w-8 h-8 text-[#059669]' />
+        <div className='w-16 h-16 bg-[#00AFD7]/10 rounded-2xl mx-auto mb-4 flex items-center justify-center'>
+          <CreditCard className='w-8 h-8 text-[#00AFD7]' />
         </div>
         <h3 className='text-xl font-bold text-gray-900 mb-2'>Pay with Card or Bank</h3>
         <p className='text-gray-600 mb-4 text-sm'>
@@ -309,7 +309,7 @@ function CardBankTab({ address, coinbaseAvailable }: { address: string; coinbase
         </p>
         <button
           disabled
-          className='w-full bg-[#059669] text-white py-3.5 rounded-xl font-semibold opacity-50 cursor-not-allowed'
+          className='w-full bg-[#00AFD7] text-white py-3.5 rounded-xl font-semibold opacity-50 cursor-not-allowed'
         >
           Coming Soon
         </button>
@@ -376,7 +376,7 @@ function CoinbaseOnrampTab({ address }: { address: string }) {
         </p>
         <button
           onClick={() => setStatus('idle')}
-          className='text-[#059669] font-semibold hover:underline'
+          className='text-[#00AFD7] font-semibold hover:underline'
         >
           Buy Again
         </button>
@@ -418,8 +418,8 @@ function NoTokenView() {
   return (
     <Shell>
       <div className='text-center py-16'>
-        <div className='w-24 h-24 bg-gradient-to-br from-[#d1fae5] to-[#a7f3d0] rounded-full mx-auto mb-8 flex items-center justify-center shadow-lg'>
-          <Wallet className='w-12 h-12 text-[#059669]' />
+        <div className='w-24 h-24 bg-gradient-to-br from-[#E6F7FB] to-[#CCF0F7] rounded-full mx-auto mb-8 flex items-center justify-center shadow-lg'>
+          <Wallet className='w-12 h-12 text-[#00AFD7]' />
         </div>
         <h1 className='text-3xl md:text-4xl font-black text-[#0f172a] leading-tight tracking-tight mb-4'>
           Fund a Sippy Account
@@ -430,7 +430,7 @@ function NoTokenView() {
         </p>
         <a
           href={SIPPY_HOME}
-          className='inline-flex items-center gap-2 px-6 py-3 bg-[#059669] text-white rounded-xl font-semibold hover:bg-[#047857] transition-colors'
+          className='inline-flex items-center gap-2 px-6 py-3 bg-[#00AFD7] text-white rounded-xl font-semibold hover:bg-[#0098BD] transition-colors'
         >
           <ArrowLeft className='w-4 h-4' />
           Back to Home
@@ -446,10 +446,10 @@ function Shell({ children }: { children: React.ReactNode }) {
       <nav className='sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-white/60'>
         <div className='max-w-7xl mx-auto px-6 py-4'>
           <a href={SIPPY_HOME} className='flex items-center gap-2 group w-fit'>
-            <ArrowLeft className='w-5 h-5 text-gray-600 group-hover:text-[#059669] transition-colors' />
+            <ArrowLeft className='w-5 h-5 text-gray-600 group-hover:text-[#00AFD7] transition-colors' />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src='https://www.sippy.lat/images/logos/sippy_full_green.svg'
+              src='/images/logos/sippy-wordmark-cheetah-on-white.svg'
               alt='Sippy'
               width={110}
               height={44}
@@ -460,7 +460,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
       <section className='relative overflow-hidden'>
         <div className='absolute inset-0 pointer-events-none'>
-          <div className='absolute top-[-120px] right-[-160px] w-[560px] h-[560px] bg-[#bbf7d0]/28 blur-[150px]' />
+          <div className='absolute top-[-120px] right-[-160px] w-[560px] h-[560px] bg-[#00AFD7]/15 blur-[150px]' />
           <div className='absolute bottom-[-180px] left-[-120px] w-[520px] h-[520px] bg-[#bfdbfe]/22 blur-[170px]' />
         </div>
 

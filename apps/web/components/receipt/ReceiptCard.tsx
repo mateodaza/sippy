@@ -162,7 +162,7 @@ export function ReceiptCard({
             href={getExplorerTxUrl(transaction.hash)}
             target='_blank'
             rel='noopener noreferrer'
-            className='block w-full px-4 sm:px-6 py-3 sm:py-3.5 bg-[#059669] hover:bg-[#047857] text-white text-sm sm:text-base font-semibold rounded-xl transition-all duration-200 text-center shadow-md hover:shadow-lg active:scale-[0.98]'
+            className='block w-full px-4 sm:px-6 py-3 sm:py-3.5 bg-brand-crypto hover:bg-brand-crypto-hover text-white text-sm sm:text-base font-semibold rounded-xl transition-all duration-200 text-center shadow-md hover:shadow-lg active:scale-[0.98]'
           >
             View on Blockscout
           </a>
@@ -178,7 +178,7 @@ export function ReceiptCard({
         <div className='px-5 sm:px-8 py-3 sm:py-4 bg-white/95 backdrop-blur-sm border-t border-gray-100 text-center'>
           <p className='text-xs text-gray-500'>
             Powered by{' '}
-            <span className='font-semibold text-[#059669]'>Sippy</span> on
+            <span className='font-semibold text-brand-primary'>Sippy</span> on
             Arbitrum One
           </p>
         </div>

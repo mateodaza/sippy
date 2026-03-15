@@ -63,37 +63,37 @@ vi.mock('../../lib/i18n', async () => {
   // Import the real module and re-export everything, but override the
   // language-detection functions so the component always stays in English
   // during tests (prevents +57 Colombian number from switching to Spanish).
-  const real = await vi.importActual<typeof import('../../lib/i18n')>('../../lib/i18n')
+  const real = await vi.importActual('../../lib/i18n')
   return {
-    ...real,
+    ...(real as object),
     getStoredLanguage: () => 'en' as const,
-    storeLanguage: (...args: unknown[]) => mocks.storeLanguage(...args),
-    clearLanguage: () => mocks.clearLanguage(),
+    storeLanguage: mocks.storeLanguage,
+    clearLanguage: mocks.clearLanguage,
     detectLanguageFromPhone: () => 'en' as const,
     fetchUserLanguage: async () => ({ language: 'en' as const, source: 'phone' as const }),
-    resolveLanguage: (...args: unknown[]) => mocks.resolveLanguage(...args),
+    resolveLanguage: mocks.resolveLanguage,
   }
 })
 
 vi.mock('../../lib/auth', () => ({
-  sendOtp: (...args: unknown[]) => mocks.sendOtp(...args),
-  verifyOtp: (...args: unknown[]) => mocks.verifyOtp(...args),
-  storeToken: (...args: unknown[]) => mocks.storeToken(...args),
+  sendOtp: mocks.sendOtp,
+  verifyOtp: mocks.verifyOtp,
+  storeToken: mocks.storeToken,
   getStoredToken: () => mocks.getStoredToken(),
   // getFreshToken delegates to getStoredToken so authenticated test setups work automatically
   getFreshToken: () => mocks.getStoredToken(),
-  clearToken: () => mocks.clearToken(),
-  isTokenExpired: (...args: unknown[]) => mocks.isTokenExpired(...args),
-  getTokenSecondsRemaining: (...args: unknown[]) => mocks.getTokenSecondsRemaining(...args),
+  clearToken: mocks.clearToken,
+  isTokenExpired: mocks.isTokenExpired,
+  getTokenSecondsRemaining: mocks.getTokenSecondsRemaining,
 }))
 
 vi.mock('../../lib/blockscout', () => ({
-  getBalances: (...args: unknown[]) => mocks.getBalances(...args),
+  getBalances: mocks.getBalances,
 }))
 
 vi.mock('../../lib/usdc-transfer', () => ({
-  buildUsdcTransferCall: (...args: unknown[]) => mocks.buildUsdcTransferCall(...args),
-  ensureGasReady: (...args: unknown[]) => mocks.ensureGasReady(...args),
+  buildUsdcTransferCall: mocks.buildUsdcTransferCall,
+  ensureGasReady: mocks.ensureGasReady,
 }))
 
 vi.mock('viem', () => ({
@@ -101,6 +101,12 @@ vi.mock('viem', () => ({
 }))
 
 // --- Helpers ---
+
+// fetch mock calls are typed as [string] but actually include [string, RequestInit?]
+type FetchCall = [url: string, init?: RequestInit]
+function fetchInit(call: unknown): RequestInit {
+  return (call as FetchCall)[1]!
+}
 
 let container: HTMLDivElement | null = null
 let root: Root | null = null
@@ -320,15 +326,15 @@ describe('session recovery', () => {
     await renderPage()
 
     const walletStatusCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/wallet-status')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/wallet-status')
     )
     expect(walletStatusCall).toBeDefined()
-    expect((walletStatusCall![1] as RequestInit).headers).toMatchObject({
+    expect(fetchInit(walletStatusCall!).headers).toMatchObject({
       Authorization: 'Bearer mock-token',
     })
 
     const registerWalletCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/register-wallet')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/register-wallet')
     )
     expect(registerWalletCall).toBeUndefined()
   })
@@ -349,10 +355,10 @@ describe('backend API calls use getStoredToken', () => {
     await renderPage()
 
     const walletStatusCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/wallet-status')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/wallet-status')
     )
     expect(walletStatusCall).toBeDefined()
-    expect((walletStatusCall![1] as RequestInit).headers).toMatchObject({
+    expect(fetchInit(walletStatusCall!).headers).toMatchObject({
       Authorization: 'Bearer mock-token',
     })
   })
@@ -392,10 +398,10 @@ describe('backend API calls use getStoredToken', () => {
     await act(async () => { await new Promise(r => setTimeout(r, 200)) })
 
     const revokeCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/revoke-permission')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/revoke-permission')
     )
     expect(revokeCall).toBeDefined()
-    expect((revokeCall![1] as RequestInit).headers).toMatchObject({
+    expect(fetchInit(revokeCall!).headers).toMatchObject({
       Authorization: 'Bearer mock-token',
     })
   })
@@ -421,10 +427,10 @@ describe('backend API calls use getStoredToken', () => {
     })
 
     const registerCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/register-permission')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/register-permission')
     )
     expect(registerCall).toBeDefined()
-    expect((registerCall![1] as RequestInit).headers).toMatchObject({
+    expect(fetchInit(registerCall!).headers).toMatchObject({
       Authorization: 'Bearer mock-token',
     })
   })
@@ -456,10 +462,10 @@ describe('backend API calls use getStoredToken', () => {
     await act(async () => {})
 
     const logCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/log-export-event')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/log-export-event')
     )
     expect(logCall).toBeDefined()
-    expect((logCall![1] as RequestInit).headers).toMatchObject({
+    expect(fetchInit(logCall!).headers).toMatchObject({
       Authorization: 'Bearer mock-token',
     })
   })
@@ -647,11 +653,11 @@ describe('email management', () => {
     })
 
     const sendCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
     )
     expect(sendCall).toBeDefined()
-    expect((sendCall![1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
-    expect(JSON.parse((sendCall![1] as RequestInit).body as string)).toEqual({ email: 'test@example.com' })
+    expect(fetchInit(sendCall!).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
+    expect(JSON.parse(fetchInit(sendCall!).body as string)).toEqual({ email: 'test@example.com' })
   })
 
   it('code input shown after send success', async () => {
@@ -712,10 +718,10 @@ describe('email management', () => {
     await act(async () => { findButton('Verify')!.click() })
 
     const verifyCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCall).toBeDefined()
-    expect(JSON.parse((verifyCall![1] as RequestInit).body as string)).toEqual({ email: 'test@example.com', code: '123456' })
+    expect(JSON.parse(fetchInit(verifyCall!).body as string)).toEqual({ email: 'test@example.com', code: '123456' })
   })
 
   it('error displayed on failed verify', async () => {
@@ -780,10 +786,10 @@ describe('email management', () => {
     await act(async () => { findButton('Resend code')!.click() })
 
     const resendCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
     )
     expect(resendCall).toBeDefined()
-    expect(JSON.parse((resendCall![1] as RequestInit).body as string)).toEqual({ email: 'test@example.com' })
+    expect(JSON.parse(fetchInit(resendCall!).body as string)).toEqual({ email: 'test@example.com' })
   })
 
   it('verified email — shows maskedEmail and Change button', async () => {
@@ -819,7 +825,7 @@ describe('email management', () => {
     expect(container!.querySelector('input[type="email"]')).not.toBeNull()
     expect(container!.querySelector('input[placeholder="Enter 6-digit code"]')).not.toBeNull()
     const verifyCalls = mockFetch.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCalls).toHaveLength(0)
   })
@@ -843,7 +849,7 @@ describe('email management', () => {
 
     expect(container!.querySelector('input[type="email"]')).not.toBeNull()
     const sendCalls = mockFetch.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
     )
     expect(sendCalls).toHaveLength(0)
   })
@@ -878,10 +884,10 @@ describe('email management', () => {
     await act(async () => { findButton('Verify')!.click() })
 
     const verifyCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCall).toBeDefined()
-    expect(JSON.parse((verifyCall![1] as RequestInit).body as string)).toEqual({ email: 'user@gmail.com', code: '123456' })
+    expect(JSON.parse(fetchInit(verifyCall!).body as string)).toEqual({ email: 'user@gmail.com', code: '123456' })
   })
 
   it('verify submit from verify_entry — blocked when email empty', async () => {
@@ -912,7 +918,7 @@ describe('email management', () => {
     expect(verifyBtn.disabled).toBe(true)
 
     const verifyCalls = mockFetch.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCalls).toHaveLength(0)
   })
@@ -942,10 +948,10 @@ describe('email management', () => {
     await act(async () => { findButton('Resend code')!.click() })
 
     const sendCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
     )
     expect(sendCall).toBeDefined()
-    expect(JSON.parse((sendCall![1] as RequestInit).body as string)).toEqual({ email: 'user@gmail.com' })
+    expect(JSON.parse(fetchInit(sendCall!).body as string)).toEqual({ email: 'user@gmail.com' })
   })
 
   it('Change — shows new email input; verify-email-code not called yet', async () => {
@@ -967,7 +973,7 @@ describe('email management', () => {
 
     expect(container!.querySelector('input[type="email"]')).not.toBeNull()
     const verifyCalls = mockFetch.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCalls).toHaveLength(0)
   })
@@ -1003,10 +1009,10 @@ describe('email management', () => {
     await act(async () => { findButton('Verify')!.click() })
 
     const verifyCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCall).toBeDefined()
-    expect(JSON.parse((verifyCall![1] as RequestInit).body as string)).toEqual({ email: 'new@example.com', code: '123456' })
+    expect(JSON.parse(fetchInit(verifyCall!).body as string)).toEqual({ email: 'new@example.com', code: '123456' })
   })
 
   it('fetchEmailStatus called on session restore', async () => {
@@ -1024,10 +1030,10 @@ describe('email management', () => {
     await renderPage()
 
     const emailStatusCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/email-status')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/email-status')
     )
     expect(emailStatusCall).toBeDefined()
-    expect((emailStatusCall![1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
+    expect(fetchInit(emailStatusCall!).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
   })
 
   it('fetchEmailStatus called after OTP verify', async () => {
@@ -1061,7 +1067,7 @@ describe('email management', () => {
     await goToVerifyStep()
 
     const emailStatusCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/email-status')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/email-status')
     )
     expect(emailStatusCall).toBeDefined()
   })
@@ -1142,10 +1148,10 @@ describe('handleSetLanguage', () => {
     })
 
     const setLangCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
     )
     expect(setLangCall).toBeDefined()
-    expect(JSON.parse((setLangCall![1] as RequestInit).body as string)).toEqual({ language: 'es' })
+    expect(JSON.parse(fetchInit(setLangCall!).body as string)).toEqual({ language: 'es' })
     expect(mocks.storeLanguage).toHaveBeenCalledWith('es')
   })
 
@@ -1157,10 +1163,10 @@ describe('handleSetLanguage', () => {
     })
 
     const setLangCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
     )
     expect(setLangCall).toBeDefined()
-    expect(JSON.parse((setLangCall![1] as RequestInit).body as string)).toEqual({ language: 'pt' })
+    expect(JSON.parse(fetchInit(setLangCall!).body as string)).toEqual({ language: 'pt' })
     expect(mocks.storeLanguage).toHaveBeenCalledWith('pt')
     // Verify the UI re-rendered: the Português button should now be highlighted (lang === 'pt')
     expect(findButton('Português')!.className).toContain('border-emerald-600')
@@ -1174,10 +1180,10 @@ describe('handleSetLanguage', () => {
     })
 
     const setLangCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
     )
     expect(setLangCall).toBeDefined()
-    expect(JSON.parse((setLangCall![1] as RequestInit).body as string)).toEqual({ language: null })
+    expect(JSON.parse(fetchInit(setLangCall!).body as string)).toEqual({ language: null })
     expect(mocks.clearLanguage).toHaveBeenCalled()
     expect(mocks.resolveLanguage).toHaveBeenCalledWith('+5511999990000', expect.anything(), expect.anything())
   })
@@ -1231,10 +1237,10 @@ describe('privacy toggle', () => {
     await renderPage()
 
     const privacyCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/privacy-status')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/privacy-status')
     )
     expect(privacyCall).toBeDefined()
-    expect((privacyCall![1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
+    expect(fetchInit(privacyCall!).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
   })
 
   it('TC-PV-003-W-02: toggle renders checked when phoneVisible: true', async () => {
@@ -1294,11 +1300,11 @@ describe('privacy toggle', () => {
     })
 
     const setPrivacyCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-privacy')
+      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-privacy')
     )
     expect(setPrivacyCall).toBeDefined()
-    expect(JSON.parse((setPrivacyCall![1] as RequestInit).body as string)).toEqual({ phoneVisible: false })
-    expect((setPrivacyCall![1] as RequestInit).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
+    expect(JSON.parse(fetchInit(setPrivacyCall!).body as string)).toEqual({ phoneVisible: false })
+    expect(fetchInit(setPrivacyCall!).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
   })
 
   it('TC-PV-003-W-05: toggle is disabled while privacySaving (save in-flight)', async () => {

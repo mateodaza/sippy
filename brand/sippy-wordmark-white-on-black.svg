@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect fill="#000000" width="1024" height="1024"/>
+
+  <!-- S/5 -->
+  <rect fill="#FFFFFF" x="153" y="408" width="120" height="16"/>
+  <rect fill="#FFFFFF" x="153" y="442" width="120" height="16"/>
+  <rect fill="#FFFFFF" x="257" y="476" width="16" height="140"/>
+  <rect fill="#FFFFFF" x="153" y="600" width="120" height="16"/>
+
+  <!-- 1/i -->
+  <rect fill="#FFFFFF" x="333" y="408" width="43" height="16"/>
+  <rect fill="#FFFFFF" x="360" y="408" width="16" height="208"/>
+
+  <!-- P/9 first -->
+  <rect fill="#FFFFFF" x="433" y="408" width="16" height="208"/>
+  <rect fill="#FFFFFF" x="433" y="408" width="120" height="16"/>
+  <rect fill="#FFFFFF" x="537" y="408" width="16" height="120"/>
+  <rect fill="#FFFFFF" x="433" y="512" width="120" height="16"/>
+
+  <!-- P/9 second -->
+  <rect fill="#FFFFFF" x="591" y="408" width="16" height="208"/>
+  <rect fill="#FFFFFF" x="591" y="408" width="120" height="16"/>
+  <rect fill="#FFFFFF" x="695" y="408" width="16" height="120"/>
+  <rect fill="#FFFFFF" x="591" y="512" width="120" height="16"/>
+
+  <!-- 4/y -->
+  <rect fill="#FFFFFF" x="750" y="408" width="16" height="120"/>
+  <rect fill="#FFFFFF" x="750" y="512" width="121" height="16"/>
+  <rect fill="#FFFFFF" x="855" y="408" width="16" height="208"/>
+</svg>

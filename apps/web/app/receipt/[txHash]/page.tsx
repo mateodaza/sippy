@@ -115,7 +115,7 @@ export default async function ReceiptPage({ params }: ReceiptPageProps) {
         <div className='max-w-4xl mx-auto mb-4 sm:mb-6'>
           <Link
             href='/'
-            className='inline-flex items-center text-sm sm:text-base text-gray-600 hover:text-[#059669] transition-colors font-medium'
+            className='inline-flex items-center text-sm sm:text-base text-gray-600 hover:text-brand-primary transition-colors font-medium'
           >
             <svg
               className='w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2'

@@ -24,17 +24,17 @@ export default function PrivacyPolicyPage() {
         <div className='max-w-4xl mx-auto px-6 py-4 flex justify-between items-center'>
           <Link href='/' className='flex items-center gap-2'>
             <Image
-              src='/images/logos/sippy_full_green.svg'
+              src='/images/logos/sippy-wordmark-cheetah.svg'
               alt='Sippy Logo'
-              width={110}
-              height={44}
+              width={148}
+              height={43}
               priority
               className='transition-smooth hover:scale-105'
             />
           </Link>
           <Link
             href='/'
-            className='flex items-center gap-2 text-sm text-gray-600 hover:text-[#059669] transition-colors'
+            className='flex items-center gap-2 text-sm text-gray-600 hover:text-[#00AFD7] transition-colors'
           >
             <ArrowLeft className='w-4 h-4' />
             Back to Home
@@ -45,11 +45,11 @@ export default function PrivacyPolicyPage() {
       {/* Header */}
       <header className='py-16 md:py-20'>
         <div className='max-w-4xl mx-auto px-6 text-center'>
-          <div className='inline-flex items-center gap-2 px-4 py-2 bg-[#dcfce7] border border-[#bbf7d0] rounded-full text-sm text-[#15803d] mb-6'>
+          <div className='inline-flex items-center gap-2 px-4 py-2 bg-[#E6F7FB] border border-[#00AFD7]/20 rounded-full text-sm text-[#0098BD] mb-6'>
             <Shield className='w-4 h-4' />
             <span className='font-medium'>Privacy Policy</span>
           </div>
-          <h1 className='text-4xl md:text-5xl font-bold text-[#0f172a] mb-4'>
+          <h1 className='text-4xl md:text-5xl font-bold text-[#1A1A2E] mb-4'>
             Privacy Policy
           </h1>
           <p className='text-gray-600'>Last updated: {lastUpdated}</p>
@@ -98,7 +98,7 @@ export default function PrivacyPolicyPage() {
                     <Mail className='w-4 h-4' />
                     <a
                       href='mailto:hello@sippy.lat'
-                      className='text-[#059669] hover:underline'
+                      className='text-[#00AFD7] hover:underline'
                     >
                       hello@sippy.lat
                     </a>
@@ -180,7 +180,7 @@ export default function PrivacyPolicyPage() {
                   You may withdraw your consent at any time by contacting us at{' '}
                   <a
                     href='mailto:hello@sippy.lat'
-                    className='text-[#059669] hover:underline'
+                    className='text-[#00AFD7] hover:underline'
                   >
                     hello@sippy.lat
                   </a>{' '}
@@ -271,7 +271,7 @@ export default function PrivacyPolicyPage() {
                       href='https://www.whatsapp.com/legal/privacy-policy'
                       target='_blank'
                       rel='noopener noreferrer'
-                      className='text-[#059669] hover:underline'
+                      className='text-[#00AFD7] hover:underline'
                     >
                       WhatsApp Privacy Policy
                     </a>
@@ -284,7 +284,7 @@ export default function PrivacyPolicyPage() {
                       href='https://www.coinbase.com/legal/privacy'
                       target='_blank'
                       rel='noopener noreferrer'
-                      className='text-[#059669] hover:underline'
+                      className='text-[#00AFD7] hover:underline'
                     >
                       Coinbase Privacy Policy
                     </a>
@@ -308,7 +308,7 @@ export default function PrivacyPolicyPage() {
                       href='https://groq.com/privacy-policy/'
                       target='_blank'
                       rel='noopener noreferrer'
-                      className='text-[#059669] hover:underline'
+                      className='text-[#00AFD7] hover:underline'
                     >
                       Privacy Policy
                     </a>
@@ -394,7 +394,7 @@ export default function PrivacyPolicyPage() {
                   us at{' '}
                   <a
                     href='mailto:hello@sippy.lat'
-                    className='text-[#059669] hover:underline'
+                    className='text-[#00AFD7] hover:underline'
                   >
                     hello@sippy.lat
                   </a>{' '}
@@ -442,7 +442,7 @@ export default function PrivacyPolicyPage() {
                   To exercise any of these rights, please contact us at{' '}
                   <a
                     href='mailto:hello@sippy.lat'
-                    className='text-[#059669] hover:underline'
+                    className='text-[#00AFD7] hover:underline'
                   >
                     hello@sippy.lat
                   </a>
@@ -462,7 +462,7 @@ export default function PrivacyPolicyPage() {
                   has provided us with personal information, please contact us at{' '}
                   <a
                     href='mailto:hello@sippy.lat'
-                    className='text-[#059669] hover:underline'
+                    className='text-[#00AFD7] hover:underline'
                   >
                     hello@sippy.lat
                   </a>{' '}
@@ -492,16 +492,16 @@ export default function PrivacyPolicyPage() {
                   If you have any questions about this Privacy Policy or our data
                   practices, please contact us:
                 </p>
-                <div className='bg-[#dcfce7] rounded-xl p-6 border border-[#bbf7d0]'>
+                <div className='bg-[#E6F7FB] rounded-xl p-6 border border-[#00AFD7]/20'>
                   <p className='text-gray-800 font-medium text-lg'>
                     Sippy
                   </p>
                   <p className='text-gray-600 font-medium'>Company registration in progress</p>
                   <p className='text-gray-700 flex items-center gap-2 mt-3 pt-3 border-t border-green-200'>
-                    <Mail className='w-4 h-4 text-[#059669]' />
+                    <Mail className='w-4 h-4 text-[#00AFD7]' />
                     <a
                       href='mailto:hello@sippy.lat'
-                      className='text-[#059669] hover:underline font-medium'
+                      className='text-[#00AFD7] hover:underline font-medium'
                     >
                       hello@sippy.lat
                     </a>
@@ -522,7 +522,7 @@ export default function PrivacyPolicyPage() {
           <div className='flex flex-col md:flex-row justify-between items-center gap-4'>
             <div className='flex items-center gap-2'>
               <Image
-                src='/images/logos/sippy-green.svg'
+                src='/images/logos/sippy-s-mark-cheetah.svg'
                 alt='Sippy'
                 width={20}
                 height={20}
@@ -534,19 +534,19 @@ export default function PrivacyPolicyPage() {
             <div className='flex gap-6 text-sm text-gray-600'>
               <Link
                 href='/'
-                className='hover:text-[#059669] transition-colors font-medium'
+                className='hover:text-[#00AFD7] transition-colors font-medium'
               >
                 Home
               </Link>
               <Link
                 href='/privacy'
-                className='text-[#059669] font-medium'
+                className='text-[#00AFD7] font-medium'
               >
                 Privacy Policy
               </Link>
               <Link
                 href='/terms'
-                className='hover:text-[#059669] transition-colors font-medium'
+                className='hover:text-[#00AFD7] transition-colors font-medium'
               >
                 Terms of Service
               </Link>

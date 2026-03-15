@@ -575,7 +575,7 @@ function SetupContent() {
   // Show loading while checking session
   if (isCheckingSession) {
     return (
-      <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
+      <div className='min-h-screen bg-gradient-to-br from-white to-[#F5FDFF] flex items-center justify-center p-4'>
         <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center'>
           <div className='animate-pulse'>
             <div className='text-4xl mb-4'>🔍</div>
@@ -587,7 +587,7 @@ function SetupContent() {
   }
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
+    <div className='min-h-screen bg-gradient-to-br from-white to-[#F5FDFF] flex items-center justify-center p-4'>
       <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
         {/* Progress indicator */}
         <div className='flex justify-between mb-8'>
@@ -596,9 +596,9 @@ function SetupContent() {
               key={s}
               className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
                 step === s
-                  ? 'bg-emerald-600 text-white'
+                  ? 'bg-[#00AFD7] text-white'
                   : (['phone', 'otp', 'email', 'tos', 'permission', 'done'] as const).indexOf(step) > i
-                    ? 'bg-emerald-200 text-emerald-800'
+                    ? 'bg-[#B3E8F5] text-[#007A99]'
                     : 'bg-gray-200 text-gray-500'
               }`}
             >
@@ -649,7 +649,7 @@ function SetupContent() {
             <button
               onClick={handleSendOtp}
               disabled={isLoading || !phoneNumber || phoneNumber.replace(/\D/g, '').length < 7 || !isCdpConfigured}
-              className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+              className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {isLoading ? t('setup.sending', lang) : t('setup.sendCode', lang)}
             </button>
@@ -677,7 +677,7 @@ function SetupContent() {
             <button
               onClick={handleVerifyOtp}
               disabled={isLoading || otp.length !== 6}
-              className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+              className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {isLoading ? t('setup.verifying', lang) : t('setup.verify', lang)}
             </button>
@@ -712,7 +712,7 @@ function SetupContent() {
                 <button
                   onClick={handleSendEmailCode}
                   disabled={isLoading || !email}
-                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                  className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                   {isLoading ? t('setup.emailSending', lang) : t('setup.emailSendCode', lang)}
                 </button>
@@ -734,7 +734,7 @@ function SetupContent() {
                 <button
                   onClick={handleVerifyEmailCode}
                   disabled={isLoading || !emailCode}
-                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                  className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                   {isLoading ? t('setup.emailVerifying', lang) : t('setup.emailVerify', lang)}
                 </button>
@@ -744,7 +744,7 @@ function SetupContent() {
             {emailVerified && (
               <div className='text-center py-4'>
                 <div className='text-4xl mb-2'>✅</div>
-                <p className='text-emerald-700 font-semibold'>{t('setup.emailVerified', lang)}</p>
+                <p className='text-[#16A34A] font-semibold'>{t('setup.emailVerified', lang)}</p>
                 <p className='text-sm text-gray-500 mt-1'>{t('setup.continuingSetup', lang)}</p>
               </div>
             )}
@@ -774,17 +774,17 @@ function SetupContent() {
               href={TOS_URL}
               target='_blank'
               rel='noopener noreferrer'
-              className='block w-full p-4 mb-4 bg-gray-50 border border-gray-200 rounded-lg text-emerald-700 font-semibold hover:bg-gray-100 transition-colors text-center'
+              className='block w-full p-4 mb-4 bg-gray-50 border border-gray-200 rounded-lg text-[#00AFD7] font-semibold hover:bg-gray-100 transition-colors text-center'
             >
               {t('setup.tosLink', lang)} ↗
             </a>
 
-            <label className='flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer mb-6 transition-colors border-gray-200 hover:border-emerald-300'>
+            <label className='flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer mb-6 transition-colors border-gray-200 hover:border-[#80D7EB]'>
               <input
                 type='checkbox'
                 checked={tosChecked}
                 onChange={(e) => { setTosChecked(e.target.checked); setError(null); }}
-                className='mt-0.5 w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500'
+                className='mt-0.5 w-5 h-5 rounded border-gray-300 text-[#00AFD7] focus:ring-[#00AFD7]'
               />
               <span className='text-gray-900 text-sm'>{t('setup.tosCheckbox', lang)}</span>
             </label>
@@ -792,7 +792,7 @@ function SetupContent() {
             <button
               onClick={handleAcceptTos}
               disabled={isLoading || !tosChecked}
-              className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+              className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {isLoading ? '...' : t('setup.tosContinue', lang)}
             </button>
@@ -816,13 +816,13 @@ function SetupContent() {
                   onClick={() => setDailyLimit(amount)}
                   className={`w-full p-4 rounded-lg border-2 text-left ${
                     dailyLimit === amount
-                      ? 'border-emerald-600 bg-emerald-50'
+                      ? 'border-[#00AFD7] bg-[#F0FAFD]'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
                   <span className='font-bold text-gray-900'>${amount}{t('setup.perDay', lang)}</span>
                   {amount === '100' && (
-                    <span className='ml-2 text-sm text-emerald-600'>
+                    <span className='ml-2 text-sm text-[#00AFD7]'>
                       {t('setup.recommended', lang)}
                     </span>
                   )}
@@ -854,7 +854,7 @@ function SetupContent() {
             <button
               onClick={handleApprovePermission}
               disabled={isLoading || isPreparingWallet}
-              className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+              className='w-full bg-[#00AFD7] text-white py-3 rounded-lg font-semibold hover:bg-[#0098BD] disabled:opacity-50 disabled:cursor-not-allowed'
             >
               {isPreparingWallet
                 ? t('setup.preparingWallet', lang)
@@ -923,7 +923,7 @@ export default function SetupPage() {
   return (
     <Suspense
       fallback={
-        <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center'>
+        <div className='min-h-screen bg-gradient-to-br from-white to-[#F5FDFF] flex items-center justify-center'>
           <div className='text-gray-600'>Loading...</div>
         </div>
       }

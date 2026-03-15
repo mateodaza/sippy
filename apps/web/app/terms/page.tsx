@@ -24,17 +24,17 @@ export default function TermsOfServicePage() {
         <div className='max-w-4xl mx-auto px-6 py-4 flex justify-between items-center'>
           <Link href='/' className='flex items-center gap-2'>
             <Image
-              src='/images/logos/sippy_full_green.svg'
+              src='/images/logos/sippy-wordmark-cheetah.svg'
               alt='Sippy Logo'
-              width={110}
-              height={44}
+              width={148}
+              height={43}
               priority
               className='transition-smooth hover:scale-105'
             />
           </Link>
           <Link
             href='/'
-            className='flex items-center gap-2 text-sm text-gray-600 hover:text-[#059669] transition-colors'
+            className='flex items-center gap-2 text-sm text-gray-600 hover:text-[#00AFD7] transition-colors'
           >
             <ArrowLeft className='w-4 h-4' />
             Back to Home
@@ -49,7 +49,7 @@ export default function TermsOfServicePage() {
             <FileText className='w-4 h-4' />
             <span className='font-medium'>Terms of Service</span>
           </div>
-          <h1 className='text-4xl md:text-5xl font-bold text-[#0f172a] mb-4'>
+          <h1 className='text-4xl md:text-5xl font-bold text-[#1A1A2E] mb-4'>
             Terms of Service
           </h1>
           <p className='text-gray-600'>Last updated: {lastUpdated}</p>
@@ -95,7 +95,7 @@ export default function TermsOfServicePage() {
                     <Mail className='w-4 h-4' />
                     <a
                       href='mailto:hello@sippy.lat'
-                      className='text-[#059669] hover:underline'
+                      className='text-[#00AFD7] hover:underline'
                     >
                       hello@sippy.lat
                     </a>
@@ -436,7 +436,7 @@ export default function TermsOfServicePage() {
                     <strong>Contact Support:</strong> Email us at{' '}
                     <a
                       href='mailto:hello@sippy.lat'
-                      className='text-[#059669] hover:underline'
+                      className='text-[#00AFD7] hover:underline'
                     >
                       hello@sippy.lat
                     </a>{' '}
@@ -559,7 +559,7 @@ export default function TermsOfServicePage() {
           <div className='flex flex-col md:flex-row justify-between items-center gap-4'>
             <div className='flex items-center gap-2'>
               <Image
-                src='/images/logos/sippy-green.svg'
+                src='/images/logos/sippy-s-mark-cheetah.svg'
                 alt='Sippy'
                 width={20}
                 height={20}
@@ -571,19 +571,19 @@ export default function TermsOfServicePage() {
             <div className='flex gap-6 text-sm text-gray-600'>
               <Link
                 href='/'
-                className='hover:text-[#059669] transition-colors font-medium'
+                className='hover:text-[#00AFD7] transition-colors font-medium'
               >
                 Home
               </Link>
               <Link
                 href='/privacy'
-                className='hover:text-[#059669] transition-colors font-medium'
+                className='hover:text-[#00AFD7] transition-colors font-medium'
               >
                 Privacy Policy
               </Link>
               <Link
                 href='/terms'
-                className='text-[#059669] font-medium'
+                className='text-[#00AFD7] font-medium'
               >
                 Terms of Service
               </Link>

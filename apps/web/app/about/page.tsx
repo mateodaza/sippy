@@ -39,13 +39,13 @@ export default function AboutPage() {
         <div className='max-w-7xl mx-auto px-6 py-4 flex justify-between items-center'>
           <Link
             href='/'
-            className='flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#059669] focus-visible:ring-offset-2 rounded-lg'
+            className='flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D796] focus-visible:ring-offset-2 rounded-lg'
           >
             <Image
-              src='/images/logos/sippy_full_green.svg'
+              src='/images/logos/sippy-wordmark-electric.svg'
               alt='Sippy - go to homepage'
-              width={110}
-              height={44}
+              width={148}
+              height={43}
               priority
               className='transition-smooth hover:scale-105'
             />
@@ -67,10 +67,10 @@ export default function AboutPage() {
             </div>
           </div>
 
-          <h1 className='text-4xl md:text-5xl lg:text-[3.5rem] font-bold text-[#0f172a] leading-[1.08] tracking-[-0.025em] mb-6 animate-fade-in-up animation-delay-100'>
+          <h1 className='font-display text-4xl md:text-5xl lg:text-[3.5rem] font-bold text-[#0f172a] leading-[1.08] tracking-[-0.025em] mb-6 animate-fade-in-up animation-delay-100'>
             The dollar wallet
             <br />
-            <span className='text-[#059669]'>for Latin America</span>
+            <span className='text-[#00D796]'>for Latin America</span>
           </h1>
 
           <p className='text-lg md:text-xl text-gray-600 leading-[1.75] max-w-2xl mx-auto animate-fade-in-up animation-delay-200'>
@@ -82,8 +82,8 @@ export default function AboutPage() {
       {/* How it Works */}
       <section className='relative py-16 md:py-24'>
         <div className='max-w-4xl mx-auto px-6'>
-          <h2 className='text-4xl md:text-[2.8rem] font-bold text-[#0f172a] text-center mb-16 leading-[1.08] tracking-[-0.02em]'>
-            How it <span className='text-[#059669]'>works</span>
+          <h2 className='font-display text-4xl md:text-[2.8rem] font-bold text-[#0f172a] text-center mb-16 leading-[1.08] tracking-[-0.02em]'>
+            How it <span className='text-[#00D796]'>works</span>
           </h2>
 
           <div className='relative'>
@@ -91,7 +91,7 @@ export default function AboutPage() {
 
             <div className='grid md:grid-cols-3 gap-12 md:gap-8'>
               <div className='text-center relative'>
-                <div className='mx-auto mb-5 w-14 h-14 rounded-full bg-[#059669] text-white flex items-center justify-center text-xl font-bold relative z-10'>
+                <div className='mx-auto mb-5 w-14 h-14 rounded-full bg-[#00D796] text-white flex items-center justify-center text-xl font-bold relative z-10'>
                   1
                 </div>
                 <h3 className='text-lg font-bold text-gray-900 mb-2'>Create wallet</h3>
@@ -101,7 +101,7 @@ export default function AboutPage() {
               </div>
 
               <div className='text-center relative'>
-                <div className='mx-auto mb-5 w-14 h-14 rounded-full bg-[#059669] text-white flex items-center justify-center text-xl font-bold relative z-10'>
+                <div className='mx-auto mb-5 w-14 h-14 rounded-full bg-[#00D796] text-white flex items-center justify-center text-xl font-bold relative z-10'>
                   2
                 </div>
                 <h3 className='text-lg font-bold text-gray-900 mb-2'>Fund wallet</h3>
@@ -111,7 +111,7 @@ export default function AboutPage() {
               </div>
 
               <div className='text-center relative'>
-                <div className='mx-auto mb-5 w-14 h-14 rounded-full bg-[#059669] text-white flex items-center justify-center text-xl font-bold relative z-10'>
+                <div className='mx-auto mb-5 w-14 h-14 rounded-full bg-[#00D796] text-white flex items-center justify-center text-xl font-bold relative z-10'>
                   3
                 </div>
                 <h3 className='text-lg font-bold text-gray-900 mb-2'>Send money</h3>
@@ -128,8 +128,8 @@ export default function AboutPage() {
       <section className='relative py-16 md:py-20'>
         <div className='max-w-3xl mx-auto px-6'>
           <BlurFade delay={0.1} inView>
-            <h2 className='text-4xl md:text-[2.8rem] font-bold text-[#0f172a] text-center mb-6 leading-[1.08] tracking-[-0.02em]'>
-              Why this <span className='text-[#059669]'>matters</span>
+            <h2 className='font-display text-4xl md:text-[2.8rem] font-bold text-[#0f172a] text-center mb-6 leading-[1.08] tracking-[-0.02em]'>
+              Why this <span className='text-[#00D796]'>matters</span>
             </h2>
           </BlurFade>
           <BlurFade delay={0.15} inView>
@@ -143,7 +143,7 @@ export default function AboutPage() {
       {/* Architecture */}
       <section className='relative py-16 md:py-24'>
         <div className='max-w-5xl mx-auto px-6'>
-          <h2 className='text-4xl md:text-[2.8rem] font-bold text-[#0f172a] text-center mb-4 leading-[1.08] tracking-[-0.02em]'>
+          <h2 className='font-display text-4xl md:text-[2.8rem] font-bold text-[#0f172a] text-center mb-4 leading-[1.08] tracking-[-0.02em]'>
             Architecture
           </h2>
           <p className='text-lg text-gray-600 text-center mb-12 leading-[1.7]'>
@@ -152,7 +152,7 @@ export default function AboutPage() {
 
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7'>
             <div className='group bg-white rounded-2xl p-8 shadow-[0_18px_42px_rgba(15,23,42,0.08)] border border-gray-100 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] hover:border-gray-200 transition-all duration-300 h-full'>
-              <div className='w-12 h-12 bg-[#dcfce7] rounded-xl flex items-center justify-center mb-5 shadow-inner shadow-emerald-200/50'>
+              <div className='w-12 h-12 bg-[#E6FBF3] rounded-xl flex items-center justify-center mb-5 shadow-inner shadow-[rgba(0,215,150,0.25)]'>
                 <Image
                   src='/images/logos/whatsapp.svg'
                   alt='WhatsApp logo'
@@ -186,8 +186,8 @@ export default function AboutPage() {
             </div>
 
             <div className='group bg-white rounded-2xl p-8 shadow-[0_18px_42px_rgba(15,23,42,0.08)] border border-gray-100 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] hover:border-gray-200 transition-all duration-300 h-full'>
-              <div className='w-12 h-12 bg-[#dcfce7] rounded-xl flex items-center justify-center mb-5 shadow-inner shadow-emerald-200/50'>
-                <Bot className='w-6 h-6 text-[#059669]' />
+              <div className='w-12 h-12 bg-[#E6FBF3] rounded-xl flex items-center justify-center mb-5 shadow-inner shadow-[rgba(0,215,150,0.25)]'>
+                <Bot className='w-6 h-6 text-[#00D796]' />
               </div>
               <h3 className='text-lg font-bold text-gray-900 mb-2.5'>
                 AI Agent
@@ -232,8 +232,8 @@ export default function AboutPage() {
             </div>
 
             <div className='group bg-white rounded-2xl p-8 shadow-[0_18px_42px_rgba(15,23,42,0.08)] border border-gray-100 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] hover:border-gray-200 transition-all duration-300 h-full'>
-              <div className='w-12 h-12 bg-[#dcfce7] rounded-xl flex items-center justify-center mb-5 shadow-inner shadow-emerald-200/50'>
-                <Zap className='w-6 h-6 text-[#059669]' />
+              <div className='w-12 h-12 bg-[#E6FBF3] rounded-xl flex items-center justify-center mb-5 shadow-inner shadow-[rgba(0,215,150,0.25)]'>
+                <Zap className='w-6 h-6 text-[#00D796]' />
               </div>
               <h3 className='text-lg font-bold text-gray-900 mb-2.5'>
                 GasRefuel.sol
@@ -249,8 +249,8 @@ export default function AboutPage() {
       {/* Trust & Security */}
       <section className='relative py-16 md:py-24'>
         <div className='max-w-3xl mx-auto px-6'>
-          <h2 className='text-4xl md:text-[2.8rem] font-bold text-[#0f172a] text-center mb-4 leading-[1.08] tracking-[-0.02em]'>
-            Trust & <span className='text-[#059669]'>Security</span>
+          <h2 className='font-display text-4xl md:text-[2.8rem] font-bold text-[#0f172a] text-center mb-4 leading-[1.08] tracking-[-0.02em]'>
+            Trust & <span className='text-[#00D796]'>Security</span>
           </h2>
           <p className='text-lg text-gray-600 text-center mb-12 leading-[1.7]'>
             Users own their wallets. Sippy operates through spend permissions that users set and can revoke at any time.
@@ -259,7 +259,7 @@ export default function AboutPage() {
           <div className='space-y-8'>
             <div className='flex items-start gap-5'>
               <div className='w-11 h-11 bg-[#f0fdf4] rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5'>
-                <Lock className='w-5 h-5 text-[#059669]' />
+                <Lock className='w-5 h-5 text-[#00D796]' />
               </div>
               <div>
                 <h3 className='text-lg font-bold text-gray-900 mb-1'>Non-custodial</h3>
@@ -271,7 +271,7 @@ export default function AboutPage() {
 
             <div className='flex items-start gap-5'>
               <div className='w-11 h-11 bg-[#f0fdf4] rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5'>
-                <Shield className='w-5 h-5 text-[#059669]' />
+                <Shield className='w-5 h-5 text-[#00D796]' />
               </div>
               <div>
                 <h3 className='text-lg font-bold text-gray-900 mb-1'>User-controlled limits</h3>
@@ -283,7 +283,7 @@ export default function AboutPage() {
 
             <div className='flex items-start gap-5'>
               <div className='w-11 h-11 bg-[#f0fdf4] rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5'>
-                <Eye className='w-5 h-5 text-[#059669]' />
+                <Eye className='w-5 h-5 text-[#00D796]' />
               </div>
               <div>
                 <h3 className='text-lg font-bold text-gray-900 mb-1'>Fully transparent</h3>
@@ -300,7 +300,7 @@ export default function AboutPage() {
       <section className='relative py-16 md:py-24'>
         <div className='max-w-5xl mx-auto px-6'>
           <BlurFade delay={0.1} inView>
-            <h2 className='text-4xl md:text-[2.8rem] font-bold text-[#0f172a] text-center mb-12 leading-[1.08] tracking-[-0.02em]'>
+            <h2 className='font-display text-4xl md:text-[2.8rem] font-bold text-[#0f172a] text-center mb-12 leading-[1.08] tracking-[-0.02em]'>
               Traction
             </h2>
           </BlurFade>
@@ -308,7 +308,7 @@ export default function AboutPage() {
           <div className='grid md:grid-cols-3 gap-6'>
             <div className='bg-white rounded-2xl p-8 shadow-[0_18px_42px_rgba(15,23,42,0.08)] border border-gray-100 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] hover:border-gray-200 transition-all duration-300 text-center h-full'>
               <div className='mx-auto mb-4 w-12 h-12 bg-[#f0fdf4] rounded-xl flex items-center justify-center'>
-                <Trophy className='w-6 h-6 text-[#059669]' />
+                <Trophy className='w-6 h-6 text-[#00D796]' />
               </div>
               <h3 className='text-lg font-bold text-gray-900 mb-2'>
                 ETHOnline 2025 Finalist
@@ -320,7 +320,7 @@ export default function AboutPage() {
                 href='https://ethglobal.com/showcase/sippy-2smms'
                 target='_blank'
                 rel='noopener noreferrer'
-                className='inline-flex items-center gap-1 mt-3 py-2 text-sm text-[#059669] font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#059669] focus-visible:ring-offset-2 rounded'
+                className='inline-flex items-center gap-1 mt-3 py-2 text-sm text-[#00D796] font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D796] focus-visible:ring-offset-2 rounded'
               >
                 View showcase
                 <ArrowUpRight className='w-3.5 h-3.5' />
@@ -330,7 +330,7 @@ export default function AboutPage() {
 
             <div className='bg-white rounded-2xl p-8 shadow-[0_18px_42px_rgba(15,23,42,0.08)] border border-gray-100 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] hover:border-gray-200 transition-all duration-300 text-center h-full'>
               <div className='mx-auto mb-4 w-12 h-12 bg-[#f0fdf4] rounded-xl flex items-center justify-center'>
-                <CheckCircle2 className='w-6 h-6 text-[#059669]' />
+                <CheckCircle2 className='w-6 h-6 text-[#00D796]' />
               </div>
               <h3 className='text-lg font-bold text-gray-900 mb-2'>
                 Arbitrum Grants Program
@@ -342,7 +342,7 @@ export default function AboutPage() {
 
             <div className='bg-white rounded-2xl p-8 shadow-[0_18px_42px_rgba(15,23,42,0.08)] border border-gray-100 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] hover:border-gray-200 transition-all duration-300 text-center h-full'>
               <div className='mx-auto mb-4 w-12 h-12 bg-[#f0fdf4] rounded-xl flex items-center justify-center'>
-                <Globe className='w-6 h-6 text-[#059669]' />
+                <Globe className='w-6 h-6 text-[#00D796]' />
               </div>
               <h3 className='text-lg font-bold text-gray-900 mb-2'>
                 Live on mainnet
@@ -360,7 +360,7 @@ export default function AboutPage() {
         <div className='max-w-6xl mx-auto px-6'>
           <div className='relative overflow-hidden rounded-[32px] px-8 py-14 md:px-16 md:py-20 shadow-[0_32px_80px_rgba(6,24,37,0.45)] bg-gradient-to-br from-[#08172b] via-[#042e2e] to-[#013b27]'>
             <div className='relative z-10 text-center max-w-3xl mx-auto'>
-              <h2 className='text-3xl md:text-[2.75rem] font-bold text-white leading-[1.08] tracking-[-0.02em] mb-4'>
+              <h2 className='font-display text-3xl md:text-[2.75rem] font-bold text-white leading-[1.08] tracking-[-0.02em] mb-4'>
                 Money as fast as your&nbsp;messages.
               </h2>
               <p className='text-lg md:text-xl text-[#d0fae5] leading-[1.7]'>
@@ -372,7 +372,7 @@ export default function AboutPage() {
               <div className='flex flex-wrap gap-3.5 justify-center'>
                 <a
                   href='mailto:hello@sippy.lat?subject=Partnership%20Inquiry'
-                  className='px-7 py-3.5 bg-white text-[#059669] rounded-xl font-semibold hover:bg-gray-100 active:scale-[0.98] transition-all duration-200 shadow-[0_18px_36px_rgba(5,150,105,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#042e2e]'
+                  className='px-7 py-3.5 bg-white text-[#00D796] rounded-xl font-semibold hover:bg-gray-100 active:scale-[0.98] transition-all duration-200 shadow-[0_18px_36px_rgba(0,215,150,0.22)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#042e2e]'
                 >
                   Get in touch
                 </a>
@@ -398,7 +398,7 @@ export default function AboutPage() {
           <div className='flex flex-col md:flex-row justify-between items-center gap-6'>
             <div className='flex items-center gap-2.5'>
               <Image
-                src='/images/logos/sippy-green.svg'
+                src='/images/logos/sippy-s-mark-cheetah.svg'
                 alt='Sippy'
                 width={20}
                 height={20}
@@ -408,25 +408,25 @@ export default function AboutPage() {
             <div className='flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-gray-600'>
               <Link
                 href='/'
-                className='py-2 hover:text-[#059669] transition-colors duration-200 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#059669] rounded'
+                className='py-2 hover:text-[#00D796] transition-colors duration-200 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D796] rounded'
               >
                 Home
               </Link>
               <a
                 href='/privacy'
-                className='py-2 hover:text-[#059669] transition-colors duration-200 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#059669] rounded'
+                className='py-2 hover:text-[#00D796] transition-colors duration-200 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D796] rounded'
               >
                 Privacy Policy
               </a>
               <a
                 href='/terms'
-                className='py-2 hover:text-[#059669] transition-colors duration-200 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#059669] rounded'
+                className='py-2 hover:text-[#00D796] transition-colors duration-200 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D796] rounded'
               >
                 Terms of Service
               </a>
               <a
                 href='mailto:hello@sippy.lat'
-                className='py-2 hover:text-[#059669] transition-colors duration-200 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#059669] rounded'
+                className='py-2 hover:text-[#00D796] transition-colors duration-200 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D796] rounded'
               >
                 Contact
               </a>
