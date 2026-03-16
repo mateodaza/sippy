@@ -15,7 +15,6 @@ import { test } from '@japa/runner'
 import { parseAndValidateAmount, parseMessageWithRegex } from '#utils/message_parser'
 import {
   formatAmountError,
-  formatAmountTooSmallMessage,
   formatInvalidPhoneNumberMessage,
   formatConfirmationPromptWithWarning,
   formatInvalidSendFormat,
@@ -421,13 +420,13 @@ test.group('Group G | Trilingual error messages', () => {
   test('G-10: formatAmountError TOO_SMALL es → Spanish minimum message', ({ assert }) => {
     const msg = formatAmountError('TOO_SMALL', 'es')
     assert.include(msg, '0.10')
-    assert.include(msg.toLowerCase(), 'minimo')
+    assert.include(msg.toLowerCase(), 'mínimo')
   })
 
   test('G-11: formatAmountError TOO_SMALL pt → Portuguese minimum message', ({ assert }) => {
     const msg = formatAmountError('TOO_SMALL', 'pt')
     assert.include(msg, '0.10')
-    assert.include(msg.toLowerCase(), 'minimo')
+    assert.include(msg.toLowerCase(), 'mínimo')
   })
 
   test('G-06: formatInvalidPhoneNumberMessage pt → Portuguese phone message', ({ assert }) => {

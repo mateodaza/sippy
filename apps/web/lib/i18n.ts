@@ -1445,8 +1445,8 @@ export async function resolveLanguage(
       const { language } = await fetchUserLanguage(token, backendUrl);
       storeLanguage(language);
       return language;
-    } catch {
-      // fall through to cache/phone/default
+    } catch (err) {
+      console.warn('[i18n] resolveLanguage: API fetch failed, falling back to local sources', err);
     }
   }
 

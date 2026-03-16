@@ -10,7 +10,8 @@ function parseAcceptLanguage(request: NextRequest): ValidLang {
     .split(',')
     .map((part) => {
       const [lang, qPart] = part.trim().split(';');
-      const q = qPart ? parseFloat(qPart.split('=')[1] || '0') : 1;
+      const raw = qPart ? parseFloat(qPart.split('=')[1] || '0') : 1;
+      const q = Number.isNaN(raw) ? 0 : raw;
       return { lang: lang.trim().toLowerCase(), q };
     })
     .sort((a, b) => b.q - a.q);

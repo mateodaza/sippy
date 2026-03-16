@@ -891,8 +891,8 @@ export function formatAmountZeroMessage(lang: Lang): string {
 export function formatAmountTooSmallMessage(lang: Lang): string {
   const m = {
     en: () => `Minimum amount is 0.10 USDC.`,
-    es: () => `El monto minimo es 0.10 USDC.`,
-    pt: () => `O valor minimo e 0.10 USDC.`,
+    es: () => `El monto mínimo es 0.10 USDC.`,
+    pt: () => `O valor mínimo é 0.10 USDC.`,
   }
   return m[lang]()
 }
