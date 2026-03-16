@@ -62,16 +62,16 @@ export default async function ReceiptPage({ params }: ReceiptPageProps) {
       <div className='min-h-screen flex items-center justify-center px-4'>
         <div className='text-center max-w-md'>
           <div className='text-6xl mb-4'>🔍</div>
-          <h1 className='text-2xl font-bold text-gray-900 mb-2'>
+          <h1 className='font-display text-2xl font-bold uppercase text-[var(--text-primary)] mb-2'>
             Transaction Not Found
           </h1>
-          <p className='text-gray-600 mb-6'>
-            We couldn't find a transaction with hash{' '}
+          <p className='text-[var(--text-muted)] mb-6'>
+            We couldn&apos;t find a transaction with hash{' '}
             <span className='font-mono text-sm'>{formatAddress(txHash)}</span>
           </p>
           <Link
             href='/'
-            className='inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors'
+            className='inline-flex items-center px-6 py-3 bg-brand-primary hover:bg-brand-primary-hover text-white font-medium rounded-lg transition-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2'
           >
             Go Home
           </Link>
@@ -115,7 +115,7 @@ export default async function ReceiptPage({ params }: ReceiptPageProps) {
         <div className='max-w-4xl mx-auto mb-4 sm:mb-6'>
           <Link
             href='/'
-            className='inline-flex items-center text-sm sm:text-base text-gray-600 hover:text-[#059669] transition-colors font-medium'
+            className='inline-flex items-center text-sm sm:text-base text-[var(--text-secondary)] hover:text-brand-primary transition-smooth font-medium'
           >
             <svg
               className='w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2'
@@ -145,7 +145,7 @@ export default async function ReceiptPage({ params }: ReceiptPageProps) {
 
         {/* Share Instructions */}
         <div className='max-w-md mx-auto mt-6 sm:mt-8 text-center animate-fade-in-up animation-delay-200'>
-          <p className='text-xs sm:text-sm text-gray-600'>
+          <p className='text-xs sm:text-sm text-[var(--text-muted)]'>
             Share this receipt link with others to provide payment proof
           </p>
         </div>

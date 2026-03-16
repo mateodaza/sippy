@@ -4,6 +4,7 @@
 
 export type AmountErrorCode =
   | 'ZERO'
+  | 'TOO_SMALL'
   | 'TOO_LARGE'
   | 'TOO_MANY_DECIMALS'
   | 'AMBIGUOUS_SEPARATOR'

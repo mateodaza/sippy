@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect fill="#00AFD7" width="1024" height="1024"/>
+  <!-- S/5 mark — 48px strokes, optically centered -->
+  <rect fill="#FFFFFF" x="368" y="220" width="288" height="48"/>
+  <rect fill="#FFFFFF" x="368" y="316" width="288" height="48"/>
+  <rect fill="#FFFFFF" x="608" y="412" width="48" height="368"/>
+  <rect fill="#FFFFFF" x="368" y="732" width="288" height="48"/>
+</svg>

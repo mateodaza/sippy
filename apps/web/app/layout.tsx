@@ -1,9 +1,33 @@
 import type { Metadata, Viewport } from 'next';
+import { Chakra_Petch, Electrolize, Space_Mono } from 'next/font/google';
+import { ThemeProvider } from 'next-themes';
 import './globals.css';
 import { Web3Provider } from './providers/Web3Provider';
 import { BlockscoutProvider } from './providers/BlockscoutProvider';
 import { CDPProvider } from './providers/cdp-provider';
 import { PostHogProvider } from './providers/PostHogProvider';
+import { getRequestLang } from '@/lib/i18n-server';
+
+const chakraPetch = Chakra_Petch({
+  weight: ['300', '400', '500', '600', '700'],
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-chakra-petch',
+  display: 'swap',
+});
+
+const electrolize = Electrolize({
+  weight: '400',
+  subsets: ['latin'],
+  variable: '--font-electrolize',
+  display: 'swap',
+});
+
+const spaceMono = Space_Mono({
+  weight: ['400', '700'],
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-space-mono',
+  display: 'swap',
+});
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -24,34 +48,38 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const lang = await getRequestLang();
+
   return (
-    <html lang='en'>
-      <body className='min-h-screen bg-gradient-to-br from-white via-[#eefaf4] to-[#f8fbff] antialiased'>
-        <PostHogProvider>
-          <BlockscoutProvider>
-            <CDPProvider>
-              <Web3Provider>
-                <script
-                  type='application/ld+json'
+    <html lang={lang} suppressHydrationWarning className={`${chakraPetch.variable} ${electrolize.variable} ${spaceMono.variable}`}>
+      <body className='min-h-screen bg-[var(--bg-primary)] antialiased font-sans text-[var(--text-primary)]'>
+        <ThemeProvider attribute='class' defaultTheme='system' storageKey='sippy_theme'>
+          <PostHogProvider>
+            <BlockscoutProvider>
+              <CDPProvider>
+                <Web3Provider>
+                  <script
+                    type='application/ld+json'
                   dangerouslySetInnerHTML={{
                     __html: JSON.stringify({
                       '@context': 'https://schema.org',
                       '@type': 'Organization',
                       name: 'Sippy',
-                      url: 'https://sippy.app',
+                      url: 'https://sippy.lat',
                     }),
                   }}
                 />
                 {children}
-              </Web3Provider>
-            </CDPProvider>
-          </BlockscoutProvider>
-        </PostHogProvider>
+                </Web3Provider>
+              </CDPProvider>
+            </BlockscoutProvider>
+          </PostHogProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

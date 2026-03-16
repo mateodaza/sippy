@@ -18,14 +18,13 @@ export function ActivityList({ transactions, lang }: ActivityListProps) {
   const router = useRouter();
 
   const handleRowClick = (txHash: string) => {
-    // Navigate to receipt page for user-friendly transaction details
     router.push(`/receipt/${txHash}`);
   };
 
   if (transactions.length === 0) {
     return (
-      <div className='bg-white rounded-2xl shadow-lg p-12 border border-gray-100 text-center'>
-        <div className='text-gray-400 mb-2'>
+      <div className='bg-[var(--bg-primary)] panel-frame rounded-2xl p-12 text-center'>
+        <div className='text-[var(--text-muted)] mb-2'>
           <svg
             className='w-16 h-16 mx-auto'
             fill='none'
@@ -40,10 +39,10 @@ export function ActivityList({ transactions, lang }: ActivityListProps) {
             />
           </svg>
         </div>
-        <p className='text-lg font-medium text-gray-600'>
+        <p className='text-lg font-medium text-[var(--text-secondary)]'>
           {t('activity.noActivity', effectiveLang)}
         </p>
-        <p className='text-sm text-gray-400 mt-1'>
+        <p className='text-sm text-[var(--text-muted)] mt-1'>
           {t('activity.willAppear', effectiveLang)}
         </p>
       </div>
@@ -51,32 +50,32 @@ export function ActivityList({ transactions, lang }: ActivityListProps) {
   }
 
   return (
-    <div className='bg-white/90 backdrop-blur-xl rounded-2xl sm:rounded-[32px] shadow-[0_20px_50px_rgba(15,23,42,0.12)] sm:shadow-[0_28px_70px_rgba(15,23,42,0.16)] border border-white/50 overflow-hidden animate-fade-in-up animation-delay-100'>
-      <div className='px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100'>
-        <h2 className='text-lg sm:text-xl font-bold text-[#0f172a]'>
+    <div className='bg-[var(--bg-primary)] backdrop-blur-xl rounded-2xl sm:rounded-[32px] shadow-[0_20px_50px_rgba(15,23,42,0.12)] sm:shadow-[0_28px_70px_rgba(15,23,42,0.16)] border border-[var(--border-default)] overflow-hidden animate-fade-in-up animation-delay-100'>
+      <div className='px-4 sm:px-6 py-4 sm:py-5 border-b border-[var(--border-default)]'>
+        <h2 className='text-lg sm:text-xl font-bold text-[var(--text-primary)]'>
           {t('activity.recentActivity', effectiveLang)}
         </h2>
-        <p className='text-xs sm:text-sm text-gray-600 mt-1'>
+        <p className='text-xs sm:text-sm text-[var(--text-secondary)] mt-1'>
           {t('activity.last10', effectiveLang)}
         </p>
       </div>
 
-      <div className='divide-y divide-gray-100'>
+      <div className='divide-y divide-[var(--border-default)]'>
         {transactions.map((tx) => (
           <button
             key={tx.hash}
             onClick={() => handleRowClick(tx.hash)}
-            className='w-full px-4 sm:px-6 py-3 sm:py-4 hover:bg-green-50 transition-all text-left flex items-center gap-2 sm:gap-4 group relative'
+            className='w-full px-4 sm:px-6 py-3 sm:py-4 hover:bg-[var(--bg-secondary)] transition-all text-left flex items-center gap-2 sm:gap-4 group relative'
             title={t('activity.viewReceipt', effectiveLang)}
           >
             {/* Direction Icon */}
             <div
               className={`flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center ${
                 tx.direction === 'sent'
-                  ? 'bg-red-100 text-red-600'
+                  ? 'bg-[var(--fill-danger-light)] text-semantic-danger'
                   : tx.direction === 'received'
-                  ? 'bg-green-100 text-green-600'
-                  : 'bg-gray-100 text-gray-600'
+                  ? 'bg-[var(--fill-success-light)] text-semantic-success'
+                  : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
               }`}
             >
               {tx.direction === 'sent' ? (
@@ -127,7 +126,7 @@ export function ActivityList({ transactions, lang }: ActivityListProps) {
             {/* Transaction Details */}
             <div className='flex-1 min-w-0'>
               <div className='flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap'>
-                <span className='font-semibold text-sm sm:text-base text-gray-900'>
+                <span className='font-semibold text-sm sm:text-base text-[var(--text-primary)]'>
                   {tx.direction === 'sent'
                     ? t('activity.sent', effectiveLang)
                     : tx.direction === 'received'
@@ -137,24 +136,24 @@ export function ActivityList({ transactions, lang }: ActivityListProps) {
                 <span
                   className={`inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium ${
                     tx.token === 'ETH'
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-green-100 text-green-800'
+                      ? 'bg-[var(--fill-info-light)] text-brand-primary'
+                      : 'bg-[var(--fill-success-light)] text-semantic-success'
                   }`}
                 >
                   {tx.token}
                 </span>
                 {tx.status === 'pending' && (
-                  <span className='inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800'>
+                  <span className='inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium bg-[var(--fill-warning-light)] text-semantic-warning'>
                     {t('activity.pending', effectiveLang)}
                   </span>
                 )}
                 {tx.status === 'failed' && (
-                  <span className='inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800'>
+                  <span className='inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium bg-[var(--fill-danger-light)] text-semantic-danger'>
                     {t('activity.failed', effectiveLang)}
                   </span>
                 )}
               </div>
-              <div className='text-xs sm:text-sm text-gray-500 truncate'>
+              <div className='text-xs sm:text-sm text-[var(--text-muted)] truncate'>
                 {tx.direction === 'sent'
                   ? t('activity.to', effectiveLang)
                   : tx.direction === 'received'
@@ -169,10 +168,10 @@ export function ActivityList({ transactions, lang }: ActivityListProps) {
               <div
                 className={`font-semibold text-sm sm:text-base ${
                   tx.direction === 'sent'
-                    ? 'text-red-600'
+                    ? 'text-semantic-danger'
                     : tx.direction === 'received'
-                    ? 'text-green-600'
-                    : 'text-gray-900'
+                    ? 'text-semantic-success'
+                    : 'text-[var(--text-primary)]'
                 }`}
               >
                 {tx.direction === 'sent'
@@ -183,13 +182,13 @@ export function ActivityList({ transactions, lang }: ActivityListProps) {
                 {parseFloat(tx.amount).toFixed(tx.token === 'ETH' ? 4 : 2)}{' '}
                 <span className='hidden sm:inline'>{tx.token}</span>
               </div>
-              <div className='text-xs text-gray-500 mt-1'>
+              <div className='text-xs text-[var(--text-muted)] mt-1'>
                 {formatRelativeTimeLocalized(tx.timestamp, effectiveLang)}
               </div>
             </div>
 
             {/* Receipt Icon - Hidden on mobile */}
-            <div className='hidden sm:block flex-shrink-0 text-gray-400 group-hover:text-[#059669] transition-colors'>
+            <div className='hidden sm:block flex-shrink-0 text-[var(--text-muted)] group-hover:text-brand-primary transition-colors'>
               <svg
                 className='w-5 h-5'
                 fill='none'

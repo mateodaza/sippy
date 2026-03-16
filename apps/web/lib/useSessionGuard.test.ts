@@ -33,13 +33,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('./auth', () => ({
   getStoredToken: () => mocks.getStoredToken(),
-  storeToken: (...args: unknown[]) => mocks.storeToken(...args),
-  clearToken: () => mocks.clearToken(),
+  storeToken: mocks.storeToken,
+  clearToken: mocks.clearToken,
   getFreshToken: () => mocks.getFreshToken(),
-  isTokenExpired: (...args: unknown[]) => mocks.isTokenExpired(...args),
-  getTokenSecondsRemaining: (...args: unknown[]) => mocks.getTokenSecondsRemaining(...args),
-  sendOtp: (...args: unknown[]) => mocks.sendOtp(...args),
-  verifyOtp: (...args: unknown[]) => mocks.verifyOtp(...args),
+  isTokenExpired: mocks.isTokenExpired,
+  getTokenSecondsRemaining: mocks.getTokenSecondsRemaining,
+  sendOtp: mocks.sendOtp,
+  verifyOtp: mocks.verifyOtp,
 }))
 
 vi.mock('@coinbase/cdp-hooks', () => ({

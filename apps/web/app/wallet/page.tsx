@@ -328,11 +328,11 @@ function WalletContent() {
 
   if (isCheckingSession) {
     return (
-      <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
-        <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center'>
+      <div className='min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4'>
+        <div className='max-w-md w-full panel-frame rounded-2xl bg-[var(--bg-primary)] p-8 text-center'>
           <div className='animate-pulse'>
             <div className='text-4xl mb-4'>💰</div>
-            <p className='text-gray-600'>{t('wallet.loading', lang)}</p>
+            <p className='text-[var(--text-secondary)]'>{t('wallet.loading', lang)}</p>
           </div>
         </div>
       </div>
@@ -341,21 +341,21 @@ function WalletContent() {
 
   if (!isAuthenticated && !isCheckingSession) {
     return (
-      <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center p-4'>
-        <div className='max-w-md w-full bg-white rounded-2xl shadow-xl p-8'>
-          <h1 className='text-2xl font-bold mb-6 text-gray-900'>{t('wallet.title', lang)}</h1>
-          <p className='text-gray-600 mb-6'>
+      <div className='min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4'>
+        <div className='max-w-md w-full panel-frame rounded-2xl bg-[var(--bg-primary)] p-8'>
+          <h1 className='font-display text-2xl font-bold uppercase mb-6 text-[var(--text-primary)]'>{t('wallet.title', lang)}</h1>
+          <p className='text-[var(--text-secondary)] mb-6'>
             {t('wallet.subtitle', lang)}
           </p>
 
           {!isCdpConfigured && (
-            <div className='mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm'>
+            <div className='mb-4 p-3 bg-[var(--fill-warning-light)] border border-yellow-200 rounded-lg text-yellow-800 text-sm'>
               <strong>{t('wallet.configRequired', lang)}</strong> {t('wallet.configInstruction', lang)}
             </div>
           )}
 
           {reAuthError && (
-            <div className='mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
+            <div className='mb-4 p-3 bg-[var(--fill-danger-light)] border border-red-200 rounded-lg text-red-700 text-sm'>
               {reAuthError}
             </div>
           )}
@@ -368,17 +368,17 @@ function WalletContent() {
                 onChange={(e) => !isPhoneLocked && setReAuthPhone(e.target.value)}
                 placeholder='+573001234567'
                 disabled={isPhoneLocked}
-                className={`w-full p-3 border rounded-lg mb-4 text-gray-900 ${
-                  isPhoneLocked ? 'bg-gray-100 text-gray-600' : ''
+                className={`w-full p-3 border rounded-lg mb-4 text-[var(--text-primary)] ${
+                  isPhoneLocked ? 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]' : ''
                 }`}
               />
               {isPhoneLocked && (
-                <p className='text-sm text-gray-500 mb-4'>{t('wallet.phoneFromWhatsapp', lang)}</p>
+                <p className='text-sm text-[var(--text-secondary)] mb-4'>{t('wallet.phoneFromWhatsapp', lang)}</p>
               )}
               <button
                 onClick={handleReAuthSendOtp}
                 disabled={reAuthLoading || !reAuthPhone || !isCdpConfigured}
-                className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                className='w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 {reAuthLoading ? t('wallet.sending', lang) : t('wallet.sendCode', lang)}
               </button>
@@ -387,7 +387,7 @@ function WalletContent() {
 
           {reAuthStep === 'otp' && (
             <>
-              <p className='text-gray-600 mb-4'>
+              <p className='text-[var(--text-secondary)] mb-4'>
                 {t('wallet.codeSentTo', lang)} {reAuthPhone}
               </p>
               <input
@@ -397,18 +397,18 @@ function WalletContent() {
                 onChange={(e) => setReAuthOtp(e.target.value.replace(/\D/g, ''))}
                 placeholder='123456'
                 maxLength={6}
-                className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-gray-900'
+                className='w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-[var(--text-primary)]'
               />
               <button
                 onClick={handleReAuthVerifyOtp}
                 disabled={reAuthLoading || reAuthOtp.length !== 6}
-                className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                className='w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 {reAuthLoading ? t('wallet.verifying', lang) : t('wallet.verify', lang)}
               </button>
               <button
                 onClick={() => setReAuthOtp('')}
-                className='w-full mt-2 text-gray-500 py-2'
+                className='w-full mt-2 text-[var(--text-secondary)] py-2'
               >
                 {t('wallet.back', lang)}
               </button>
@@ -424,7 +424,7 @@ function WalletContent() {
   // ============================================================================
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 p-4'>
+    <div className='min-h-screen bg-[var(--bg-primary)] p-4'>
       <div className='max-w-md mx-auto space-y-4'>
 
         {/* Expiry warning banner */}
@@ -439,13 +439,13 @@ function WalletContent() {
 
         {/* Inline re-auth overlay */}
         {reAuthVisible && (
-          <div className='bg-white rounded-2xl shadow-xl p-6 border border-amber-200'>
+          <div className='bg-[var(--bg-primary)] panel-frame rounded-2xl p-6 border border-amber-200'>
             <div className='flex items-center justify-between mb-4'>
-              <h2 className='text-lg font-semibold text-gray-900'>Session expired</h2>
-              <button onClick={dismissReAuth} className='text-gray-400 hover:text-gray-600 text-xl leading-none'>&times;</button>
+              <h2 className='font-display text-lg font-bold uppercase text-[var(--text-primary)]'>Session expired</h2>
+              <button onClick={dismissReAuth} className='text-[var(--text-muted)] hover:text-[var(--text-secondary)] text-xl leading-none'>&times;</button>
             </div>
             {reAuthError && (
-              <div className='mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
+              <div className='mb-3 p-3 bg-[var(--fill-danger-light)] border border-red-200 rounded-lg text-red-700 text-sm'>
                 {reAuthError}
               </div>
             )}
@@ -457,12 +457,12 @@ function WalletContent() {
                   onChange={(e) => setReAuthPhone(e.target.value)}
                   placeholder='+573001234567'
                   disabled={!!reAuthPhone}
-                  className='w-full p-3 border rounded-lg mb-3 text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed'
+                  className='w-full p-3 border rounded-lg mb-3 text-[var(--text-primary)] disabled:bg-[var(--bg-tertiary)] disabled:cursor-not-allowed'
                 />
                 <button
                   onClick={handleReAuthSendOtp}
                   disabled={reAuthLoading || !reAuthPhone}
-                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                  className='w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                   {reAuthLoading ? t('wallet.sending', lang) : t('wallet.sendCode', lang)}
                 </button>
@@ -470,7 +470,7 @@ function WalletContent() {
             )}
             {reAuthStep === 'otp' && (
               <>
-                <p className='text-gray-600 mb-3 text-sm'>{t('wallet.codeSentTo', lang)} {reAuthPhone}</p>
+                <p className='text-[var(--text-secondary)] mb-3 text-sm'>{t('wallet.codeSentTo', lang)} {reAuthPhone}</p>
                 <input
                   type='text'
                   inputMode='numeric'
@@ -478,12 +478,12 @@ function WalletContent() {
                   onChange={(e) => setReAuthOtp(e.target.value.replace(/\D/g, ''))}
                   placeholder='123456'
                   maxLength={6}
-                  className='w-full p-3 border rounded-lg mb-3 text-center text-2xl tracking-widest text-gray-900'
+                  className='w-full p-3 border rounded-lg mb-3 text-center text-2xl tracking-widest text-[var(--text-primary)]'
                 />
                 <button
                   onClick={handleReAuthVerifyOtp}
                   disabled={reAuthLoading || reAuthOtp.length !== 6}
-                  className='w-full bg-emerald-600 text-white py-3 rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                  className='w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                   {reAuthLoading ? t('wallet.verifying', lang) : t('wallet.verify', lang)}
                 </button>
@@ -497,19 +497,19 @@ function WalletContent() {
           {/* WhatsApp Wallet (EOA) */}
           <button
             onClick={() => setSendFrom('whatsapp')}
-            className={`bg-white rounded-2xl shadow p-4 text-left transition-all ${
-              sendFrom === 'whatsapp' ? 'ring-2 ring-emerald-500' : 'opacity-70'
+            className={`bg-[var(--bg-primary)] rounded-2xl border border-brand-primary/20 p-4 text-left transition-all ${
+              sendFrom === 'whatsapp' ? 'ring-2 ring-brand-primary' : 'opacity-70'
             }`}
           >
-            <p className='text-xs text-gray-500 mb-1 font-medium'>{t('wallet.whatsappWallet', lang)}</p>
+            <p className='text-xs text-[var(--text-secondary)] mb-1 font-medium'>{t('wallet.whatsappWallet', lang)}</p>
             {isLoadingData ? (
-              <div className='animate-pulse h-7 bg-gray-100 rounded w-20 mb-1' />
+              <div className='animate-pulse h-7 bg-[var(--bg-tertiary)] rounded w-20 mb-1' />
             ) : (
-              <p className='text-xl font-bold text-gray-900'>
+              <p className='text-xl font-bold text-[var(--text-primary)]'>
                 ${parseFloat(eoaBalances?.usdc ?? '0').toFixed(2)}
               </p>
             )}
-            <p className='text-xs text-gray-400 mt-1 truncate'>
+            <p className='text-xs text-[var(--text-muted)] mt-1 truncate'>
               {eoaAddress ? formatAddress(eoaAddress) : '—'}
             </p>
           </button>
@@ -517,31 +517,31 @@ function WalletContent() {
           {/* Web Wallet (Smart Account) */}
           <button
             onClick={() => setSendFrom('web')}
-            className={`bg-white rounded-2xl shadow p-4 text-left transition-all ${
-              sendFrom === 'web' ? 'ring-2 ring-emerald-500' : 'opacity-70'
+            className={`bg-[var(--bg-primary)] rounded-2xl border border-brand-primary/20 p-4 text-left transition-all ${
+              sendFrom === 'web' ? 'ring-2 ring-brand-primary' : 'opacity-70'
             }`}
           >
-            <p className='text-xs text-gray-500 mb-1 font-medium'>{t('wallet.webWallet', lang)}</p>
+            <p className='text-xs text-[var(--text-secondary)] mb-1 font-medium'>{t('wallet.webWallet', lang)}</p>
             {isLoadingData ? (
-              <div className='animate-pulse h-7 bg-gray-100 rounded w-20 mb-1' />
+              <div className='animate-pulse h-7 bg-[var(--bg-tertiary)] rounded w-20 mb-1' />
             ) : (
-              <p className='text-xl font-bold text-gray-900'>
+              <p className='text-xl font-bold text-[var(--text-primary)]'>
                 ${parseFloat(smartBalances?.usdc ?? '0').toFixed(2)}
               </p>
             )}
-            <p className='text-xs text-gray-400 mt-1 truncate'>
+            <p className='text-xs text-[var(--text-muted)] mt-1 truncate'>
               {smartAccountAddress ? formatAddress(smartAccountAddress) : '—'}
             </p>
           </button>
         </div>
 
         {/* Selected wallet address + copy */}
-        <div className='bg-white rounded-2xl shadow-xl px-5 py-3 flex items-center justify-between'>
+        <div className='bg-[var(--bg-primary)] panel-frame rounded-2xl px-5 py-3 flex items-center justify-between'>
           <div>
-            <p className='text-xs text-gray-400'>
+            <p className='text-xs text-[var(--text-muted)]'>
               {sendFrom === 'whatsapp' ? t('wallet.whatsappWallet', lang) : t('wallet.webWallet', lang)} {t('wallet.walletAddress', lang)}
             </p>
-            <p className='text-sm font-mono text-gray-700'>
+            <p className='text-sm font-mono text-[var(--text-secondary)]'>
               {sendFrom === 'whatsapp'
                 ? eoaAddress
                   ? formatAddress(eoaAddress)
@@ -556,19 +556,19 @@ function WalletContent() {
               const addr = sendFrom === 'whatsapp' ? eoaAddress : smartAccountAddress;
               if (addr) navigator.clipboard.writeText(addr);
             }}
-            className='text-xs text-emerald-600 hover:text-emerald-700 font-medium'
+            className='text-xs text-brand-primary hover:text-brand-primary-hover font-medium'
           >
             {t('wallet.copy', lang)}
           </button>
         </div>
 
         {/* Send section */}
-        <div className='bg-white rounded-2xl shadow-xl p-6'>
+        <div className='bg-[var(--bg-primary)] panel-frame rounded-2xl p-6'>
           <div className='flex items-center justify-between mb-4'>
-            <h2 className='text-lg font-semibold text-gray-900'>{t('wallet.send', lang)}</h2>
-            <span className='text-xs text-gray-400'>
+            <h2 className='font-display text-lg font-bold uppercase text-[var(--text-primary)]'>{t('wallet.send', lang)}</h2>
+            <span className='text-xs text-[var(--text-muted)]'>
               {t('wallet.sendFrom', lang)}{' '}
-              <span className='font-medium text-gray-600'>
+              <span className='font-medium text-[var(--text-secondary)]'>
                 {sendFrom === 'whatsapp' ? t('wallet.whatsappWallet', lang) : t('wallet.webWallet', lang)}
               </span>
             </span>
@@ -577,7 +577,7 @@ function WalletContent() {
           {sendStep === 'form' && (
             <div className='space-y-3'>
               <div>
-                <label className='block text-sm text-gray-600 mb-1'>
+                <label className='block text-sm text-[var(--text-secondary)] mb-1'>
                   {t('wallet.toLabel', lang)} ({t('wallet.toLabelHint', lang)})
                 </label>
                 <input
@@ -585,11 +585,11 @@ function WalletContent() {
                   value={recipient}
                   onChange={(e) => setRecipient(e.target.value)}
                   placeholder='+573001234567 or 0x...'
-                  className='w-full p-3 border rounded-lg text-gray-900'
+                  className='w-full p-3 border rounded-lg text-[var(--text-primary)]'
                 />
               </div>
               <div>
-                <label className='block text-sm text-gray-600 mb-1'>
+                <label className='block text-sm text-[var(--text-secondary)] mb-1'>
                   {t('wallet.amountLabel', lang)}
                 </label>
                 <div className='flex gap-2'>
@@ -600,11 +600,11 @@ function WalletContent() {
                     placeholder='0.00'
                     step='0.01'
                     min='0'
-                    className='flex-1 p-3 border rounded-lg text-gray-900'
+                    className='flex-1 p-3 border rounded-lg text-[var(--text-primary)]'
                   />
                   <button
                     onClick={handleMax}
-                    className='px-4 py-3 bg-gray-100 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-200'
+                    className='px-4 py-3 bg-brand-primary/10 rounded-lg text-sm font-medium text-[var(--text-secondary)] hover:bg-brand-primary/15'
                   >
                     {t('wallet.max', lang).toUpperCase()}
                   </button>
@@ -614,7 +614,7 @@ function WalletContent() {
               <button
                 onClick={handleSendReview}
                 disabled={!recipient || !amount}
-                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                className='w-full py-3 bg-brand-primary text-white rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 {t('wallet.review', lang)}
               </button>
@@ -623,30 +623,30 @@ function WalletContent() {
 
           {sendStep === 'confirm' && (
             <div className='space-y-4'>
-              <div className='p-4 bg-gray-50 rounded-lg'>
-                <p className='text-sm text-gray-600'>{t('wallet.send', lang)}</p>
-                <p className='text-2xl font-bold text-gray-900'>
+              <div className='p-4 bg-[var(--bg-secondary)] rounded-lg'>
+                <p className='text-sm text-[var(--text-secondary)]'>{t('wallet.send', lang)}</p>
+                <p className='text-2xl font-bold text-[var(--text-primary)]'>
                   ${parseFloat(amount).toFixed(2)} USDC
                 </p>
-                <p className='text-sm text-gray-600 mt-2'>{t('wallet.to', lang)}</p>
+                <p className='text-sm text-[var(--text-secondary)] mt-2'>{t('wallet.to', lang)}</p>
                 <p className='text-sm font-mono text-gray-800 break-all'>
                   {isPhoneNumber(recipient.trim())
                     ? `${recipient.trim()} (${formatAddress(resolvedAddress || '')})`
                     : formatAddress(resolvedAddress || '')}
                 </p>
-                <p className='text-xs text-gray-400 mt-2'>
+                <p className='text-xs text-[var(--text-muted)] mt-2'>
                   from {sendFrom === 'whatsapp' ? t('wallet.whatsappWallet', lang) : t('wallet.webWallet', lang)}
                 </p>
               </div>
               <button
                 onClick={handleSendConfirm}
-                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
+                className='w-full py-3 bg-brand-primary text-white rounded-lg font-semibold hover:bg-brand-primary-hover'
               >
                 {t('wallet.confirmSend', lang)}
               </button>
               <button
                 onClick={() => setSendStep('form')}
-                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+                className='w-full py-2 text-[var(--text-secondary)] text-sm hover:text-[var(--text-secondary)]'
               >
                 {t('wallet.back', lang)}
               </button>
@@ -655,8 +655,8 @@ function WalletContent() {
 
           {sendStep === 'sending' && (
             <div className='text-center py-6'>
-              <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto mb-4' />
-              <p className='text-gray-700 font-medium'>
+              <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-brand-primary mx-auto mb-4' />
+              <p className='text-[var(--text-secondary)] font-medium'>
                 {t('wallet.sendingProgress', lang)} ${parseFloat(amount).toFixed(2)} USDC...
               </p>
             </div>
@@ -665,9 +665,9 @@ function WalletContent() {
           {sendStep === 'success' && (
             <div className='space-y-4'>
               <div className='text-center py-4'>
-                <div className='text-4xl mb-2'>&#10003;</div>
-                <p className='text-gray-900 font-semibold'>{t('wallet.sent', lang)}</p>
-                <p className='text-sm text-gray-600'>
+                <div className='text-4xl mb-2 text-semantic-success'>&#10003;</div>
+                <p className='text-semantic-success font-semibold'>{t('wallet.sent', lang)}</p>
+                <p className='text-sm text-[var(--text-secondary)]'>
                   ${parseFloat(amount).toFixed(2)} USDC {t('wallet.sentSuccess', lang)}
                 </p>
               </div>
@@ -676,14 +676,14 @@ function WalletContent() {
                   href={getExplorerTxUrl(sendTxHash)}
                   target='_blank'
                   rel='noopener noreferrer'
-                  className='block text-center text-sm text-emerald-600 hover:text-emerald-700 underline'
+                  className='block text-center text-sm text-brand-primary hover:text-brand-primary-hover underline'
                 >
                   {t('wallet.viewOnBlockscout', lang)}
                 </a>
               )}
               <button
                 onClick={resetSend}
-                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
+                className='w-full py-3 bg-brand-primary text-white rounded-lg font-semibold hover:bg-brand-primary-hover'
               >
                 {t('wallet.sendAnother', lang)}
               </button>
@@ -692,20 +692,20 @@ function WalletContent() {
 
           {sendStep === 'error' && (
             <div className='space-y-4'>
-              <div className='p-4 bg-red-50 border border-red-200 rounded-lg'>
+              <div className='p-4 bg-[var(--fill-danger-light)] border border-red-200 rounded-lg'>
                 <p className='text-sm text-red-700'>
                   {sendError || t('wallet.txFailed', lang)}
                 </p>
               </div>
               <button
                 onClick={handleSendConfirm}
-                className='w-full py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700'
+                className='w-full py-3 bg-brand-primary text-white rounded-lg font-semibold hover:bg-brand-primary-hover'
               >
                 {t('wallet.retry', lang)}
               </button>
               <button
                 onClick={resetSend}
-                className='w-full py-2 text-gray-500 text-sm hover:text-gray-700'
+                className='w-full py-2 text-[var(--text-secondary)] text-sm hover:text-[var(--text-secondary)]'
               >
                 {t('wallet.cancel', lang)}
               </button>
@@ -717,10 +717,10 @@ function WalletContent() {
         <ActivityList transactions={activity} lang={lang} />
 
         {/* Navigation */}
-        <div className='bg-white rounded-2xl shadow-xl p-4 flex items-center justify-between'>
+        <div className='bg-[var(--bg-primary)] panel-frame rounded-2xl p-4 flex items-center justify-between'>
           <a
             href='/settings'
-            className='text-sm text-emerald-600 hover:text-emerald-700 font-medium'
+            className='text-sm text-brand-primary hover:text-brand-primary-hover font-medium'
           >
             {t('wallet.settings', lang)}
           </a>
@@ -733,13 +733,13 @@ function WalletContent() {
               setActivity([]);
               resetSend();
             }}
-            className='text-sm text-gray-500 hover:text-gray-700'
+            className='text-sm text-[var(--text-secondary)] hover:text-[var(--text-secondary)]'
           >
             {t('wallet.signOut', lang)}
           </button>
         </div>
 
-        <div className='text-center text-xs text-gray-500 pb-4'>
+        <div className='text-center text-xs text-[var(--text-secondary)] pb-4'>
           <p>{t('wallet.poweredBy', lang)}</p>
           <p className='mt-1'>Network: {NETWORK}</p>
         </div>
@@ -752,8 +752,8 @@ export default function WalletPage() {
   return (
     <Suspense
       fallback={
-        <div className='min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50 flex items-center justify-center'>
-          <div className='text-gray-600'>Loading...</div>
+        <div className='min-h-screen bg-[var(--bg-primary)] flex items-center justify-center'>
+          <div className='text-[var(--text-secondary)]'>Loading...</div>
         </div>
       }
     >

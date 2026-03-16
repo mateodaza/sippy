@@ -66,6 +66,22 @@ vi.mock('viem', () => ({
   parseUnits: vi.fn(() => BigInt(0)),
 }))
 
+// Mock react-international-phone so PhoneInput is a simple controlled <input type="tel">
+vi.mock('react-international-phone', () => ({
+  PhoneInput: ({ value, onChange, inputProps, ...rest }: {
+    value?: string; onChange?: (val: string) => void; inputProps?: Record<string, unknown>;
+    [key: string]: unknown;
+  }) => {
+    const React = require('react')
+    return React.createElement('input', {
+      type: 'tel',
+      value: value || '',
+      onChange: (e: { target: { value: string } }) => onChange?.(e.target.value),
+      ...inputProps,
+    })
+  },
+}))
+
 // --- Helpers ---
 
 let container: HTMLDivElement | null = null
@@ -105,12 +121,25 @@ function findButton(text: string): HTMLButtonElement | null {
 }
 
 function setInputValue(input: HTMLInputElement, value: string) {
-  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+  // Use the native setter when available (works for real HTMLInputElement instances),
+  // fall back to direct assignment for jsdom proxies / third-party component wrappers.
+  const nativeSetter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     'value'
-  )!.set!
-  nativeInputValueSetter.call(input, value)
-  input.dispatchEvent(new Event('input', { bubbles: true }))
+  )?.set
+  try {
+    if (nativeSetter) {
+      nativeSetter.call(input, value)
+    } else {
+      // eslint-disable-next-line no-param-reassign
+      input.value = value
+    }
+  } catch {
+    // jsdom may throw if the element isn't a "valid instance" — fall back to direct assignment
+    // eslint-disable-next-line no-param-reassign
+    input.value = value
+  }
+  input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
 // Advance to OTP step
@@ -121,6 +150,17 @@ async function goToOtpStep(phone = '+573001234567') {
   })
   await act(async () => {
     findButton('Send Verification Code')!.click()
+  })
+}
+
+// Advance through the ToS step (checkbox + Continue)
+async function goThroughTosStep() {
+  await act(async () => {
+    const checkbox = container!.querySelector('input[type="checkbox"]') as HTMLInputElement
+    checkbox.click()
+  })
+  await act(async () => {
+    findButton('Continue')!.click()
   })
 }
 
@@ -136,12 +176,15 @@ async function goToEmailStep(otpCode = '123456') {
 }
 
 async function goToPermissionStepViaSkip() {
+  // Skip email -> goes to ToS
   await act(async () => {
     findButton('Skip for now')!.click()
   })
+  // Accept ToS -> goes to permission
+  await goThroughTosStep()
 }
 
-// Advance to permission step (skip email)
+// Advance to permission step (skip email, accept ToS)
 async function goToPermissionStep(otpCode = '123456') {
   await goToEmailStep(otpCode)
   await goToPermissionStepViaSkip()
@@ -289,14 +332,13 @@ describe('session recovery', () => {
     expect((registerCall![1] as RequestInit).headers).toMatchObject({
       Authorization: 'Bearer stored-token-xyz',
     })
-    // Recovery routes to permission, not email — the single mock is sufficient
-    // (no email-status fetch occurs during recovery)
-    expect(container!.textContent).toContain('Set Spending Limit')
+    // Recovery routes to tos (not email) when tosAccepted is falsy
+    expect(container!.textContent).toContain('Terms of Service')
 
     vi.unstubAllGlobals()
   })
 
-  it('routes to permission step (not email) when hasPermission is false — covers skipped-email recovery', async () => {
+  it('routes to tos step (not email) when hasPermission is false — covers skipped-email recovery', async () => {
     // Covers all hasPermission:false recovery cases: skipped email, mid-email, never-saw-email.
     // None of them should show the email step on recovery ("no nag on this page").
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
@@ -313,8 +355,8 @@ describe('session recovery', () => {
 
     await renderPage()
 
-    // Must show permission step, NOT email step
-    expect(container!.textContent).toContain('Set Spending Limit')
+    // Must show tos step, NOT email step (tosAccepted is falsy in response)
+    expect(container!.textContent).toContain('Terms of Service')
     expect(container!.textContent).not.toContain('Add a recovery email')
     // No email-status fetch should occur during recovery
     const emailStatusCalls = mockFetch.mock.calls.filter(
@@ -325,7 +367,7 @@ describe('session recovery', () => {
     vi.unstubAllGlobals()
   })
 
-  it('routes to permission step when wallet-status returns non-OK', async () => {
+  it('routes to tos step when wallet-status returns non-OK', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
@@ -341,7 +383,7 @@ describe('session recovery', () => {
 
     await renderPage()
 
-    expect(container!.textContent).toContain('Set Spending Limit')
+    expect(container!.textContent).toContain('Terms of Service')
     expect(container!.textContent).not.toContain('Add a recovery email')
 
     vi.unstubAllGlobals()
@@ -488,10 +530,13 @@ describe('handleSendEmailCode', () => {
     })
     mocks.getStoredToken.mockReturnValue('stored-token-email')
 
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: false,
-      text: async () => 'Invalid email address',
-      json: async () => ({}),
+    // register-wallet (from handleVerifyOtp) must succeed so we reach the email step;
+    // send-email-code should fail to exercise the error branch.
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === 'string' && url.includes('/api/auth/send-email-code')) {
+        return Promise.resolve({ ok: false, text: async () => 'Invalid email address', json: async () => ({}) })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
     })
     vi.stubGlobal('fetch', mockFetch)
 
@@ -516,7 +561,7 @@ describe('handleSendEmailCode', () => {
 })
 
 describe('handleVerifyEmailCode', () => {
-  it('happy path: verifies code, shows confirmation, advances to permission after 1500ms', async () => {
+  it('happy path: verifies code, shows confirmation, advances to tos after 1500ms', async () => {
     vi.useFakeTimers()
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.sendOtp.mockResolvedValue(undefined)
@@ -565,9 +610,9 @@ describe('handleVerifyEmailCode', () => {
     // Confirmation shown before auto-advance
     expect(container!.textContent).toContain('Email verified')
 
-    // Advance timer to trigger setStep('permission')
+    // Advance timer to trigger setStep('tos')
     await act(async () => { vi.advanceTimersByTime(1500) })
-    expect(container!.textContent).toContain('Set Spending Limit')
+    expect(container!.textContent).toContain('Terms of Service')
 
     vi.useRealTimers()
     vi.unstubAllGlobals()
@@ -617,7 +662,7 @@ describe('handleVerifyEmailCode', () => {
 })
 
 describe('handleSkipEmail', () => {
-  it('skip before sending code: advances directly to permission step with no API call', async () => {
+  it('skip before sending code: advances directly to tos step with no API call', async () => {
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
     mocks.storeToken.mockImplementation(() => {})
@@ -635,7 +680,7 @@ describe('handleSkipEmail', () => {
 
     await act(async () => { findButton('Skip for now')!.click() })
 
-    expect(container!.textContent).toContain('Set Spending Limit')
+    expect(container!.textContent).toContain('Terms of Service')
     // No email-related fetch calls should have been made
     const emailCalls = mockFetch.mock.calls.filter(
       (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/auth/')
@@ -645,7 +690,7 @@ describe('handleSkipEmail', () => {
     vi.unstubAllGlobals()
   })
 
-  it('skip after sending code: "Skip for now" still visible and advances to permission', async () => {
+  it('skip after sending code: "Skip for now" still visible and advances to tos', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
@@ -673,7 +718,7 @@ describe('handleSkipEmail', () => {
     // Now skip instead of entering code
     await act(async () => { findButton('Skip for now')!.click() })
 
-    expect(container!.textContent).toContain('Set Spending Limit')
+    expect(container!.textContent).toContain('Terms of Service')
 
     vi.unstubAllGlobals()
   })

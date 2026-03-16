@@ -113,6 +113,30 @@ test.group('Group A | parseAndValidateAmount core cases', () => {
     assert.equal(r.errorCode, 'AMBIGUOUS_SEPARATOR')
   })
 
+  test('A-15: "0.05" → TOO_SMALL (below 0.1 minimum)', ({ assert }) => {
+    const r = parseAndValidateAmount('0.05')
+    assert.isNull(r.value)
+    assert.equal(r.errorCode, 'TOO_SMALL')
+  })
+
+  test('A-16: "0.09" → TOO_SMALL (just below 0.1)', ({ assert }) => {
+    const r = parseAndValidateAmount('0.09')
+    assert.isNull(r.value)
+    assert.equal(r.errorCode, 'TOO_SMALL')
+  })
+
+  test('A-17: "0.01" → TOO_SMALL', ({ assert }) => {
+    const r = parseAndValidateAmount('0.01')
+    assert.isNull(r.value)
+    assert.equal(r.errorCode, 'TOO_SMALL')
+  })
+
+  test('A-18: "0.10" → value=0.10, no error (exactly at minimum)', ({ assert }) => {
+    const r = parseAndValidateAmount('0.10')
+    assert.equal(r.value, 0.10)
+    assert.isNull(r.errorCode)
+  })
+
   test('A-13: "abc" → INVALID_FORMAT', ({ assert }) => {
     const r = parseAndValidateAmount('abc')
     assert.isNull(r.value)
@@ -215,6 +239,13 @@ test.group('Group D | Send parsing with amount errors (parseMessageWithRegex)', 
     const r = parseMessageWithRegex('send 99999 to +573001234567')
     assert.equal(r.command, 'send')
     assert.equal(r.amountError, 'TOO_LARGE')
+    assert.isUndefined(r.amount)
+  })
+
+  test('D-09: "send 0.05 to +573001234567" → command=send, amountError=TOO_SMALL', ({ assert }) => {
+    const r = parseMessageWithRegex('send 0.05 to +573001234567')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amountError, 'TOO_SMALL')
     assert.isUndefined(r.amount)
   })
 
@@ -379,6 +410,23 @@ test.group('Group G | Trilingual error messages', () => {
     const msg = formatAmountError('ZERO', 'es')
     assert.include(msg.toLowerCase(), 'mayor')
     assert.include(msg.toLowerCase(), 'cero')
+  })
+
+  test('G-09: formatAmountError TOO_SMALL en → contains "0.10"', ({ assert }) => {
+    const msg = formatAmountError('TOO_SMALL', 'en')
+    assert.include(msg, '0.10')
+  })
+
+  test('G-10: formatAmountError TOO_SMALL es → Spanish minimum message', ({ assert }) => {
+    const msg = formatAmountError('TOO_SMALL', 'es')
+    assert.include(msg, '0.10')
+    assert.include(msg.toLowerCase(), 'mínimo')
+  })
+
+  test('G-11: formatAmountError TOO_SMALL pt → Portuguese minimum message', ({ assert }) => {
+    const msg = formatAmountError('TOO_SMALL', 'pt')
+    assert.include(msg, '0.10')
+    assert.include(msg.toLowerCase(), 'mínimo')
   })
 
   test('G-06: formatInvalidPhoneNumberMessage pt → Portuguese phone message', ({ assert }) => {
