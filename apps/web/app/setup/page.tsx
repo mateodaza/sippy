@@ -7,6 +7,7 @@ import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken, getFreshTok
 import { Language, getStoredLanguage, storeLanguage, detectLanguageFromPhone, fetchUserLanguage, resolveLanguage, localizeError, t } from '../../lib/i18n';
 import { parseUnits } from 'viem';
 import { SippyPhoneInput } from '../../components/ui/phone-input';
+import { isBlockedPrefix } from '@sippy/shared';
 
 /**
  * Setup Page for Embedded Wallets
@@ -271,12 +272,18 @@ function SetupContent() {
       const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
       setPhoneNumber(formattedPhone);
 
+      if (isBlockedPrefix(formattedPhone)) {
+        setError(lang === 'es' ? 'Este país no está disponible.' :
+                 lang === 'pt' ? 'Este país não está disponível.' :
+                 'This country is not available.');
+        return;
+      }
+
       // Detect language from phone prefix before sending OTP so the UI switches immediately
       const phoneLang = detectLanguageFromPhone(formattedPhone);
       storeLanguage(phoneLang);
       setLang(phoneLang);
 
-      console.log('Sending OTP to:', formattedPhone);
       await sendOtp(formattedPhone);
 
       setStep('otp');

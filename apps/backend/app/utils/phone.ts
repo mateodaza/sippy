@@ -1,4 +1,5 @@
 import { type ParsedCommand } from '../types/index.js'
+import { isBlockedPrefix } from '@sippy/shared'
 
 function extractDigitsFromPlus(source?: string): string | null {
   if (!source) return null
@@ -92,7 +93,7 @@ export function canonicalizePhone(input: string): string | null {
   }
 
   if (!/^\d+$/.test(rawDigits)) return null
-  if (rawDigits.length < 10) return null
+  if (rawDigits.length < 7) return null
   if (rawDigits.length > 15) return null
 
   if (rawDigits.length === 10) {
@@ -104,7 +105,10 @@ export function canonicalizePhone(input: string): string | null {
   if (rawDigits.length > 15) return null
   if (rawDigits[0] === '0') return null
 
-  return '+' + rawDigits
+  const e164 = '+' + rawDigits
+  if (isBlockedPrefix(e164)) return null
+
+  return e164
 }
 
 export type SendVerificationMismatch = 'amount' | 'recipient' | 'invalid'

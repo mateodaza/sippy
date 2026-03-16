@@ -17,6 +17,7 @@ import {
   sendOtp,
   verifyOtp,
 } from './auth'
+import { isBlockedPrefix } from '@sippy/shared'
 
 type ReAuthStep = 'phone' | 'otp'
 
@@ -177,6 +178,11 @@ export function useSessionGuard(): SessionGuardResult {
     setReAuthLoading(true)
     setReAuthError(null)
     try {
+      const phone = reAuthPhone.startsWith('+') ? reAuthPhone : `+${reAuthPhone}`
+      if (isBlockedPrefix(phone)) {
+        setReAuthError('This country is not available.')
+        return
+      }
       await sendOtp(reAuthPhone)
       setReAuthStep('otp')
     } catch (err) {

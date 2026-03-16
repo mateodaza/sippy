@@ -68,8 +68,12 @@ test.group('canonicalizePhone | invalid → null', (group) => {
     assert.isNull(canonicalizePhone(''))
   })
 
-  test('TC-C11: 123456789 (9 digits) → null', ({ assert }) => {
-    assert.isNull(canonicalizePhone('123456789'))
+  test('TC-C11: 123456789 (9 digits) → +123456789 (valid E.164 length)', ({ assert }) => {
+    assert.equal(canonicalizePhone('123456789'), '+123456789')
+  })
+
+  test('TC-C17: 123456 (6 digits) → null (below E.164 minimum)', ({ assert }) => {
+    assert.isNull(canonicalizePhone('123456'))
   })
 
   test('TC-C12: +0123456789 → null (starts with 0 after +)', ({ assert }) => {
@@ -90,5 +94,31 @@ test.group('canonicalizePhone | invalid → null', (group) => {
 
   test('TC-C16: 3001234567 with no DEFAULT_COUNTRY_CODE → null', ({ assert }) => {
     assert.isNull(canonicalizePhone('3001234567'))
+  })
+})
+
+test.group('canonicalizePhone | FATF/Twilio blocked countries → null', () => {
+  test('TC-C18: +850123456789 (North Korea) → null', ({ assert }) => {
+    assert.isNull(canonicalizePhone('+850123456789'))
+  })
+
+  test('TC-C19: +989123456789 (Iran) → null', ({ assert }) => {
+    assert.isNull(canonicalizePhone('+989123456789'))
+  })
+
+  test('TC-C20: +959123456789 (Myanmar) → null', ({ assert }) => {
+    assert.isNull(canonicalizePhone('+959123456789'))
+  })
+
+  test('TC-C21: +963912345678 (Syria) → null', ({ assert }) => {
+    assert.isNull(canonicalizePhone('+963912345678'))
+  })
+
+  test('TC-C22: +5312345678 (Cuba) → null', ({ assert }) => {
+    assert.isNull(canonicalizePhone('+5312345678'))
+  })
+
+  test('TC-C23: +249912345678 (Sudan) → null', ({ assert }) => {
+    assert.isNull(canonicalizePhone('+249912345678'))
   })
 })
