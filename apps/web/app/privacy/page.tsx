@@ -10,7 +10,6 @@ import { Shield, Mail, ArrowLeft } from 'lucide-react';
 import { getRequestLang } from '@/lib/i18n-server';
 import { t } from '@/lib/i18n';
 import { LanguageSwitcher } from '@/components/ui/language-switcher';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 export const metadata = {
   title: 'Privacy Policy - Sippy',
@@ -37,7 +36,6 @@ export default async function PrivacyPolicyPage() {
             />
           </Link>
           <div className='flex items-center gap-3'>
-            <ThemeToggle />
             <Link
               href='/'
               className='flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-brand-primary transition-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 rounded-lg'

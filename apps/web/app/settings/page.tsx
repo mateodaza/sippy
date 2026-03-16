@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useCreateSpendPermission, useRevokeSpendPermission, useListSpendPermissions, useCurrentUser, useIsSignedIn, useSignOut, useExportEvmAccount, useEvmAccounts, useSendUserOperation } from '@coinbase/cdp-hooks';
 import { getStoredToken, clearToken } from '../../lib/auth';
 import { useSessionGuard } from '../../lib/useSessionGuard';
@@ -9,6 +9,7 @@ import { parseUnits } from 'viem';
 import { getBalances } from '../../lib/blockscout';
 import { ensureGasReady, buildUsdcTransferCall } from '../../lib/usdc-transfer';
 import { Language, getStoredLanguage, storeLanguage, clearLanguage, resolveLanguage, localizeError, t } from '../../lib/i18n';
+import { SippyPhoneInput } from '../../components/ui/phone-input';
 
 /**
  * Settings Page for Embedded Wallets
@@ -72,6 +73,7 @@ type EmailSectionStep =
 
 function SettingsContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const phoneFromUrl = searchParams.get('phone') || '';
 
   // Session guard hook
@@ -897,16 +899,13 @@ function SettingsContent() {
 
           {reAuthStep === 'phone' && (
             <>
-              <input
-                type='tel'
-                value={reAuthPhone}
-                onChange={(e) => !isPhoneLocked && setReAuthPhone(e.target.value)}
-                placeholder={t('settings.phonePlaceholder', lang)}
-                disabled={isPhoneLocked}
-                className={`w-full p-3 border rounded-lg mb-4 text-[var(--text-primary)] ${
-                  isPhoneLocked ? 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]' : ''
-                }`}
-              />
+              <div className='mb-4'>
+                <SippyPhoneInput
+                  value={reAuthPhone}
+                  onChange={setReAuthPhone}
+                  locked={isPhoneLocked}
+                />
+              </div>
               {isPhoneLocked && (
                 <p className='text-sm text-[var(--text-secondary)] mb-4'>
                   {t('settings.phoneFromWhatsapp', lang)}
@@ -987,13 +986,12 @@ function SettingsContent() {
             )}
             {reAuthStep === 'phone' && (
               <>
-                <input
-                  type='tel'
-                  value={reAuthPhone}
-                  onChange={(e) => setReAuthPhone(e.target.value)}
-                  placeholder={t('settings.phonePlaceholder', lang)}
-                  className='w-full p-3 border rounded-lg mb-3 text-[var(--text-primary)]'
-                />
+                <div className='mb-3'>
+                  <SippyPhoneInput
+                    value={reAuthPhone}
+                    onChange={setReAuthPhone}
+                  />
+                </div>
                 <button
                   onClick={handleReAuthSendOtp}
                   disabled={reAuthLoading || !reAuthPhone}
@@ -1787,8 +1785,7 @@ function SettingsContent() {
               if (exportStep !== 'idle') resetExport('cancelled');
               clearToken();
               await signOut();
-              setWalletStatus(null);
-              setVerifiedPhone(null);
+              router.replace('/setup');
             }}
             className='text-sm text-[var(--text-secondary)] hover:text-[var(--text-secondary)]'
           >

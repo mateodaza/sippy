@@ -56,7 +56,9 @@ export interface SessionGuardResult {
 }
 
 export function useSessionGuard(): SessionGuardResult {
-  const [token, setToken] = useState<string | null>(() => getStoredToken())
+  const [token, setToken] = useState<string | null>(() =>
+    typeof window !== 'undefined' ? getStoredToken() : null
+  )
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isCheckingSession, setIsCheckingSession] = useState(true)
   const [hasCheckedSession, setHasCheckedSession] = useState(false)

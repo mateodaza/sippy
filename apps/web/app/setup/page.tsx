@@ -1,26 +1,12 @@
 'use client';
 
 import { useState, Suspense, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuthenticateWithJWT, useCreateSpendPermission, useCurrentUser, useIsSignedIn, useSignOut } from '@coinbase/cdp-hooks';
-import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken } from '../../lib/auth';
+import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken, getFreshToken } from '../../lib/auth';
 import { Language, getStoredLanguage, storeLanguage, detectLanguageFromPhone, fetchUserLanguage, resolveLanguage, localizeError, t } from '../../lib/i18n';
 import { parseUnits } from 'viem';
-import { PhoneInput } from 'react-international-phone';
-import 'react-international-phone/style.css';
-
-// LATAM-first country ordering for the phone picker
-const PREFERRED_COUNTRIES = ['co', 'mx', 'br', 'ar', 'cl', 'pe', 've', 'ec', 'us'] as const;
-
-function detectDefaultCountry(): string {
-  if (typeof navigator === 'undefined') return 'co';
-  const region = (navigator.language || '').split('-')[1]?.toLowerCase();
-  const map: Record<string, string> = {
-    co: 'co', us: 'us', ca: 'us', br: 'br', mx: 'mx',
-    ar: 'ar', cl: 'cl', pe: 'pe', ve: 've', ec: 'ec',
-  };
-  return map[region || ''] || 'co';
-}
+import { SippyPhoneInput } from '../../components/ui/phone-input';
 
 /**
  * Setup Page for Embedded Wallets
@@ -53,11 +39,19 @@ const TOS_URL = 'https://www.sippy.lat/terms';
 
 function SetupContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Phone number from WhatsApp link - LOCKED (user cannot change)
   // Strip everything except digits, re-add '+' for E.164
   const rawPhone = (searchParams.get('phone') || '').replace(/[^\d]/g, '');
   const phoneFromUrl = rawPhone ? `+${rawPhone}` : '';
+
+  // Redirect to settings if user already has a valid (non-expired) session
+  useEffect(() => {
+    if (!phoneFromUrl && getFreshToken()) {
+      router.replace('/settings');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [step, setStep] = useState<Step>('phone');
   const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl);
@@ -300,7 +294,6 @@ function SetupContent() {
     setError(null);
 
     try {
-      console.log('Verifying OTP...');
       const token = await verifyOtp(phoneNumber, otp);
       storeToken(token);
 
@@ -312,7 +305,6 @@ function SetupContent() {
         .then(({ language }) => { storeLanguage(language); setLang(language) })
         .catch(() => {})
 
-      console.log('Authenticating with JWT...');
       const { user } = await authenticateWithJWT();
 
       // Get the user's smart account address
@@ -631,14 +623,10 @@ function SetupContent() {
               {t('setup.subtitle', lang)}
             </p>
             <div className='mb-4'>
-              <PhoneInput
-                defaultCountry={detectDefaultCountry()}
-                preferredCountries={[...PREFERRED_COUNTRIES]}
+              <SippyPhoneInput
                 value={phoneNumber}
-                onChange={(val) => !isPhoneLocked && setPhoneNumber(val)}
-                forceDialCode
-                hideDropdown={isPhoneLocked}
-                inputProps={{ readOnly: isPhoneLocked }}
+                onChange={setPhoneNumber}
+                locked={isPhoneLocked}
               />
             </div>
             {isPhoneLocked && (

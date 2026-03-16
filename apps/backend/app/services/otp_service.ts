@@ -197,10 +197,16 @@ class OtpService {
     const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
     const params = new URLSearchParams({ To: to, From: from, Body: body })
 
-    await axios.post(url, params.toString(), {
-      auth: { username: accountSid, password: authToken },
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    })
+    try {
+      await axios.post(url, params.toString(), {
+        auth: { username: accountSid, password: authToken },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      })
+    } catch (err: any) {
+      const twilioError = err?.response?.data
+      console.error('sendOtp Twilio error:', { to, status: err?.response?.status, twilioError })
+      throw err
+    }
   }
 
   // ── Internal: capacity management ──────────────────────────────────────────

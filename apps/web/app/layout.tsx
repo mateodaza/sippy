@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Chakra_Petch, Electrolize, Space_Mono } from 'next/font/google';
-import { ThemeProvider } from 'next-themes';
+import { ThemeWrapper } from '@/components/ui/theme-wrapper';
 import './globals.css';
 import { Web3Provider } from './providers/Web3Provider';
 import { BlockscoutProvider } from './providers/BlockscoutProvider';
@@ -58,7 +58,7 @@ export default async function RootLayout({
   return (
     <html lang={lang} suppressHydrationWarning className={`${chakraPetch.variable} ${electrolize.variable} ${spaceMono.variable}`}>
       <body className='min-h-screen bg-[var(--bg-primary)] antialiased font-sans text-[var(--text-primary)]'>
-        <ThemeProvider attribute='class' defaultTheme='system' storageKey='sippy_theme'>
+        <ThemeWrapper>
           <PostHogProvider>
             <BlockscoutProvider>
               <CDPProvider>
@@ -79,7 +79,7 @@ export default async function RootLayout({
               </CDPProvider>
             </BlockscoutProvider>
           </PostHogProvider>
-        </ThemeProvider>
+        </ThemeWrapper>
       </body>
     </html>
   );
