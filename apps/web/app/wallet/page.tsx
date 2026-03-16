@@ -604,7 +604,7 @@ function WalletContent() {
                   />
                   <button
                     onClick={handleMax}
-                    className='px-4 py-3 bg-gray-100 rounded-lg text-sm font-medium text-brand-dark/60 hover:bg-gray-200'
+                    className='px-4 py-3 bg-brand-primary/10 rounded-lg text-sm font-medium text-brand-dark/60 hover:bg-brand-primary/15'
                   >
                     {t('wallet.max', lang).toUpperCase()}
                   </button>

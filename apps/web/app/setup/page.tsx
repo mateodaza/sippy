@@ -599,7 +599,7 @@ function SetupContent() {
                   ? 'bg-brand-primary text-white'
                   : (['phone', 'otp', 'email', 'tos', 'permission', 'done'] as const).indexOf(step) > i
                     ? 'bg-brand-primary-light text-brand-primary-hover'
-                    : 'bg-gray-200 text-gray-500'
+                    : 'bg-brand-dark/10 text-brand-dark/40'
               }`}
             >
               {i + 1}
@@ -774,7 +774,7 @@ function SetupContent() {
               href={TOS_URL}
               target='_blank'
               rel='noopener noreferrer'
-              className='block w-full p-4 mb-4 bg-gray-50 border border-brand-primary/20 rounded-lg text-brand-primary font-semibold hover:bg-gray-100 transition-colors text-center'
+              className='block w-full p-4 mb-4 bg-gray-50 border border-brand-primary/20 rounded-lg text-brand-primary font-semibold hover:bg-brand-primary-light transition-smooth text-center'
             >
               {t('setup.tosLink', lang)} ↗
             </a>
@@ -784,7 +784,7 @@ function SetupContent() {
                 type='checkbox'
                 checked={tosChecked}
                 onChange={(e) => { setTosChecked(e.target.checked); setError(null); }}
-                className='mt-0.5 w-5 h-5 rounded border-gray-300 text-brand-primary focus:ring-brand-primary'
+                className='mt-0.5 w-5 h-5 rounded border-brand-primary/30 text-brand-primary focus:ring-brand-primary'
               />
               <span className='text-brand-dark text-sm'>{t('setup.tosCheckbox', lang)}</span>
             </label>

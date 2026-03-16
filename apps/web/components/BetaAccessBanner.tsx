@@ -22,7 +22,7 @@ export default function BetaAccessBanner({
     return (
       <div className='relative group'>
         <div className='absolute -inset-0.5 bg-gradient-to-r from-brand-primary via-brand-primary to-brand-primary rounded-xl blur opacity-20 group-hover:opacity-30 transition duration-300' />
-        <div className='relative bg-gradient-to-br from-brand-primary to-brand-primary-hover rounded-lg p-4 shadow-lg border border-brand-primary/30'>
+        <div className='relative bg-gradient-to-br from-brand-primary to-brand-primary-hover rounded-lg p-4 border border-brand-primary/30'>
           <div className='flex items-center justify-between gap-4'>
             <div className='flex items-center gap-3'>
               <div className='flex-shrink-0 w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center'>
@@ -51,7 +51,7 @@ export default function BetaAccessBanner({
             </div>
             <a
               href={emailLink}
-              className='flex-shrink-0 px-5 py-2 bg-white text-brand-primary rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200'
+              className='flex-shrink-0 px-5 py-2 bg-white text-brand-primary rounded-lg font-semibold text-sm hover:scale-105 transition-smooth'
             >
               Join Waitlist
             </a>
@@ -65,7 +65,7 @@ export default function BetaAccessBanner({
   return (
     <div className='relative group'>
       <div className='absolute -inset-1 bg-gradient-to-r from-brand-primary via-brand-primary to-brand-primary rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-500' />
-      <div className='relative bg-gradient-to-br from-brand-primary to-brand-primary-hover rounded-xl p-6 shadow-xl border border-brand-primary/30'>
+      <div className='relative bg-gradient-to-br from-brand-primary to-brand-primary-hover rounded-xl p-6 border border-brand-primary/30'>
         <div className='flex flex-col md:flex-row items-center gap-4 text-center md:text-left'>
           <div className='flex-shrink-0 w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center'>
             <svg
@@ -99,7 +99,7 @@ export default function BetaAccessBanner({
           </div>
           <a
             href={emailLink}
-            className='flex-shrink-0 px-6 py-2.5 bg-white text-brand-primary rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200'
+            className='flex-shrink-0 px-6 py-2.5 bg-white text-brand-primary rounded-lg font-semibold text-sm hover:scale-105 transition-smooth'
           >
             Request Access
           </a>

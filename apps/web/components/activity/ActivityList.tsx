@@ -24,8 +24,8 @@ export function ActivityList({ transactions, lang }: ActivityListProps) {
 
   if (transactions.length === 0) {
     return (
-      <div className='bg-white rounded-2xl shadow-lg p-12 border border-gray-100 text-center'>
-        <div className='text-gray-400 mb-2'>
+      <div className='bg-white panel-frame rounded-2xl p-12 text-center'>
+        <div className='text-brand-dark/40 mb-2'>
           <svg
             className='w-16 h-16 mx-auto'
             fill='none'

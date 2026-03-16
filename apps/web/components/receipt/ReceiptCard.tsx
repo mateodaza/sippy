@@ -68,9 +68,9 @@ export function ReceiptCard({
 
   return (
     <div className='max-w-md mx-auto animate-fade-in-up'>
-      <div className='absolute -inset-4 rounded-[40px] bg-gradient-to-br from-[#dcfce7]/40 via-white/0 to-[#dbeafe]/30 blur-[40px]' />
+      <div className='absolute -inset-4 rounded-[40px] bg-gradient-to-br from-brand-primary-light/40 via-white/0 to-brand-primary-light/30 blur-[40px]' />
       <div
-        className={`relative rounded-2xl sm:rounded-[32px] shadow-[0_20px_50px_rgba(15,23,42,0.12)] sm:shadow-[0_28px_70px_rgba(15,23,42,0.16)] overflow-hidden border border-white/50 ${config.bg}`}
+        className={`relative rounded-2xl sm:rounded-2xl overflow-hidden border border-brand-primary/20 ${config.bg}`}
       >
         {/* Header */}
         <div className='px-5 sm:px-8 pt-6 sm:pt-8 pb-5 sm:pb-6 text-center'>
@@ -162,13 +162,13 @@ export function ReceiptCard({
             href={getExplorerTxUrl(transaction.hash)}
             target='_blank'
             rel='noopener noreferrer'
-            className='block w-full px-4 sm:px-6 py-3 sm:py-3.5 bg-brand-crypto hover:bg-brand-crypto-hover text-white text-sm sm:text-base font-semibold rounded-xl transition-all duration-200 text-center shadow-md hover:shadow-lg active:scale-[0.98]'
+            className='block w-full px-4 sm:px-6 py-3 sm:py-3.5 bg-brand-crypto hover:bg-brand-crypto-hover text-white text-sm sm:text-base font-semibold rounded-xl transition-smooth text-center active:scale-[0.98]'
           >
             View on Blockscout
           </a>
           <button
             onClick={copyLink}
-            className='block w-full px-4 sm:px-6 py-3 sm:py-3.5 bg-white hover:bg-gray-50 text-brand-dark text-sm sm:text-base font-semibold rounded-xl transition-all duration-200 border border-gray-200 hover:border-gray-300 hover:shadow-md active:scale-[0.98]'
+            className='block w-full px-4 sm:px-6 py-3 sm:py-3.5 bg-white hover:bg-gray-50 text-brand-dark text-sm sm:text-base font-semibold rounded-xl transition-smooth border border-brand-primary/20 hover:border-brand-primary/30 active:scale-[0.98]'
           >
             {copied ? '✓ Link Copied!' : 'Copy Receipt Link'}
           </button>
