@@ -4,10 +4,13 @@
  * VHS Glitch Waves — warm gray + white noise on brand blue.
  * Horizontal waves + vertical noise (SVG-based, not grid lines).
  * Slow flicker, organic drift, calm chaos.
+ * In dark mode: neutral dark gray instead of brand blue (via CSS dark: classes — no flash).
  */
 export function AnalogGradient({ className = '', variant = 'primary' }: { className?: string; variant?: 'primary' | 'dark' }) {
   const isDark = variant === 'dark';
-  const bg = isDark ? 'bg-[#1c2e3c]' : 'bg-brand-primary';
+  const bg = isDark
+    ? 'bg-[#1c2e3c] dark:bg-gradient-to-b dark:from-[#0a0a0a] dark:via-[#111111] dark:to-[#0a0a0a]'
+    : 'bg-brand-primary dark:bg-gradient-to-b dark:from-[#0a0a0a] dark:via-[#111111] dark:to-[#0a0a0a]';
   const blend = isDark ? 'mix-blend-screen' : 'mix-blend-soft-light';
   const id = isDark ? 'dark' : 'pri';
 

@@ -27,22 +27,22 @@ export function ReceiptCard({
 
   const statusConfig = {
     success: {
-      bg: 'bg-gradient-to-br from-green-50 to-emerald-50',
+      bg: 'bg-[var(--fill-success-light)]',
       icon: '✓',
       text: 'Success',
-      color: 'text-green-600',
+      color: 'text-semantic-success',
     },
     pending: {
-      bg: 'bg-gradient-to-br from-yellow-50 to-amber-50',
+      bg: 'bg-[var(--fill-warning-light)]',
       icon: '⏳',
       text: 'Pending',
-      color: 'text-yellow-600',
+      color: 'text-semantic-warning',
     },
     failed: {
-      bg: 'bg-gradient-to-br from-red-50 to-rose-50',
+      bg: 'bg-[var(--fill-danger-light)]',
       icon: '✗',
       text: 'Failed',
-      color: 'text-red-600',
+      color: 'text-semantic-danger',
     },
   };
 
@@ -68,7 +68,7 @@ export function ReceiptCard({
 
   return (
     <div className='max-w-md mx-auto animate-fade-in-up'>
-      <div className='absolute -inset-4 rounded-[40px] bg-gradient-to-br from-brand-primary-light/40 via-white/0 to-brand-primary-light/30 blur-[40px]' />
+      <div className='absolute -inset-4 rounded-[40px] bg-gradient-to-br from-brand-primary-light/40 via-transparent to-brand-primary-light/30 blur-[40px]' />
       <div
         className={`relative rounded-2xl sm:rounded-2xl overflow-hidden border border-brand-primary/20 ${config.bg}`}
       >
@@ -77,25 +77,25 @@ export function ReceiptCard({
           <div className={`text-5xl sm:text-6xl mb-3 sm:mb-4 ${config.color}`}>
             {config.icon}
           </div>
-          <h1 className='text-xl sm:text-2xl font-bold text-brand-dark mb-2'>
+          <h1 className='text-xl sm:text-2xl font-bold text-[var(--text-primary)] mb-2'>
             Payment Details
           </h1>
           <div
-            className={`inline-block px-2.5 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${config.color} bg-white shadow-sm`}
+            className={`inline-block px-2.5 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${config.color} bg-[var(--bg-primary)] shadow-sm`}
           >
             {config.text}
           </div>
         </div>
 
         {/* Amount */}
-        <div className='px-5 sm:px-8 py-5 sm:py-6 bg-white/90 backdrop-blur-sm'>
+        <div className='px-5 sm:px-8 py-5 sm:py-6 bg-[var(--bg-primary)] backdrop-blur-sm'>
           <div className='text-center mb-5 sm:mb-6'>
-            <div className='text-4xl sm:text-5xl font-bold text-brand-dark mb-2'>
+            <div className='text-4xl sm:text-5xl font-bold text-[var(--text-primary)] mb-2'>
               {parseFloat(transaction.amount).toFixed(
                 transaction.token === 'ETH' ? 4 : 2
               )}
             </div>
-            <div className='text-lg sm:text-xl text-gray-600 font-semibold'>
+            <div className='text-lg sm:text-xl text-[var(--text-secondary)] font-semibold'>
               {transaction.token}
             </div>
           </div>
@@ -104,7 +104,7 @@ export function ReceiptCard({
           <div className='space-y-3 sm:space-y-4'>
             {/* From */}
             <div className='flex justify-between items-start gap-2'>
-              <span className='text-sm sm:text-base text-gray-600 font-semibold flex-shrink-0'>
+              <span className='text-sm sm:text-base text-[var(--text-secondary)] font-semibold flex-shrink-0'>
                 From:
               </span>
               <div className='text-right break-all'>
@@ -114,7 +114,7 @@ export function ReceiptCard({
 
             {/* To */}
             <div className='flex justify-between items-start gap-2'>
-              <span className='text-sm sm:text-base text-gray-600 font-semibold flex-shrink-0'>
+              <span className='text-sm sm:text-base text-[var(--text-secondary)] font-semibold flex-shrink-0'>
                 To:
               </span>
               <div className='text-right break-all'>
@@ -124,31 +124,31 @@ export function ReceiptCard({
 
             {/* Date */}
             <div className='flex justify-between items-start gap-2'>
-              <span className='text-sm sm:text-base text-gray-600 font-semibold flex-shrink-0'>
+              <span className='text-sm sm:text-base text-[var(--text-secondary)] font-semibold flex-shrink-0'>
                 Date:
               </span>
-              <span className='text-xs sm:text-sm text-brand-dark font-medium text-right'>
+              <span className='text-xs sm:text-sm text-[var(--text-primary)] font-medium text-right'>
                 {formatDate(transaction.timestamp)}
               </span>
             </div>
 
             {/* Network */}
             <div className='flex justify-between items-center gap-2'>
-              <span className='text-sm sm:text-base text-gray-600 font-semibold flex-shrink-0'>
+              <span className='text-sm sm:text-base text-[var(--text-secondary)] font-semibold flex-shrink-0'>
                 Network:
               </span>
-              <span className='text-xs sm:text-sm text-brand-dark font-medium'>
+              <span className='text-xs sm:text-sm text-[var(--text-primary)] font-medium'>
                 Arbitrum One
               </span>
             </div>
 
             {/* Transaction Hash */}
             <div className='flex justify-between items-start gap-2'>
-              <span className='text-sm sm:text-base text-gray-600 font-semibold flex-shrink-0'>
+              <span className='text-sm sm:text-base text-[var(--text-secondary)] font-semibold flex-shrink-0'>
                 Tx Hash:
               </span>
               <div className='text-right'>
-                <div className='text-xs sm:text-sm text-gray-500 font-mono break-all'>
+                <div className='text-xs sm:text-sm text-[var(--text-muted)] font-mono break-all'>
                   {formatAddress(transaction.hash)}
                 </div>
               </div>
@@ -157,7 +157,7 @@ export function ReceiptCard({
         </div>
 
         {/* Actions */}
-        <div className='px-5 sm:px-8 py-5 sm:py-6 bg-white/95 backdrop-blur-sm space-y-2.5 sm:space-y-3'>
+        <div className='px-5 sm:px-8 py-5 sm:py-6 bg-[var(--bg-primary)] backdrop-blur-sm space-y-2.5 sm:space-y-3'>
           <a
             href={getExplorerTxUrl(transaction.hash)}
             target='_blank'
@@ -168,15 +168,15 @@ export function ReceiptCard({
           </a>
           <button
             onClick={copyLink}
-            className='block w-full px-4 sm:px-6 py-3 sm:py-3.5 bg-white hover:bg-gray-50 text-brand-dark text-sm sm:text-base font-semibold rounded-xl transition-smooth border border-brand-primary/20 hover:border-brand-primary/30 active:scale-[0.98]'
+            className='block w-full px-4 sm:px-6 py-3 sm:py-3.5 bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)] text-[var(--text-primary)] text-sm sm:text-base font-semibold rounded-xl transition-smooth border border-brand-primary/20 hover:border-brand-primary/30 active:scale-[0.98]'
           >
             {copied ? '✓ Link Copied!' : 'Copy Receipt Link'}
           </button>
         </div>
 
         {/* Footer */}
-        <div className='px-5 sm:px-8 py-3 sm:py-4 bg-white/95 backdrop-blur-sm border-t border-gray-100 text-center'>
-          <p className='text-xs text-gray-500'>
+        <div className='px-5 sm:px-8 py-3 sm:py-4 bg-[var(--bg-primary)] backdrop-blur-sm border-t border-[var(--border-default)] text-center'>
+          <p className='text-xs text-[var(--text-muted)]'>
             Powered by{' '}
             <span className='font-semibold text-brand-primary'>Sippy</span> on
             Arbitrum One

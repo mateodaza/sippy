@@ -888,6 +888,15 @@ export function formatAmountZeroMessage(lang: Lang): string {
   return m[lang]()
 }
 
+export function formatAmountTooSmallMessage(lang: Lang): string {
+  const m = {
+    en: () => `Minimum amount is 0.10 USDC.`,
+    es: () => `El monto minimo es 0.10 USDC.`,
+    pt: () => `O valor minimo e 0.10 USDC.`,
+  }
+  return m[lang]()
+}
+
 export function formatAmountTooLargeMessage(lang: Lang): string {
   const m = {
     en: () => `Amount exceeds the $10,000 limit.`,
@@ -936,6 +945,7 @@ export function formatInvalidPhoneNumberMessage(lang: Lang): string {
 export function formatAmountError(code: AmountErrorCode, lang: Lang): string {
   switch (code) {
     case 'ZERO':               return formatAmountZeroMessage(lang)
+    case 'TOO_SMALL':          return formatAmountTooSmallMessage(lang)
     case 'TOO_LARGE':          return formatAmountTooLargeMessage(lang)
     case 'TOO_MANY_DECIMALS':  return formatAmountTooManyDecimalsMessage(lang)
     case 'AMBIGUOUS_SEPARATOR': return formatAmountAmbiguousMessage(lang)

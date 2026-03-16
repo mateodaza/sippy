@@ -4,6 +4,7 @@ import { WagmiProvider, createConfig, http } from 'wagmi';
 import { arbitrum, mainnet, optimism, base, polygon } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConnectKitProvider, getDefaultConfig } from 'connectkit';
+import { useTheme } from 'next-themes';
 import { ReactNode } from 'react';
 
 export const wagmiConfig = createConfig(
@@ -34,10 +35,14 @@ export const wagmiConfig = createConfig(
 const queryClient = new QueryClient();
 
 export function Web3Provider({ children }: { children: ReactNode }) {
+  const { resolvedTheme } = useTheme();
+  const mode = (resolvedTheme as 'light' | 'dark') ?? 'light';
+
   return (
     <WagmiProvider config={wagmiConfig} reconnectOnMount={true}>
       <QueryClientProvider client={queryClient}>
         <ConnectKitProvider
+          mode={mode}
           options={{
             hideNoWalletCTA: true,
             hideRecentBadge: true,

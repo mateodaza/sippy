@@ -81,7 +81,7 @@ export function AddressOrPhone({
 
   if (loading) {
     return (
-      <span className={`text-gray-400 ${className}`}>
+      <span className={`text-[var(--text-muted)] ${className}`}>
         {formatAddress(address)}
       </span>
     );

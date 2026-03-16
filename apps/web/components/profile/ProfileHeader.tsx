@@ -139,7 +139,7 @@ export function ProfileHeader({
               </div>
             </div>
             <div className='inline-flex items-center gap-2 px-4 py-1.5 bg-white/15 backdrop-blur-sm rounded-full border border-white/25'>
-              <div className='w-2 h-2 rounded-full bg-[#4ade80] animate-pulse' />
+              <div className='w-2 h-2 rounded-full bg-brand-crypto animate-pulse' />
               <span className='text-white/90 text-xs sm:text-sm font-semibold'>
                 USD
               </span>

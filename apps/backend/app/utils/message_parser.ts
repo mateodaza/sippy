@@ -243,6 +243,11 @@ export function parseAndValidateAmount(raw: string): AmountParseResult {
     return { value: null, errorCode: 'ZERO', isLarge: false }
   }
 
+  // Step 5b: Minimum amount check (0.1 USDC)
+  if (value < 0.1) {
+    return { value: null, errorCode: 'TOO_SMALL', isLarge: false }
+  }
+
   // Step 6: Too many decimals (4+ decimal places)
   const parts = normalized.split('.')
   if (parts[1] !== undefined && parts[1].length > 2) {

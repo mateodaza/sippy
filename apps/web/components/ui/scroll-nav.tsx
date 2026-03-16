@@ -37,7 +37,7 @@ export default function ScrollNav({
       aria-label='Main navigation'
       className={`group/nav fixed w-full z-50 pointer-events-none transition-all duration-300 ${
         hidden ? '-translate-y-full' : 'translate-y-0'
-      } ${scrolled ? 'bg-white/70 backdrop-blur-xl shadow-sm' : ''}`}
+      } ${scrolled ? 'bg-[var(--bg-nav-blur)] backdrop-blur-xl shadow-sm' : ''}`}
       data-scrolled={scrolled || undefined}
     >
       {children}

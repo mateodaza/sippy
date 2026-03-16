@@ -18,6 +18,10 @@ import {
 } from 'lucide-react';
 import BlurFade from '@/components/ui/blur-fade';
 import ScrollNav from '@/components/ui/scroll-nav';
+import { getRequestLang } from '@/lib/i18n-server';
+import { t } from '@/lib/i18n';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { LanguageSwitcher } from '@/components/ui/language-switcher';
 
 export const metadata = {
   title: 'About Sippy - WhatsApp USDC Payments on Arbitrum',
@@ -31,7 +35,9 @@ export const metadata = {
   },
 };
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  const lang = await getRequestLang();
+
   return (
     <main className='min-h-screen' id='main-content'>
       {/* Navigation */}
@@ -50,6 +56,7 @@ export default function AboutPage() {
               className='transition-smooth hover:scale-105'
             />
           </Link>
+          <ThemeToggle />
         </div>
       </ScrollNav>
 
@@ -57,24 +64,24 @@ export default function AboutPage() {
       <section className='relative overflow-hidden py-12 sm:py-24'>
         <div className='relative z-10 max-w-[75vw] sm:max-w-3xl mx-auto text-center'>
           <div className='flex flex-wrap gap-3 items-center justify-center mb-8'>
-            <div className='inline-flex items-center gap-2 px-3.5 py-1.5 bg-brand-crypto-light border border-brand-crypto/20 rounded-full text-sm text-brand-dark animate-fade-in-up'>
+            <div className='inline-flex items-center gap-2 px-3.5 py-1.5 bg-brand-crypto-light border border-brand-crypto/20 rounded-full text-sm text-[var(--text-primary)] animate-fade-in-up'>
               <CheckCircle2 className='w-4 h-4 text-brand-crypto' />
-              <span className='font-medium'>Live on Arbitrum One</span>
+              <span className='font-medium'>{t('about.badge.live', lang)}</span>
             </div>
-            <div className='inline-flex items-center gap-2 px-3.5 py-1.5 bg-brand-crypto-light border border-brand-crypto/20 rounded-full text-sm text-brand-dark animate-fade-in-up animation-delay-100'>
+            <div className='inline-flex items-center gap-2 px-3.5 py-1.5 bg-brand-crypto-light border border-brand-crypto/20 rounded-full text-sm text-[var(--text-primary)] animate-fade-in-up animation-delay-100'>
               <Zap className='w-4 h-4 text-brand-crypto' />
-              <span className='font-medium'>Launching Q2 2026</span>
+              <span className='font-medium'>{t('about.badge.launch', lang)}</span>
             </div>
           </div>
 
-          <h1 className='font-display text-4xl md:text-5xl lg:text-[3.5rem] font-bold uppercase text-brand-dark leading-[1.08] tracking-[-0.025em] mb-6 animate-fade-in-up animation-delay-100'>
-            The dollar wallet
+          <h1 className='font-display text-4xl md:text-5xl lg:text-[3.5rem] font-bold uppercase text-[var(--text-primary)] leading-[1.08] tracking-[-0.025em] mb-6 animate-fade-in-up animation-delay-100'>
+            {t('about.hero.title.line1', lang)}
             <br />
-            <span className='text-brand-crypto'>for Latin America</span>
+            <span className='text-brand-crypto'>{t('about.hero.title.line2', lang)}</span>
           </h1>
 
-          <p className='text-lg md:text-xl text-brand-dark/70 leading-[1.75] max-w-2xl mx-auto animate-fade-in-up animation-delay-200'>
-            Sippy turns WhatsApp into a USDC wallet on Arbitrum One so you can send, receive, and hold dollars through messages without downloading an app, managing seed phrases, or learning anything about crypto.
+          <p className='text-lg md:text-xl text-[var(--text-secondary)] leading-[1.75] max-w-2xl mx-auto animate-fade-in-up animation-delay-200'>
+            {t('about.hero.desc', lang)}
           </p>
         </div>
       </section>
@@ -82,21 +89,22 @@ export default function AboutPage() {
       {/* How it Works */}
       <section className='relative py-12 sm:py-24'>
         <div className='max-w-[75vw] sm:max-w-4xl mx-auto'>
-          <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-brand-dark text-center mb-16 leading-[1.08] tracking-[-0.02em]'>
-            How it <span className='text-brand-crypto'>works</span>
+          <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-[var(--text-primary)] text-center mb-16 leading-[1.08] tracking-[-0.02em]'>
+            {t('about.how.title.before', lang)}{' '}
+            <span className='text-brand-crypto'>{t('about.how.title.accent', lang)}</span>
           </h2>
 
           <div className='relative'>
-            <div className='hidden md:block absolute top-7 left-[calc(16.67%+24px)] right-[calc(16.67%+24px)] h-px bg-brand-primary/15' />
+            <div className='hidden md:block absolute top-7 left-[calc(16.67%+24px)] right-[calc(16.67%+24px)] h-px bg-brand-primary/15 dark:bg-white/10' />
 
             <div className='grid md:grid-cols-3 gap-12 md:gap-8'>
               <div className='text-center relative'>
                 <div className='mx-auto mb-5 w-14 h-14 rounded-full bg-brand-crypto text-white flex items-center justify-center text-xl font-bold relative z-10'>
                   1
                 </div>
-                <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>Create wallet</h3>
-                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
-                  SMS verification. 30 seconds. You get your own smart wallet.
+                <h3 className='font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-2'>{t('about.step1.title', lang)}</h3>
+                <p className='text-[15px] text-[var(--text-secondary)] leading-[1.75]'>
+                  {t('about.step1.desc', lang)}
                 </p>
               </div>
 
@@ -104,9 +112,9 @@ export default function AboutPage() {
                 <div className='mx-auto mb-5 w-14 h-14 rounded-full bg-brand-crypto text-white flex items-center justify-center text-xl font-bold relative z-10'>
                   2
                 </div>
-                <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>Fund wallet</h3>
-                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
-                  Buy USDC with local currency. Funds land directly in your wallet.
+                <h3 className='font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-2'>{t('about.step2.title', lang)}</h3>
+                <p className='text-[15px] text-[var(--text-secondary)] leading-[1.75]'>
+                  {t('about.step2.desc', lang)}
                 </p>
               </div>
 
@@ -114,9 +122,9 @@ export default function AboutPage() {
                 <div className='mx-auto mb-5 w-14 h-14 rounded-full bg-brand-crypto text-white flex items-center justify-center text-xl font-bold relative z-10'>
                   3
                 </div>
-                <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>Send money</h3>
-                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
-                  Type &ldquo;send $20 to +573001234567&rdquo; on WhatsApp. Arrives in seconds.
+                <h3 className='font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-2'>{t('about.step3.title', lang)}</h3>
+                <p className='text-[15px] text-[var(--text-secondary)] leading-[1.75]'>
+                  {t('about.step3.desc', lang)}
                 </p>
               </div>
             </div>
@@ -128,13 +136,14 @@ export default function AboutPage() {
       <section className='relative py-12 sm:py-24'>
         <div className='max-w-[75vw] sm:max-w-3xl mx-auto'>
           <BlurFade delay={0.1} inView>
-            <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-brand-dark text-center mb-6 leading-[1.08] tracking-[-0.02em]'>
-              Why this <span className='text-brand-crypto'>matters</span>
+            <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-[var(--text-primary)] text-center mb-6 leading-[1.08] tracking-[-0.02em]'>
+              {t('about.thesis.title.before', lang)}{' '}
+              <span className='text-brand-crypto'>{t('about.thesis.title.accent', lang)}</span>
             </h2>
           </BlurFade>
           <BlurFade delay={0.15} inView>
-            <p className='text-lg md:text-xl text-brand-dark/70 leading-[1.75] text-center'>
-              WhatsApp has 90%+ penetration across Latin America. Hundreds of millions of people open it before breakfast, and most of them want dollar stability because local currencies keep losing value. But nobody is downloading a new app to get it. Sippy puts a dollar wallet inside the app they already use, powered by an AI agent that speaks their language.
+            <p className='text-lg md:text-xl text-[var(--text-secondary)] leading-[1.75] text-center'>
+              {t('about.thesis', lang)}
             </p>
           </BlurFade>
         </div>
@@ -143,11 +152,11 @@ export default function AboutPage() {
       {/* Architecture */}
       <section className='relative py-12 sm:py-24'>
         <div className='max-w-[75vw] sm:max-w-5xl mx-auto'>
-          <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-brand-dark text-center mb-4 leading-[1.08] tracking-[-0.02em]'>
-            Architecture
+          <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-[var(--text-primary)] text-center mb-4 leading-[1.08] tracking-[-0.02em]'>
+            {t('about.arch.title', lang)}
           </h2>
-          <p className='text-lg text-brand-dark/70 text-center mb-12 leading-[1.7]'>
-            WhatsApp message in, on-chain transaction out
+          <p className='text-lg text-[var(--text-secondary)] text-center mb-12 leading-[1.7]'>
+            {t('about.arch.subtitle', lang)}
           </p>
 
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7'>
@@ -162,8 +171,8 @@ export default function AboutPage() {
                   />
                 ),
                 bg: 'bg-brand-crypto-light',
-                title: 'WhatsApp Business API',
-                desc: 'User interface via Meta Cloud API',
+                titleKey: 'about.arch1.title',
+                descKey: 'about.arch1.desc',
               },
               {
                 icon: (
@@ -175,14 +184,14 @@ export default function AboutPage() {
                   />
                 ),
                 bg: 'bg-brand-primary-light',
-                title: 'Coinbase CDP Wallets',
-                desc: 'Non-custodial embedded smart accounts',
+                titleKey: 'about.arch2.title',
+                descKey: 'about.arch2.desc',
               },
               {
                 icon: <Bot className='w-6 h-6 text-brand-crypto' />,
                 bg: 'bg-brand-crypto-light',
-                title: 'AI Agent',
-                desc: 'AI-powered payments in Spanish, English, and Portuguese',
+                titleKey: 'about.arch3.title',
+                descKey: 'about.arch3.desc',
               },
               {
                 icon: (
@@ -194,8 +203,8 @@ export default function AboutPage() {
                   />
                 ),
                 bg: 'bg-brand-primary-light',
-                title: 'USDC on Arbitrum One',
-                desc: 'Stable, regulated, deep liquidity',
+                titleKey: 'about.arch4.title',
+                descKey: 'about.arch4.desc',
               },
               {
                 icon: (
@@ -207,30 +216,30 @@ export default function AboutPage() {
                   />
                 ),
                 bg: 'bg-brand-primary-light',
-                title: 'Arbitrum One',
-                desc: 'Low-cost settlement, ~$0.01 per transaction',
+                titleKey: 'about.arch5.title',
+                descKey: 'about.arch5.desc',
               },
               {
                 icon: <Zap className='w-6 h-6 text-brand-crypto' />,
                 bg: 'bg-brand-crypto-light',
-                title: 'GasRefuel.sol',
-                desc: 'Gasless transactions for users',
+                titleKey: 'about.arch6.title',
+                descKey: 'about.arch6.desc',
               },
             ].map((card) => (
               <div
-                key={card.title}
-                className='group panel-frame rounded-2xl bg-white p-8 h-full'
+                key={card.titleKey}
+                className='group panel-frame rounded-2xl bg-[var(--bg-primary)] p-8 h-full'
               >
                 <div
                   className={`w-12 h-12 ${card.bg} rounded-xl flex items-center justify-center mb-5`}
                 >
                   {card.icon}
                 </div>
-                <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2.5'>
-                  {card.title}
+                <h3 className='font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-2.5'>
+                  {t(card.titleKey, lang)}
                 </h3>
-                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
-                  {card.desc}
+                <p className='text-[15px] text-[var(--text-secondary)] leading-[1.75]'>
+                  {t(card.descKey, lang)}
                 </p>
               </div>
             ))}
@@ -241,11 +250,12 @@ export default function AboutPage() {
       {/* Trust & Security */}
       <section className='relative py-12 sm:py-24'>
         <div className='max-w-[75vw] sm:max-w-3xl mx-auto'>
-          <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-brand-dark text-center mb-4 leading-[1.08] tracking-[-0.02em]'>
-            Trust & <span className='text-brand-crypto'>Security</span>
+          <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-[var(--text-primary)] text-center mb-4 leading-[1.08] tracking-[-0.02em]'>
+            {t('about.trust.title.before', lang)}{' '}
+            <span className='text-brand-crypto'>{t('about.trust.title.accent', lang)}</span>
           </h2>
-          <p className='text-lg text-brand-dark/70 text-center mb-12 leading-[1.7]'>
-            Users own their wallets. Sippy operates through spend permissions that users set and can revoke at any time.
+          <p className='text-lg text-[var(--text-secondary)] text-center mb-12 leading-[1.7]'>
+            {t('about.trust.desc', lang)}
           </p>
 
           <div className='space-y-8'>
@@ -254,9 +264,9 @@ export default function AboutPage() {
                 <Lock className='w-5 h-5 text-brand-crypto' />
               </div>
               <div>
-                <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-1'>Non-custodial</h3>
-                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
-                  Coinbase CDP Embedded Wallets. Users control their own smart accounts and can export their private keys.
+                <h3 className='font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-1'>{t('about.pillar1.title', lang)}</h3>
+                <p className='text-[15px] text-[var(--text-secondary)] leading-[1.75]'>
+                  {t('about.pillar1.desc', lang)}
                 </p>
               </div>
             </div>
@@ -266,9 +276,9 @@ export default function AboutPage() {
                 <Shield className='w-5 h-5 text-brand-crypto' />
               </div>
               <div>
-                <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-1'>User-controlled limits</h3>
-                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
-                  Daily spend limits enforced on-chain via SpendPermissionManager. Users set and revoke these anytime.
+                <h3 className='font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-1'>{t('about.pillar2.title', lang)}</h3>
+                <p className='text-[15px] text-[var(--text-secondary)] leading-[1.75]'>
+                  {t('about.pillar2.desc', lang)}
                 </p>
               </div>
             </div>
@@ -278,9 +288,9 @@ export default function AboutPage() {
                 <Eye className='w-5 h-5 text-brand-crypto' />
               </div>
               <div>
-                <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-1'>Fully transparent</h3>
-                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
-                  Every transaction is verifiable on Arbiscan. Amount, recipient, timestamp, all on-chain.
+                <h3 className='font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-1'>{t('about.pillar3.title', lang)}</h3>
+                <p className='text-[15px] text-[var(--text-secondary)] leading-[1.75]'>
+                  {t('about.pillar3.desc', lang)}
                 </p>
               </div>
             </div>
@@ -292,21 +302,21 @@ export default function AboutPage() {
       <section className='relative py-12 sm:py-24'>
         <div className='max-w-[75vw] sm:max-w-5xl mx-auto'>
           <BlurFade delay={0.1} inView>
-            <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-brand-dark text-center mb-12 leading-[1.08] tracking-[-0.02em]'>
-              Traction
+            <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-[var(--text-primary)] text-center mb-12 leading-[1.08] tracking-[-0.02em]'>
+              {t('about.traction.title', lang)}
             </h2>
           </BlurFade>
 
           <div className='grid md:grid-cols-3 gap-6'>
-            <div className='panel-frame rounded-2xl bg-white p-8 text-center h-full'>
+            <div className='panel-frame rounded-2xl bg-[var(--bg-primary)] p-8 text-center h-full'>
               <div className='mx-auto mb-4 w-12 h-12 bg-brand-crypto-light rounded-xl flex items-center justify-center'>
                 <Trophy className='w-6 h-6 text-brand-crypto' />
               </div>
-              <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>
-                ETHOnline 2025 Finalist
+              <h3 className='font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-2'>
+                {t('about.traction1.title', lang)}
               </h3>
-              <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
-                Selected from hundreds of submissions at ETHGlobal.
+              <p className='text-[15px] text-[var(--text-secondary)] leading-[1.75]'>
+                {t('about.traction1.desc', lang)}
               </p>
               <a
                 href='https://ethglobal.com/showcase/sippy-2smms'
@@ -314,33 +324,33 @@ export default function AboutPage() {
                 rel='noopener noreferrer'
                 className='inline-flex items-center gap-1 mt-3 py-2 text-sm text-brand-crypto font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-crypto focus-visible:ring-offset-2 rounded'
               >
-                View showcase
+                {t('about.traction1.link', lang)}
                 <ArrowUpRight className='w-3.5 h-3.5' />
                 <span className='sr-only'>(opens in new tab)</span>
               </a>
             </div>
 
-            <div className='panel-frame rounded-2xl bg-white p-8 text-center h-full'>
+            <div className='panel-frame rounded-2xl bg-[var(--bg-primary)] p-8 text-center h-full'>
               <div className='mx-auto mb-4 w-12 h-12 bg-brand-crypto-light rounded-xl flex items-center justify-center'>
                 <CheckCircle2 className='w-6 h-6 text-brand-crypto' />
               </div>
-              <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>
-                Arbitrum Grants Program
+              <h3 className='font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-2'>
+                {t('about.traction2.title', lang)}
               </h3>
-              <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
-                Funded through Arbitrum New Protocols and Ideas 3.0 via Questbook.
+              <p className='text-[15px] text-[var(--text-secondary)] leading-[1.75]'>
+                {t('about.traction2.desc', lang)}
               </p>
             </div>
 
-            <div className='panel-frame rounded-2xl bg-white p-8 text-center h-full'>
+            <div className='panel-frame rounded-2xl bg-[var(--bg-primary)] p-8 text-center h-full'>
               <div className='mx-auto mb-4 w-12 h-12 bg-brand-crypto-light rounded-xl flex items-center justify-center'>
                 <Globe className='w-6 h-6 text-brand-crypto' />
               </div>
-              <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>
-                Live on mainnet
+              <h3 className='font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-2'>
+                {t('about.traction3.title', lang)}
               </h3>
-              <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
-                Smart contracts deployed and operational on Arbitrum One. End-to-end payment flow validated.
+              <p className='text-[15px] text-[var(--text-secondary)] leading-[1.75]'>
+                {t('about.traction3.desc', lang)}
               </p>
             </div>
           </div>
@@ -353,20 +363,20 @@ export default function AboutPage() {
           <div className='relative overflow-hidden rounded-[32px] px-8 py-14 md:px-16 md:py-20 bg-brand-primary'>
             <div className='relative z-10 text-center max-w-3xl mx-auto'>
               <h2 className='font-display text-3xl md:text-[2.75rem] font-bold uppercase text-white leading-[1.08] tracking-[-0.02em] mb-4'>
-                Money as fast as your&nbsp;messages.
+                {t('about.cta.title', lang)}
               </h2>
               <p className='text-lg md:text-xl text-white/80 leading-[1.7]'>
-                Launching Q2 2026 in Colombia.
+                {t('about.cta.sub1', lang)}
               </p>
               <p className='text-lg md:text-xl text-white/80 leading-[1.7] mt-2 mb-10'>
-                Built to scale across Latin America.
+                {t('about.cta.sub2', lang)}
               </p>
               <div className='flex flex-wrap gap-3.5 justify-center'>
                 <a
                   href='mailto:hello@sippy.lat?subject=Partnership%20Inquiry'
                   className='px-7 py-3.5 bg-white text-brand-primary rounded-xl font-semibold hover:bg-white/90 active:scale-[0.98] transition-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-primary'
                 >
-                  Get in touch
+                  {t('about.cta.contact', lang)}
                 </a>
                 <a
                   href='https://ethglobal.com/showcase/sippy-2smms'
@@ -374,7 +384,7 @@ export default function AboutPage() {
                   rel='noopener noreferrer'
                   className='panel-frame-light px-7 py-3.5 text-white rounded-xl font-semibold hover:bg-white/5 active:scale-[0.98] transition-smooth flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-primary'
                 >
-                  ETHGlobal Showcase
+                  {t('about.cta.showcase', lang)}
                   <ArrowUpRight className='w-4 h-4' />
                   <span className='sr-only'>(opens in new tab)</span>
                 </a>
@@ -385,7 +395,7 @@ export default function AboutPage() {
       </section>
 
       {/* Footer */}
-      <footer className='border-t border-brand-dark/20 bg-white'>
+      <footer className='border-t border-[var(--border-strong)] bg-[var(--bg-primary)]'>
         <div className='max-w-7xl mx-auto px-6 py-10'>
           <div className='flex flex-col md:flex-row justify-between items-center gap-6'>
             <div className='flex items-center gap-2.5'>
@@ -394,38 +404,47 @@ export default function AboutPage() {
                 alt='Sippy'
                 width={20}
                 height={20}
+                className='dark:hidden'
               />
-              <span className='text-[13px] text-brand-dark/70'>Sippy</span>
+              <Image
+                src='/images/logos/sippy-s-mark-white.svg'
+                alt='Sippy'
+                width={20}
+                height={20}
+                className='hidden dark:block'
+              />
+              <span className='text-[13px] text-[var(--text-secondary)]'>Sippy</span>
             </div>
-            <nav aria-label='Footer navigation' className='flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-brand-dark/70'>
+            <nav aria-label='Footer navigation' className='flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-[var(--text-secondary)]'>
               <Link
                 href='/'
                 className='py-2 hover:text-brand-primary transition-smooth font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'
               >
-                Home
+                {t('about.footer.home', lang)}
               </Link>
               <Link
                 href='/privacy'
                 className='py-2 hover:text-brand-primary transition-smooth font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'
               >
-                Privacy Policy
+                {t('about.footer.privacy', lang)}
               </Link>
               <Link
                 href='/terms'
                 className='py-2 hover:text-brand-primary transition-smooth font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'
               >
-                Terms of Service
+                {t('about.footer.terms', lang)}
               </Link>
               <a
                 href='mailto:hello@sippy.lat'
                 className='py-2 hover:text-brand-primary transition-smooth font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'
               >
-                Contact
+                {t('about.footer.contact', lang)}
               </a>
             </nav>
           </div>
-          <div className='text-center mt-8 pt-6 border-t border-brand-primary/10'>
-            <p className='spec-label spec-label-muted'>Built on Arbitrum One</p>
+          <div className='flex flex-col items-center gap-4 mt-8 pt-6 border-t border-brand-primary/10'>
+            <p className='spec-label spec-label-muted'>{t('about.footer.built', lang)}</p>
+            <LanguageSwitcher current={lang} />
           </div>
         </div>
       </footer>

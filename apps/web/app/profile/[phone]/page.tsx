@@ -85,10 +85,10 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       <div className='min-h-screen flex items-center justify-center px-4'>
         <div className='text-center max-w-md'>
           <div className='text-6xl mb-4'>📱</div>
-          <h1 className='font-display text-2xl font-bold uppercase text-brand-dark mb-2'>
+          <h1 className='font-display text-2xl font-bold uppercase text-[var(--text-primary)] mb-2'>
             Phone Number Not Found
           </h1>
-          <p className='text-gray-500 mb-6'>
+          <p className='text-[var(--text-muted)] mb-6'>
             We couldn&apos;t find a wallet associated with {decodedPhone}. The user
             may not have set up their wallet yet.
           </p>
@@ -118,7 +118,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
           {/* Back Button */}
           <Link
             href='/'
-            className='inline-flex items-center text-sm sm:text-base text-brand-dark/60 hover:text-brand-primary mb-4 sm:mb-6 transition-smooth font-medium'
+            className='inline-flex items-center text-sm sm:text-base text-[var(--text-secondary)] hover:text-brand-primary mb-4 sm:mb-6 transition-smooth font-medium'
           >
             <svg
               className='w-4 h-4 sm:w-5 sm:h-5 mr-1.5 sm:mr-2'

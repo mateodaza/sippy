@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Chakra_Petch, Electrolize, Space_Mono } from 'next/font/google';
+import { ThemeProvider } from 'next-themes';
 import './globals.css';
 import { Web3Provider } from './providers/Web3Provider';
 
@@ -46,9 +47,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang='en' className={`${chakraPetch.variable} ${electrolize.variable} ${spaceMono.variable}`}>
-      <body className='min-h-screen bg-white antialiased font-sans text-brand-dark'>
-        <Web3Provider>{children}</Web3Provider>
+    <html lang='en' suppressHydrationWarning className={`${chakraPetch.variable} ${electrolize.variable} ${spaceMono.variable}`}>
+      <body className='min-h-screen bg-[var(--bg-primary)] antialiased font-sans text-[var(--text-primary)]'>
+        <ThemeProvider attribute='class' defaultTheme='system' storageKey='sippy_fund_theme'>
+          <Web3Provider>{children}</Web3Provider>
+        </ThemeProvider>
       </body>
     </html>
   );

@@ -22,6 +22,48 @@ html {
   --semantic-success: #16A34A;
   --semantic-danger: #DC2626;
   --semantic-warning: #D97706;
+
+  /* ── Surfaces ── */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F9FAFB;
+  --bg-tertiary: #F3F4F6;
+  --bg-nav-blur: rgba(255, 255, 255, 0.7);
+  --bg-wordmark-blur: rgba(255, 255, 255, 0.6);
+
+  /* ── Text ── */
+  --text-primary: #0D0D1A;
+  --text-secondary: rgba(13, 13, 26, 0.6);
+  --text-muted: rgba(13, 13, 26, 0.4);
+
+  /* ── Borders ── */
+  --border-default: rgba(0, 175, 215, 0.1);
+  --border-strong: rgba(0, 175, 215, 0.2);
+
+  /* ── Semantic fills (banners/alerts) ── */
+  --fill-danger-light: #FEE2E2;
+  --fill-warning-light: #FEF3C7;
+  --fill-success-light: #DCFCE7;
+  --fill-info-light: rgba(0, 175, 215, 0.08);
+}
+
+.dark {
+  --bg-primary: #000000;
+  --bg-secondary: #0A0A0A;
+  --bg-tertiary: #141414;
+  --bg-nav-blur: rgba(0, 0, 0, 0.7);
+  --bg-wordmark-blur: rgba(0, 0, 0, 0.6);
+
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.45);
+
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  --fill-danger-light: rgba(220, 38, 38, 0.12);
+  --fill-warning-light: rgba(217, 119, 6, 0.12);
+  --fill-success-light: rgba(22, 163, 74, 0.12);
+  --fill-info-light: rgba(255, 255, 255, 0.05);
 }
 
 @layer utilities {
@@ -88,6 +130,21 @@ html {
     border-radius: inherit;
   }
 
+  /* ── Panel frame — dark mode override: white borders ── */
+  .dark .panel-frame {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+  .dark .panel-frame::after {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+  .dark .panel-frame:hover::after {
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+  .dark .panel-frame-fill-hover:hover::after {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+
   /* ── Panel frame — white variant (for blue/dark backgrounds) ── */
   .panel-frame-light {
     border: 1px solid rgba(255, 255, 255, 0.4);
@@ -146,6 +203,35 @@ html {
       linear-gradient(to right, rgba(0, 175, 215, 0.06) 1px, transparent 1px);
     background-size: 80px 100%;
   }
+  .dark .ruled-lines {
+    background-color: #000000;
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  }
+
+  /* ── Grid overlay — faint ruled lines for sections/footers ── */
+  .grid-overlay {
+    background-image:
+      linear-gradient(to right, rgba(0, 175, 215, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0, 175, 215, 0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+  .dark .grid-overlay {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  }
+  .grid-overlay-lg {
+    background-image:
+      linear-gradient(to right, rgba(0, 175, 215, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(0, 175, 215, 0.06) 1px, transparent 1px);
+    background-size: 80px 80px;
+  }
+  .dark .grid-overlay-lg {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  }
 
   /* ── Spec label — equipment annotation ── */
   .spec-label {
@@ -161,6 +247,22 @@ html {
   }
   .spec-label-light {
     color: rgba(255, 255, 255, 0.6);
+  }
+  .dark .spec-label {
+    color: rgba(255, 255, 255, 0.5);
+  }
+  .dark .spec-label-muted {
+    color: rgba(255, 255, 255, 0.3);
+  }
+
+  /* ── Dark mode overrides for registration marks ── */
+  .dark .registration-marks::before {
+    border-left-color: rgba(255, 255, 255, 0.15);
+    border-top-color: rgba(255, 255, 255, 0.15);
+  }
+  .dark .registration-marks::after {
+    border-right-color: rgba(255, 255, 255, 0.15);
+    border-bottom-color: rgba(255, 255, 255, 0.15);
   }
 
   /* ── Panel seam — section divider with terminal marks ── */
@@ -182,6 +284,13 @@ html {
   }
   .panel-seam::before { left: 0; }
   .panel-seam::after { right: 0; }
+  .dark .panel-seam {
+    background: rgba(255, 255, 255, 0.15);
+  }
+  .dark .panel-seam::before,
+  .dark .panel-seam::after {
+    background: rgba(255, 255, 255, 0.15);
+  }
 
   /* ── Indicator dot — status light ── */
   .indicator-dot {
@@ -191,7 +300,11 @@ html {
     background: var(--brand-primary);
     display: inline-block;
   }
-  .indicator-dot-active {
+  .dark .indicator-dot {
+    background: rgba(255, 255, 255, 0.3);
+  }
+  .indicator-dot-active,
+  .dark .indicator-dot-active {
     background: var(--brand-crypto);
     box-shadow: 0 0 6px rgba(0, 215, 150, 0.5);
   }
@@ -221,6 +334,14 @@ html {
       border-radius: calc(1.5rem - 5px);
     }
   }
+  .dark .crt-tv {
+    background: #0A0A0A;
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+  .dark .crt-tv::after {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
   /* The screen inset */
   .crt-screen {
     border-radius: 0.5rem;
@@ -387,9 +508,9 @@ html {
 /* Glitch wave bands — erratic rolling interference */
 @keyframes glitch-wave {
   0% { transform: translateY(0) scaleY(1); }
-  25% { transform: translateY(-12%) scaleY(1.02); }
-  50% { transform: translateY(-28%) scaleY(0.98); }
-  75% { transform: translateY(-38%) scaleY(1.01); }
+  18% { transform: translateY(-8%) scaleY(1.02); }
+  42% { transform: translateY(-26%) scaleY(0.98); }
+  68% { transform: translateY(-36%) scaleY(1.01); }
   100% { transform: translateY(-50%) scaleY(1); }
 }
 
@@ -401,24 +522,24 @@ html {
 }
 
 .animate-glitch-wave {
-  animation: glitch-wave 11s ease-in-out infinite alternate;
+  animation: glitch-wave 11s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
 }
 
 .animate-glitch-wave-slow {
-  animation: glitch-wave-slow 17s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: glitch-wave-slow 17s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
 }
 
 @keyframes glitch-wave-fast {
   0% { transform: translateY(0) scaleX(1); }
-  20% { transform: translateY(-18%) scaleX(1.005); }
-  40% { transform: translateY(-8%) scaleX(0.995); }
-  60% { transform: translateY(-35%) scaleX(1.003); }
-  80% { transform: translateY(-22%) scaleX(0.998); }
+  15% { transform: translateY(-10%) scaleX(1.005); }
+  35% { transform: translateY(-22%) scaleX(0.995); }
+  55% { transform: translateY(-14%) scaleX(1.003); }
+  75% { transform: translateY(-38%) scaleX(0.998); }
   100% { transform: translateY(-50%) scaleX(1); }
 }
 
 .animate-glitch-wave-fast {
-  animation: glitch-wave-fast 6.7s ease-in-out infinite;
+  animation: glitch-wave-fast 6.7s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 /* Organic blob drift — wandering movement */
@@ -432,15 +553,15 @@ html {
 }
 
 .animate-glitch-drift {
-  animation: glitch-drift 23s ease-in-out infinite;
+  animation: glitch-drift 23s cubic-bezier(0.33, 0, 0.67, 1) infinite;
 }
 
 /* Vertical lines scrolling horizontally — erratic */
 @keyframes glitch-wave-h {
   0% { transform: translateX(0) skewX(0deg); }
-  30% { transform: translateX(-15%) skewX(0.4deg); }
-  50% { transform: translateX(-30%) skewX(-0.2deg); }
-  70% { transform: translateX(-20%) skewX(0.3deg); }
+  22% { transform: translateX(-12%) skewX(0.4deg); }
+  48% { transform: translateX(-30%) skewX(-0.2deg); }
+  72% { transform: translateX(-22%) skewX(0.3deg); }
   100% { transform: translateX(-50%) skewX(0deg); }
 }
 
@@ -453,11 +574,11 @@ html {
 }
 
 .animate-glitch-wave-h {
-  animation: glitch-wave-h 8.3s ease-in-out infinite alternate;
+  animation: glitch-wave-h 8.3s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
 }
 
 .animate-glitch-wave-h-slow {
-  animation: glitch-wave-h-slow 13.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+  animation: glitch-wave-h-slow 13.7s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
 }
 
 /* VHS flicker lines — erratic jumps, not smooth drift */
@@ -519,6 +640,38 @@ html {
 
 .animate-vhs-flicker-3 {
   animation: vhs-flicker-3 14s step-end infinite;
+}
+
+/* Hero vertical streaks — slow elegant drift */
+@keyframes hero-drift {
+  0% { transform: translateX(0) scaleX(1); opacity: 1; }
+  50% { transform: translateX(3%) scaleX(1.02); opacity: 0.85; }
+  100% { transform: translateX(0) scaleX(1); opacity: 1; }
+}
+
+@keyframes hero-drift-slow {
+  0% { transform: translateX(0) scaleX(1); opacity: 1; }
+  50% { transform: translateX(-2%) scaleX(0.98); opacity: 0.9; }
+  100% { transform: translateX(0) scaleX(1); opacity: 1; }
+}
+
+@keyframes hero-drift-warm {
+  0% { transform: translateX(0); opacity: 0.8; }
+  33% { transform: translateX(1.5%); opacity: 1; }
+  66% { transform: translateX(-1%); opacity: 0.7; }
+  100% { transform: translateX(0); opacity: 0.8; }
+}
+
+.animate-hero-drift {
+  animation: hero-drift 12s cubic-bezier(0.37, 0, 0.63, 1) infinite;
+}
+
+.animate-hero-drift-slow {
+  animation: hero-drift-slow 16s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+.animate-hero-drift-warm {
+  animation: hero-drift-warm 10s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 @keyframes border-beam {

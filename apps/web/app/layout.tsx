@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from 'next';
 import { Chakra_Petch, Electrolize, Space_Mono } from 'next/font/google';
+import { ThemeProvider } from 'next-themes';
 import './globals.css';
 import { Web3Provider } from './providers/Web3Provider';
 import { BlockscoutProvider } from './providers/BlockscoutProvider';
 import { CDPProvider } from './providers/cdp-provider';
 import { PostHogProvider } from './providers/PostHogProvider';
+import { getRequestLang } from '@/lib/i18n-server';
 
 const chakraPetch = Chakra_Petch({
   weight: ['300', '400', '500', '600', '700'],
@@ -46,20 +48,23 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const lang = await getRequestLang();
+
   return (
-    <html lang='en' className={`${chakraPetch.variable} ${electrolize.variable} ${spaceMono.variable}`}>
-      <body className='min-h-screen bg-white antialiased font-sans text-brand-dark'>
-        <PostHogProvider>
-          <BlockscoutProvider>
-            <CDPProvider>
-              <Web3Provider>
-                <script
-                  type='application/ld+json'
+    <html lang={lang} suppressHydrationWarning className={`${chakraPetch.variable} ${electrolize.variable} ${spaceMono.variable}`}>
+      <body className='min-h-screen bg-[var(--bg-primary)] antialiased font-sans text-[var(--text-primary)]'>
+        <ThemeProvider attribute='class' defaultTheme='system' storageKey='sippy_theme'>
+          <PostHogProvider>
+            <BlockscoutProvider>
+              <CDPProvider>
+                <Web3Provider>
+                  <script
+                    type='application/ld+json'
                   dangerouslySetInnerHTML={{
                     __html: JSON.stringify({
                       '@context': 'https://schema.org',
@@ -70,10 +75,11 @@ export default function RootLayout({
                   }}
                 />
                 {children}
-              </Web3Provider>
-            </CDPProvider>
-          </BlockscoutProvider>
-        </PostHogProvider>
+                </Web3Provider>
+              </CDPProvider>
+            </BlockscoutProvider>
+          </PostHogProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

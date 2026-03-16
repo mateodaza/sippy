@@ -22,6 +22,46 @@ html {
   --semantic-success: #16A34A;
   --semantic-danger: #DC2626;
   --semantic-warning: #D97706;
+
+  /* ── Surfaces ── */
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F9FAFB;
+  --bg-tertiary: #F3F4F6;
+  --bg-nav-blur: rgba(255, 255, 255, 0.7);
+
+  /* ── Text ── */
+  --text-primary: #0D0D1A;
+  --text-secondary: rgba(13, 13, 26, 0.6);
+  --text-muted: rgba(13, 13, 26, 0.4);
+
+  /* ── Borders ── */
+  --border-default: rgba(0, 175, 215, 0.1);
+  --border-strong: rgba(0, 175, 215, 0.2);
+
+  /* ── Semantic fills ── */
+  --fill-danger-light: #FEE2E2;
+  --fill-warning-light: #FEF3C7;
+  --fill-success-light: #DCFCE7;
+  --fill-info-light: rgba(0, 175, 215, 0.08);
+}
+
+.dark {
+  --bg-primary: #000000;
+  --bg-secondary: #0A0A0A;
+  --bg-tertiary: #141414;
+  --bg-nav-blur: rgba(0, 0, 0, 0.7);
+
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-muted: rgba(255, 255, 255, 0.45);
+
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  --fill-danger-light: rgba(220, 38, 38, 0.12);
+  --fill-warning-light: rgba(217, 119, 6, 0.12);
+  --fill-success-light: rgba(22, 163, 74, 0.12);
+  --fill-info-light: rgba(255, 255, 255, 0.05);
 }
 
 @layer utilities {
