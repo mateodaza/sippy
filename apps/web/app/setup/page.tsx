@@ -579,7 +579,7 @@ function SetupContent() {
         <div className='max-w-md w-full bg-white panel-frame rounded-2xl p-8 text-center'>
           <div className='animate-pulse'>
             <div className='text-4xl mb-4'>🔍</div>
-            <p className='text-gray-500'>{t('setup.loading', lang)}</p>
+            <p className='text-brand-dark/70'>{t('setup.loading', lang)}</p>
           </div>
         </div>
       </div>
@@ -627,7 +627,7 @@ function SetupContent() {
             <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.title', lang)}
             </h1>
-            <p className='text-gray-500 mb-6'>
+            <p className='text-brand-dark/70 mb-6'>
               {t('setup.subtitle', lang)}
             </p>
             <div className='mb-4'>
@@ -642,7 +642,7 @@ function SetupContent() {
               />
             </div>
             {isPhoneLocked && (
-              <p className='text-sm text-gray-500 mb-4'>
+              <p className='text-sm text-brand-dark/70 mb-4'>
                 {t('setup.phoneFromWhatsapp', lang)}
               </p>
             )}
@@ -662,7 +662,7 @@ function SetupContent() {
             <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.enterCode', lang)}
             </h1>
-            <p className='text-gray-500 mb-6'>
+            <p className='text-brand-dark/70 mb-6'>
               {t('setup.codeSentTo', lang)} {phoneNumber}
             </p>
             <input
@@ -683,7 +683,7 @@ function SetupContent() {
             </button>
             <button
               onClick={() => setStep('phone')}
-              className='w-full mt-2 text-gray-500 py-2'
+              className='w-full mt-2 text-brand-dark/70 py-2'
             >
               {t('setup.back', lang)}
             </button>
@@ -696,7 +696,7 @@ function SetupContent() {
             <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.emailTitle', lang)}
             </h1>
-            <p className='text-gray-500 mb-6'>
+            <p className='text-brand-dark/70 mb-6'>
               {t('setup.emailSubtitle', lang)}
             </p>
 
@@ -721,7 +721,7 @@ function SetupContent() {
 
             {emailSent && !emailVerified && (
               <>
-                <p className='text-gray-500 mb-4'>{t('setup.emailCodeSentTo', lang)} {email}</p>
+                <p className='text-brand-dark/70 mb-4'>{t('setup.emailCodeSentTo', lang)} {email}</p>
                 <input
                   type='text'
                   inputMode='numeric'
@@ -745,14 +745,14 @@ function SetupContent() {
               <div className='text-center py-4'>
                 <div className='text-4xl mb-2'>✅</div>
                 <p className='text-semantic-success font-semibold'>{t('setup.emailVerified', lang)}</p>
-                <p className='text-sm text-gray-500 mt-1'>{t('setup.continuingSetup', lang)}</p>
+                <p className='text-sm text-brand-dark/70 mt-1'>{t('setup.continuingSetup', lang)}</p>
               </div>
             )}
 
             {!emailVerified && (
               <button
                 onClick={handleSkipEmail}
-                className='w-full mt-4 text-gray-500 py-2 text-sm'
+                className='w-full mt-4 text-brand-dark/70 py-2 text-sm'
               >
                 {t('setup.skipEmail', lang)}
               </button>
@@ -766,7 +766,7 @@ function SetupContent() {
             <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.tosTitle', lang)}
             </h1>
-            <p className='text-gray-500 mb-6'>
+            <p className='text-brand-dark/70 mb-6'>
               {t('setup.tosSubtitle', lang)}
             </p>
 
@@ -805,7 +805,7 @@ function SetupContent() {
             <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.spendTitle', lang)}
             </h1>
-            <p className='text-gray-500 mb-6'>
+            <p className='text-brand-dark/70 mb-6'>
               {t('setup.spendSubtitle', lang)}
             </p>
 
@@ -864,7 +864,7 @@ function SetupContent() {
             </button>
 
             {isPreparingWallet && (
-              <p className='mt-2 text-sm text-gray-500 text-center animate-pulse'>
+              <p className='mt-2 text-sm text-brand-dark/70 text-center animate-pulse'>
                 {t('setup.fundingGas', lang)}
               </p>
             )}
@@ -878,14 +878,14 @@ function SetupContent() {
             <h1 className='font-display text-2xl font-bold uppercase mb-4 text-brand-dark'>
               {t('setup.allSet', lang)}
             </h1>
-            <p className='text-gray-500 mb-6'>
+            <p className='text-brand-dark/70 mb-6'>
               {t('setup.walletReady', lang)}
             </p>
 
             {walletAddress && (
               <div className='bg-gray-100 p-4 rounded-lg text-left text-sm mb-6'>
                 <p className='font-semibold mb-2 text-brand-dark'>{t('setup.yourWallet', lang)}</p>
-                <p className='font-mono text-xs text-gray-500 break-all'>
+                <p className='font-mono text-xs text-brand-dark/70 break-all'>
                   {walletAddress}
                 </p>
               </div>
@@ -905,7 +905,7 @@ function SetupContent() {
         )}
 
         {/* Footer */}
-        <div className='mt-8 text-center text-xs text-gray-500'>
+        <div className='mt-8 text-center text-xs text-brand-dark/70'>
           <p>{t('setup.poweredBy', lang)}</p>
           <p className='mt-1'>Network: {NETWORK}</p>
           {SIPPY_SPENDER_ADDRESS && (
@@ -924,7 +924,7 @@ export default function SetupPage() {
     <Suspense
       fallback={
         <div className='min-h-screen bg-white flex items-center justify-center'>
-          <div className='text-gray-500'>Loading...</div>
+          <div className='text-brand-dark/70'>Loading...</div>
         </div>
       }
     >

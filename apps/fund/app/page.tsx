@@ -152,7 +152,7 @@ function FundPageContent() {
       <Shell>
         <div className='text-center py-20'>
           <Loader2 className='w-12 h-12 text-brand-primary animate-spin mx-auto mb-4' />
-          <p className='text-gray-500'>Loading fund link...</p>
+          <p className='text-brand-dark/70'>Loading fund link...</p>
         </div>
       </Shell>
     );
@@ -166,7 +166,7 @@ function FundPageContent() {
           <h2 className='font-display text-xl font-bold uppercase text-brand-dark mb-2'>
             {error || 'Something went wrong'}
           </h2>
-          <p className='text-gray-500 mb-6'>
+          <p className='text-brand-dark/70 mb-6'>
             This fund link may be expired or invalid.
           </p>
           <a
@@ -245,7 +245,7 @@ function FundPageContent() {
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
               activeTab === 'card'
                 ? 'bg-white text-brand-dark shadow-sm'
-                : 'text-gray-500 hover:text-brand-dark/60'
+                : 'text-brand-dark/70 hover:text-brand-dark/60'
             }`}
           >
             <CreditCard className='w-4 h-4' />
@@ -256,7 +256,7 @@ function FundPageContent() {
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
               activeTab === 'crypto'
                 ? 'bg-white text-brand-dark shadow-sm'
-                : 'text-gray-500 hover:text-brand-dark/60'
+                : 'text-brand-dark/70 hover:text-brand-dark/60'
             }`}
           >
             <ArrowLeftRight className='w-4 h-4' />
@@ -276,7 +276,7 @@ function FundPageContent() {
         )}
       </div>
 
-      <p className='text-center text-sm text-gray-500 mt-6 max-w-md mx-auto'>
+      <p className='text-center text-sm text-brand-dark/70 mt-6 max-w-md mx-auto'>
         {activeTab === 'card'
           ? 'Buy USDC with your card or bank account. It arrives directly in their Sippy account on Arbitrum.'
           : 'Connect your wallet, pick a token, and it arrives as USDC in their Sippy account on Arbitrum.'}
@@ -296,7 +296,7 @@ function CardBankTab({ address, coinbaseAvailable }: { address: string; coinbase
             <CreditCard className='w-8 h-8 text-[#0052FF]' />
           </div>
           <h3 className='font-display text-xl font-bold uppercase text-brand-dark mb-2'>Coinbase</h3>
-          <p className='text-gray-500 text-sm'>Not available in your country</p>
+          <p className='text-brand-dark/70 text-sm'>Not available in your country</p>
         </div>
       )}
       <div className='bg-white panel-frame rounded-2xl p-8 text-center opacity-50'>
@@ -304,7 +304,7 @@ function CardBankTab({ address, coinbaseAvailable }: { address: string; coinbase
           <CreditCard className='w-8 h-8 text-brand-primary' />
         </div>
         <h3 className='font-display text-xl font-bold uppercase text-brand-dark mb-2'>Pay with Card or Bank</h3>
-        <p className='text-gray-500 mb-4 text-sm'>
+        <p className='text-brand-dark/70 mb-4 text-sm'>
           Buy USDC using your local card, bank transfer, or payment method.
         </p>
         <button
@@ -371,7 +371,7 @@ function CoinbaseOnrampTab({ address }: { address: string }) {
       <div className='bg-white panel-frame rounded-2xl p-8 text-center'>
         <Clock className='w-16 h-16 text-amber-500 mx-auto mb-4' />
         <h3 className='font-display text-xl font-bold uppercase text-brand-dark mb-2'>Checking Purchase...</h3>
-        <p className='text-gray-500 mb-4'>
+        <p className='text-brand-dark/70 mb-4'>
           If your purchase completed successfully, the USDC should appear in the Sippy account within a few minutes. Check the balance on WhatsApp to confirm.
         </p>
         <button
@@ -391,7 +391,7 @@ function CoinbaseOnrampTab({ address }: { address: string }) {
           <CreditCard className='w-8 h-8 text-[#0052FF]' />
         </div>
         <h3 className='font-display text-xl font-bold uppercase text-brand-dark mb-2'>Buy with Card or Bank</h3>
-        <p className='text-gray-500 mb-6 text-sm'>
+        <p className='text-brand-dark/70 mb-6 text-sm'>
           Purchase USDC using your debit card, credit card, or bank transfer via Coinbase.
         </p>
         <button
@@ -424,7 +424,7 @@ function NoTokenView() {
         <h1 className='font-display text-3xl md:text-4xl font-bold uppercase text-brand-dark leading-tight tracking-tight mb-4'>
           Fund a Sippy Account
         </h1>
-        <p className='text-lg text-gray-500 leading-relaxed max-w-md mx-auto mb-8'>
+        <p className='text-lg text-brand-dark/70 leading-relaxed max-w-md mx-auto mb-8'>
           You need a fund link to send money to someone. Ask them to share their
           Sippy fund link with you.
         </p>
@@ -446,7 +446,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <nav className='sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-brand-primary/10'>
         <div className='max-w-7xl mx-auto px-6 py-4'>
           <a href={SIPPY_HOME} className='flex items-center gap-2 group w-fit'>
-            <ArrowLeft className='w-5 h-5 text-gray-500 group-hover:text-brand-primary transition-smooth' />
+            <ArrowLeft className='w-5 h-5 text-brand-dark/70 group-hover:text-brand-primary transition-smooth' />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src='/images/logos/sippy-wordmark-cheetah-on-white.svg'

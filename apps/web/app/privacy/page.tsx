@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
           </Link>
           <Link
             href='/'
-            className='flex items-center gap-2 text-sm text-gray-500 hover:text-brand-primary transition-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 rounded-lg'
+            className='flex items-center gap-2 text-sm text-brand-dark/70 hover:text-brand-primary transition-smooth focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 rounded-lg'
           >
             <ArrowLeft className='w-4 h-4' />
             Back to Home
@@ -52,7 +52,7 @@ export default function PrivacyPolicyPage() {
           <h1 className='font-display text-4xl md:text-5xl font-bold uppercase text-brand-dark mb-4'>
             Privacy Policy
           </h1>
-          <p className='text-gray-500'>Last updated: {lastUpdated}</p>
+          <p className='text-brand-dark/70'>Last updated: {lastUpdated}</p>
         </div>
       </header>
 
@@ -60,17 +60,17 @@ export default function PrivacyPolicyPage() {
       <main id='main-content' className='pb-20'>
         <div className='max-w-[75vw] sm:max-w-4xl mx-auto'>
           <div className='panel-frame rounded-2xl bg-white p-8 md:p-12'>
-            <div className='max-w-none text-gray-500 [&_h2]:font-display [&_h2]:text-xl [&_h2]:font-bold [&_h2]:uppercase [&_h2]:text-brand-dark [&_h2]:mt-8 [&_h2]:mb-4 [&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-4 [&_li]:mb-1 [&_a]:text-brand-primary [&_a]:hover:text-brand-primary-hover'>
+            <div className='max-w-none text-brand-dark/70 [&_h2]:font-display [&_h2]:text-xl [&_h2]:font-bold [&_h2]:uppercase [&_h2]:text-brand-dark [&_h2]:mt-8 [&_h2]:mb-4 [&_p]:mb-4 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-4 [&_li]:mb-1 [&_a]:text-brand-primary [&_a]:hover:text-brand-primary-hover'>
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>1. Introduction</h2>
-                <p className='text-gray-500 leading-relaxed mb-4'>
+                <p className='text-brand-dark/70 leading-relaxed mb-4'>
                   Welcome to Sippy (&ldquo;we,&rdquo; &ldquo;our,&rdquo; or &ldquo;us&rdquo;). Sippy is a WhatsApp-based
                   payment service that allows users to send and receive digital
                   dollars using phone numbers. This Privacy Policy
                   explains how we collect, use, disclose, and protect your
                   information when you use our service.
                 </p>
-                <p className='text-gray-500 leading-relaxed'>
+                <p className='text-brand-dark/70 leading-relaxed'>
                   By using Sippy, you agree to the collection and use of
                   information in accordance with this policy. This policy complies
                   with Colombian data protection laws (Ley 1581 de 2012) and
@@ -80,13 +80,13 @@ export default function PrivacyPolicyPage() {
 
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>2. Data Controller</h2>
-                <p className='text-gray-500 leading-relaxed mb-4'>
+                <p className='text-brand-dark/70 leading-relaxed mb-4'>
                   The data controller responsible for your personal information is:
                 </p>
                 <div className='bg-gray-50 rounded-xl p-6 border border-brand-primary/10'>
                   <p className='text-gray-600 font-medium text-lg'>Sippy</p>
-                  <p className='text-gray-500 font-medium'>Company registration in progress</p>
-                  <p className='text-gray-500 flex items-center gap-2 mt-3 pt-3 border-t border-brand-primary/10'>
+                  <p className='text-brand-dark/70 font-medium'>Company registration in progress</p>
+                  <p className='text-brand-dark/70 flex items-center gap-2 mt-3 pt-3 border-t border-brand-primary/10'>
                     <Mail className='w-4 h-4' />
                     <a href='mailto:hello@sippy.lat' className='text-brand-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'>hello@sippy.lat</a>
                   </p>
@@ -95,16 +95,16 @@ export default function PrivacyPolicyPage() {
 
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>3. Information We Collect</h2>
-                <p className='text-gray-500 leading-relaxed mb-4'>
+                <p className='text-brand-dark/70 leading-relaxed mb-4'>
                   We collect the following types of information when you use our service:
                 </p>
                 <h3 className='font-display text-lg font-bold uppercase text-brand-dark mt-6 mb-3'>3.1 Information You Provide</h3>
-                <ul className='list-disc pl-6 text-gray-500 space-y-2'>
+                <ul className='list-disc pl-6 text-brand-dark/70 space-y-2'>
                   <li><strong>Phone Number:</strong> Your WhatsApp phone number, which serves as your account identifier and wallet address.</li>
                   <li><strong>Messages:</strong> The messages you send to our WhatsApp bot to execute commands (e.g., &ldquo;send $10 to +573001234567&rdquo;).</li>
                 </ul>
                 <h3 className='font-display text-lg font-bold uppercase text-brand-dark mt-6 mb-3'>3.2 Information Collected Automatically</h3>
-                <ul className='list-disc pl-6 text-gray-500 space-y-2'>
+                <ul className='list-disc pl-6 text-brand-dark/70 space-y-2'>
                   <li><strong>Account Address:</strong> A unique payment address automatically generated and associated with your phone number.</li>
                   <li><strong>Transaction History:</strong> Records of dollar transfers you make or receive, stored on the Arbitrum network (a public blockchain).</li>
                   <li><strong>Account Activity:</strong> Timestamps of your last activity, daily transaction amounts for security limits.</li>
@@ -113,15 +113,15 @@ export default function PrivacyPolicyPage() {
 
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>4. Consent and Opt-In</h2>
-                <p className='text-gray-500 leading-relaxed mb-4'>
+                <p className='text-brand-dark/70 leading-relaxed mb-4'>
                   By initiating a conversation with our WhatsApp bot (sending &ldquo;start&rdquo; or any message), you:
                 </p>
-                <ul className='list-disc pl-6 text-gray-500 space-y-2'>
+                <ul className='list-disc pl-6 text-brand-dark/70 space-y-2'>
                   <li><strong>Opt-in to receive messages:</strong> You consent to receive transactional messages, notifications, and responses from Sippy via WhatsApp.</li>
                   <li><strong>Consent to data processing:</strong> You agree to the collection and processing of your data as described in this policy.</li>
                   <li><strong>Acknowledge the service terms:</strong> You confirm that you have read and accept our Terms of Service.</li>
                 </ul>
-                <p className='text-gray-500 leading-relaxed mt-4'>
+                <p className='text-brand-dark/70 leading-relaxed mt-4'>
                   You may withdraw your consent at any time by contacting us at{' '}
                   <a href='mailto:hello@sippy.lat' className='text-brand-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'>hello@sippy.lat</a>{' '}
                   or by stopping interaction with our WhatsApp bot.
@@ -130,38 +130,38 @@ export default function PrivacyPolicyPage() {
 
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>5. How We Use Your Information</h2>
-                <p className='text-gray-500 leading-relaxed mb-4'>We use the collected information for the following purposes:</p>
-                <ul className='list-disc pl-6 text-gray-500 space-y-2'>
+                <p className='text-brand-dark/70 leading-relaxed mb-4'>We use the collected information for the following purposes:</p>
+                <ul className='list-disc pl-6 text-brand-dark/70 space-y-2'>
                   <li><strong>Provide Services:</strong> To create and manage your wallet, process transactions, and respond to your commands.</li>
                   <li><strong>Security:</strong> To enforce daily spending limits and detect fraudulent or unauthorized activity.</li>
                   <li><strong>Communication:</strong> To send you transaction confirmations, notifications, and support messages via WhatsApp.</li>
                   <li><strong>Service Improvement:</strong> To understand how our service is used and improve user experience.</li>
                   <li><strong>Legal Compliance:</strong> To comply with applicable laws, regulations, and legal requests.</li>
                 </ul>
-                <p className='text-gray-500 leading-relaxed mt-4'>
+                <p className='text-brand-dark/70 leading-relaxed mt-4'>
                   <strong>Important:</strong> We only use data obtained through WhatsApp for purposes reasonably necessary to provide our payment service. We do not use your data for marketing or share it with third parties for advertising purposes.
                 </p>
               </section>
 
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>6. Information We Do NOT Collect</h2>
-                <p className='text-gray-500 leading-relaxed mb-4'>To protect your privacy and security, we do NOT collect or request:</p>
-                <ul className='list-disc pl-6 text-gray-500 space-y-2'>
+                <p className='text-brand-dark/70 leading-relaxed mb-4'>To protect your privacy and security, we do NOT collect or request:</p>
+                <ul className='list-disc pl-6 text-brand-dark/70 space-y-2'>
                   <li>Bank account numbers or banking credentials</li>
                   <li>Credit or debit card numbers</li>
                   <li>Government-issued identification numbers (c&eacute;dula, passport)</li>
                   <li>Passwords or PINs</li>
                   <li>Biometric data</li>
                 </ul>
-                <p className='text-gray-500 leading-relaxed mt-4'>
+                <p className='text-brand-dark/70 leading-relaxed mt-4'>
                   <strong>Warning:</strong> Sippy will never ask you to share sensitive financial information through WhatsApp. If someone requests this information claiming to be Sippy, do not respond and report it to us immediately.
                 </p>
               </section>
 
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>7. Third-Party Services</h2>
-                <p className='text-gray-500 leading-relaxed mb-4'>We use the following third-party services to provide our service:</p>
-                <ul className='list-disc pl-6 text-gray-500 space-y-3'>
+                <p className='text-brand-dark/70 leading-relaxed mb-4'>We use the following third-party services to provide our service:</p>
+                <ul className='list-disc pl-6 text-brand-dark/70 space-y-3'>
                   <li>
                     <strong>Meta (WhatsApp Business API):</strong> To receive and send messages through WhatsApp. Your messages are processed through Meta&apos;s servers.{' '}
                     <a href='https://www.whatsapp.com/legal/privacy-policy' target='_blank' rel='noopener noreferrer' className='text-brand-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'>WhatsApp Privacy Policy</a>
@@ -181,8 +181,8 @@ export default function PrivacyPolicyPage() {
 
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>8. Data Storage and Security</h2>
-                <p className='text-gray-500 leading-relaxed mb-4'>We implement appropriate security measures to protect your information:</p>
-                <ul className='list-disc pl-6 text-gray-500 space-y-2'>
+                <p className='text-brand-dark/70 leading-relaxed mb-4'>We implement appropriate security measures to protect your information:</p>
+                <ul className='list-disc pl-6 text-brand-dark/70 space-y-2'>
                   <li>Your wallet private keys are stored securely by Coinbase in their Trusted Execution Environment (TEE) and are never exposed to our servers.</li>
                   <li>Your phone number and wallet address are stored in a secure PostgreSQL database with encrypted connections (TLS).</li>
                   <li><strong>Message handling:</strong> Message IDs are cached temporarily in memory for deduplication (approximately 2 minutes). Spam counters are maintained in memory and reset periodically. We do not permanently store message content in our database. However, server logs may include message content for operational purposes and may be retained by our hosting provider according to their data retention policies.</li>
@@ -192,15 +192,15 @@ export default function PrivacyPolicyPage() {
 
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>9. Data Retention</h2>
-                <p className='text-gray-500 leading-relaxed mb-4'>We retain different types of data for different periods:</p>
-                <ul className='list-disc pl-6 text-gray-500 space-y-2 mb-4'>
+                <p className='text-brand-dark/70 leading-relaxed mb-4'>We retain different types of data for different periods:</p>
+                <ul className='list-disc pl-6 text-brand-dark/70 space-y-2 mb-4'>
                   <li><strong>Account data</strong> (phone number, wallet address): Retained for as long as your account is active, or until you request deletion.</li>
                   <li><strong>Activity data</strong> (last activity timestamp, daily spending counters): Retained in the database for as long as your account is active. Daily spending counters reset automatically each day.</li>
                   <li><strong>Message cache</strong> (message IDs, spam counters): Stored in memory only, cleared on server restart or after short intervals (2 minutes for deduplication). Server logs containing message content may be retained by our hosting provider per their policies.</li>
                   <li><strong>Payment transactions</strong>: Permanently stored on the Arbitrum network (a public blockchain). This data cannot be deleted due to the immutable nature of blockchain records.</li>
                 </ul>
                 <h3 className='font-display text-lg font-bold uppercase text-brand-dark mt-6 mb-3'>Requesting Data Deletion</h3>
-                <p className='text-gray-500 leading-relaxed'>
+                <p className='text-brand-dark/70 leading-relaxed'>
                   To request deletion of your account and associated data, email us at{' '}
                   <a href='mailto:hello@sippy.lat' className='text-brand-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'>hello@sippy.lat</a>{' '}
                   with subject line &ldquo;Data Deletion Request&rdquo; and include the phone number associated with your account. We will process your request within 15 business days and confirm deletion via email. Note: Transaction records on the Arbitrum blockchain cannot be deleted due to the immutable nature of public blockchains.
@@ -209,17 +209,17 @@ export default function PrivacyPolicyPage() {
 
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>10. Your Rights</h2>
-                <p className='text-gray-500 leading-relaxed mb-4'>
+                <p className='text-brand-dark/70 leading-relaxed mb-4'>
                   Under Colombian data protection law (Ley 1581 de 2012), you have the following rights:
                 </p>
-                <ul className='list-disc pl-6 text-gray-500 space-y-2'>
+                <ul className='list-disc pl-6 text-brand-dark/70 space-y-2'>
                   <li><strong>Right to Access:</strong> Request information about the personal data we hold about you.</li>
                   <li><strong>Right to Rectification:</strong> Request correction of inaccurate or incomplete data.</li>
                   <li><strong>Right to Deletion:</strong> Request deletion of your personal data, subject to legal retention requirements.</li>
                   <li><strong>Right to Revoke Consent:</strong> Withdraw your consent for data processing at any time.</li>
                   <li><strong>Right to Lodge a Complaint:</strong> File a complaint with the Superintendencia de Industria y Comercio (SIC) if you believe your rights have been violated.</li>
                 </ul>
-                <p className='text-gray-500 leading-relaxed mt-4'>
+                <p className='text-brand-dark/70 leading-relaxed mt-4'>
                   To exercise any of these rights, please contact us at{' '}
                   <a href='mailto:hello@sippy.lat' className='text-brand-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'>hello@sippy.lat</a>.
                 </p>
@@ -227,7 +227,7 @@ export default function PrivacyPolicyPage() {
 
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>11. Children&apos;s Privacy</h2>
-                <p className='text-gray-500 leading-relaxed'>
+                <p className='text-brand-dark/70 leading-relaxed'>
                   Our service is not intended for use by individuals under the age of 18. We do not knowingly collect personal information from children. If you are a parent or guardian and believe your child has provided us with personal information, please contact us at{' '}
                   <a href='mailto:hello@sippy.lat' className='text-brand-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'>hello@sippy.lat</a>{' '}
                   so we can take appropriate action.
@@ -236,24 +236,24 @@ export default function PrivacyPolicyPage() {
 
               <section className='mb-10'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>12. Changes to This Policy</h2>
-                <p className='text-gray-500 leading-relaxed'>
+                <p className='text-brand-dark/70 leading-relaxed'>
                   We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the &ldquo;Last updated&rdquo; date. We encourage you to review this Privacy Policy periodically for any changes.
                 </p>
               </section>
 
               <section className='mb-6'>
                 <h2 className='font-display text-2xl font-bold uppercase text-brand-dark mb-4'>13. Contact Us</h2>
-                <p className='text-gray-500 leading-relaxed mb-4'>
+                <p className='text-brand-dark/70 leading-relaxed mb-4'>
                   If you have any questions about this Privacy Policy or our data practices, please contact us:
                 </p>
                 <div className='bg-brand-primary-light rounded-xl p-6 border border-brand-primary/20'>
                   <p className='text-brand-dark font-medium text-lg'>Sippy</p>
-                  <p className='text-gray-500 font-medium'>Company registration in progress</p>
+                  <p className='text-brand-dark/70 font-medium'>Company registration in progress</p>
                   <p className='text-gray-600 flex items-center gap-2 mt-3 pt-3 border-t border-brand-primary/20'>
                     <Mail className='w-4 h-4 text-brand-primary' />
                     <a href='mailto:hello@sippy.lat' className='text-brand-primary hover:underline font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'>hello@sippy.lat</a>
                   </p>
-                  <p className='text-gray-500 text-sm mt-3'>We will respond to your inquiry within 15 business days.</p>
+                  <p className='text-brand-dark/70 text-sm mt-3'>We will respond to your inquiry within 15 business days.</p>
                 </div>
               </section>
             </div>
@@ -267,9 +267,9 @@ export default function PrivacyPolicyPage() {
           <div className='flex flex-col md:flex-row justify-between items-center gap-4'>
             <div className='flex items-center gap-2'>
               <Image src='/images/logos/sippy-s-mark-cheetah.svg' alt='Sippy' width={20} height={20} />
-              <p className='text-sm text-brand-dark/60'>&copy; {new Date().getFullYear()} Sippy. All rights reserved.</p>
+              <p className='text-sm text-brand-dark/70'>&copy; {new Date().getFullYear()} Sippy. All rights reserved.</p>
             </div>
-            <nav aria-label='Footer navigation' className='flex gap-6 text-sm text-brand-dark/60'>
+            <nav aria-label='Footer navigation' className='flex gap-6 text-sm text-brand-dark/70'>
               <Link href='/' className='hover:text-brand-primary transition-smooth font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'>Home</Link>
               <Link href='/privacy' className='text-brand-primary font-medium'>Privacy Policy</Link>
               <Link href='/terms' className='hover:text-brand-primary transition-smooth font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'>Terms of Service</Link>

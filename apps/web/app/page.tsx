@@ -181,7 +181,7 @@ export default function HomePage() {
                 <h3 className='font-display font-bold text-xl text-brand-dark uppercase mt-1 mb-3'>
                   Message Sippy
                 </h3>
-                <p className='text-gray-500 leading-relaxed text-sm'>
+                <p className='text-brand-dark/80 leading-relaxed text-base'>
                   Open WhatsApp and say hi. <br />
                   No app to download, no bank to visit.
                 </p>
@@ -193,7 +193,7 @@ export default function HomePage() {
                 <h3 className='font-display font-bold text-xl text-brand-dark uppercase mt-1 mb-3'>
                   Fund your wallet
                 </h3>
-                <p className='text-gray-500 leading-relaxed text-sm'>
+                <p className='text-brand-dark/80 leading-relaxed text-base'>
                   Add funds instantly <br />
                   using local cards, or crypto.
                 </p>
@@ -231,13 +231,13 @@ export default function HomePage() {
                 <h3 className='font-display font-bold text-xl text-brand-dark uppercase mt-1 mb-3'>
                   Send to anyone
                 </h3>
-                <p className='text-gray-500 leading-relaxed text-sm'>
+                <p className='text-brand-dark/80 leading-relaxed text-base'>
                   Text an amount and a phone number. <br />
                   They receive digital dollars instantly.
                 </p>
               </div>
               <div className='pt-4'>
-                <p className='text-gray-500 text-xs leading-relaxed'>
+                <p className='text-brand-dark/70 text-sm leading-relaxed'>
                   Non-custodial wallets linked to phone numbers. <br />
                   Sub-second settlement on Arbitrum. No app required.
                 </p>
@@ -270,7 +270,7 @@ export default function HomePage() {
                   <h3 className='font-display font-bold text-xl text-brand-dark uppercase mt-1 mb-3'>
                     {s.title}
                   </h3>
-                  <p className='text-gray-500 leading-relaxed'>{s.desc}</p>
+                  <p className='text-brand-dark/80 leading-relaxed text-base'>{s.desc}</p>
                 </div>
               ))}
             </div>
@@ -317,7 +317,7 @@ export default function HomePage() {
                   <h2 className='font-display font-bold text-2xl sm:text-4xl md:text-5xl text-brand-dark mb-4 sm:mb-6 uppercase'>
                     Under the Hood
                   </h2>
-                  <p className='text-gray-500 max-w-2xl mx-auto text-sm sm:text-lg'>
+                  <p className='text-brand-dark/70 max-w-2xl mx-auto text-sm sm:text-lg'>
                     Built on robust blockchain infrastructure for security and
                     speed.
                   </p>
@@ -358,7 +358,7 @@ export default function HomePage() {
                       <h3 className='font-display font-bold text-lg sm:text-xl mb-2 sm:mb-3 text-brand-dark uppercase'>
                         Arbitrum L2 Speed
                       </h3>
-                      <p className='text-gray-500 text-sm sm:text-base'>
+                      <p className='text-brand-dark/70 text-sm sm:text-base'>
                         Sub-second transaction finality and near-zero fees on
                         Arbitrum.
                       </p>
@@ -374,7 +374,7 @@ export default function HomePage() {
                       <h3 className='font-display font-bold text-lg sm:text-xl mb-2 sm:mb-3 text-brand-dark uppercase'>
                         Non-Custodial
                       </h3>
-                      <p className='text-gray-500 text-sm sm:text-base'>
+                      <p className='text-brand-dark/70 text-sm sm:text-base'>
                         Smart contract wallets linked securely to your phone
                         number. You own your keys.
                       </p>
@@ -391,7 +391,7 @@ export default function HomePage() {
                         <h3 className='font-display font-bold text-xl mb-2 text-brand-dark uppercase'>
                           Agentic AI
                         </h3>
-                        <p className='text-gray-500'>
+                        <p className='text-brand-dark/70'>
                           An AI agent that understands how you talk, not the other
                           way around. Just text what you need.
                         </p>
@@ -551,7 +551,7 @@ export default function HomePage() {
                 height={28}
                 className='mb-3'
               />
-              <p className='font-mono text-[10px] text-brand-dark/60 tracking-[0.15em] uppercase leading-relaxed max-w-xs'>
+              <p className='font-mono text-sm text-brand-dark/80 tracking-[0.12em] uppercase leading-relaxed max-w-xs'>
                 WhatsApp-native digital dollar agent
                 <br />
                 for Latin America
@@ -559,7 +559,7 @@ export default function HomePage() {
             </div>
 
             {/* Right — system reference links */}
-            <nav className='flex flex-wrap gap-x-5 sm:gap-x-8 gap-y-3 font-mono text-[11px] tracking-[0.15em] sm:tracking-[0.2em] uppercase'>
+            <nav className='flex flex-wrap gap-x-5 sm:gap-x-8 gap-y-3 font-mono text-sm tracking-[0.12em] sm:tracking-[0.15em] uppercase'>
               {[
                 { label: '/features', href: '#specs' },
                 { label: '/fund', href: 'https://fund.sippy.lat' },
@@ -569,7 +569,7 @@ export default function HomePage() {
                 <a
                   key={link.label}
                   href={link.href}
-                  className='text-brand-dark/60 hover:text-brand-primary focus-visible:text-brand-primary focus-visible:outline-none transition-smooth py-1'
+                  className='text-brand-dark/80 hover:text-brand-primary focus-visible:text-brand-primary focus-visible:outline-none transition-smooth py-1'
                 >
                   {link.label}
                 </a>
@@ -589,10 +589,10 @@ export default function HomePage() {
               { label: 'Interface', value: 'WhatsApp' },
             ].map((spec) => (
               <div key={spec.label}>
-                <span className='font-mono text-[9px] text-brand-primary/80 tracking-[0.25em] uppercase block mb-1'>
+                <span className='font-mono text-xs text-brand-primary tracking-[0.2em] uppercase block mb-1'>
                   {spec.label}
                 </span>
-                <span className='font-mono text-[11px] text-brand-dark/80 tracking-wide'>
+                <span className='font-mono text-sm text-brand-dark tracking-wide'>
                   {spec.value}
                 </span>
               </div>
@@ -604,7 +604,7 @@ export default function HomePage() {
 
           {/* Bottom row — legal + version stamp */}
           <div className='py-6 sm:py-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4'>
-            <div className='flex items-center gap-4 sm:gap-6 font-mono text-[10px] text-brand-dark/50 tracking-[0.15em] sm:tracking-[0.2em] uppercase'>
+            <div className='flex items-center gap-4 sm:gap-6 font-mono text-sm text-brand-dark/70 tracking-[0.12em] sm:tracking-[0.15em] uppercase'>
               <span>&copy; 2026 Sippy</span>
               <a
                 href='/terms'
@@ -619,7 +619,7 @@ export default function HomePage() {
                 Privacy
               </a>
             </div>
-            <div className='font-mono text-[9px] text-brand-dark/40 tracking-[0.3em] uppercase flex items-center gap-3'>
+            <div className='font-mono text-xs text-brand-dark/60 tracking-[0.2em] uppercase flex items-center gap-3'>
               <span className='inline-block w-1.5 h-1.5 rounded-full bg-brand-crypto/40' />
               v0.1.0 // LATAM // 2026
             </div>

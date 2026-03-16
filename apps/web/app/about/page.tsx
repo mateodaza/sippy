@@ -73,7 +73,7 @@ export default function AboutPage() {
             <span className='text-brand-crypto'>for Latin America</span>
           </h1>
 
-          <p className='text-lg md:text-xl text-gray-500 leading-[1.75] max-w-2xl mx-auto animate-fade-in-up animation-delay-200'>
+          <p className='text-lg md:text-xl text-brand-dark/70 leading-[1.75] max-w-2xl mx-auto animate-fade-in-up animation-delay-200'>
             Sippy turns WhatsApp into a USDC wallet on Arbitrum One so you can send, receive, and hold dollars through messages without downloading an app, managing seed phrases, or learning anything about crypto.
           </p>
         </div>
@@ -95,7 +95,7 @@ export default function AboutPage() {
                   1
                 </div>
                 <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>Create wallet</h3>
-                <p className='text-[15px] text-gray-500 leading-[1.75]'>
+                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
                   SMS verification. 30 seconds. You get your own smart wallet.
                 </p>
               </div>
@@ -105,7 +105,7 @@ export default function AboutPage() {
                   2
                 </div>
                 <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>Fund wallet</h3>
-                <p className='text-[15px] text-gray-500 leading-[1.75]'>
+                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
                   Buy USDC with local currency. Funds land directly in your wallet.
                 </p>
               </div>
@@ -115,7 +115,7 @@ export default function AboutPage() {
                   3
                 </div>
                 <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>Send money</h3>
-                <p className='text-[15px] text-gray-500 leading-[1.75]'>
+                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
                   Type &ldquo;send $20 to +573001234567&rdquo; on WhatsApp. Arrives in seconds.
                 </p>
               </div>
@@ -133,7 +133,7 @@ export default function AboutPage() {
             </h2>
           </BlurFade>
           <BlurFade delay={0.15} inView>
-            <p className='text-lg md:text-xl text-gray-500 leading-[1.75] text-center'>
+            <p className='text-lg md:text-xl text-brand-dark/70 leading-[1.75] text-center'>
               WhatsApp has 90%+ penetration across Latin America. Hundreds of millions of people open it before breakfast, and most of them want dollar stability because local currencies keep losing value. But nobody is downloading a new app to get it. Sippy puts a dollar wallet inside the app they already use, powered by an AI agent that speaks their language.
             </p>
           </BlurFade>
@@ -146,7 +146,7 @@ export default function AboutPage() {
           <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-brand-dark text-center mb-4 leading-[1.08] tracking-[-0.02em]'>
             Architecture
           </h2>
-          <p className='text-lg text-gray-500 text-center mb-12 leading-[1.7]'>
+          <p className='text-lg text-brand-dark/70 text-center mb-12 leading-[1.7]'>
             WhatsApp message in, on-chain transaction out
           </p>
 
@@ -229,7 +229,7 @@ export default function AboutPage() {
                 <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2.5'>
                   {card.title}
                 </h3>
-                <p className='text-[15px] text-gray-500 leading-[1.75]'>
+                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
                   {card.desc}
                 </p>
               </div>
@@ -244,7 +244,7 @@ export default function AboutPage() {
           <h2 className='font-display text-4xl md:text-[2.8rem] font-bold uppercase text-brand-dark text-center mb-4 leading-[1.08] tracking-[-0.02em]'>
             Trust & <span className='text-brand-crypto'>Security</span>
           </h2>
-          <p className='text-lg text-gray-500 text-center mb-12 leading-[1.7]'>
+          <p className='text-lg text-brand-dark/70 text-center mb-12 leading-[1.7]'>
             Users own their wallets. Sippy operates through spend permissions that users set and can revoke at any time.
           </p>
 
@@ -255,7 +255,7 @@ export default function AboutPage() {
               </div>
               <div>
                 <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-1'>Non-custodial</h3>
-                <p className='text-[15px] text-gray-500 leading-[1.75]'>
+                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
                   Coinbase CDP Embedded Wallets. Users control their own smart accounts and can export their private keys.
                 </p>
               </div>
@@ -267,7 +267,7 @@ export default function AboutPage() {
               </div>
               <div>
                 <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-1'>User-controlled limits</h3>
-                <p className='text-[15px] text-gray-500 leading-[1.75]'>
+                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
                   Daily spend limits enforced on-chain via SpendPermissionManager. Users set and revoke these anytime.
                 </p>
               </div>
@@ -279,7 +279,7 @@ export default function AboutPage() {
               </div>
               <div>
                 <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-1'>Fully transparent</h3>
-                <p className='text-[15px] text-gray-500 leading-[1.75]'>
+                <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
                   Every transaction is verifiable on Arbiscan. Amount, recipient, timestamp, all on-chain.
                 </p>
               </div>
@@ -305,7 +305,7 @@ export default function AboutPage() {
               <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>
                 ETHOnline 2025 Finalist
               </h3>
-              <p className='text-[15px] text-gray-500 leading-[1.75]'>
+              <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
                 Selected from hundreds of submissions at ETHGlobal.
               </p>
               <a
@@ -327,7 +327,7 @@ export default function AboutPage() {
               <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>
                 Arbitrum Grants Program
               </h3>
-              <p className='text-[15px] text-gray-500 leading-[1.75]'>
+              <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
                 Funded through Arbitrum New Protocols and Ideas 3.0 via Questbook.
               </p>
             </div>
@@ -339,7 +339,7 @@ export default function AboutPage() {
               <h3 className='font-display text-lg font-bold uppercase text-brand-dark mb-2'>
                 Live on mainnet
               </h3>
-              <p className='text-[15px] text-gray-500 leading-[1.75]'>
+              <p className='text-[15px] text-brand-dark/70 leading-[1.75]'>
                 Smart contracts deployed and operational on Arbitrum One. End-to-end payment flow validated.
               </p>
             </div>
@@ -395,9 +395,9 @@ export default function AboutPage() {
                 width={20}
                 height={20}
               />
-              <span className='text-[13px] text-brand-dark/60'>Sippy</span>
+              <span className='text-[13px] text-brand-dark/70'>Sippy</span>
             </div>
-            <nav aria-label='Footer navigation' className='flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-brand-dark/60'>
+            <nav aria-label='Footer navigation' className='flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-brand-dark/70'>
               <Link
                 href='/'
                 className='py-2 hover:text-brand-primary transition-smooth font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded'

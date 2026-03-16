@@ -332,7 +332,7 @@ function WalletContent() {
         <div className='max-w-md w-full panel-frame rounded-2xl bg-white p-8 text-center'>
           <div className='animate-pulse'>
             <div className='text-4xl mb-4'>💰</div>
-            <p className='text-gray-500'>{t('wallet.loading', lang)}</p>
+            <p className='text-brand-dark/70'>{t('wallet.loading', lang)}</p>
           </div>
         </div>
       </div>
@@ -344,7 +344,7 @@ function WalletContent() {
       <div className='min-h-screen bg-white flex items-center justify-center p-4'>
         <div className='max-w-md w-full panel-frame rounded-2xl bg-white p-8'>
           <h1 className='font-display text-2xl font-bold uppercase mb-6 text-brand-dark'>{t('wallet.title', lang)}</h1>
-          <p className='text-gray-500 mb-6'>
+          <p className='text-brand-dark/70 mb-6'>
             {t('wallet.subtitle', lang)}
           </p>
 
@@ -369,11 +369,11 @@ function WalletContent() {
                 placeholder='+573001234567'
                 disabled={isPhoneLocked}
                 className={`w-full p-3 border rounded-lg mb-4 text-brand-dark ${
-                  isPhoneLocked ? 'bg-gray-100 text-gray-500' : ''
+                  isPhoneLocked ? 'bg-gray-100 text-brand-dark/70' : ''
                 }`}
               />
               {isPhoneLocked && (
-                <p className='text-sm text-gray-500 mb-4'>{t('wallet.phoneFromWhatsapp', lang)}</p>
+                <p className='text-sm text-brand-dark/70 mb-4'>{t('wallet.phoneFromWhatsapp', lang)}</p>
               )}
               <button
                 onClick={handleReAuthSendOtp}
@@ -387,7 +387,7 @@ function WalletContent() {
 
           {reAuthStep === 'otp' && (
             <>
-              <p className='text-gray-500 mb-4'>
+              <p className='text-brand-dark/70 mb-4'>
                 {t('wallet.codeSentTo', lang)} {reAuthPhone}
               </p>
               <input
@@ -408,7 +408,7 @@ function WalletContent() {
               </button>
               <button
                 onClick={() => setReAuthOtp('')}
-                className='w-full mt-2 text-gray-500 py-2'
+                className='w-full mt-2 text-brand-dark/70 py-2'
               >
                 {t('wallet.back', lang)}
               </button>
@@ -442,7 +442,7 @@ function WalletContent() {
           <div className='bg-white panel-frame rounded-2xl p-6 border border-amber-200'>
             <div className='flex items-center justify-between mb-4'>
               <h2 className='font-display text-lg font-bold uppercase text-brand-dark'>Session expired</h2>
-              <button onClick={dismissReAuth} className='text-brand-dark/40 hover:text-gray-500 text-xl leading-none'>&times;</button>
+              <button onClick={dismissReAuth} className='text-brand-dark/40 hover:text-brand-dark/70 text-xl leading-none'>&times;</button>
             </div>
             {reAuthError && (
               <div className='mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
@@ -470,7 +470,7 @@ function WalletContent() {
             )}
             {reAuthStep === 'otp' && (
               <>
-                <p className='text-gray-500 mb-3 text-sm'>{t('wallet.codeSentTo', lang)} {reAuthPhone}</p>
+                <p className='text-brand-dark/70 mb-3 text-sm'>{t('wallet.codeSentTo', lang)} {reAuthPhone}</p>
                 <input
                   type='text'
                   inputMode='numeric'
@@ -501,7 +501,7 @@ function WalletContent() {
               sendFrom === 'whatsapp' ? 'ring-2 ring-brand-primary' : 'opacity-70'
             }`}
           >
-            <p className='text-xs text-gray-500 mb-1 font-medium'>{t('wallet.whatsappWallet', lang)}</p>
+            <p className='text-xs text-brand-dark/70 mb-1 font-medium'>{t('wallet.whatsappWallet', lang)}</p>
             {isLoadingData ? (
               <div className='animate-pulse h-7 bg-gray-100 rounded w-20 mb-1' />
             ) : (
@@ -521,7 +521,7 @@ function WalletContent() {
               sendFrom === 'web' ? 'ring-2 ring-brand-primary' : 'opacity-70'
             }`}
           >
-            <p className='text-xs text-gray-500 mb-1 font-medium'>{t('wallet.webWallet', lang)}</p>
+            <p className='text-xs text-brand-dark/70 mb-1 font-medium'>{t('wallet.webWallet', lang)}</p>
             {isLoadingData ? (
               <div className='animate-pulse h-7 bg-gray-100 rounded w-20 mb-1' />
             ) : (
@@ -568,7 +568,7 @@ function WalletContent() {
             <h2 className='font-display text-lg font-bold uppercase text-brand-dark'>{t('wallet.send', lang)}</h2>
             <span className='text-xs text-brand-dark/40'>
               {t('wallet.sendFrom', lang)}{' '}
-              <span className='font-medium text-gray-500'>
+              <span className='font-medium text-brand-dark/70'>
                 {sendFrom === 'whatsapp' ? t('wallet.whatsappWallet', lang) : t('wallet.webWallet', lang)}
               </span>
             </span>
@@ -577,7 +577,7 @@ function WalletContent() {
           {sendStep === 'form' && (
             <div className='space-y-3'>
               <div>
-                <label className='block text-sm text-gray-500 mb-1'>
+                <label className='block text-sm text-brand-dark/70 mb-1'>
                   {t('wallet.toLabel', lang)} ({t('wallet.toLabelHint', lang)})
                 </label>
                 <input
@@ -589,7 +589,7 @@ function WalletContent() {
                 />
               </div>
               <div>
-                <label className='block text-sm text-gray-500 mb-1'>
+                <label className='block text-sm text-brand-dark/70 mb-1'>
                   {t('wallet.amountLabel', lang)}
                 </label>
                 <div className='flex gap-2'>
@@ -624,11 +624,11 @@ function WalletContent() {
           {sendStep === 'confirm' && (
             <div className='space-y-4'>
               <div className='p-4 bg-gray-50 rounded-lg'>
-                <p className='text-sm text-gray-500'>{t('wallet.send', lang)}</p>
+                <p className='text-sm text-brand-dark/70'>{t('wallet.send', lang)}</p>
                 <p className='text-2xl font-bold text-brand-dark'>
                   ${parseFloat(amount).toFixed(2)} USDC
                 </p>
-                <p className='text-sm text-gray-500 mt-2'>{t('wallet.to', lang)}</p>
+                <p className='text-sm text-brand-dark/70 mt-2'>{t('wallet.to', lang)}</p>
                 <p className='text-sm font-mono text-gray-800 break-all'>
                   {isPhoneNumber(recipient.trim())
                     ? `${recipient.trim()} (${formatAddress(resolvedAddress || '')})`
@@ -646,7 +646,7 @@ function WalletContent() {
               </button>
               <button
                 onClick={() => setSendStep('form')}
-                className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60'
+                className='w-full py-2 text-brand-dark/70 text-sm hover:text-brand-dark/60'
               >
                 {t('wallet.back', lang)}
               </button>
@@ -667,7 +667,7 @@ function WalletContent() {
               <div className='text-center py-4'>
                 <div className='text-4xl mb-2 text-semantic-success'>&#10003;</div>
                 <p className='text-semantic-success font-semibold'>{t('wallet.sent', lang)}</p>
-                <p className='text-sm text-gray-500'>
+                <p className='text-sm text-brand-dark/70'>
                   ${parseFloat(amount).toFixed(2)} USDC {t('wallet.sentSuccess', lang)}
                 </p>
               </div>
@@ -705,7 +705,7 @@ function WalletContent() {
               </button>
               <button
                 onClick={resetSend}
-                className='w-full py-2 text-gray-500 text-sm hover:text-brand-dark/60'
+                className='w-full py-2 text-brand-dark/70 text-sm hover:text-brand-dark/60'
               >
                 {t('wallet.cancel', lang)}
               </button>
@@ -733,13 +733,13 @@ function WalletContent() {
               setActivity([]);
               resetSend();
             }}
-            className='text-sm text-gray-500 hover:text-brand-dark/60'
+            className='text-sm text-brand-dark/70 hover:text-brand-dark/60'
           >
             {t('wallet.signOut', lang)}
           </button>
         </div>
 
-        <div className='text-center text-xs text-gray-500 pb-4'>
+        <div className='text-center text-xs text-brand-dark/70 pb-4'>
           <p>{t('wallet.poweredBy', lang)}</p>
           <p className='mt-1'>Network: {NETWORK}</p>
         </div>
@@ -753,7 +753,7 @@ export default function WalletPage() {
     <Suspense
       fallback={
         <div className='min-h-screen bg-white flex items-center justify-center'>
-          <div className='text-gray-500'>Loading...</div>
+          <div className='text-brand-dark/70'>Loading...</div>
         </div>
       }
     >
