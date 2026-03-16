@@ -246,7 +246,7 @@ export async function setUserLanguage(
       `INSERT INTO user_preferences (phone_number, preferred_language, updated_at)
        VALUES ($1, $2, NOW())
        ON CONFLICT (phone_number)
-       DO UPDATE SET preferred_language = $2, updated_at = NOW()`,
+       DO UPDATE SET preferred_language = EXCLUDED.preferred_language, updated_at = NOW()`,
       [writePhone, lang]
     )
   } catch (error) {

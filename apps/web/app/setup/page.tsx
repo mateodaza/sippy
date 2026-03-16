@@ -160,7 +160,13 @@ function SetupContent() {
             if (registerResponse.ok) {
               console.log('Wallet registered/confirmed in backend');
             } else {
-              console.warn('Failed to register wallet:', await registerResponse.text());
+              const errText = await registerResponse.text();
+              console.error('Wallet registration failed on recovery:', errText);
+              setError(lang === 'es' ? 'Error registrando la billetera. Intenta de nuevo.' :
+                       lang === 'pt' ? 'Erro ao registrar a carteira. Tente novamente.' :
+                       'Failed to register wallet. Please try again.');
+              setIsCheckingSession(false);
+              return;
             }
 
             // Check wallet status to determine which step to resume from

@@ -89,8 +89,8 @@ export default class EmbeddedWalletController {
           `INSERT INTO phone_registry (phone_number, cdp_wallet_name, wallet_address, created_at, last_activity, daily_spent, last_reset_date)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (phone_number) DO UPDATE SET
-             wallet_address = $3,
-             last_activity = $5`,
+             wallet_address = EXCLUDED.wallet_address,
+             last_activity = EXCLUDED.last_activity`,
           [
             canonicalPhone,
             `embedded-${canonicalPhone}`,
@@ -126,7 +126,7 @@ export default class EmbeddedWalletController {
 
       return response.json({ success: true, network: NETWORK })
     } catch (error) {
-      logger.error('Register wallet error: %o', error)
+      logger.error({ err: error instanceof Error ? { message: error.message, stack: error.stack } : error }, 'Register wallet error')
       const isAuth = error instanceof Error && (error.message.includes('authorization') || error.message.includes('token'))
       return response.status(isAuth ? 401 : 500).json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
     }
