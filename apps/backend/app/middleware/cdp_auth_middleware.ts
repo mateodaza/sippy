@@ -14,6 +14,7 @@ import type { NextFn } from '@adonisjs/core/types/http'
 import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import { CdpClient } from '@coinbase/cdp-sdk'
+import { canonicalizePhone } from '#utils/phone'
 
 import '#types/cdp_auth'
 
@@ -95,9 +96,16 @@ export default class CdpAuthMiddleware {
         return ctx.response.unauthorized({ error: 'Unauthorized' })
       }
 
+      // Canonicalize phone (strips legacy prefixes like Mexico +521 → +52)
+      const canonicalPhone = canonicalizePhone(smsAuth.phoneNumber)
+      if (!canonicalPhone) {
+        logger.warn('CDP auth: phone failed canonicalization: %s', smsAuth.phoneNumber)
+        return ctx.response.unauthorized({ error: 'Unauthorized' })
+      }
+
       // Store authenticated user data on the context
       ctx.cdpUser = {
-        phoneNumber: smsAuth.phoneNumber,
+        phoneNumber: canonicalPhone,
         walletAddress,
       }
 
