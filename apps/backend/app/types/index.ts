@@ -51,6 +51,7 @@ export interface ParsedCommand {
     | 'greeting'
     | 'social'
     | 'privacy'
+    | 'fund'
     | 'confirm'
     | 'cancel'
     | 'unknown'

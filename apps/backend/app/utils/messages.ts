@@ -459,6 +459,15 @@ export function formatNoWalletMessage(lang: Lang = 'en'): string {
   return m[lang]()
 }
 
+export function formatFundMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `Add funds to your wallet here:\n${FUND_URL}`,
+    es: () => `Agrega fondos a tu billetera aqui:\n${FUND_URL}`,
+    pt: () => `Adicione fundos a sua carteira aqui:\n${FUND_URL}`,
+  }
+  return m[lang]()
+}
+
 export function formatSessionExpiredMessage(lang: Lang = 'en'): string {
   const m = {
     en: () => `Session expired.\n\nSend "start" to renew your session.`,

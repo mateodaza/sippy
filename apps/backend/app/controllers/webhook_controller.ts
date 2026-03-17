@@ -54,6 +54,7 @@ import {
   formatNudgeFinishSetup,
   formatGreetingNewUser,
   formatGreetingIncomplete,
+  formatFundMessage,
 } from '#utils/messages'
 
 import UserPreference from '#models/user_preference'
@@ -206,6 +207,10 @@ export async function routeCommand(
 
       case 'about':
         await sendMessageFn(phoneNumber, formatAboutMessage(lang), lang)
+        break
+
+      case 'fund':
+        await sendMessageFn(phoneNumber, formatFundMessage(lang), lang)
         break
 
       case 'balance':
@@ -711,11 +716,17 @@ export default class WebhookController {
         llmLang || (detection && detection.confidence >= PERSIST_THRESHOLD ? detection.lang : null)
 
       if (detectedLang) {
-        // Update persisted preference if different — language follows the user
-        if (detectedLang !== userLang) {
+        // Update persisted preference if different — language follows the user.
+        // Skip persistence for unknown commands: a single typo or gibberish
+        // message shouldn't permanently flip the user's language.
+        if (detectedLang !== userLang && command.command !== 'unknown') {
           await setUserLanguage(from, detectedLang)
         }
-        userLang = detectedLang
+        // Use detected lang for this message (even on unknown), but only
+        // override if user has no persisted preference
+        if (command.command !== 'unknown' || !userLang) {
+          userLang = detectedLang
+        }
       } else if (!userLang && detection) {
         // Low confidence, no persisted preference — use for this message only
         userLang = detection.lang

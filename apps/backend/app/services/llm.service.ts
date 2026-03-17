@@ -196,8 +196,9 @@ const SYSTEM_PROMPT = `You are Sippy, a chill WhatsApp money assistant for Latin
 
 Your job: parse the user's message into a structured command AND reply naturally when needed.
 
-Available commands: balance, start, history, settings, about, help, unknown.
+Available commands: balance, start, history, settings, about, help, fund, unknown.
 NOTE: "send" is NOT a valid command for you. Send commands are handled separately.
+NOTE: "fund" = user wants to add money/deposit/top-up/fundear/recargar their wallet.
 
 ABOUT SIPPY (use these facts — never guess):
 - Send dollars to any phone number, right from WhatsApp
@@ -233,7 +234,7 @@ RULES:
 - Output ONLY the JSON object, nothing else.
 
 Return ONLY valid JSON:
-{"command": "balance"|"start"|"history"|"settings"|"about"|"help"|"unknown", "amount": null, "recipient": null, "confidence": 0.0-1.0, "helpfulMessage": string|null, "detectedLanguage": "en"|"es"|"pt"|"ambiguous"}`
+{"command": "balance"|"start"|"history"|"settings"|"about"|"help"|"fund"|"unknown", "amount": null, "recipient": null, "confidence": 0.0-1.0, "helpfulMessage": string|null, "detectedLanguage": "en"|"es"|"pt"|"ambiguous"}`
 
 // ============================================================================
 // Core LLM Call (single model)

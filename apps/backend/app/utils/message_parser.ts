@@ -90,6 +90,11 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
   cancel: [
     /^(no|cancel|cancelar|n[aã]o)$/i,
   ],
+  fund: [
+    /^(fund|add funds|add money|deposit|top.?up)$/i,
+    /^(fundear|agregar fondos|agregar plata|agregar dinero|recargar|depositar|cargar)$/i,
+    /^(adicionar fundos|adicionar dinheiro|depositar|carregar)$/i,
+  ],
   social: [
     /^(thanks|thank you|thx|ty|ok|okay|cool|got it|great|nice|perfect|awesome|sure|bye|goodbye|see you)$/i,
     /^(gracias|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada)$/i,
@@ -122,6 +127,7 @@ const LOOSE_COMMAND_PATTERNS: Record<string, RegExp> = {
     /(?:^|\s)(history|historial|hist[oó]rico|transactions?|transacciones?|transa[cç][oõ]es?)(?:\s|$)/i,
   settings: /(?:^|\s)(settings?|configuraci[oó]n|configura[cç][aã]o|ajustes)(?:\s|$)/i,
   about: /(?:^|\s)(what is sippy|whats sippy|what's sippy|qu[eé] es sippy|o que [eé] sippy)(?:\s|$)/i,
+  fund: /(?:^|\s)(fund|fundear|add funds|add money|deposit|top.?up|agregar fondos|agregar plata|agregar dinero|recargar|depositar|adicionar fundos|adicionar dinheiro|cargar|carregar)(?:\s|$)/i,
 }
 
 /** Trilingual send patterns — strict format, must extract amount + recipient */
