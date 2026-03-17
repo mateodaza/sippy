@@ -34,8 +34,17 @@ let REGISTERED_WALLETS: `0x${string}`[] = []
     )] as `0x${string}`[]
     console.warn(`DB read failed, using env (${REGISTERED_WALLETS.length} wallets)`)
   } finally {
-    await client?.end().catch(() => {})
+    await client?.end().catch((err) => console.warn('Failed to close pg client:', err.message))
   }
+}
+
+// Include the spender wallet so both legs of spend+transfer sends are captured
+const SPENDER = process.env.SIPPY_SPENDER_ADDRESS?.toLowerCase().trim()
+if (SPENDER && !ADDRESS_RE.test(SPENDER)) {
+  console.error(`SIPPY_SPENDER_ADDRESS is malformed: "${SPENDER}" — must be 0x + 40 hex chars. Spender will NOT be filtered.`)
+} else if (SPENDER && !REGISTERED_WALLETS.includes(SPENDER as `0x${string}`)) {
+  REGISTERED_WALLETS.push(SPENDER as `0x${string}`)
+  console.log(`Added spender ${SPENDER} to USDC filter`)
 }
 
 // Fail-closed: AND both from+to on burn address = self-transfer = structurally impossible

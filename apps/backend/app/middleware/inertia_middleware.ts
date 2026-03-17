@@ -16,7 +16,9 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
           .select(db.raw("(value->>'heartbeat_at')::bigint as heartbeat"))
           .first()
         indexerHeartbeat = row?.heartbeat ? Number(row.heartbeat) : null
-      } catch {}
+      } catch (err) {
+        console.warn('Failed to query indexer heartbeat:', (err as Error).message)
+      }
     }
 
     return {

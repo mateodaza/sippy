@@ -9,10 +9,20 @@ import {
 
 // ── USDC Transfer ──────────────────────────────────────────
 
+// Spender is infrastructure — skip its account aggregation so stats
+// attribute to the actual user, not the relay wallet.
+const SPENDER_RAW = process.env.SIPPY_SPENDER_ADDRESS
+if (!SPENDER_RAW) {
+  console.warn('SIPPY_SPENDER_ADDRESS not set — spender relay wallet will NOT be excluded from account aggregation')
+}
+const SPENDER = (SPENDER_RAW || '').toLowerCase()
+
 ponder.on('USDC:Transfer', async ({ event, context }) => {
   const { from, to, value } = event.args
   const timestamp = Number(event.block.timestamp)
   const day = new Date(timestamp * 1000).toISOString().slice(0, 10)
+  const fromLower = from.toLowerCase()
+  const toLower = to.toLowerCase()
 
   // Insert transfer — gate aggregates on success
   const inserted = await context.db.insert(transfer).values({
@@ -28,41 +38,45 @@ ponder.on('USDC:Transfer', async ({ event, context }) => {
   // If transfer already existed (backfill or replay), skip all aggregates
   if (!inserted) return
 
-  // Update sender account
-  await context.db
-    .insert(account)
-    .values({
-      address: from,
-      balance: -value,
-      totalSent: value,
-      totalReceived: 0n,
-      txCount: 1,
-      lastActivity: timestamp,
-    })
-    .onConflictDoUpdate((row) => ({
-      balance: row.balance - value,
-      totalSent: row.totalSent + value,
-      txCount: row.txCount + 1,
-      lastActivity: timestamp,
-    }))
+  // Update sender account (skip spender — it's a relay, not a user)
+  if (fromLower !== SPENDER) {
+    await context.db
+      .insert(account)
+      .values({
+        address: from,
+        balance: -value,
+        totalSent: value,
+        totalReceived: 0n,
+        txCount: 1,
+        lastActivity: timestamp,
+      })
+      .onConflictDoUpdate((row) => ({
+        balance: row.balance - value,
+        totalSent: row.totalSent + value,
+        txCount: row.txCount + 1,
+        lastActivity: timestamp,
+      }))
+  }
 
-  // Update receiver account
-  await context.db
-    .insert(account)
-    .values({
-      address: to,
-      balance: value,
-      totalSent: 0n,
-      totalReceived: value,
-      txCount: 1,
-      lastActivity: timestamp,
-    })
-    .onConflictDoUpdate((row) => ({
-      balance: row.balance + value,
-      totalReceived: row.totalReceived + value,
-      txCount: row.txCount + 1,
-      lastActivity: timestamp,
-    }))
+  // Update receiver account (skip spender — it's a relay, not a user)
+  if (toLower !== SPENDER) {
+    await context.db
+      .insert(account)
+      .values({
+        address: to,
+        balance: value,
+        totalSent: 0n,
+        totalReceived: value,
+        txCount: 1,
+        lastActivity: timestamp,
+      })
+      .onConflictDoUpdate((row) => ({
+        balance: row.balance + value,
+        totalReceived: row.totalReceived + value,
+        txCount: row.txCount + 1,
+        lastActivity: timestamp,
+      }))
+  }
 
   // Update daily volume
   await context.db

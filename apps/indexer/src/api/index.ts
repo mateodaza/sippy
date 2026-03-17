@@ -181,11 +181,17 @@ function deduplicateLogs(logs: any[]): any[] {
 // ══════════════════════════════════════════════════════════════
 
 const PONDER_SCHEMA = process.env.INDEXER_DB_SCHEMA || process.env.DATABASE_SCHEMA || 'ponder'
+if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(PONDER_SCHEMA)) {
+  throw new Error(`Invalid PONDER_SCHEMA: ${PONDER_SCHEMA}`)
+}
 
 async function backfillWallet(address: string) {
   const rpcUrl = process.env.PONDER_RPC_URL_42161
   const startBlock = process.env.START_BLOCK || '437000000'
-  if (!rpcUrl) return
+  if (!rpcUrl) {
+    console.warn(`Skipping backfill for ${address}: PONDER_RPC_URL_42161 is not set`)
+    return
+  }
 
   const startBlockHex = '0x' + parseInt(startBlock).toString(16)
   const paddedAddr = '0x' + address.slice(2).padStart(64, '0')
@@ -210,8 +216,12 @@ async function backfillWallet(address: string) {
   const CONCURRENCY = 10
   for (let i = 0; i < uniqueBlockNums.length; i += CONCURRENCY) {
     const batch = uniqueBlockNums.slice(i, i + CONCURRENCY)
-    const results = await Promise.all(batch.map((bn) => fetchBlockTimestamp(rpcUrl, bn)))
-    batch.forEach((bn, idx) => blockTimestamps.set(bn, results[idx]))
+    const results = await Promise.allSettled(batch.map((bn) => fetchBlockTimestamp(rpcUrl, bn)))
+    batch.forEach((bn, idx) => {
+      const r = results[idx]
+      if (r.status === 'fulfilled') blockTimestamps.set(bn, r.value)
+      else console.warn(`Failed to fetch timestamp for block ${bn}: ${r.reason?.message}`)
+    })
   }
 
   const S = PONDER_SCHEMA  // shorthand for SQL interpolation
@@ -338,7 +348,7 @@ app.post('/wallets/register', requireSecret, async (c) => {
     try {
       await backfillWallet(normalized)
     } catch (err) {
-      console.warn(`Backfill failed for ${normalized}: ${(err as Error).message}`)
+      console.error(`Backfill failed for ${normalized}: ${(err as Error).message}`)
     }
     // Restart is batched (30 min window) — backfill provides immediate data,
     // restart updates the live event filter for future transfers.

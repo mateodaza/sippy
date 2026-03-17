@@ -43,10 +43,12 @@ function formatUSDC(raw: string): string {
 }
 
 function formatETH(raw: string): string {
-  const padded = raw.padStart(19, '0')
+  const negative = raw.startsWith('-')
+  const abs = negative ? raw.slice(1) : raw
+  const padded = abs.padStart(19, '0')
   const whole = padded.slice(0, padded.length - 18) || '0'
   const frac = padded.slice(padded.length - 18, padded.length - 14)
-  return `${whole}.${frac} ETH`
+  return `${negative ? '-' : ''}${whole}.${frac} ETH`
 }
 
 function truncateAddress(addr: string): string {
