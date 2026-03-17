@@ -787,8 +787,7 @@ export default class EmbeddedWalletController {
 
       return response.json({
         address: row.wallet_address,
-        phone: canonicalPhone,
-        phoneVisible,
+        phone: phoneVisible ? canonicalPhone : null,
       })
     } catch (error) {
       logger.error('Get profile error: %o', error)

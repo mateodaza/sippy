@@ -16,8 +16,14 @@ export default class RolesController {
     })
   }
 
-  async update({ params, request, response, session }: HttpContext) {
+  async update({ params, request, response, session, auth }: HttpContext) {
     const admin = await AdminUser.findOrFail(params.id)
+
+    if (admin.id === auth.user!.id) {
+      session.flash('error', 'Cannot modify your own role')
+      return response.redirect().back()
+    }
+
     const { role } = await request.validateUsing(updateRoleValidator)
     admin.role = role
     await admin.save()

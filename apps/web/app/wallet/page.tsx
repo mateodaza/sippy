@@ -25,6 +25,7 @@ import {
   localizeError,
   t,
 } from '../../lib/i18n';
+import { CDPProviderCustomAuth } from '../providers/cdp-provider';
 
 const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
@@ -750,14 +751,16 @@ function WalletContent() {
 
 export default function WalletPage() {
   return (
-    <Suspense
-      fallback={
-        <div className='min-h-screen bg-[var(--bg-primary)] flex items-center justify-center'>
-          <div className='text-[var(--text-secondary)]'>Loading...</div>
-        </div>
-      }
-    >
-      <WalletContent />
-    </Suspense>
+    <CDPProviderCustomAuth>
+      <Suspense
+        fallback={
+          <div className='min-h-screen bg-[var(--bg-primary)] flex items-center justify-center'>
+            <div className='text-[var(--text-secondary)]'>Loading...</div>
+          </div>
+        }
+      >
+        <WalletContent />
+      </Suspense>
+    </CDPProviderCustomAuth>
   );
 }

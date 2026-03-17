@@ -29,6 +29,9 @@ const USER_RESOLVE_WINDOW = 60 * 60 * 1000 // 1 hour
 const LOGIN_LIMIT = 5 // attempts per window
 const LOGIN_WINDOW = 15 * 60 * 1000 // 15 minutes
 
+const CDP_EXCHANGE_LIMIT = 5  // exchanges per window
+const CDP_EXCHANGE_WINDOW = 15 * 60 * 1000 // 15 minutes
+
 const MAX_MAP_ENTRIES = 100_000 // hard cap to prevent unbounded memory growth
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -77,6 +80,12 @@ export default class RateLimitService {
    * IP → { count, resetAt }
    */
   private loginThrottle: Map<string, ThrottleBucket> = new Map()
+
+  /**
+   * Map 6: CDP exchange per-phone throttle
+   * phone (E.164) -> { count, resetAt }
+   */
+  private cdpExchangeThrottle: Map<string, ThrottleBucket> = new Map()
 
   /** Interval handles so we can stop them on shutdown */
   private cleanupTimers: ReturnType<typeof setInterval>[] = []
@@ -221,6 +230,29 @@ export default class RateLimitService {
     this.ipResolveThrottle.clear()
   }
 
+  // ── Map 6: CDP Exchange Per-Phone Throttle ──────────────────────────────────
+
+  checkCdpExchangeThrottle(phoneNumber: string): { allowed: boolean; retryAfter?: number } {
+    const now = Date.now()
+    const entry = this.cdpExchangeThrottle.get(phoneNumber)
+
+    if (!entry || now > entry.resetAt) {
+      if (this.cdpExchangeThrottle.size >= MAX_MAP_ENTRIES) {
+        this.cleanExpiredThrottleEntries()
+      }
+      this.cdpExchangeThrottle.set(phoneNumber, { count: 1, resetAt: now + CDP_EXCHANGE_WINDOW })
+      return { allowed: true }
+    }
+
+    entry.count++
+    if (entry.count > CDP_EXCHANGE_LIMIT) {
+      const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
+      return { allowed: false, retryAfter }
+    }
+
+    return { allowed: true }
+  }
+
   // ── Map 4: Per-User Phone Resolution Throttle ──────────────────────────────
 
   /**
@@ -280,6 +312,9 @@ export default class RateLimitService {
     }
     for (const [key, entry] of this.loginThrottle) {
       if (entry.resetAt < now) this.loginThrottle.delete(key)
+    }
+    for (const [key, entry] of this.cdpExchangeThrottle) {
+      if (entry.resetAt < now) this.cdpExchangeThrottle.delete(key)
     }
   }
 
@@ -350,9 +385,17 @@ export default class RateLimitService {
           }
         }
 
-        if (ipCleaned > 0 || userCleaned > 0 || loginCleaned > 0) {
+        let cdpCleaned = 0
+        for (const [key, entry] of this.cdpExchangeThrottle) {
+          if (entry.resetAt < now) {
+            this.cdpExchangeThrottle.delete(key)
+            cdpCleaned++
+          }
+        }
+
+        if (ipCleaned > 0 || userCleaned > 0 || loginCleaned > 0 || cdpCleaned > 0) {
           this.logger?.debug(
-            `RateLimitService cleanup: ${ipCleaned} IP, ${userCleaned} user-resolve, ${loginCleaned} login entries`
+            `RateLimitService cleanup: ${ipCleaned} IP, ${userCleaned} user-resolve, ${loginCleaned} login, ${cdpCleaned} cdp-exchange entries`
           )
         }
       } catch (err) {

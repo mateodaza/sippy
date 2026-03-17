@@ -44,9 +44,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: mocks.searchParamsGet }),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }))
 
 vi.mock('@coinbase/cdp-hooks', () => ({
+  CDPHooksProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
   useAuthenticateWithJWT: () => ({ authenticateWithJWT: mocks.authenticateWithJWT }),
   useCreateSpendPermission: () => ({ createSpendPermission: mocks.createSpendPermission, status: null }),
   useRevokeSpendPermission: () => ({ revokeSpendPermission: mocks.revokeSpendPermission }),
@@ -98,6 +100,24 @@ vi.mock('../../lib/usdc-transfer', () => ({
 
 vi.mock('viem', () => ({
   parseUnits: vi.fn(() => BigInt(0)),
+}))
+
+// Mock react-international-phone so SippyPhoneInput is a simple controlled <input type="tel">
+vi.mock('react-international-phone', () => ({
+  PhoneInput: ({ value, onChange, inputProps }: {
+    value?: string; onChange?: (val: string) => void; inputProps?: Record<string, unknown>;
+    [key: string]: unknown;
+  }) => {
+    const React = require('react')
+    return React.createElement('input', {
+      type: 'tel',
+      value: value || '',
+      onChange: (e: { target: { value: string } }) => onChange?.(e.target.value),
+      ...inputProps,
+    })
+  },
+  defaultCountries: [],
+  parseCountry: () => ({ iso2: '' }),
 }))
 
 // --- Helpers ---
@@ -1169,7 +1189,7 @@ describe('handleSetLanguage', () => {
     expect(JSON.parse(fetchInit(setLangCall!).body as string)).toEqual({ language: 'pt' })
     expect(mocks.storeLanguage).toHaveBeenCalledWith('pt')
     // Verify the UI re-rendered: the Português button should now be highlighted (lang === 'pt')
-    expect(findButton('Português')!.className).toContain('border-emerald-600')
+    expect(findButton('Português')!.className).toContain('border-brand-crypto')
   })
 
   it('TC-LN-003-F04: clicking Auto-detect POSTs {language:null}, clears language, calls resolveLanguage with verifiedPhone', async () => {

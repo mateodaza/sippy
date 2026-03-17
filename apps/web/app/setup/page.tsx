@@ -2,12 +2,13 @@
 
 import { useState, Suspense, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useAuthenticateWithJWT, useCreateSpendPermission, useCurrentUser, useIsSignedIn, useSignOut } from '@coinbase/cdp-hooks';
+import { useAuthenticateWithJWT, useCreateSpendPermission, useCurrentUser, useIsSignedIn, useSignOut, useSignInWithSms, useVerifySmsOTP, useGetAccessToken } from '@coinbase/cdp-hooks';
 import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken, getFreshToken } from '../../lib/auth';
 import { Language, getStoredLanguage, storeLanguage, detectLanguageFromPhone, fetchUserLanguage, resolveLanguage, localizeError, t } from '../../lib/i18n';
 import { parseUnits } from 'viem';
 import { SippyPhoneInput } from '../../components/ui/phone-input';
-import { isBlockedPrefix } from '@sippy/shared';
+import { isBlockedPrefix, isNANP } from '@sippy/shared';
+import { CDPProviderCustomAuth, CDPProviderNative } from '../providers/cdp-provider';
 
 /**
  * Setup Page for Embedded Wallets
@@ -34,18 +35,15 @@ const USDC_ADDRESSES: Record<string, string> = {
 const USDC_ADDRESS = USDC_ADDRESSES[NETWORK] || USDC_ADDRESSES.arbitrum;
 
 type Step = 'phone' | 'otp' | 'email' | 'tos' | 'permission' | 'done';
+type AuthMode = 'twilio' | 'cdp-sms';
 
 const TOS_VERSION = '1.0';
 const TOS_URL = 'https://www.sippy.lat/terms';
 
-function SetupContent() {
-  const searchParams = useSearchParams();
+function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: AuthMode; phoneFromUrl: string }) {
   const router = useRouter();
 
-  // Phone number from WhatsApp link - LOCKED (user cannot change)
-  // Strip everything except digits, re-add '+' for E.164
-  const rawPhone = (searchParams.get('phone') || '').replace(/[^\d]/g, '');
-  const phoneFromUrl = rawPhone ? `+${rawPhone}` : '';
+  const phoneFromUrl = phoneFromUrlProp;
 
   // Redirect to settings if user already has a valid (non-expired) session
   useEffect(() => {
@@ -75,12 +73,21 @@ function SetupContent() {
   // Keep html lang attribute in sync for screen readers
   useEffect(() => { document.documentElement.lang = lang }, [lang])
 
-  // CDP Hooks
+  // CDP Hooks — shared
   const { authenticateWithJWT } = useAuthenticateWithJWT();
   const { createSpendPermission, status: permissionStatus } = useCreateSpendPermission();
   const { currentUser } = useCurrentUser();
   const { isSignedIn } = useIsSignedIn();
   const { signOut } = useSignOut();
+
+  // CDP SMS hooks (only used when authMode === 'cdp-sms')
+  const { signInWithSms } = useSignInWithSms();
+  const { verifySmsOTP } = useVerifySmsOTP();
+  const { getAccessToken } = useGetAccessToken();
+  const [cdpFlowId, setCdpFlowId] = useState<string | null>(null);
+
+  // Flag: CDP SMS OTP verified, waiting for currentUser to populate with wallet
+  const [awaitingCdpWallet, setAwaitingCdpWallet] = useState(false);
 
   // Security: Phone number must match what was sent in the WhatsApp link
   const isPhoneLocked = !!phoneFromUrl;
@@ -104,7 +111,7 @@ function SetupContent() {
       const token = getStoredToken();
       resolveLanguage(null, token, BACKEND_URL)
         .then(resolved => { storeLanguage(resolved); setLang(resolved) })
-        .catch(() => {})
+        .catch((err: unknown) => { console.debug('language fetch failed:', (err as Error).message) })
     }
   }, [phoneFromUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -290,7 +297,14 @@ function SetupContent() {
       storeLanguage(phoneLang);
       setLang(phoneLang);
 
-      await sendOtp(formattedPhone);
+      if (authMode === 'cdp-sms') {
+        // CDP native SMS — CDP sends the SMS directly
+        const result = await signInWithSms({ phoneNumber: formattedPhone });
+        setCdpFlowId(result.flowId);
+      } else {
+        // Twilio flow — backend sends SMS
+        await sendOtp(formattedPhone);
+      }
 
       setStep('otp');
     } catch (err) {
@@ -307,22 +321,69 @@ function SetupContent() {
     setError(null);
 
     try {
-      const token = await verifyOtp(phoneNumber, otp);
-      storeToken(token);
+      if (authMode === 'cdp-sms') {
+        // CDP native SMS flow: verify OTP via CDP, then wait for wallet via useEffect
+        if (!cdpFlowId) throw new Error('Missing CDP flow ID. Please restart.');
+
+        await verifySmsOTP({ flowId: cdpFlowId, otp });
+
+        // CDP has now authenticated the user and created a wallet.
+        // Get CDP access token and exchange it for a Sippy JWT.
+        const cdpAccessToken = await getAccessToken();
+        if (!cdpAccessToken) {
+          throw new Error('Failed to get CDP access token.');
+        }
+
+        const exchangeRes = await fetch(`${BACKEND_URL}/api/auth/exchange-cdp-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cdpAccessToken }),
+        });
+
+        if (!exchangeRes.ok) {
+          const errBody = await exchangeRes.json().catch(() => ({}));
+          // Distinguish auth failures from server errors
+          if (exchangeRes.status === 401 || exchangeRes.status === 422) {
+            throw new Error(errBody.error || 'Authentication failed. Please try again.');
+          }
+          throw new Error(errBody.error || 'Failed to exchange CDP token');
+        }
+
+        const { token } = await exchangeRes.json();
+        storeToken(token);
+
+        // Detect language
+        const phoneLang = detectLanguageFromPhone(phoneNumber);
+        storeLanguage(phoneLang);
+        setLang(phoneLang);
+        fetchUserLanguage(token, BACKEND_URL)
+          .then(({ language }) => { storeLanguage(language); setLang(language) })
+          .catch((err: unknown) => { console.debug('language fetch failed:', (err as Error).message) });
+
+        // After verifySmsOTP, CDP SDK updates its internal state asynchronously.
+        // React won't re-render mid-handler, so `currentUser` from the closure is stale.
+        // Set a flag so a useEffect can pick up the wallet once currentUser updates.
+        setAwaitingCdpWallet(true);
+        // Keep isLoading true — the useEffect will clear it when the wallet arrives.
+        return;
+      }
+
+      // Twilio flow: verify OTP via backend, get Sippy JWT directly
+      const sippyJwt = await verifyOtp(phoneNumber, otp);
+      storeToken(sippyJwt);
 
       // Detect and store language immediately from phone, then update from API
-      const phoneLang = detectLanguageFromPhone(phoneNumber)
-      storeLanguage(phoneLang)
-      setLang(phoneLang)
-      fetchUserLanguage(token, BACKEND_URL)
+      const phoneLang = detectLanguageFromPhone(phoneNumber);
+      storeLanguage(phoneLang);
+      setLang(phoneLang);
+      fetchUserLanguage(sippyJwt, BACKEND_URL)
         .then(({ language }) => { storeLanguage(language); setLang(language) })
-        .catch(() => {})
+        .catch((err: unknown) => { console.debug('language fetch failed:', (err as Error).message) });
 
       const { user } = await authenticateWithJWT();
 
       // Get the user's smart account address
-      // CDP embedded wallets use evmSmartAccounts, not evmAccounts
-      const smartAccountAddress = user.evmSmartAccounts?.[0] || user.evmAccounts?.[0];
+      const smartAccountAddress = user?.evmSmartAccounts?.[0] || user?.evmAccounts?.[0];
       if (!smartAccountAddress) {
         throw new Error('No wallet found. Please try again.');
       }
@@ -334,13 +395,14 @@ function SetupContent() {
         try {
           const accessToken = getStoredToken();
           if (accessToken) {
+            const cdpToken = await getAccessToken();
             const response = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({ walletAddress: smartAccountAddress }),
+              body: JSON.stringify({ walletAddress: smartAccountAddress, cdpAccessToken: cdpToken }),
             });
 
             if (!response.ok) {
@@ -366,9 +428,76 @@ function SetupContent() {
       console.error('OTP verification failed:', err);
       setError(localizeError(err, 'otp-verify', lang));
     } finally {
-      setIsLoading(false);
+      // For CDP SMS flow with awaitingCdpWallet, keep isLoading true
+      if (authMode !== 'cdp-sms') {
+        setIsLoading(false);
+      }
     }
   };
+
+  // Effect: After CDP SMS OTP verification, wait for currentUser to populate with a wallet.
+  // verifySmsOTP triggers an internal SDK state update; React re-renders with the new
+  // currentUser in a subsequent render cycle. This effect fires on that re-render.
+  useEffect(() => {
+    if (!awaitingCdpWallet) return;
+
+    // Timeout: if the wallet never populates (SDK error, network issue), unblock the UI.
+    const timeout = setTimeout(() => {
+      setAwaitingCdpWallet(false);
+      setIsLoading(false);
+      setError(lang === 'es' ? 'La creación de la billetera expiró. Intenta de nuevo.' :
+               lang === 'pt' ? 'A criação da carteira expirou. Tente novamente.' :
+               'Wallet creation timed out. Please try again.');
+    }, 30000);
+
+    const smartAccountAddress = currentUser?.evmSmartAccounts?.[0] || currentUser?.evmAccounts?.[0];
+    if (!smartAccountAddress) return () => clearTimeout(timeout); // Not yet populated, wait for next render
+
+    // Wallet is available — clear timeout and continue the setup flow
+    clearTimeout(timeout);
+    setAwaitingCdpWallet(false);
+    setWalletAddress(smartAccountAddress);
+
+    const registerAndContinue = async () => {
+      try {
+        if (BACKEND_URL) {
+          const accessToken = getStoredToken();
+          if (accessToken) {
+            const cdpToken = await getAccessToken();
+            const response = await fetch(`${BACKEND_URL}/api/register-wallet`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ walletAddress: smartAccountAddress, cdpAccessToken: cdpToken }),
+            });
+
+            if (!response.ok) {
+              const errText = await response.text();
+              console.error('Wallet registration failed:', errText);
+              setError(lang === 'es' ? 'Error registrando la billetera. Intenta de nuevo.' :
+                       lang === 'pt' ? 'Erro ao registrar a carteira. Tente novamente.' :
+                       'Failed to register wallet. Please try again.');
+              setIsLoading(false);
+              return;
+            }
+          }
+        }
+
+        setStep('email');
+      } catch (regErr) {
+        console.error('Backend registration error:', regErr);
+        setError(lang === 'es' ? 'Error registrando la billetera. Intenta de nuevo.' :
+                 lang === 'pt' ? 'Erro ao registrar a carteira. Tente novamente.' :
+                 'Failed to register wallet. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    registerAndContinue();
+  }, [awaitingCdpWallet, currentUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Step 3a: Send email verification code
   const handleSendEmailCode = async () => {
@@ -443,6 +572,9 @@ function SetupContent() {
     try {
       if (BACKEND_URL) {
         const accessToken = getStoredToken();
+        if (!accessToken) {
+          console.warn('handleAcceptTos: no access token — ToS acceptance will not be recorded on backend');
+        }
         if (accessToken) {
           const response = await fetch(`${BACKEND_URL}/api/accept-tos`, {
             method: 'POST',
@@ -920,6 +1052,128 @@ function SetupContent() {
   );
 }
 
+/**
+ * Gate component for bare /setup (no phone in URL).
+ * Renders a phone input first, then mounts the correct provider after submission.
+ */
+function PhoneEntryGate() {
+  const [submittedPhone, setSubmittedPhone] = useState<string | null>(null);
+  const router = useRouter();
+  const [lang] = useState<Language>(() => getStoredLanguage() || 'en');
+
+  // Redirect to settings if user already has a valid session
+  useEffect(() => {
+    if (getFreshToken()) {
+      router.replace('/settings');
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!submittedPhone) {
+    return (
+      <div className='min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4'>
+        <div className='max-w-md w-full bg-[var(--bg-primary)] panel-frame rounded-2xl p-8'>
+          <h1 className='font-display text-2xl font-bold uppercase mb-4 text-[var(--text-primary)]'>
+            {t('setup.title', lang)}
+          </h1>
+          <p className='text-[var(--text-secondary)] mb-6'>
+            {t('setup.subtitle', lang)}
+          </p>
+          <PhoneEntryForm onSubmit={setSubmittedPhone} lang={lang} />
+        </div>
+      </div>
+    );
+  }
+
+  const authMode: AuthMode = isNANP(submittedPhone) ? 'cdp-sms' : 'twilio';
+  const Provider = isNANP(submittedPhone) ? CDPProviderNative : CDPProviderCustomAuth;
+
+  return (
+    <Provider>
+      <Suspense
+        fallback={
+          <div className='min-h-screen bg-[var(--bg-primary)] flex items-center justify-center'>
+            <div className='text-[var(--text-secondary)]'>Loading...</div>
+          </div>
+        }
+      >
+        <SetupContent authMode={authMode} phoneFromUrl={submittedPhone} />
+      </Suspense>
+    </Provider>
+  );
+}
+
+/**
+ * Inline phone entry form used inside PhoneEntryGate.
+ */
+function PhoneEntryForm({ onSubmit, lang }: { onSubmit: (phone: string) => void; lang: Language }) {
+  const [phone, setPhone] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = () => {
+    const formatted = phone.startsWith('+') ? phone : `+${phone}`;
+    if (isBlockedPrefix(formatted)) {
+      setError(lang === 'es' ? 'Este país no está disponible.' :
+               lang === 'pt' ? 'Este país não está disponível.' :
+               'This country is not available.');
+      return;
+    }
+    if (formatted.replace(/\D/g, '').length < 7) {
+      setError(lang === 'es' ? 'Número inválido.' :
+               lang === 'pt' ? 'Número inválido.' :
+               'Invalid phone number.');
+      return;
+    }
+    onSubmit(formatted);
+  };
+
+  return (
+    <>
+      {error && (
+        <div className='mb-4 p-3 bg-[var(--fill-danger-light)] border border-red-200 rounded-lg text-red-700 text-sm'>
+          {error}
+        </div>
+      )}
+      <div className='mb-4'>
+        <SippyPhoneInput
+          value={phone}
+          onChange={setPhone}
+          locked={false}
+        />
+      </div>
+      <button
+        onClick={handleSubmit}
+        disabled={!phone || phone.replace(/\D/g, '').length < 7}
+        className='w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed'
+      >
+        {t('setup.sendCode', lang)}
+      </button>
+    </>
+  );
+}
+
+function SetupPageInner() {
+  const searchParams = useSearchParams();
+
+  // Phone number from WhatsApp link
+  const rawPhone = (searchParams.get('phone') || '').replace(/[^\d]/g, '');
+  const phoneFromUrl = rawPhone ? `+${rawPhone}` : '';
+
+  // No phone from URL → show phone entry gate (provider chosen after phone is known)
+  if (!phoneFromUrl) {
+    return <PhoneEntryGate />;
+  }
+
+  // Phone from URL → mount correct provider immediately
+  const authMode: AuthMode = isNANP(phoneFromUrl) ? 'cdp-sms' : 'twilio';
+  const Provider = isNANP(phoneFromUrl) ? CDPProviderNative : CDPProviderCustomAuth;
+
+  return (
+    <Provider>
+      <SetupContent authMode={authMode} phoneFromUrl={phoneFromUrl} />
+    </Provider>
+  );
+}
+
 export default function SetupPage() {
   return (
     <Suspense
@@ -929,7 +1183,7 @@ export default function SetupPage() {
         </div>
       }
     >
-      <SetupContent />
+      <SetupPageInner />
     </Suspense>
   );
 }

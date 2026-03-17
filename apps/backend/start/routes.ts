@@ -29,11 +29,9 @@ router.get('/health', [HealthController, 'health'])
 router.get('/webhook/whatsapp', [WebhookController, 'verify'])
 router.post('/webhook/whatsapp', [WebhookController, 'handle'])
 
-// ── Public resolution ───────────────────────────────────────────────────────
+// ── Public resolution (IP-throttled, privacy-aware) ─────────────────────────
 router.get('/resolve-phone', [ResolveController, 'byPhone']).use(middleware.ipThrottle())
-router
-  .get('/resolve-address', [ResolveController, 'byAddress'])
-  .use(middleware.ipThrottle())
+router.get('/resolve-address', [ResolveController, 'byAddress']).use(middleware.ipThrottle())
 router.get('/api/profile', [EmbeddedWalletController, 'getProfile']).use(middleware.ipThrottle())
 
 // ── Notifications (require shared secret) ───────────────────────────────────
@@ -50,6 +48,7 @@ router
   .group(() => {
     router.post('/send-otp', [AuthApiController, 'sendOtp']).use(middleware.ipThrottle())
     router.post('/verify-otp', [AuthApiController, 'verifyOtp']).use(middleware.ipThrottle())
+    router.post('/exchange-cdp-token', [AuthApiController, 'exchangeCdpToken']).use(middleware.ipThrottle())
     router.get('/.well-known/jwks.json', [AuthApiController, 'jwks'])
   })
   .prefix('/api/auth')
@@ -104,11 +103,11 @@ router
     router.get('/analytics', [AnalyticsController, 'index'])
     router.get('/parse-patterns', [AnalyticsController, 'parsePatterns'])
     router.get('/roles', [RolesController, 'index'])
-    router.put('/roles/:id', [RolesController, 'update'])
-    router.post('/block-user', [ModerationController, 'blockUser'])
-    router.post('/unblock-user', [ModerationController, 'unblockUser'])
-    router.post('/pause', [ModerationController, 'pause'])
-    router.post('/resume', [ModerationController, 'resume'])
+    router.put('/roles/:id', [RolesController, 'update']).use(middleware.adminRole({ role: 'admin' }))
+    router.post('/block-user', [ModerationController, 'blockUser']).use(middleware.adminRole({ role: 'admin' }))
+    router.post('/unblock-user', [ModerationController, 'unblockUser']).use(middleware.adminRole({ role: 'admin' }))
+    router.post('/pause', [ModerationController, 'pause']).use(middleware.adminRole({ role: 'admin' }))
+    router.post('/resume', [ModerationController, 'resume']).use(middleware.adminRole({ role: 'admin' }))
   })
   .prefix('/admin')
   .use(middleware.auth({ guards: ['web'] }))

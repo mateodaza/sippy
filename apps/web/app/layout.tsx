@@ -4,7 +4,6 @@ import { ThemeWrapper } from '@/components/ui/theme-wrapper';
 import './globals.css';
 import { Web3Provider } from './providers/Web3Provider';
 import { BlockscoutProvider } from './providers/BlockscoutProvider';
-import { CDPProvider } from './providers/cdp-provider';
 import { PostHogProvider } from './providers/PostHogProvider';
 import { getRequestLang } from '@/lib/i18n-server';
 
@@ -61,8 +60,7 @@ export default async function RootLayout({
         <ThemeWrapper>
           <PostHogProvider>
             <BlockscoutProvider>
-              <CDPProvider>
-                <Web3Provider>
+              <Web3Provider>
                   <script
                     type='application/ld+json'
                   dangerouslySetInnerHTML={{
@@ -76,7 +74,6 @@ export default async function RootLayout({
                 />
                 {children}
                 </Web3Provider>
-              </CDPProvider>
             </BlockscoutProvider>
           </PostHogProvider>
         </ThemeWrapper>

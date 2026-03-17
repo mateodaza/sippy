@@ -11,6 +11,7 @@ import env from '#start/env'
 import { query } from '#services/db'
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { canonicalizePhone } from '#utils/phone'
+import { findUserPrefByPhone } from '#utils/user_pref_lookup'
 
 export default class ResolveController {
   /**
@@ -34,7 +35,7 @@ export default class ResolveController {
         return response.status(400).json({ error: 'Invalid phone number' })
       }
 
-      logger.info(`Resolving phone number: ${canonicalPhone}`)
+      logger.info('Resolving phone number for resolve-phone request')
 
       // Try to get existing wallet
       const wallet = await getUserWallet(canonicalPhone)
@@ -112,7 +113,15 @@ export default class ResolveController {
 
       const storedPhone = result.rows[0].phone_number
       const phone = storedPhone.startsWith('+') ? storedPhone : `+${storedPhone}`
-      logger.info(`Found phone: ${phone}`)
+      logger.info(`Found phone for address: ${address}`)
+
+      const pref = await findUserPrefByPhone(phone)
+      if (pref && pref.phoneVisible === false) {
+        return response.json({
+          address,
+          phone: null,
+        })
+      }
 
       return response.json({
         address,

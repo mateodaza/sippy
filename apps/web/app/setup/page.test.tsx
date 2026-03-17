@@ -27,9 +27,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: mocks.searchParamsGet }),
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }))
 
 vi.mock('@coinbase/cdp-hooks', () => ({
+  CDPHooksProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
   useAuthenticateWithJWT: () => ({ authenticateWithJWT: mocks.authenticateWithJWT }),
   useCreateSpendPermission: () => ({
     createSpendPermission: mocks.createSpendPermission,
@@ -38,6 +40,9 @@ vi.mock('@coinbase/cdp-hooks', () => ({
   useCurrentUser: () => ({ currentUser: mocks.state.currentUser }),
   useIsSignedIn: () => ({ isSignedIn: mocks.state.isSignedIn }),
   useSignOut: () => ({ signOut: mocks.signOut }),
+  useSignInWithSms: () => ({ signInWithSms: vi.fn() }),
+  useVerifySmsOTP: () => ({ verifySmsOTP: vi.fn() }),
+  useGetAccessToken: () => ({ getAccessToken: vi.fn() }),
 }))
 
 vi.mock('../../lib/i18n', async () => {
@@ -60,6 +65,8 @@ vi.mock('../../lib/auth', () => ({
   verifyOtp: (...args: unknown[]) => mocks.verifyOtp(...args),
   storeToken: (...args: unknown[]) => mocks.storeToken(...args),
   getStoredToken: () => mocks.getStoredToken(),
+  clearToken: vi.fn(),
+  getFreshToken: vi.fn(() => null),
 }))
 
 vi.mock('viem', () => ({
@@ -68,7 +75,7 @@ vi.mock('viem', () => ({
 
 // Mock react-international-phone so PhoneInput is a simple controlled <input type="tel">
 vi.mock('react-international-phone', () => ({
-  PhoneInput: ({ value, onChange, inputProps, ...rest }: {
+  PhoneInput: ({ value, onChange, inputProps }: {
     value?: string; onChange?: (val: string) => void; inputProps?: Record<string, unknown>;
     [key: string]: unknown;
   }) => {
@@ -80,6 +87,8 @@ vi.mock('react-international-phone', () => ({
       ...inputProps,
     })
   },
+  defaultCountries: [],
+  parseCountry: () => ({ iso2: '' }),
 }))
 
 // --- Helpers ---
@@ -196,7 +205,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.state.isSignedIn = false
   mocks.state.currentUser = null
-  mocks.searchParamsGet.mockReturnValue(null)
+  // Default: provide a Colombian phone via URL (Twilio auth mode)
+  // Tests that need bare /setup (PhoneEntryGate) can override to null
+  mocks.searchParamsGet.mockImplementation((key: string) =>
+    key === 'phone' ? '573001234567' : null
+  )
   mocks.getStoredToken.mockReturnValue(null)
   vi.stubEnv('NEXT_PUBLIC_CDP_PROJECT_ID', 'test-project-id')
   vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', '')
@@ -725,10 +738,21 @@ describe('handleSkipEmail', () => {
 })
 
 describe('source integrity', () => {
-  it('does not import removed hooks from @coinbase/cdp-hooks', () => {
+  it('imports CDP SMS hooks for NANP (+1) auth flow', () => {
     const source = readFileSync(join(__dir, 'page.tsx'), 'utf-8')
-    expect(source).not.toMatch(/useSignInWithSms/)
-    expect(source).not.toMatch(/useVerifySmsOTP/)
-    expect(source).not.toMatch(/useGetAccessToken/)
+    expect(source).toMatch(/useSignInWithSms/)
+    expect(source).toMatch(/useVerifySmsOTP/)
+    expect(source).toMatch(/useGetAccessToken/)
+  })
+
+  it('uses isNANP to choose auth mode', () => {
+    const source = readFileSync(join(__dir, 'page.tsx'), 'utf-8')
+    expect(source).toMatch(/isNANP/)
+  })
+
+  it('imports both CDP provider variants', () => {
+    const source = readFileSync(join(__dir, 'page.tsx'), 'utf-8')
+    expect(source).toMatch(/CDPProviderCustomAuth/)
+    expect(source).toMatch(/CDPProviderNative/)
   })
 })

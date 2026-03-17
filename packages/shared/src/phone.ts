@@ -26,6 +26,15 @@ export function isBlockedPrefix(e164Phone: string): boolean {
   return BLOCKED_DIAL_PREFIXES.some((prefix) => e164Phone.startsWith(prefix))
 }
 
+// ── NANP detection (North American Numbering Plan) ────────────────────────────
+// +1 covers USA, Canada, Puerto Rico, Jamaica, Trinidad & Tobago, Dominican
+// Republic, Bahamas, Barbados, and ~20 more Caribbean nations.
+// All share the same Twilio A2P 10DLC restriction.
+
+export function isNANP(e164Phone: string): boolean {
+  return e164Phone.startsWith('+1')
+}
+
 // ── Phone-to-language mapping ──────────────────────────────────────────────────
 
 /**

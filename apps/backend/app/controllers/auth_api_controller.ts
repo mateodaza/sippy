@@ -7,6 +7,10 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
+import app from '@adonisjs/core/services/app'
+import '#types/container'
+import env from '#start/env'
+import { CdpClient } from '@coinbase/cdp-sdk'
 import { otpService } from '#services/otp_service'
 import { jwtService } from '#services/jwt_service'
 import { emailService } from '#services/email_service'
@@ -15,6 +19,21 @@ import UserPreference from '#models/user_preference'
 import { DateTime } from 'luxon'
 import { canonicalizePhone, getLanguageForPhone } from '#utils/phone'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
+
+// ── CDP client singleton ──────────────────────────────────────────────────────
+
+let cdpClient: CdpClient | null = null
+
+function getCdpClient(): CdpClient {
+  if (!cdpClient) {
+    cdpClient = new CdpClient({
+      apiKeyId: env.get('CDP_API_KEY_ID'),
+      apiKeySecret: env.get('CDP_API_KEY_SECRET'),
+      walletSecret: env.get('CDP_WALLET_SECRET'),
+    })
+  }
+  return cdpClient
+}
 
 // ── Email masking ──────────────────────────────────────────────────────────────
 
@@ -412,6 +431,61 @@ export default class AuthApiController {
       return response.status(200).json({ ok: true })
     } catch (error) {
       logger.error('setLanguage error: %o', error)
+      return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * POST /api/auth/exchange-cdp-token
+   *
+   * Validates a CDP access token (from native SMS auth) and returns a Sippy JWT.
+   * Used by NANP (+1) users who authenticate via CDP's built-in SMS flow.
+   * No JWT required — the CDP access token is the proof of identity.
+   */
+  async exchangeCdpToken({ request, response }: HttpContext) {
+    try {
+      const { cdpAccessToken } = request.body() ?? {}
+
+      if (!cdpAccessToken || typeof cdpAccessToken !== 'string') {
+        return response.status(422).json({ error: 'Missing cdpAccessToken' })
+      }
+
+      const cdp = getCdpClient()
+      const endUser = await cdp.endUser.validateAccessToken({ accessToken: cdpAccessToken })
+
+      // Extract phone from SMS auth method (same pattern as cdp_auth_middleware.ts)
+      const smsAuth = endUser.authenticationMethods?.find(
+        (m: { type: string }) => m.type === 'sms'
+      ) as { type: 'sms'; phoneNumber: string } | undefined
+
+      if (!smsAuth?.phoneNumber) {
+        return response.status(401).json({ error: 'No phone in CDP token' })
+      }
+
+      const canonicalPhone = canonicalizePhone(smsAuth.phoneNumber)
+      if (!canonicalPhone) {
+        return response.status(422).json({ error: 'Invalid phone number' })
+      }
+
+      const rateLimitService = await app.container.make('rateLimitService')
+      const exchangeCheck = rateLimitService.checkCdpExchangeThrottle(canonicalPhone)
+      if (!exchangeCheck.allowed) {
+        response.header('Retry-After', String(exchangeCheck.retryAfter))
+        return response.status(429).json({ error: 'Too many requests. Try again later.' })
+      }
+
+      const token = await jwtService.signToken(canonicalPhone)
+      return response.status(200).json({ token, expiresIn: 3600 })
+    } catch (error) {
+      // Distinguish CDP auth failures from server errors using HTTP status codes
+      // from the SDK response, not fragile string matching on error messages.
+      const status = (error as Record<string, unknown>)?.status ??
+        (error as Record<string, unknown> & { response?: { status?: number } })?.response?.status
+      if (status === 401 || status === 403) {
+        logger.warn('exchangeCdpToken auth failure (status=%d): %s', status, (error as Error).message)
+        return response.status(401).json({ error: 'CDP token invalid or expired' })
+      }
+      logger.error('exchangeCdpToken error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
