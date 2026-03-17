@@ -292,7 +292,11 @@ export async function checkSecurityLimits(
     }
   }
 
-  return computeSecurityLimits(emailVerified, userWallet.dailySpent, amount)
+  // Reset daily spending if it's a new day (same logic as updateLastActivity)
+  const today = new Date().toDateString()
+  const dailySpent = userWallet.lastResetDate !== today ? 0 : userWallet.dailySpent
+
+  return computeSecurityLimits(emailVerified, dailySpent, amount)
 }
 
 /**

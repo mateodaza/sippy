@@ -349,8 +349,9 @@ export async function parseMessage(
             // Safety: verify amount and recipient from LLM output exist in the original text.
             // This prevents prompt injection from fabricating amounts or recipients.
             const amountStr = String(reparse.amount)
+            const amountComma = amountStr.replace('.', ',')
             const recipientDigits = reparse.recipient.replace(/\+/g, '')
-            if (!text.includes(amountStr) || !text.includes(recipientDigits)) {
+            if ((!text.includes(amountStr) && !text.includes(amountComma)) || !text.includes(recipientDigits)) {
               logger.warn('normalizeSendCommand: LLM output contains data not in original text — original: "%s", normalized: "%s"', text, normalized)
               // Fall through to format hint
             } else {

@@ -351,14 +351,14 @@ export async function appendConversationMessage(
            FROM (
              SELECT val, ord
              FROM jsonb_array_elements(
-               conversation_context.messages || jsonb_build_array($2::jsonb)
+               conversation_context.messages || jsonb_build_array($3::jsonb)
              ) WITH ORDINALITY AS t(val, ord)
              ORDER BY ord DESC
              LIMIT 2
            ) sub
          ),
          updated_at = NOW()`,
-      [phoneNumber, newMessage]
+      [phoneNumber, newMessage, newMessage]
     )
   } catch (error) {
     logger.warn('appendConversationMessage failed (non-blocking): %o', error)
