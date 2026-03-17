@@ -72,6 +72,25 @@ import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup
 export const pendingTransactions = new Map<string, PendingTransaction>()
 export const activeSends = new Set<string>()
 
+const FUND_URL = env.get('FUND_URL', 'https://fund.sippy.lat')
+
+async function generateFundUrl(phoneNumber: string): Promise<string> {
+  try {
+    const res = await fetch(`${FUND_URL}/api/fund-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: phoneNumber }),
+    })
+    if (res.ok) {
+      const data = (await res.json()) as { url?: string }
+      if (data.url) return data.url
+    }
+  } catch (err) {
+    logger.warn('Fund token generation failed, falling back to base URL: %o', err)
+  }
+  return FUND_URL
+}
+
 const CONFIRM_THRESHOLD_DEFAULT = 5
 const ACTIVE_SEND_TIMEOUT_MS = 60_000 // safety valve — clears stuck sends
 const PENDING_TX_TTL_MS = 2 * 60 * 1000 // 2 minutes
@@ -209,9 +228,11 @@ export async function routeCommand(
         await sendMessageFn(phoneNumber, formatAboutMessage(lang), lang)
         break
 
-      case 'fund':
-        await sendMessageFn(phoneNumber, formatFundMessage(lang), lang)
+      case 'fund': {
+        const fundUrl = await generateFundUrl(phoneNumber)
+        await sendMessageFn(phoneNumber, formatFundMessage(fundUrl, lang), lang)
         break
+      }
 
       case 'balance':
         await balanceHandler(phoneNumber, lang, rateCtx.senderRate, rateCtx.senderCurrency)

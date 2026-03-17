@@ -459,11 +459,11 @@ export function formatNoWalletMessage(lang: Lang = 'en'): string {
   return m[lang]()
 }
 
-export function formatFundMessage(lang: Lang = 'en'): string {
+export function formatFundMessage(fundUrl: string, lang: Lang = 'en'): string {
   const m = {
-    en: () => `Add funds to your wallet here:\n${FUND_URL}`,
-    es: () => `Agrega fondos a tu billetera aqui:\n${FUND_URL}`,
-    pt: () => `Adicione fundos a sua carteira aqui:\n${FUND_URL}`,
+    en: () => `Add funds to your wallet here:\n${fundUrl}`,
+    es: () => `Agrega fondos a tu billetera aqui:\n${fundUrl}`,
+    pt: () => `Adicione fundos a sua carteira aqui:\n${fundUrl}`,
   }
   return m[lang]()
 }
