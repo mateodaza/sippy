@@ -61,7 +61,9 @@ test.group('AC1 dispatchCommand | rate threaded from cache to balance handler', 
     exchangeRateService.stopRefreshTimer()
   })
 
-  test('Colombian sender: senderRate=4000, senderCurrency=COP reach handler', async ({ assert }) => {
+  test('Colombian sender: senderRate=4000, senderCurrency=COP reach handler', async ({
+    assert,
+  }) => {
     let capturedRate: number | null | undefined = undefined
     let capturedCurrency: string | null | undefined = undefined
 
@@ -78,7 +80,11 @@ test.group('AC1 dispatchCommand | rate threaded from cache to balance handler', 
     const cmd: ParsedCommand = { command: 'balance', originalText: 'balance' }
     await dispatchCommand('+573001234567', cmd, 'es', [], fakeBalance)
 
-    assert.equal(capturedRate, 4000, 'dispatchCommand must call fetchRateContext, not hardcode null')
+    assert.equal(
+      capturedRate,
+      4000,
+      'dispatchCommand must call fetchRateContext, not hardcode null'
+    )
     assert.equal(capturedCurrency, 'COP')
   })
 
@@ -134,7 +140,9 @@ test.group('AC1 dispatchCommand | rate threaded from cache to send handler', (gr
     exchangeRateService.stopRefreshTimer()
   })
 
-  test('COP sender + BRL recipient: all four rate fields reach handler from cache', async ({ assert }) => {
+  test('COP sender + BRL recipient: all four rate fields reach handler from cache', async ({
+    assert,
+  }) => {
     let capturedSenderRate: number | null | undefined = undefined
     let capturedSenderCurrency: string | null | undefined = undefined
     let capturedRecipientRate: number | null | undefined = undefined
@@ -159,7 +167,7 @@ test.group('AC1 dispatchCommand | rate threaded from cache to send handler', (gr
 
     const cmd: ParsedCommand = {
       command: 'send',
-      amount: 3,  // ≤ CONFIRM_THRESHOLD_DEFAULT ($5) — executes immediately without confirmation gate
+      amount: 3, // ≤ CONFIRM_THRESHOLD_DEFAULT ($5) — executes immediately without confirmation gate
       recipient: '+551234567890',
       originalText: 'send 3 to +551234567890',
     }
@@ -167,7 +175,11 @@ test.group('AC1 dispatchCommand | rate threaded from cache to send handler', (gr
 
     assert.equal(capturedSenderRate, 4000, 'dispatchCommand must call fetchRateContext for sender')
     assert.equal(capturedSenderCurrency, 'COP')
-    assert.equal(capturedRecipientRate, 5, 'dispatchCommand must call fetchRateContext for recipient')
+    assert.equal(
+      capturedRecipientRate,
+      5,
+      'dispatchCommand must call fetchRateContext for recipient'
+    )
     assert.equal(capturedRecipientCurrency, 'BRL')
   })
 })
@@ -197,7 +209,9 @@ test.group('fetchRateContext | sender resolution', (group) => {
     assert.isNull(ctx.senderRate)
   })
 
-  test('USD-country sender (+507 Panama) → senderCurrency=null (Panama is USD)', async ({ assert }) => {
+  test('USD-country sender (+507 Panama) → senderCurrency=null (Panama is USD)', async ({
+    assert,
+  }) => {
     const ctx = await fetchRateContext('+50712345678')
     assert.isNull(ctx.senderCurrency)
     assert.isNull(ctx.senderRate)
@@ -227,7 +241,9 @@ test.group('fetchRateContext | recipient resolution', (group) => {
     assert.equal(ctx.recipientRate, 5)
   })
 
-  test('LATAM sender + USD recipient → sender rate set, recipient fields null', async ({ assert }) => {
+  test('LATAM sender + USD recipient → sender rate set, recipient fields null', async ({
+    assert,
+  }) => {
     const ctx = await fetchRateContext('+573001234567', '+13105551234')
     assert.equal(ctx.senderCurrency, 'COP')
     assert.equal(ctx.senderRate, 4000)
@@ -273,7 +289,9 @@ test.group('AC2 routeCommand | rate values threaded to balance handler', () => {
     assert.equal(capturedCurrency, 'COP')
   })
 
-  test('balance command with null rates: null values reach the handler (USD path)', async ({ assert }) => {
+  test('balance command with null rates: null values reach the handler (USD path)', async ({
+    assert,
+  }) => {
     let capturedRate: number | null | undefined = undefined
     let capturedCurrency: string | null | undefined = undefined
 
@@ -335,7 +353,7 @@ test.group('AC2 routeCommand | rate values threaded to send handler', () => {
 
     const cmd: ParsedCommand = {
       command: 'send',
-      amount: 3,  // ≤ CONFIRM_THRESHOLD_DEFAULT ($5) — executes immediately without confirmation gate
+      amount: 3, // ≤ CONFIRM_THRESHOLD_DEFAULT ($5) — executes immediately without confirmation gate
       recipient: '+551234567890',
       originalText: 'send 3 to +551234567890',
     }
@@ -364,13 +382,36 @@ test.group('AC2b routeCommand | context forwarded to generateResponse', () => {
     }
 
     const incomingContext = [{ role: 'user' as const, content: 'hola' }]
-    const rateCtx: RateContext = { senderRate: null, senderCurrency: null, recipientRate: null, recipientCurrency: null }
+    const rateCtx: RateContext = {
+      senderRate: null,
+      senderCurrency: null,
+      recipientRate: null,
+      recipientCurrency: null,
+    }
     const cmd: ParsedCommand = { command: 'greeting', originalText: 'buenos días' }
 
     const noopSend = async () => ({ messaging_product: 'whatsapp' })
-    await routeCommand('+573001234567', cmd, 'es', rateCtx, incomingContext, undefined, undefined, fakeGenerateResponse, noopSend)
+    await routeCommand(
+      '+573001234567',
+      cmd,
+      'es',
+      rateCtx,
+      incomingContext,
+      undefined,
+      undefined,
+      fakeGenerateResponse,
+      noopSend,
+      undefined,
+      undefined,
+      undefined,
+      'onboarded'
+    )
 
-    assert.deepEqual(capturedContext, incomingContext, 'context must be forwarded to generateResponse unchanged')
+    assert.deepEqual(
+      capturedContext,
+      incomingContext,
+      'context must be forwarded to generateResponse unchanged'
+    )
   })
 
   test('social command: non-empty context array reaches generateResponse', async ({ assert }) => {
@@ -386,16 +427,41 @@ test.group('AC2b routeCommand | context forwarded to generateResponse', () => {
     }
 
     const incomingContext = [{ role: 'user' as const, content: 'previous message' }]
-    const rateCtx: RateContext = { senderRate: null, senderCurrency: null, recipientRate: null, recipientCurrency: null }
+    const rateCtx: RateContext = {
+      senderRate: null,
+      senderCurrency: null,
+      recipientRate: null,
+      recipientCurrency: null,
+    }
     const cmd: ParsedCommand = { command: 'social', originalText: 'gracias' }
 
     const noopSend = async () => ({ messaging_product: 'whatsapp' })
-    await routeCommand('+573001234567', cmd, 'es', rateCtx, incomingContext, undefined, undefined, fakeGenerateResponse, noopSend)
+    await routeCommand(
+      '+573001234567',
+      cmd,
+      'es',
+      rateCtx,
+      incomingContext,
+      undefined,
+      undefined,
+      fakeGenerateResponse,
+      noopSend,
+      undefined,
+      undefined,
+      undefined,
+      'onboarded'
+    )
 
-    assert.deepEqual(capturedContext, incomingContext, 'context must be forwarded to generateResponse unchanged')
+    assert.deepEqual(
+      capturedContext,
+      incomingContext,
+      'context must be forwarded to generateResponse unchanged'
+    )
   })
 
-  test('greeting command: empty context passes through (zero-value baseline)', async ({ assert }) => {
+  test('greeting command: empty context passes through (zero-value baseline)', async ({
+    assert,
+  }) => {
     let capturedContext: unknown = 'not-set'
 
     const fakeGenerateResponse = async (
@@ -407,13 +473,36 @@ test.group('AC2b routeCommand | context forwarded to generateResponse', () => {
       return null
     }
 
-    const rateCtx: RateContext = { senderRate: null, senderCurrency: null, recipientRate: null, recipientCurrency: null }
+    const rateCtx: RateContext = {
+      senderRate: null,
+      senderCurrency: null,
+      recipientRate: null,
+      recipientCurrency: null,
+    }
     const cmd: ParsedCommand = { command: 'greeting', originalText: 'hi' }
 
     const noopSend = async () => ({ messaging_product: 'whatsapp' })
-    await routeCommand('+13105551234', cmd, 'en', rateCtx, [], undefined, undefined, fakeGenerateResponse, noopSend)
+    await routeCommand(
+      '+13105551234',
+      cmd,
+      'en',
+      rateCtx,
+      [],
+      undefined,
+      undefined,
+      fakeGenerateResponse,
+      noopSend,
+      undefined,
+      undefined,
+      undefined,
+      'onboarded'
+    )
 
-    assert.deepEqual(capturedContext, [], 'empty context must still be forwarded, not replaced with undefined')
+    assert.deepEqual(
+      capturedContext,
+      [],
+      'empty context must still be forwarded, not replaced with undefined'
+    )
   })
 })
 
@@ -470,7 +559,9 @@ test.group('AC4 fetchRateContext | null rate when currency not in cache', (group
     exchangeRateService.stopRefreshTimer()
   })
 
-  test('COP phone with MXN-only cache → senderCurrency=COP, senderRate=null', async ({ assert }) => {
+  test('COP phone with MXN-only cache → senderCurrency=COP, senderRate=null', async ({
+    assert,
+  }) => {
     // getCurrencyForPhone returns 'COP', getLocalRate('COP') returns null (not in cache)
     const ctx = await fetchRateContext('+573001234567')
     assert.equal(ctx.senderCurrency, 'COP', 'currency is still detected from phone prefix')

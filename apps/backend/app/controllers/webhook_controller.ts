@@ -18,7 +18,12 @@ import '#types/container'
 import type { Lang } from '#utils/messages'
 import { parseMessage } from '#utils/message_parser'
 import { sendTextMessage, markAsRead } from '#services/whatsapp.service'
-import { getUserLanguage, setUserLanguage, getConversationContext, appendConversationMessage } from '#services/db'
+import {
+  getUserLanguage,
+  setUserLanguage,
+  getConversationContext,
+  appendConversationMessage,
+} from '#services/db'
 import { detectLanguage, PERSIST_THRESHOLD } from '#utils/language'
 import {
   formatHelpMessage,
@@ -43,6 +48,12 @@ import {
   formatConfirmationPromptWithWarning,
   formatAccountSuspendedMessage,
   formatMaintenanceMessage,
+  formatHelpNewUser,
+  formatHelpIncomplete,
+  formatNudgeSetup,
+  formatNudgeFinishSetup,
+  formatGreetingNewUser,
+  formatGreetingIncomplete,
 } from '#utils/messages'
 
 import UserPreference from '#models/user_preference'
@@ -50,6 +61,7 @@ import { handleStartCommand } from '#commands/start_command'
 import { handleBalanceCommand } from '#commands/balance_command'
 import { handleSendCommand } from '#commands/send_command'
 import { generateResponse } from '#services/llm.service'
+import { type SetupStatus, getSetupStatus } from '#services/embedded_wallet.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
 import { canonicalizePhone } from '#utils/phone'
 import { getIsPaused } from '#controllers/admin/moderation_controller'
@@ -60,8 +72,8 @@ export const pendingTransactions = new Map<string, PendingTransaction>()
 export const activeSends = new Set<string>()
 
 const CONFIRM_THRESHOLD_DEFAULT = 5
-const ACTIVE_SEND_TIMEOUT_MS = 60_000  // safety valve — clears stuck sends
-const PENDING_TX_TTL_MS = 2 * 60 * 1000  // 2 minutes
+const ACTIVE_SEND_TIMEOUT_MS = 60_000 // safety valve — clears stuck sends
+const PENDING_TX_TTL_MS = 2 * 60 * 1000 // 2 minutes
 
 // GC interval — removes entries that were never confirmed/cancelled.
 // Correctness is NOT reliant on this interval; expiry is enforced lazily
@@ -94,7 +106,6 @@ function clearPendingIfUnrelated(
     }
   }
 }
-
 
 export interface RateContext {
   senderRate: number | null
@@ -164,17 +175,34 @@ export async function routeCommand(
   sendMessageFn: typeof sendTextMessage = sendTextMessage,
   pendingTxs: Map<string, PendingTransaction> = pendingTransactions,
   activeSendsSet: Set<string> = activeSends,
-  activeSendTimeoutMs: number = ACTIVE_SEND_TIMEOUT_MS
+  activeSendTimeoutMs: number = ACTIVE_SEND_TIMEOUT_MS,
+  setupStatusOverride?: SetupStatus
 ): Promise<void> {
+  // Lazy setup status: only resolved for commands that need it, cached after first call.
+  // Tests can bypass DB via setupStatusOverride.
+  let cachedStatus: SetupStatus | undefined = setupStatusOverride
+  const resolveStatus = async (): Promise<SetupStatus> => {
+    if (!cachedStatus) cachedStatus = await getSetupStatus(phoneNumber)
+    return cachedStatus
+  }
+
   try {
     switch (command.command) {
       case 'start':
         await handleStartCommand(phoneNumber, lang)
         break
 
-      case 'help':
-        await sendMessageFn(phoneNumber, formatHelpMessage(lang), lang)
+      case 'help': {
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatHelpNewUser(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatHelpIncomplete(phoneNumber, lang), lang)
+        } else {
+          await sendMessageFn(phoneNumber, formatHelpMessage(lang), lang)
+        }
         break
+      }
 
       case 'about':
         await sendMessageFn(phoneNumber, formatAboutMessage(lang), lang)
@@ -212,7 +240,10 @@ export async function routeCommand(
               return
             }
             activeSendsSet.add(phoneNumber)
-            const safetyTimer = setTimeout(() => activeSendsSet.delete(phoneNumber), activeSendTimeoutMs)
+            const safetyTimer = setTimeout(
+              () => activeSendsSet.delete(phoneNumber),
+              activeSendTimeoutMs
+            )
             try {
               await sendHandler(
                 phoneNumber,
@@ -258,7 +289,7 @@ export async function routeCommand(
         const pending = pendingTxs.get(phoneNumber)
         // Lazy expiry check — guarantees 2-minute cutoff regardless of GC interval timing
         if (!pending || Date.now() - pending.timestamp > PENDING_TX_TTL_MS) {
-          if (pending) pendingTxs.delete(phoneNumber)  // clean up expired entry
+          if (pending) pendingTxs.delete(phoneNumber) // clean up expired entry
           await sendMessageFn(phoneNumber, formatNoPendingTransfer(lang), lang)
         } else {
           // Guard 2: concurrent-send check — BEFORE consuming pending tx
@@ -277,12 +308,20 @@ export async function routeCommand(
           // The outer try/catch handles any throw and sends formatCommandErrorMessage.
           pendingTxs.delete(phoneNumber)
           activeSendsSet.add(phoneNumber)
-          const safetyTimer = setTimeout(() => activeSendsSet.delete(phoneNumber), activeSendTimeoutMs)
+          const safetyTimer = setTimeout(
+            () => activeSendsSet.delete(phoneNumber),
+            activeSendTimeoutMs
+          )
           try {
             await sendHandler(
-              phoneNumber, pending.amount, pending.recipient, pending.lang,
-              rateCtx.senderRate, rateCtx.senderCurrency,
-              rateCtx.recipientRate, rateCtx.recipientCurrency
+              phoneNumber,
+              pending.amount,
+              pending.recipient,
+              pending.lang,
+              rateCtx.senderRate,
+              rateCtx.senderCurrency,
+              rateCtx.recipientRate,
+              rateCtx.recipientCurrency
             )
           } finally {
             clearTimeout(safetyTimer)
@@ -297,25 +336,59 @@ export async function routeCommand(
         await sendMessageFn(phoneNumber, formatTransferCancelled(lang), lang)
         break
 
-      case 'history':
-        await sendMessageFn(phoneNumber, formatHistoryMessage(phoneNumber, lang), lang)
+      case 'history': {
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+        } else {
+          await sendMessageFn(phoneNumber, formatHistoryMessage(phoneNumber, lang), lang)
+        }
         break
+      }
 
-      case 'settings':
-        await sendMessageFn(phoneNumber, formatSettingsMessage(phoneNumber, lang), lang)
+      case 'settings': {
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+        } else {
+          await sendMessageFn(phoneNumber, formatSettingsMessage(phoneNumber, lang), lang)
+        }
         break
+      }
 
       case 'greeting': {
+        const s = await resolveStatus()
         const text = command.originalText ?? ''
-        const reply = text ? await generateResponseFn(text, lang, context) : null
-        await sendMessageFn(phoneNumber, reply ?? formatGreetingMessage(lang), lang)
+        const reply = text ? await generateResponseFn(text, lang, context, s) : null
+        if (reply) {
+          await sendMessageFn(phoneNumber, reply, lang)
+        } else if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatGreetingNewUser(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatGreetingIncomplete(phoneNumber, lang), lang)
+        } else {
+          await sendMessageFn(phoneNumber, formatGreetingMessage(lang), lang)
+        }
         break
       }
 
       case 'social': {
+        const s = await resolveStatus()
         const text = command.originalText ?? ''
-        const reply = text ? await generateResponseFn(text, lang, context) : null
-        await sendMessageFn(phoneNumber, reply ?? formatSocialReplyMessage(lang), lang)
+        const reply = text ? await generateResponseFn(text, lang, context, s) : null
+        if (reply) {
+          await sendMessageFn(phoneNumber, reply, lang)
+        } else if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatGreetingNewUser(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatGreetingIncomplete(phoneNumber, lang), lang)
+        } else {
+          await sendMessageFn(phoneNumber, formatSocialReplyMessage(lang), lang)
+        }
         break
       }
 
@@ -325,8 +398,7 @@ export async function routeCommand(
           es: 'Español',
           pt: 'Português',
         }
-        const langName =
-          langNames[command.detectedLanguage || ''] || command.detectedLanguage || ''
+        const langName = langNames[command.detectedLanguage || ''] || command.detectedLanguage || ''
         await sendMessageFn(phoneNumber, formatLanguageSetMessage(langName, lang), lang)
         break
       }
@@ -334,16 +406,22 @@ export async function routeCommand(
       case 'privacy': {
         const visible = command.privacyAction === 'on'
         const prefKey = await resolveUserPrefKey(phoneNumber)
-        await UserPreference.updateOrCreate(
-          { phoneNumber: prefKey },
-          { phoneVisible: visible }
+        await UserPreference.updateOrCreate({ phoneNumber: prefKey }, { phoneVisible: visible })
+        await sendMessageFn(
+          phoneNumber,
+          formatPrivacySetMessage(command.privacyAction!, lang),
+          lang
         )
-        await sendMessageFn(phoneNumber, formatPrivacySetMessage(command.privacyAction!, lang), lang)
         break
       }
 
-      case 'unknown':
-        if (command.helpfulMessage) {
+      case 'unknown': {
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+        } else if (command.helpfulMessage) {
           await sendMessageFn(phoneNumber, command.helpfulMessage, lang)
         } else {
           const rateLimitNote =
@@ -356,6 +434,7 @@ export async function routeCommand(
           )
         }
         break
+      }
 
       default:
         logger.warn('Unhandled command: %s', command.command)
@@ -397,12 +476,25 @@ export async function dispatchCommand(
   clearPendingIfUnrelated(from, command, pendingTxs)
 
   const recipientPhone =
-    command.command === 'send' && command.recipient ? command.recipient :
-    command.command === 'confirm' ? pendingTxs.get(from)?.recipient :
-    undefined
+    command.command === 'send' && command.recipient
+      ? command.recipient
+      : command.command === 'confirm'
+        ? pendingTxs.get(from)?.recipient
+        : undefined
   const rateCtx = await fetchRateContext(from, recipientPhone)
-  await routeCommand(from, command, lang, rateCtx, context, balanceHandler, sendHandler,
-    generateResponse, sendTextMessage, pendingTxs, activeSendsSet)
+  await routeCommand(
+    from,
+    command,
+    lang,
+    rateCtx,
+    context,
+    balanceHandler,
+    sendHandler,
+    generateResponse,
+    sendTextMessage,
+    pendingTxs,
+    activeSendsSet
+  )
 }
 
 export default class WebhookController {
@@ -446,7 +538,9 @@ export default class WebhookController {
     if (appSecret) {
       const rawBody = request.raw()
       if (!rawBody) {
-        logger.error('Webhook rejected: request.raw() returned null — rawBody may not be configured in bodyparser')
+        logger.error(
+          'Webhook rejected: request.raw() returned null — rawBody may not be configured in bodyparser'
+        )
         return response.status(500).send('')
       }
       const signature = request.header('x-hub-signature-256')
@@ -471,11 +565,7 @@ export default class WebhookController {
    * matches regardless of JSON key ordering or whitespace differences.
    * Uses constant-time comparison to prevent timing attacks.
    */
-  private verifySignature(
-    rawBody: string,
-    secret: string,
-    headerSignature: string
-  ): boolean {
+  private verifySignature(rawBody: string, secret: string, headerSignature: string): boolean {
     const expected = 'sha256=' + createHmac('sha256', secret).update(rawBody).digest('hex')
 
     if (expected.length !== headerSignature.length) return false
@@ -548,7 +638,8 @@ export default class WebhookController {
     // ── Blocked user check ────────────────────────────────────────────
     const blockedPref = await findUserPrefByPhone(from)
     if (blockedPref?.blocked) {
-      const blockedLang: Lang = (blockedPref.preferredLanguage as Lang) || (await getUserLanguage(from)) || 'en'
+      const blockedLang: Lang =
+        (blockedPref.preferredLanguage as Lang) || (await getUserLanguage(from)) || 'en'
       await sendTextMessage(from, formatAccountSuspendedMessage(blockedLang), blockedLang)
       rateLimitService.markProcessed(messageId)
       return
@@ -578,7 +669,16 @@ export default class WebhookController {
     // ── Store context for eligible intents (fire-and-forget, before handler) ──
     // Written early to reduce race window if a second message arrives quickly.
     // Only non-financial intents — never store send attempts or unknown messages.
-    const CONTEXT_INTENTS = new Set(['greeting', 'social', 'help', 'about', 'history', 'settings', 'language', 'start'])
+    const CONTEXT_INTENTS = new Set([
+      'greeting',
+      'social',
+      'help',
+      'about',
+      'history',
+      'settings',
+      'language',
+      'start',
+    ])
     if (CONTEXT_INTENTS.has(command.command)) {
       appendConversationMessage(from, text)
     }

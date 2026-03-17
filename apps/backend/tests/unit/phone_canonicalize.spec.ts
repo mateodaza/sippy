@@ -97,6 +97,20 @@ test.group('canonicalizePhone | invalid → null', (group) => {
   })
 })
 
+test.group('canonicalizePhone | Mexico legacy mobile prefix stripped', () => {
+  test('TC-C24: +5215631751220 (legacy +521) → +525631751220', ({ assert }) => {
+    assert.equal(canonicalizePhone('+5215631751220'), '+525631751220')
+  })
+
+  test('TC-C25: 5215631751220 (no +, legacy 521) → +525631751220', ({ assert }) => {
+    assert.equal(canonicalizePhone('5215631751220'), '+525631751220')
+  })
+
+  test('TC-C26: +525631751220 (already correct) → +525631751220', ({ assert }) => {
+    assert.equal(canonicalizePhone('+525631751220'), '+525631751220')
+  })
+})
+
 test.group('canonicalizePhone | FATF/Twilio blocked countries → null', () => {
   test('TC-C18: +850123456789 (North Korea) → null', ({ assert }) => {
     assert.isNull(canonicalizePhone('+850123456789'))

@@ -346,7 +346,8 @@ export async function sendWithSpendPermission(
     logger.info(`Transfer complete! Hash: ${txHash}`)
 
     // Track daily spend for embedded wallet users (mirrors updateLastActivity pattern)
-    const { getUserWallet: getWallet, computeNewDailySpent } = await import('#services/cdp_wallet.service')
+    const { getUserWallet: getWallet, computeNewDailySpent } =
+      await import('#services/cdp_wallet.service')
     const wallet = await getWallet(fromPhoneNumber)
     const today = new Date().toDateString()
     const newDailySpent = computeNewDailySpent(
@@ -525,6 +526,29 @@ export async function getRemainingAllowance(phoneNumber: string): Promise<{
     logger.error(`Failed to get remaining allowance: %o`, error)
     return null
   }
+}
+
+// ============================================================================
+// Setup Status — three-state model matching start_command.ts logic
+// ============================================================================
+
+export type SetupStatus = 'new_user' | 'embedded_incomplete' | 'onboarded'
+
+/**
+ * Determine the user's setup status without side effects.
+ *
+ * - new_user:             no wallet row at all
+ * - embedded_incomplete:  embedded wallet exists but spendPermissionHash is null
+ * - onboarded:            embedded wallet with spendPermissionHash OR legacy wallet
+ */
+export async function getSetupStatus(phoneNumber: string): Promise<SetupStatus> {
+  const embedded = await getEmbeddedWallet(phoneNumber)
+  if (embedded) {
+    return embedded.spendPermissionHash ? 'onboarded' : 'embedded_incomplete'
+  }
+  const { getUserWallet } = await import('#services/cdp_wallet.service')
+  const legacy = await getUserWallet(phoneNumber)
+  return legacy ? 'onboarded' : 'new_user'
 }
 
 /**

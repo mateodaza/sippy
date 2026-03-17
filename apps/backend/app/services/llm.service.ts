@@ -274,7 +274,11 @@ async function callModel(
 
   const content = completion.choices[0]?.message?.content
   if (!content) {
-    logger.warn('LLM returned empty content (%s), finish_reason: %s', modelId, completion.choices[0]?.finish_reason)
+    logger.warn(
+      'LLM returned empty content (%s), finish_reason: %s',
+      modelId,
+      completion.choices[0]?.finish_reason
+    )
     return { parsed: null, model: modelId }
   }
 
@@ -433,7 +437,8 @@ Return only the response text, nothing else.`
 export async function generateResponse(
   text: string,
   lang: string,
-  context: ContextMessage[] = []
+  context: ContextMessage[] = [],
+  setupStatus?: import('#services/embedded_wallet.service').SetupStatus
 ): Promise<string | null> {
   const client = getGroqClient()
   if (!client) return null
@@ -448,10 +453,16 @@ export async function generateResponse(
 
   limiter.recordRequest()
 
-  const systemContent =
+  let systemContent =
     lang === 'es' || lang === 'pt'
       ? `${RESPONSE_SYSTEM_PROMPT}\nRespond in ${lang === 'es' ? 'Spanish' : 'Portuguese'}.`
       : RESPONSE_SYSTEM_PROMPT
+
+  if (setupStatus === 'new_user') {
+    systemContent += `\nThis user hasn't set up their wallet yet. Don't suggest sending money or checking balance. Naturally encourage them to get started by setting up their wallet.`
+  } else if (setupStatus === 'embedded_incomplete') {
+    systemContent += `\nThis user started setting up but didn't finish. Encourage them to complete their wallet setup.`
+  }
 
   try {
     const completion = await Promise.race([

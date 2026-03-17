@@ -105,6 +105,13 @@ export function canonicalizePhone(input: string): string | null {
   if (rawDigits.length > 15) return null
   if (rawDigits[0] === '0') return null
 
+  // Mexico legacy mobile prefix: +521XXXXXXXXXX → +52XXXXXXXXXX
+  // Eliminated in 2019; CDP and some carriers still return the old format.
+  if (rawDigits.length === 13 && rawDigits.startsWith('521')) {
+    const withoutPrefix = '52' + rawDigits.slice(3)
+    if (withoutPrefix.length === 12) rawDigits = withoutPrefix
+  }
+
   const e164 = '+' + rawDigits
   if (isBlockedPrefix(e164)) return null
 

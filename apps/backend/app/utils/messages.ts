@@ -36,42 +36,46 @@ export function formatCurrencyUSD(amount: number): string {
 
 const CURRENCY_THOUSANDS_SEP: Record<string, string> = {
   // South America
-  COP: ',',  // Colombia: 1,000
-  MXN: ',',  // Mexico: 1,000
-  ARS: '.',  // Argentina: 1.000
-  BRL: '.',  // Brazil: 1.000
-  PEN: ',',  // Peru: 1,000
-  CLP: '.',  // Chile: 1.000
-  UYU: '.',  // Uruguay: 1.000
-  PYG: '.',  // Paraguay: 1.000
-  BOB: ',',  // Bolivia: 1,000
-  VES: ',',  // Venezuela: 1,000
+  COP: ',', // Colombia: 1,000
+  MXN: ',', // Mexico: 1,000
+  ARS: '.', // Argentina: 1.000
+  BRL: '.', // Brazil: 1.000
+  PEN: ',', // Peru: 1,000
+  CLP: '.', // Chile: 1.000
+  UYU: '.', // Uruguay: 1.000
+  PYG: '.', // Paraguay: 1.000
+  BOB: ',', // Bolivia: 1,000
+  VES: ',', // Venezuela: 1,000
   // Central America
-  CRC: '.',  // Costa Rica: 1.000
-  GTQ: ',',  // Guatemala: 1,000
-  HNL: ',',  // Honduras: 1,000
-  NIO: ',',  // Nicaragua: 1,000
+  CRC: '.', // Costa Rica: 1.000
+  GTQ: ',', // Guatemala: 1,000
+  HNL: ',', // Honduras: 1,000
+  NIO: ',', // Nicaragua: 1,000
   // Caribbean
-  DOP: ',',  // Dominican Republic: 1,000
-  CUP: ',',  // Cuba: 1,000
-  HTG: ',',  // Haiti: 1,000
-  JMD: ',',  // Jamaica: 1,000
-  TTD: ',',  // Trinidad & Tobago: 1,000
-  BBD: ',',  // Barbados: 1,000
+  DOP: ',', // Dominican Republic: 1,000
+  CUP: ',', // Cuba: 1,000
+  HTG: ',', // Haiti: 1,000
+  JMD: ',', // Jamaica: 1,000
+  TTD: ',', // Trinidad & Tobago: 1,000
+  BBD: ',', // Barbados: 1,000
   // Other
-  GYD: ',',  // Guyana: 1,000
-  SRD: ',',  // Suriname: 1,000
-  BZD: ',',  // Belize: 1,000
-  AWG: ',',  // Aruba: 1,000
-  ANG: ',',  // Curaçao: 1,000
-  XCD: ',',  // EC$ islands: 1,000
+  GYD: ',', // Guyana: 1,000
+  SRD: ',', // Suriname: 1,000
+  BZD: ',', // Belize: 1,000
+  AWG: ',', // Aruba: 1,000
+  ANG: ',', // Curaçao: 1,000
+  XCD: ',', // EC$ islands: 1,000
 }
 
 function formatIntegerWithSep(n: number, sep: string): string {
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, sep)
 }
 
-export function formatDualAmount(usd: number, rate: number | null, currency: string | null): string {
+export function formatDualAmount(
+  usd: number,
+  rate: number | null,
+  currency: string | null
+): string {
   const usdFormatted = formatCurrencyUSD(usd)
   if (rate === null || currency === null) {
     return usdFormatted
@@ -132,6 +136,81 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
   return m[lang]()
 }
 
+export function formatHelpNewUser(phoneNumber: string, lang: Lang = 'en'): string {
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () =>
+      `Sippy lets you send dollars to any phone number, right from WhatsApp.\n\n` +
+      `Set up your wallet to get started (takes 60 seconds):\n${setupUrl}`,
+    es: () =>
+      `Sippy te permite enviar dolares a cualquier numero de telefono, directo desde WhatsApp.\n\n` +
+      `Configura tu billetera para comenzar (toma 60 segundos):\n${setupUrl}`,
+    pt: () =>
+      `Sippy te permite enviar dolares para qualquer numero de telefone, direto do WhatsApp.\n\n` +
+      `Configure sua carteira para comecar (leva 60 segundos):\n${setupUrl}`,
+  }
+  return m[lang]()
+}
+
+export function formatHelpIncomplete(phoneNumber: string, lang: Lang = 'en'): string {
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () => `You're almost there. Finish setting up your wallet to start sending:\n${setupUrl}`,
+    es: () => `Ya casi. Termina de configurar tu billetera para comenzar a enviar:\n${setupUrl}`,
+    pt: () => `Quase la. Termine de configurar sua carteira para comecar a enviar:\n${setupUrl}`,
+  }
+  return m[lang]()
+}
+
+export function formatNudgeSetup(phoneNumber: string, lang: Lang = 'en'): string {
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () => `To get started, set up your wallet here:\n${setupUrl}`,
+    es: () => `Para comenzar, configura tu billetera aqui:\n${setupUrl}`,
+    pt: () => `Para comecar, configure sua carteira aqui:\n${setupUrl}`,
+  }
+  return m[lang]()
+}
+
+export function formatNudgeFinishSetup(phoneNumber: string, lang: Lang = 'en'): string {
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () => `You started setting up but didn't finish. Complete your setup here:\n${setupUrl}`,
+    es: () =>
+      `Empezaste a configurar pero no terminaste. Completa tu configuracion aqui:\n${setupUrl}`,
+    pt: () =>
+      `Voce comecou a configurar mas nao terminou. Complete sua configuracao aqui:\n${setupUrl}`,
+  }
+  return m[lang]()
+}
+
+export function formatGreetingNewUser(phoneNumber: string, lang: Lang = 'en'): string {
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () =>
+      `Hey! I'm Sippy. I help you send dollars to any phone number via WhatsApp.\n\n` +
+      `Set up your wallet to get started:\n${setupUrl}`,
+    es: () =>
+      `Hola! Soy Sippy. Te ayudo a enviar dolares a cualquier numero de telefono por WhatsApp.\n\n` +
+      `Configura tu billetera para comenzar:\n${setupUrl}`,
+    pt: () =>
+      `Oi! Sou o Sippy. Te ajudo a enviar dolares para qualquer numero de telefone pelo WhatsApp.\n\n` +
+      `Configure sua carteira para comecar:\n${setupUrl}`,
+  }
+  return m[lang]()
+}
+
+export function formatGreetingIncomplete(phoneNumber: string, lang: Lang = 'en'): string {
+  const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () =>
+      `Hey! You're almost set up. Finish here and you'll be sending in no time:\n${setupUrl}`,
+    es: () => `Hola! Ya casi estas listo. Termina aqui y podras enviar en un momento:\n${setupUrl}`,
+    pt: () => `Oi! Voce esta quase pronto. Termine aqui e vai poder enviar rapidinho:\n${setupUrl}`,
+  }
+  return m[lang]()
+}
+
 // --- About ---
 
 export function formatAboutMessage(lang: Lang = 'en'): string {
@@ -170,7 +249,14 @@ export function formatAboutMessage(lang: Lang = 'en'): string {
 // --- Balance ---
 
 export function formatBalanceMessage(
-  params: { balance: number; wallet: string; ethBalance?: string; phoneNumber?: string; localRate?: number | null; localCurrency?: string | null },
+  params: {
+    balance: number
+    wallet: string
+    ethBalance?: string
+    phoneNumber?: string
+    localRate?: number | null
+    localCurrency?: string | null
+  },
   lang: Lang = 'en'
 ): string {
   const amt = formatDualAmount(
@@ -206,10 +292,19 @@ export function formatBalanceMessage(
 // --- Send processing ---
 
 export function formatSendProcessingMessage(
-  params: { amount: number; toPhone: string; localRate?: number | null; localCurrency?: string | null },
+  params: {
+    amount: number
+    toPhone: string
+    localRate?: number | null
+    localCurrency?: string | null
+  },
   lang: Lang = 'en'
 ): string {
-  const amt = formatDualAmount(params.amount, params.localRate ?? null, params.localCurrency ?? null)
+  const amt = formatDualAmount(
+    params.amount,
+    params.localRate ?? null,
+    params.localCurrency ?? null
+  )
   const to = getDisplayName(params.toPhone)
   const m = {
     en: () => `Sending ${amt} to ${to}...\n\nUsually instant, may take up to 30 seconds.`,
@@ -224,10 +319,21 @@ export function formatSendProcessingMessage(
 // --- Send success (sender) ---
 
 export function formatSendSuccessMessage(
-  params: { amount: number; toPhone: string; txHash: string; gasCovered?: boolean; localRate?: number | null; localCurrency?: string | null },
+  params: {
+    amount: number
+    toPhone: string
+    txHash: string
+    gasCovered?: boolean
+    localRate?: number | null
+    localCurrency?: string | null
+  },
   lang: Lang = 'en'
 ): string {
-  const amt = formatDualAmount(params.amount, params.localRate ?? null, params.localCurrency ?? null)
+  const amt = formatDualAmount(
+    params.amount,
+    params.localRate ?? null,
+    params.localCurrency ?? null
+  )
   const to = getDisplayName(params.toPhone)
   const tx = shortHash(params.txHash)
   const receiptUrl = RECEIPT_BASE_URL + params.txHash
@@ -258,10 +364,20 @@ export function formatSendSuccessMessage(
 // --- Send recipient notification ---
 
 export function formatSendRecipientMessage(
-  params: { amount: number; fromPhone: string; txHash: string; localRate?: number | null; localCurrency?: string | null },
+  params: {
+    amount: number
+    fromPhone: string
+    txHash: string
+    localRate?: number | null
+    localCurrency?: string | null
+  },
   lang: Lang = 'en'
 ): string {
-  const amt = formatDualAmount(params.amount, params.localRate ?? null, params.localCurrency ?? null)
+  const amt = formatDualAmount(
+    params.amount,
+    params.localRate ?? null,
+    params.localCurrency ?? null
+  )
   const from = getDisplayName(params.fromPhone)
   const receiptUrl = RECEIPT_BASE_URL + params.txHash
   const m = {
@@ -306,11 +422,24 @@ export function formatFundUSDReceivedMessage(
 // --- Error states ---
 
 export function formatInsufficientBalanceMessage(
-  params: { balance: number; needed: number; localRate?: number | null; localCurrency?: string | null },
+  params: {
+    balance: number
+    needed: number
+    localRate?: number | null
+    localCurrency?: string | null
+  },
   lang: Lang = 'en'
 ): string {
-  const bal = formatDualAmount(params.balance, params.localRate ?? null, params.localCurrency ?? null)
-  const need = formatDualAmount(params.needed, params.localRate ?? null, params.localCurrency ?? null)
+  const bal = formatDualAmount(
+    params.balance,
+    params.localRate ?? null,
+    params.localCurrency ?? null
+  )
+  const need = formatDualAmount(
+    params.needed,
+    params.localRate ?? null,
+    params.localCurrency ?? null
+  )
   const m = {
     en: () => `Insufficient balance.\n\nBalance: ${bal}\nNeeded: ${need}\n\nAdd funds: ${FUND_URL}`,
     es: () =>
@@ -416,10 +545,8 @@ export function formatWelcomeMessage(
 
 export function formatInvalidSendFormat(lang: Lang = 'en'): string {
   const m = {
-    en: () =>
-      `I couldn't catch the details. Try something like:\n\n"send 5 to +573001234567"`,
-    es: () =>
-      `No pude entender los detalles. Intenta algo como:\n\n"enviar 5 a +573001234567"`,
+    en: () => `I couldn't catch the details. Try something like:\n\n"send 5 to +573001234567"`,
+    es: () => `No pude entender los detalles. Intenta algo como:\n\n"enviar 5 a +573001234567"`,
     pt: () =>
       `Nao consegui entender os detalhes. Tente algo como:\n\n"enviar 5 para +573001234567"`,
   }
@@ -463,18 +590,24 @@ export function formatSettingsMessage(phoneNumber: string, lang: Lang = 'en'): s
 
 export function formatRateLimitedMessage(lang: Lang = 'en'): string {
   const m = {
-    en: () => `I'm a bit busy right now. Try saying exactly what you need — like "balance" or "send 5 to +57..."`,
-    es: () => `Estoy un poco ocupado. Intenta decir exactamente lo que necesitas — como "saldo" o "enviar 5 a +57..."`,
-    pt: () => `Estou um pouco ocupado. Tente dizer exatamente o que precisa — como "saldo" ou "enviar 5 para +57..."`,
+    en: () =>
+      `I'm a bit busy right now. Try saying exactly what you need — like "balance" or "send 5 to +57..."`,
+    es: () =>
+      `Estoy un poco ocupado. Intenta decir exactamente lo que necesitas — como "saldo" o "enviar 5 a +57..."`,
+    pt: () =>
+      `Estou um pouco ocupado. Tente dizer exatamente o que precisa — como "saldo" ou "enviar 5 para +57..."`,
   }
   return m[lang]()
 }
 
 export function formatUnknownCommandMessage(_originalText: string, lang: Lang = 'en'): string {
   const m = {
-    en: () => `I didn't catch that. Just tell me what you need — send money, check your balance, or say "help" to see everything.\n`,
-    es: () => `No te entendi. Solo dime que necesitas — enviar dinero, ver tu saldo, o di "ayuda" para ver todo.\n`,
-    pt: () => `Nao entendi. So me diga o que precisa — enviar dinheiro, ver saldo, ou diga "ajuda" para ver tudo.\n`,
+    en: () =>
+      `I didn't catch that. Just tell me what you need — send money, check your balance, or say "help" to see everything.\n`,
+    es: () =>
+      `No te entendi. Solo dime que necesitas — enviar dinero, ver tu saldo, o di "ayuda" para ver todo.\n`,
+    pt: () =>
+      `Nao entendi. So me diga o que precisa — enviar dinheiro, ver saldo, ou diga "ajuda" para ver tudo.\n`,
   }
   return m[lang]()
 }
@@ -695,15 +828,18 @@ export function formatLanguageSetMessage(langName: string, lang: Lang = 'en'): s
 
 export function formatPrivacySetMessage(action: 'on' | 'off', lang: Lang = 'en'): string {
   const m = {
-    en: () => action === 'on'
-      ? 'Your phone number is now visible on your profile.'
-      : 'Your phone number is now hidden on your profile.',
-    es: () => action === 'on'
-      ? 'Tu numero de telefono ahora es visible en tu perfil.'
-      : 'Tu numero de telefono ahora esta oculto en tu perfil.',
-    pt: () => action === 'on'
-      ? 'Seu numero de telefone agora esta visivel no seu perfil.'
-      : 'Seu numero de telefone agora esta oculto no seu perfil.',
+    en: () =>
+      action === 'on'
+        ? 'Your phone number is now visible on your profile.'
+        : 'Your phone number is now hidden on your profile.',
+    es: () =>
+      action === 'on'
+        ? 'Tu numero de telefono ahora es visible en tu perfil.'
+        : 'Tu numero de telefono ahora esta oculto en tu perfil.',
+    pt: () =>
+      action === 'on'
+        ? 'Seu numero de telefone agora esta visivel no seu perfil.'
+        : 'Seu numero de telefone agora esta oculto no seu perfil.',
   }
   return m[lang]()
 }
@@ -809,8 +945,22 @@ const ONE_DIGIT_CC_PREFIXES = new Set(['+1'])
 // Caribbean/Guiana: Curaçao/Sint Maarten +599, Aruba +297, Suriname +597,
 //                   Belize +501, Guyana +592
 const THREE_DIGIT_CC_PREFIXES = new Set([
-  '+297', '+501', '+502', '+503', '+504', '+505', '+506', '+507', '+509',
-  '+591', '+592', '+593', '+595', '+597', '+598', '+599',
+  '+297',
+  '+501',
+  '+502',
+  '+503',
+  '+504',
+  '+505',
+  '+506',
+  '+507',
+  '+509',
+  '+591',
+  '+592',
+  '+593',
+  '+595',
+  '+597',
+  '+598',
+  '+599',
 ])
 
 function maskPhoneForConfirmation(phone: string): string {
@@ -819,11 +969,11 @@ function maskPhoneForConfirmation(phone: string): string {
   if (!phone.startsWith('+') || phone.length < 6) return phone
   let prefixLen: number
   if (ONE_DIGIT_CC_PREFIXES.has(phone.slice(0, 2))) {
-    prefixLen = 2  // +1XXXXXXXXXX  → "+1"
+    prefixLen = 2 // +1XXXXXXXXXX  → "+1"
   } else if (THREE_DIGIT_CC_PREFIXES.has(phone.slice(0, 4))) {
-    prefixLen = 4  // +591XXXXXXX   → "+591"
+    prefixLen = 4 // +591XXXXXXX   → "+591"
   } else {
-    prefixLen = 3  // +52/+55/+57…  → "+57" (2-digit CC default)
+    prefixLen = 3 // +52/+55/+57…  → "+57" (2-digit CC default)
   }
   return `${phone.slice(0, prefixLen)}***${phone.slice(-4)}`
 }
@@ -917,7 +1067,8 @@ export function formatAmountTooManyDecimalsMessage(lang: Lang): string {
 
 export function formatAmountAmbiguousMessage(lang: Lang): string {
   const m = {
-    en: () => `That amount is ambiguous. Did you mean the number with a decimal or a thousands separator? Please write it without separators (e.g., 1000 or 10.50).`,
+    en: () =>
+      `That amount is ambiguous. Did you mean the number with a decimal or a thousands separator? Please write it without separators (e.g., 1000 or 10.50).`,
     es: () => `Ese monto es ambiguo. Escribelo sin separadores (ej: 1000 o 10.50).`,
     pt: () => `Esse valor e ambiguo. Escreva-o sem separadores (ex: 1000 ou 10.50).`,
   }
@@ -944,12 +1095,18 @@ export function formatInvalidPhoneNumberMessage(lang: Lang): string {
 
 export function formatAmountError(code: AmountErrorCode, lang: Lang): string {
   switch (code) {
-    case 'ZERO':               return formatAmountZeroMessage(lang)
-    case 'TOO_SMALL':          return formatAmountTooSmallMessage(lang)
-    case 'TOO_LARGE':          return formatAmountTooLargeMessage(lang)
-    case 'TOO_MANY_DECIMALS':  return formatAmountTooManyDecimalsMessage(lang)
-    case 'AMBIGUOUS_SEPARATOR': return formatAmountAmbiguousMessage(lang)
-    case 'INVALID_FORMAT':     return formatAmountInvalidMessage(lang)
+    case 'ZERO':
+      return formatAmountZeroMessage(lang)
+    case 'TOO_SMALL':
+      return formatAmountTooSmallMessage(lang)
+    case 'TOO_LARGE':
+      return formatAmountTooLargeMessage(lang)
+    case 'TOO_MANY_DECIMALS':
+      return formatAmountTooManyDecimalsMessage(lang)
+    case 'AMBIGUOUS_SEPARATOR':
+      return formatAmountAmbiguousMessage(lang)
+    case 'INVALID_FORMAT':
+      return formatAmountInvalidMessage(lang)
   }
 }
 
