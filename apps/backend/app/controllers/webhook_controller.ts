@@ -13,10 +13,10 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import app from '@adonisjs/core/services/app'
-import type { WebhookPayload, ParsedCommand, PendingTransaction } from '#types/index'
+import type { WebhookPayload, ParsedCommand, PendingTransaction, PartialSend } from '#types/index'
 import '#types/container'
 import type { Lang } from '#utils/messages'
-import { parseMessage } from '#utils/message_parser'
+import { parseMessage, parseAndValidateAmount } from '#utils/message_parser'
 import { sendTextMessage, markAsRead } from '#services/whatsapp.service'
 import {
   getUserLanguage,
@@ -46,6 +46,8 @@ import {
   formatAmountError,
   formatInvalidPhoneNumberMessage,
   formatConfirmationPromptWithWarning,
+  formatAskForAmount,
+  formatAskForRecipient,
   formatAccountSuspendedMessage,
   formatMaintenanceMessage,
   formatHelpNewUser,
@@ -67,9 +69,11 @@ import { exchangeRateService } from '#services/exchange_rate_service'
 import { canonicalizePhone } from '#utils/phone'
 import { getIsPaused } from '#controllers/admin/moderation_controller'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
+import { getDialect, dialectHint, type Dialect } from '#utils/dialect'
 
 // Exported so tests can seed/inspect state directly
 export const pendingTransactions = new Map<string, PendingTransaction>()
+export const partialSends = new Map<string, PartialSend>()
 export const activeSends = new Set<string>()
 
 const FUND_URL = env.get('FUND_URL', 'https://fund.sippy.lat')
@@ -130,6 +134,11 @@ const _pendingTxCleanupInterval = setInterval(() => {
         pendingTransactions.delete(phone)
       }
     }
+    for (const [phone, ps] of partialSends.entries()) {
+      if (now - ps.timestamp > PENDING_TX_TTL_MS) {
+        partialSends.delete(phone)
+      }
+    }
   } catch (err) {
     logger.error('pendingTx cleanup error: %o', err)
   }
@@ -146,6 +155,10 @@ function clearPendingIfUnrelated(
       pendingTxs.delete(from)
       logger.info('Pending tx cancelled due to new command from %s', from)
     }
+  }
+  // Clear partial sends on any non-send command (user moved on)
+  if (command.command !== 'send') {
+    partialSends.delete(from)
   }
 }
 
@@ -218,7 +231,8 @@ export async function routeCommand(
   pendingTxs: Map<string, PendingTransaction> = pendingTransactions,
   activeSendsSet: Set<string> = activeSends,
   activeSendTimeoutMs: number = ACTIVE_SEND_TIMEOUT_MS,
-  setupStatusOverride?: SetupStatus
+  setupStatusOverride?: SetupStatus,
+  dialect: Dialect = getDialect(phoneNumber)
 ): Promise<void> {
   // Lazy setup status: only resolved for commands that need it, cached after first call.
   // Tests can bypass DB via setupStatusOverride.
@@ -327,6 +341,22 @@ export async function routeCommand(
               lang
             )
           }
+        } else if (command.amount && !command.recipient) {
+          // Has amount, missing recipient → store partial, ask for phone
+          partialSends.set(phoneNumber, {
+            amount: command.amount,
+            timestamp: Date.now(),
+            lang,
+          })
+          await sendMessageFn(phoneNumber, formatAskForRecipient(command.amount, lang), lang)
+        } else if (command.recipient && !command.amount) {
+          // Has recipient, missing amount → store partial, ask for amount
+          partialSends.set(phoneNumber, {
+            recipient: command.recipient,
+            timestamp: Date.now(),
+            lang,
+          })
+          await sendMessageFn(phoneNumber, formatAskForAmount(command.recipient, lang), lang)
         } else {
           await sendMessageFn(phoneNumber, formatInvalidSendFormat(lang), lang)
         }
@@ -338,7 +368,11 @@ export async function routeCommand(
         // Lazy expiry check — guarantees 2-minute cutoff regardless of GC interval timing
         if (!pending || Date.now() - pending.timestamp > PENDING_TX_TTL_MS) {
           if (pending) pendingTxs.delete(phoneNumber) // clean up expired entry
-          await sendMessageFn(phoneNumber, formatNoPendingTransfer(lang), lang)
+          // No pending tx — "dale"/"sí"/"va" is just acknowledgment, not a real confirm.
+          // Treat like social instead of showing confusing "No pending transfer."
+          const text = command.originalText ?? ''
+          const reply = text ? await generateResponseFn(text, lang, context, undefined, dialectHint(dialect)) : null
+          await sendMessageFn(phoneNumber, reply || formatSocialReplyMessage(lang, dialect), lang)
         } else {
           // Guard 2: concurrent-send check — BEFORE consuming pending tx
           // If in-flight, reject and leave pending tx intact for retry
@@ -411,7 +445,7 @@ export async function routeCommand(
       case 'greeting': {
         const s = await resolveStatus()
         const text = command.originalText ?? ''
-        const reply = text ? await generateResponseFn(text, lang, context, s) : null
+        const reply = text ? await generateResponseFn(text, lang, context, s, dialectHint(dialect)) : null
         if (reply) {
           await sendMessageFn(phoneNumber, reply, lang)
         } else if (s === 'new_user') {
@@ -419,7 +453,7 @@ export async function routeCommand(
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatGreetingIncomplete(phoneNumber, lang), lang)
         } else {
-          await sendMessageFn(phoneNumber, formatGreetingMessage(lang), lang)
+          await sendMessageFn(phoneNumber, formatGreetingMessage(lang, dialect), lang)
         }
         break
       }
@@ -427,7 +461,7 @@ export async function routeCommand(
       case 'social': {
         const s = await resolveStatus()
         const text = command.originalText ?? ''
-        const reply = text ? await generateResponseFn(text, lang, context, s) : null
+        const reply = text ? await generateResponseFn(text, lang, context, s, dialectHint(dialect)) : null
         if (reply) {
           await sendMessageFn(phoneNumber, reply, lang)
         } else if (s === 'new_user') {
@@ -435,7 +469,7 @@ export async function routeCommand(
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatGreetingIncomplete(phoneNumber, lang), lang)
         } else {
-          await sendMessageFn(phoneNumber, formatSocialReplyMessage(lang), lang)
+          await sendMessageFn(phoneNumber, formatSocialReplyMessage(lang, dialect), lang)
         }
         break
       }
@@ -476,7 +510,7 @@ export async function routeCommand(
             command.llmStatus === 'rate-limited' ? `\n${formatRateLimitedMessage(lang)}\n\n` : ''
           await sendMessageFn(
             phoneNumber,
-            formatUnknownCommandMessage(command.originalText || '', lang) +
+            formatUnknownCommandMessage(command.originalText || '', lang, dialect) +
               (rateLimitNote ? `\n${rateLimitNote}` : ''),
             lang
           )
@@ -543,6 +577,40 @@ export async function dispatchCommand(
     pendingTxs,
     activeSendsSet
   )
+}
+
+/**
+ * Try to fill in the missing piece of a partial send.
+ * Returns { amount, recipient } if successful, null otherwise.
+ */
+function resolvePartialSend(
+  partial: PartialSend,
+  text: string
+): { amount: number; recipient: string } | null {
+  const trimmed = text.trim()
+
+  if (partial.recipient && !partial.amount) {
+    // We have the recipient, user should be sending the amount.
+    // Strip currency words: "4 dólares", "$5", "10 pesos" → number
+    const cleaned = trimmed
+      .replace(/^\$/, '')
+      .replace(/\s*(d[oó]lar(?:es)?|dollars?|pesos?|usd|plata)\s*$/i, '')
+      .trim()
+    const result = parseAndValidateAmount(cleaned)
+    if (result.value !== null && result.errorCode === null) {
+      return { amount: result.value, recipient: partial.recipient }
+    }
+  }
+
+  if (partial.amount && !partial.recipient) {
+    // We have the amount, user should be sending the phone number.
+    const phone = canonicalizePhone(trimmed)
+    if (phone) {
+      return { amount: partial.amount, recipient: phone }
+    }
+  }
+
+  return null
 }
 
 export default class WebhookController {
@@ -709,6 +777,41 @@ export default class WebhookController {
 
     // ── Fetch conversation context (non-financial follow-ups) ──────────
     const context = await getConversationContext(from)
+
+    // ── Multi-turn send: resolve partial sends before parsing ──────────
+    // If the user previously gave an incomplete send (amount or recipient only),
+    // try to interpret this message as the missing piece.
+    const partial = partialSends.get(from)
+    if (partial && Date.now() - partial.timestamp <= PENDING_TX_TTL_MS) {
+      const resolved = resolvePartialSend(partial, text)
+      if (resolved) {
+        partialSends.delete(from)
+        logger.info('Partial send resolved for %s: amount=%s recipient=%s', from, resolved.amount, resolved.recipient)
+        // Synthesize a complete send command and skip normal parsing
+        const command: ParsedCommand = {
+          command: 'send',
+          amount: resolved.amount,
+          recipient: resolved.recipient,
+          isLargeAmount: resolved.amount > 500,
+          originalText: text,
+        }
+        // Language, rate context, and routing — same path as normal sends
+        const lang: Lang = (await getUserLanguage(from)) || partial.lang || 'en'
+        clearPendingIfUnrelated(from, command, pendingTransactions)
+        const rateCtx = await fetchRateContext(from, resolved.recipient)
+        try {
+          await this.handleCommand(from, command, lang, rateCtx, context)
+          logger.info('Message %s processed (partial send resolved)', messageId)
+        } finally {
+          rateLimitService.markProcessed(messageId)
+        }
+        return
+      }
+      // Text didn't fill the gap — clear partial and parse normally
+      partialSends.delete(from)
+    } else if (partial) {
+      partialSends.delete(from) // expired
+    }
 
     // ── Parse command ──────────────────────────────────────────────────
     const command = await parseMessage(text, { messageId, phoneNumber: from }, context)

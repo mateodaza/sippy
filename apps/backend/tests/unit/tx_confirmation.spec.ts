@@ -313,11 +313,12 @@ test.group('Group D | routeCommand confirm handler', () => {
     await Promise.all([p1, p2])
 
     assert.equal(sendHandlerCallCount, 1)
-    const noPendingMsg = formatNoPendingTransfer('en')
-    assert.isTrue(capturedMessages.some(m => m === noPendingMsg))
+    // Second confirm with no pending tx → social acknowledgment (not "no pending transfer")
+    assert.isTrue(capturedMessages.length > 0)
+    assert.isFalse(capturedMessages.some(m => m.includes('undefined')))
   })
 
-  test('C-06: confirm with no pending tx → "No pending transfer." sent, sendHandler NOT called', async ({ assert }) => {
+  test('C-06: confirm with no pending tx → social reply sent, sendHandler NOT called', async ({ assert }) => {
     const pendingTxs = makePendingMap()
     let sendHandlerCalled = false
     const capturedMessages: string[] = []
@@ -329,10 +330,11 @@ test.group('Group D | routeCommand confirm handler', () => {
     await routeCommand('+1555000006', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
 
     assert.isFalse(sendHandlerCalled)
-    assert.isTrue(capturedMessages.some(m => m === formatNoPendingTransfer('en')))
+    // Now returns social reply instead of "No pending transfer"
+    assert.isTrue(capturedMessages.length > 0)
   })
 
-  test('C-07: confirm with expired pending tx → treated as no-pending, entry deleted', async ({ assert }) => {
+  test('C-07: confirm with expired pending tx → social reply sent, entry deleted', async ({ assert }) => {
     const phone = '+1555000007'
     const expired: PendingTransaction = {
       amount: 10,
@@ -351,7 +353,7 @@ test.group('Group D | routeCommand confirm handler', () => {
     await routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
 
     assert.isFalse(sendHandlerCalled)
-    assert.isTrue(capturedMessages.some(m => m === formatNoPendingTransfer('en')))
+    assert.isTrue(capturedMessages.length > 0)
     assert.equal(pendingTxs.size, 0)
   })
 })

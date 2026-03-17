@@ -20,6 +20,11 @@ function getCdpClient(): CdpClient {
   return cdpClient
 }
 
+/** @internal — test-only: inject a mock CdpClient */
+export function __setCdpClientForTest(mock: CdpClient | null) {
+  cdpClient = mock
+}
+
 const REGISTER_WALLET_PATH = '/api/register-wallet'
 
 /**

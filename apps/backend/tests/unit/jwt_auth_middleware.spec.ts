@@ -1,6 +1,6 @@
 import { test } from '@japa/runner'
 import { generateKeyPair, exportPKCS8, exportSPKI, SignJWT } from 'jose'
-import JwtAuthMiddleware from '#middleware/jwt_auth_middleware'
+import JwtAuthMiddleware, { __setCdpClientForTest } from '#middleware/jwt_auth_middleware'
 import PhoneRegistry from '#models/phone_registry'
 
 // ── Key setup ──────────────────────────────────────────────────────────────────
@@ -131,6 +131,22 @@ function mockFindBy(result: PhoneRecord, throws = false) {
 
 function restoreFindBy() {
   ;(PhoneRegistry as any).findBy = originalFindBy
+}
+
+// ── CDP client mock helpers ──────────────────────────────────────────────────
+
+function mockCdpClient(validWallets: string[]) {
+  __setCdpClientForTest({
+    endUser: {
+      validateAccessToken: async () => ({
+        evmSmartAccounts: validWallets,
+      }),
+    },
+  } as any)
+}
+
+function restoreCdpClient() {
+  __setCdpClientForTest(null)
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -371,18 +387,20 @@ test.group('JwtAuthMiddleware | register-wallet — first-time user, valid body 
 
   group.each.teardown(() => {
     restoreFindBy()
+    restoreCdpClient()
   })
 
-  test('TC-E: no DB record, body has valid address → cdpUser uses body address, next called', async ({
+  test('TC-E: no DB record, body has valid address + CDP token → cdpUser uses body address, next called', async ({
     assert,
   }) => {
     mockFindBy(null)
+    mockCdpClient([VALID_WALLET])
     const middleware = new JwtAuthMiddleware()
     const token = await signToken(PHONE_E164)
     const { ctx, next, wasNextCalled } = buildCtx({
       token,
       url: '/api/register-wallet',
-      body: { walletAddress: VALID_WALLET },
+      body: { walletAddress: VALID_WALLET, cdpAccessToken: 'mock-cdp-token' },
     })
 
     await middleware.handle(ctx as any, next)
@@ -394,12 +412,13 @@ test.group('JwtAuthMiddleware | register-wallet — first-time user, valid body 
 
   test('TC-F: DB lookup called before body used (canonical + bare-digit compat fallback)', async ({ assert }) => {
     mockFindBy(null)
+    mockCdpClient([VALID_WALLET])
     const middleware = new JwtAuthMiddleware()
     const token = await signToken(PHONE_E164)
     const { ctx, next } = buildCtx({
       token,
       url: '/api/register-wallet',
-      body: { walletAddress: VALID_WALLET },
+      body: { walletAddress: VALID_WALLET, cdpAccessToken: 'mock-cdp-token' },
     })
 
     await middleware.handle(ctx as any, next)
@@ -408,17 +427,18 @@ test.group('JwtAuthMiddleware | register-wallet — first-time user, valid body 
     assert.lengthOf(findByCalls, 2)
   })
 
-  test('TC-G: no DB record, mixed-case valid address → cdpUser uses body address, next called', async ({
+  test('TC-G: no DB record, mixed-case valid address + CDP token → cdpUser uses body address, next called', async ({
     assert,
   }) => {
     const MIXED_WALLET = '0xAbCd1234567890aBcD1234567890AbCd12345678'
     mockFindBy(null)
+    mockCdpClient([MIXED_WALLET])
     const middleware = new JwtAuthMiddleware()
     const token = await signToken(PHONE_E164)
     const { ctx, next, wasNextCalled } = buildCtx({
       token,
       url: '/api/register-wallet',
-      body: { walletAddress: MIXED_WALLET },
+      body: { walletAddress: MIXED_WALLET, cdpAccessToken: 'mock-cdp-token' },
     })
 
     await middleware.handle(ctx as any, next)

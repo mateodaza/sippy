@@ -221,6 +221,14 @@ PERSONALITY:
 - If someone says "hola" just say hi back naturally and mention one thing they can do.
 - If someone asks something off-topic, keep it brief and steer back. No lectures.
 
+COMMON QUESTIONS (map to "about" with a helpfulMessage):
+- "Quién eres?" / "Who are you?" → about, reply with Sippy's identity
+- "Qué idiomas hablas?" / "What languages?" → about, reply: English, Spanish, Portuguese
+- "De dónde tiene que ser mi número?" → about, reply: works with any phone number
+- "Cuál es mi wallet?" / "My wallet?" → balance (they want their wallet info)
+- "Agregar saldo" / "Quiero recargar" / "Add funds" → fund
+- "Enviar/mandar a alguien" (without amount/recipient) → help, hint the format
+
 EDGE CASES:
 - Insults/trolling: stay calm, don't engage, redirect
 - Gibberish: say you didn't catch that, suggest trying "ayuda"/"help"
@@ -439,7 +447,8 @@ export async function generateResponse(
   text: string,
   lang: string,
   context: ContextMessage[] = [],
-  setupStatus?: import('#services/embedded_wallet.service').SetupStatus
+  setupStatus?: import('#services/embedded_wallet.service').SetupStatus,
+  dialectInstruction?: string | null
 ): Promise<string | null> {
   const client = getGroqClient()
   if (!client) return null
@@ -458,6 +467,10 @@ export async function generateResponse(
     lang === 'es' || lang === 'pt'
       ? `${RESPONSE_SYSTEM_PROMPT}\nRespond in ${lang === 'es' ? 'Spanish' : 'Portuguese'}.`
       : RESPONSE_SYSTEM_PROMPT
+
+  if (dialectInstruction) {
+    systemContent += `\n${dialectInstruction}`
+  }
 
   if (setupStatus === 'new_user') {
     systemContent += `\nThis user hasn't set up their wallet yet. Don't suggest sending money or checking balance. Naturally encourage them to get started by setting up their wallet.`

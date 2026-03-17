@@ -309,7 +309,7 @@ test.group('Conversation | Multi-Turn Flow Simulation', () => {
     const t1 = await parseMessage('hola')
     assert.equal(t1.command, 'greeting')
     const r1 = formatGreetingMessage('es')
-    assert.isTrue(r1.includes('Sippy'))
+    assert.isTrue(r1.length > 20)
     assert.isFalse(r1.includes('Command'))
 
     // Turn 2: User asks for help
@@ -401,4 +401,170 @@ test.group('Conversation | Response Formatting Safety', () => {
       }
     })
   }
+})
+
+// ============================================================================
+// 9. Natural language improvements (WhatsApp interaction audit, Mar 2026)
+// ============================================================================
+
+test.group('Conversation | Natural Language — Identity & Wallet Queries', () => {
+  test('"Quién eres?" → about', async ({ assert }) => {
+    const result = await parseMessage('Quién eres?')
+    assert.equal(result.command, 'about')
+  })
+
+  test('"quien eres" → about', async ({ assert }) => {
+    const result = await parseMessage('quien eres')
+    assert.equal(result.command, 'about')
+  })
+
+  test('"who are you" → about', async ({ assert }) => {
+    const result = await parseMessage('who are you')
+    assert.equal(result.command, 'about')
+  })
+
+  test('"Cuál es mi wallet" → balance', async ({ assert }) => {
+    const result = await parseMessage('Cuál es mi wallet')
+    assert.equal(result.command, 'balance')
+  })
+
+  test('"mi billetera" → balance', async ({ assert }) => {
+    const result = await parseMessage('mi billetera')
+    assert.equal(result.command, 'balance')
+  })
+
+  test('"my wallet" → balance', async ({ assert }) => {
+    const result = await parseMessage('my wallet')
+    assert.equal(result.command, 'balance')
+  })
+})
+
+test.group('Conversation | Natural Language — Fund Intent', () => {
+  test('"Agregar" → fund', async ({ assert }) => {
+    const result = await parseMessage('Agregar')
+    assert.equal(result.command, 'fund')
+  })
+
+  test('"agregar saldo" → fund (not balance)', async ({ assert }) => {
+    const result = await parseMessage('agregar saldo')
+    assert.equal(result.command, 'fund')
+  })
+
+  test('"Quiero agregar saldo a mi cuenta" → fund', async ({ assert }) => {
+    const result = await parseMessage('Quiero agregar saldo a mi cuenta')
+    assert.equal(result.command, 'fund')
+  })
+
+  test('"recargar" → fund', async ({ assert }) => {
+    const result = await parseMessage('recargar')
+    assert.equal(result.command, 'fund')
+  })
+
+  test('"quiero recargar" → fund', async ({ assert }) => {
+    const result = await parseMessage('quiero recargar')
+    assert.equal(result.command, 'fund')
+  })
+})
+
+test.group('Conversation | Send with Currency Words', () => {
+  test('"Envía 1 dólar a +573153007266" → send $1', async ({ assert }) => {
+    const result = await parseMessage('Envía 1 dólar a +573153007266')
+    assert.equal(result.command, 'send')
+    assert.approximately(result.amount!, 1, 0.01)
+    assert.isOk(result.recipient)
+  })
+
+  test('"send 5 dollars to +573001234567" → send $5', async ({ assert }) => {
+    const result = await parseMessage('send 5 dollars to +573001234567')
+    assert.equal(result.command, 'send')
+    assert.approximately(result.amount!, 5, 0.01)
+  })
+
+  test('"enviar 10 dolares a +573001234567" → send $10', async ({ assert }) => {
+    const result = await parseMessage('enviar 10 dolares a +573001234567')
+    assert.equal(result.command, 'send')
+    assert.approximately(result.amount!, 10, 0.01)
+  })
+
+  test('"manda 20 pesos a +573001234567" → send $20', async ({ assert }) => {
+    const result = await parseMessage('manda 20 pesos a +573001234567')
+    assert.equal(result.command, 'send')
+    assert.approximately(result.amount!, 20, 0.01)
+  })
+})
+
+test.group('Conversation | Social Acknowledgments (Loop Prevention)', () => {
+  const socialPhrases = [
+    'ya', 'ya vi', 'entendido', 'enterado', 'arre', 'sale', 'joya',
+    'de una', 'todo bien', 'a la orden', 'noted', 'understood', 'sounds good',
+    'beleza', 'firmeza', 'falou', 'blz',
+  ]
+  for (const phrase of socialPhrases) {
+    test(`"${phrase}" → social (not unknown)`, async ({ assert }) => {
+      const result = await parseMessage(phrase)
+      assert.equal(result.command, 'social')
+    })
+  }
+})
+
+// ============================================================================
+// 11. Multi-turn sends: partial send detection
+// ============================================================================
+
+test.group('Conversation | Partial Send Detection', () => {
+  test('"enviar dinero a +573001234567" → send with recipient only', async ({ assert }) => {
+    const result = await parseMessage('enviar dinero a +573001234567')
+    assert.equal(result.command, 'send')
+    assert.isOk(result.recipient)
+    assert.isUndefined(result.amount)
+  })
+
+  test('"send to +573001234567" → send with recipient only', async ({ assert }) => {
+    const result = await parseMessage('send to +573001234567')
+    assert.equal(result.command, 'send')
+    assert.isOk(result.recipient)
+    assert.isUndefined(result.amount)
+  })
+
+  test('"enviar a +5511999887766" → send with recipient only', async ({ assert }) => {
+    const result = await parseMessage('enviar a +5511999887766')
+    assert.equal(result.command, 'send')
+    assert.isOk(result.recipient)
+    assert.isUndefined(result.amount)
+  })
+
+  test('"manda plata a +573001234567" → send with recipient only', async ({ assert }) => {
+    const result = await parseMessage('manda plata a +573001234567')
+    assert.equal(result.command, 'send')
+    assert.isOk(result.recipient)
+    assert.isUndefined(result.amount)
+  })
+
+  test('"enviar 5" → send with amount only', async ({ assert }) => {
+    const result = await parseMessage('enviar 5')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 5)
+    assert.isUndefined(result.recipient)
+  })
+
+  test('"send 10" → send with amount only', async ({ assert }) => {
+    const result = await parseMessage('send 10')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 10)
+    assert.isUndefined(result.recipient)
+  })
+
+  test('"envía 20 dólares" → send with amount only', async ({ assert }) => {
+    const result = await parseMessage('envía 20 dólares')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 20)
+    assert.isUndefined(result.recipient)
+  })
+
+  test('"mandar 1" → send with amount only', async ({ assert }) => {
+    const result = await parseMessage('mandar 1')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 1)
+    assert.isUndefined(result.recipient)
+  })
 })

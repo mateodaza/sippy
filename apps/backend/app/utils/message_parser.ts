@@ -57,11 +57,16 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(what is sippy|whats sippy|what's sippy)$/i,
     /^(acerca|qu[eé] es sippy)$/i,
     /^(sobre|o que [eé] sippy|o que é sippy)$/i,
+    // Identity questions: "quién eres?", "who are you?"
+    /^(qui[eé]n eres|quien eres|who are you|quem [eé] voc[eê])\??$/i,
   ],
   balance: [
     /^balance$/i,
     /^(saldo|cu[aá]nto tengo|mi saldo)$/i,
     /^(saldo|quanto tenho|meu saldo)$/i,
+    // Wallet queries: "cuál es mi wallet", "mi billetera", "my wallet"
+    /^(cu[aá]l es )?mi (wallet|billetera|cartera)$/i,
+    /^(my wallet|minha carteira)$/i,
   ],
   settings: [
     /^(settings?|config)$/i,
@@ -92,13 +97,17 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
   ],
   fund: [
     /^(fund|add funds|add money|deposit|top.?up)$/i,
-    /^(fundear|agregar fondos|agregar plata|agregar dinero|recargar|depositar|cargar)$/i,
-    /^(adicionar fundos|adicionar dinheiro|depositar|carregar)$/i,
+    /^(fundear|agregar fondos|agregar plata|agregar dinero|agregar saldo|agregar|recargar|depositar|cargar)$/i,
+    /^(adicionar fundos|adicionar dinheiro|adicionar saldo|depositar|carregar)$/i,
+    // Natural: "quiero agregar saldo", "quiero recargar", "want to add funds"
+    /^quiero (agregar|recargar|depositar|cargar|fundear)/i,
+    /^(i want to|i'd like to) (add funds|add money|deposit|top.?up)/i,
+    /^quero (adicionar|depositar|carregar)/i,
   ],
   social: [
-    /^(thanks|thank you|thx|ty|ok|okay|cool|got it|great|nice|perfect|awesome|sure|bye|goodbye|see you)$/i,
-    /^(gracias|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada)$/i,
-    /^(obrigado|obrigada|valeu|beleza|legal|perfeito|tchau|at[eé] logo|de nada)$/i,
+    /^(thanks|thank you|thx|ty|ok|okay|cool|got it|great|nice|perfect|awesome|sure|bye|goodbye|see you|alright|sounds good|noted|understood)$/i,
+    /^(gracias|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada|ya|ya vi|entendido|enterado|arre|sale|joya|de una|todo bien|a la orden)$/i,
+    /^(obrigado|obrigada|valeu|beleza|legal|perfeito|tchau|at[eé] logo|de nada|entendi|entendido|j[oó]ia|firmeza|falou|blz)$/i,
   ],
 }
 
@@ -119,38 +128,41 @@ const PRIVACY_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
  * characters (á, ó, ç, ã, õ) as non-word — breaks Spanish/Portuguese patterns.
  * Order matters: earlier entries take priority when multiple patterns match.
  */
-const LOOSE_COMMAND_PATTERNS: Record<string, RegExp> = {
-  balance:
-    /(?:^|\s)(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi)(?:\s|$)/i,
-  help: /(?:^|\s)(help(?!ful|less|ing|er|ed)|ayuda|ajuda)(?:\s|$)/i,
-  history:
-    /(?:^|\s)(history|historial|hist[oó]rico|transactions?|transacciones?|transa[cç][oõ]es?)(?:\s|$)/i,
-  settings: /(?:^|\s)(settings?|configuraci[oó]n|configura[cç][aã]o|ajustes)(?:\s|$)/i,
-  about: /(?:^|\s)(what is sippy|whats sippy|what's sippy|qu[eé] es sippy|o que [eé] sippy)(?:\s|$)/i,
-  fund: /(?:^|\s)(fund|fundear|add funds|add money|deposit|top.?up|agregar fondos|agregar plata|agregar dinero|recargar|depositar|adicionar fundos|adicionar dinheiro|cargar|carregar)(?:\s|$)/i,
-}
+// Order matters: fund must come before balance so "agregar saldo" matches fund, not balance.
+const LOOSE_COMMAND_PATTERNS: Array<[string, RegExp]> = [
+  ['fund', /(?:^|\s)(fund|fundear|add funds|add money|deposit|top.?up|agregar (?:fondos|plata|dinero|saldo)|agregar$|recargar|depositar|adicionar (?:fundos|dinheiro|saldo)|cargar|carregar)(?:\s|$)/i],
+  ['balance', /(?:^|\s)(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi|mi (?:wallet|billetera|cartera)|my wallet|minha carteira)(?:\s|$)/i],
+  ['help', /(?:^|\s)(help(?!ful|less|ing|er|ed)|ayuda|ajuda)(?:\s|$)/i],
+  ['history', /(?:^|\s)(history|historial|hist[oó]rico|transactions?|transacciones?|transa[cç][oõ]es?)(?:\s|$)/i],
+  ['settings', /(?:^|\s)(settings?|configuraci[oó]n|configura[cç][aã]o|ajustes)(?:\s|$)/i],
+  ['about', /(?:^|\s)(what is sippy|whats sippy|what's sippy|qu[eé] es sippy|o que [eé] sippy|qui[eé]n eres|who are you|quem [eé] voc[eê])(?:\s|$)/i],
+]
+
+// Optional currency word after amount: "1 dólar", "5 dolares", "10 pesos", "20 dollars"
+const CURRENCY_WORD = `(?:\\s+(?:d[oó]lar(?:es)?|dollars?|pesos?|usd|plata))?`
 
 /** Trilingual send patterns — strict format, must extract amount + recipient */
 const SEND_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
-  // EN: "send 10 to +573001234567" or "send $10 to ..." or "send 10,50 to ..."
-  { pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)\s+to\s+(.+)$/i, lang: 'en' },
+  // EN: "send 10 to +573001234567" or "send $10 to ..." or "send 10 dollars to ..."
+  { pattern: new RegExp(`^send\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+to\\s+(.+)$`, 'i'), lang: 'en' },
   // ES: "enviar/envía/envia/envíe/envie 10 a ..." (infinitive, imperative, subjunctive)
   // Also handles pronoun suffixes: "enviale/envíale/enviales 10 a ..."
-  { pattern: /^env[ií][ae]?r?(?:le|les|lo|la|los|las)?\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
+  // Accepts optional currency word: "envía 1 dólar a ..."
+  { pattern: new RegExp(`^env[ií][ae]?r?(?:le|les|lo|la|los|las)?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+a\\s+(.+)$`, 'i'), lang: 'es' },
   // PT: "enviar/envie 10 para ..."
-  { pattern: /^env[ií][ae]?r?\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i, lang: 'pt' },
+  { pattern: new RegExp(`^env[ií][ae]?r?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+para\\s+(.+)$`, 'i'), lang: 'pt' },
   // ES casual: "manda/mandá/mande/mandale 5 a ..." / "transfiere/transferir 5 a ..." / "pasa/pasale 5 a ..." / "paga/pague 5 a ..."
-  { pattern: /^(?:mand[aáe]|transfier[ae]|transferir|pas[aá]|pague?|pagar?)(?:le|les|lo|la|los|las)?\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
+  { pattern: new RegExp(`^(?:mand[aáe]|transfier[ae]|transferir|pas[aá]|pague?|pagar?)(?:le|les|lo|la|los|las)?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+a\\s+(.+)$`, 'i'), lang: 'es' },
   // PT casual: "manda/mande 5 para ..." / "transfere/transferir 5 para ..." / "pague 5 para ..."
-  { pattern: /^(?:mand[aáe]|transfere|transferir|pague?)\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i, lang: 'pt' },
+  { pattern: new RegExp(`^(?:mand[aáe]|transfere|transferir|pague?)\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+para\\s+(.+)$`, 'i'), lang: 'pt' },
   // EN alt verbs: "transfer 5 to ..." / "pay 5 to ..."
-  { pattern: /^(?:transfer|pay)\s+\$?(\d+(?:[.,]\d+)?)\s+to\s+(.+)$/i, lang: 'en' },
+  { pattern: new RegExp(`^(?:transfer|pay)\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+to\\s+(.+)$`, 'i'), lang: 'en' },
   // Cross-language: "send 5 a ..." (EN verb + ES preposition)
-  { pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)\s+a\s+(.+)$/i, lang: 'es' },
+  { pattern: new RegExp(`^send\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+a\\s+(.+)$`, 'i'), lang: 'es' },
   // Cross-language: "send 5 para ..." (EN verb + PT preposition)
-  { pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)\s+para\s+(.+)$/i, lang: 'pt' },
+  { pattern: new RegExp(`^send\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+para\\s+(.+)$`, 'i'), lang: 'pt' },
   // Cross-language: "enviar/envie 5 to ..." (ES/PT verb + EN preposition)
-  { pattern: /^env[ií][ae]?r?\s+\$?(\d+(?:[.,]\d+)?)\s+to\s+(.+)$/i, lang: 'en' },
+  { pattern: new RegExp(`^env[ií][ae]?r?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+to\\s+(.+)$`, 'i'), lang: 'en' },
 ]
 
 /**
@@ -195,8 +207,70 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
     }
   }
 
+  // Check partial send patterns (recipient only, no amount)
+  const partialResult = matchPartialSend(trimmedText)
+  if (partialResult) return partialResult
+
   // Unknown command
   return { command: 'unknown', originalText: text }
+}
+
+// ============================================================================
+// Partial send patterns (amount-only or recipient-only)
+// ============================================================================
+
+/** Patterns for "send to <phone>" without amount */
+const PARTIAL_RECIPIENT_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
+  // EN: "send to +573001234567", "send money to +57..."
+  { pattern: /^send(?:\s+(?:money|dollars?))?\s+to\s+(.+)$/i, lang: 'en' },
+  // ES: "enviar a +57...", "enviar dinero a +57...", "envía a +57...", "mandar a +57..."
+  { pattern: /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir|pas[aá]r?)(?:le|les)?\s+(?:(?:dinero|plata|d[oó]lares?)\s+)?a\s+(.+)$/i, lang: 'es' },
+  // PT: "enviar para +55...", "enviar dinheiro para +55..."
+  { pattern: /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir)\s+(?:(?:dinheiro|grana)\s+)?para\s+(.+)$/i, lang: 'pt' },
+]
+
+/** Patterns for "send <amount>" without recipient */
+const PARTIAL_AMOUNT_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
+  // EN: "send 5", "send $10"
+  { pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|dollars?|pesos?|usd|plata))?$/i, lang: 'en' },
+  // ES: "enviar 5", "envía 10 dólares"
+  { pattern: /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir|pas[aá]r?)(?:le|les)?\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|pesos?|usd|plata))?$/i, lang: 'es' },
+  // PT: "enviar 5", "manda 10"
+  { pattern: /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir)\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|reais?|usd|grana))?$/i, lang: 'pt' },
+]
+
+/**
+ * Match partial sends: sends with amount but no recipient, or recipient but no amount.
+ * Returns a send command with only the available piece filled in.
+ */
+function matchPartialSend(text: string): ParsedCommand | null {
+  // Recipient-only: "enviar dinero a +573001234567"
+  for (const { pattern, lang } of PARTIAL_RECIPIENT_PATTERNS) {
+    const match = text.match(pattern)
+    if (match) {
+      const rawRecipient = match[1].trim()
+      const recipient = canonicalizePhone(rawRecipient)
+      if (recipient) {
+        return { command: 'send', recipient, detectedLanguage: lang, originalText: text }
+      }
+    }
+  }
+
+  // Amount-only: "enviar 5"
+  for (const { pattern, lang } of PARTIAL_AMOUNT_PATTERNS) {
+    const match = text.match(pattern)
+    if (match) {
+      const result = parseAndValidateAmount(match[1])
+      if (result.value !== null && result.errorCode === null) {
+        return { command: 'send', amount: result.value, isLargeAmount: result.isLarge, detectedLanguage: lang, originalText: text }
+      }
+      if (result.errorCode) {
+        return { command: 'send', amountError: result.errorCode, detectedLanguage: lang, originalText: text }
+      }
+    }
+  }
+
+  return null
 }
 
 /**
@@ -205,7 +279,7 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
  */
 function matchLooseCommand(text: string): ParsedCommand | null {
   const normalized = text.trim().toLowerCase().replace(/[?!.,;:¿¡]+/g, '').trim()
-  for (const [command, pattern] of Object.entries(LOOSE_COMMAND_PATTERNS)) {
+  for (const [command, pattern] of LOOSE_COMMAND_PATTERNS) {
     if (pattern.test(normalized)) {
       return { command: command as ParsedCommand['command'], originalText: text }
     }

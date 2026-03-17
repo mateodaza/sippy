@@ -36,6 +36,13 @@ export interface PendingTransaction {
   lang: Lang          // user's lang at time of send command
 }
 
+export interface PartialSend {
+  amount?: number         // present if user gave an amount
+  recipient?: string      // present if user gave a phone (canonical E.164)
+  timestamp: number       // Date.now()
+  lang: Lang
+}
+
 type Lang = 'en' | 'es' | 'pt'
 
 export interface ParsedCommand {
