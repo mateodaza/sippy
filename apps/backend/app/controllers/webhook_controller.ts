@@ -40,7 +40,6 @@ import {
   formatTextOnlyMessage,
   formatPrivacySetMessage,
   formatTransferCancelled,
-  formatNoPendingTransfer,
   formatSelfSendMessage,
   formatConcurrentSendMessage,
   formatAmountError,
@@ -70,6 +69,7 @@ import { canonicalizePhone } from '#utils/phone'
 import { getIsPaused } from '#controllers/admin/moderation_controller'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { getDialect, dialectHint, type Dialect } from '#utils/dialect'
+import { validateLLMResponse } from '#services/llm_validator.service'
 
 // Exported so tests can seed/inspect state directly
 export const pendingTransactions = new Map<string, PendingTransaction>()
@@ -232,8 +232,24 @@ export async function routeCommand(
   activeSendsSet: Set<string> = activeSends,
   activeSendTimeoutMs: number = ACTIVE_SEND_TIMEOUT_MS,
   setupStatusOverride?: SetupStatus,
-  dialect: Dialect = getDialect(phoneNumber)
+  dialect: Dialect = getDialect(phoneNumber),
+  validateFn: typeof validateLLMResponse = validateLLMResponse
 ): Promise<void> {
+  // Validate LLM-generated reply; return corrected text or null (caller falls back to template)
+  async function validateAndFallback(
+    llmReply: string | null,
+    userText: string,
+    ctx: import('#services/db').ContextMessage[],
+    setupStatus?: SetupStatus,
+    dialectInstruction?: string | null
+  ): Promise<string | null> {
+    if (!llmReply) return null
+    const result = await validateFn(llmReply, userText, lang, ctx, setupStatus, dialectInstruction)
+    if (result.passed) return llmReply
+    if (result.correctedText) return result.correctedText
+    return null
+  }
+
   // Lazy setup status: only resolved for commands that need it, cached after first call.
   // Tests can bypass DB via setupStatusOverride.
   let cachedStatus: SetupStatus | undefined = setupStatusOverride
@@ -260,13 +276,28 @@ export async function routeCommand(
         break
       }
 
-      case 'about':
-        await sendMessageFn(phoneNumber, formatAboutMessage(lang), lang)
+      case 'about': {
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatGreetingNewUser(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatGreetingIncomplete(phoneNumber, lang), lang)
+        } else {
+          await sendMessageFn(phoneNumber, formatAboutMessage(lang), lang)
+        }
         break
+      }
 
       case 'fund': {
-        const fundUrl = await generateFundUrl(phoneNumber)
-        await sendMessageFn(phoneNumber, formatFundMessage(fundUrl, lang), lang)
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+        } else {
+          const fundUrl = await generateFundUrl(phoneNumber)
+          await sendMessageFn(phoneNumber, formatFundMessage(fundUrl, lang), lang)
+        }
         break
       }
 
@@ -370,9 +401,17 @@ export async function routeCommand(
           if (pending) pendingTxs.delete(phoneNumber) // clean up expired entry
           // No pending tx — "dale"/"sí"/"va" is just acknowledgment, not a real confirm.
           // Treat like social instead of showing confusing "No pending transfer."
-          const text = command.originalText ?? ''
-          const reply = text ? await generateResponseFn(text, lang, context, undefined, dialectHint(dialect)) : null
-          await sendMessageFn(phoneNumber, reply || formatSocialReplyMessage(lang, dialect), lang)
+          const s = await resolveStatus()
+          if (s === 'new_user') {
+            await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+          } else if (s === 'embedded_incomplete') {
+            await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+          } else {
+            const text = command.originalText ?? ''
+            const raw = text ? await generateResponseFn(text, lang, context, s, dialectHint(dialect)) : null
+            const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
+            await sendMessageFn(phoneNumber, reply || formatSocialReplyMessage(lang, dialect), lang)
+          }
         } else {
           // Guard 2: concurrent-send check — BEFORE consuming pending tx
           // If in-flight, reject and leave pending tx intact for retry
@@ -445,7 +484,8 @@ export async function routeCommand(
       case 'greeting': {
         const s = await resolveStatus()
         const text = command.originalText ?? ''
-        const reply = text ? await generateResponseFn(text, lang, context, s, dialectHint(dialect)) : null
+        const raw = text ? await generateResponseFn(text, lang, context, s, dialectHint(dialect)) : null
+        const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
         if (reply) {
           await sendMessageFn(phoneNumber, reply, lang)
         } else if (s === 'new_user') {
@@ -461,7 +501,8 @@ export async function routeCommand(
       case 'social': {
         const s = await resolveStatus()
         const text = command.originalText ?? ''
-        const reply = text ? await generateResponseFn(text, lang, context, s, dialectHint(dialect)) : null
+        const raw = text ? await generateResponseFn(text, lang, context, s, dialectHint(dialect)) : null
+        const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
         if (reply) {
           await sendMessageFn(phoneNumber, reply, lang)
         } else if (s === 'new_user') {
@@ -504,7 +545,8 @@ export async function routeCommand(
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
         } else if (command.helpfulMessage) {
-          await sendMessageFn(phoneNumber, command.helpfulMessage, lang)
+          const validated = await validateAndFallback(command.helpfulMessage, command.originalText ?? '', context, s, dialectHint(dialect))
+          await sendMessageFn(phoneNumber, validated || formatUnknownCommandMessage(command.originalText || '', lang, dialect), lang)
         } else {
           const rateLimitNote =
             command.llmStatus === 'rate-limited' ? `\n${formatRateLimitedMessage(lang)}\n\n` : ''

@@ -68,6 +68,14 @@ const MODEL_CATALOG: Record<string, ModelConfig> = {
   },
   // Tiering fallback — 60 RPM (double others), good quality for classification
   'qwen/qwen3-32b': { id: 'qwen/qwen3-32b', rpm: 60, rpd: 1000, timeout: 5000, maxTokens: 512 },
+  // Validator primary — OpenAI safety classification model, purpose-built for policy enforcement
+  'openai/gpt-oss-safeguard-20b': {
+    id: 'openai/gpt-oss-safeguard-20b',
+    rpm: 30,
+    rpd: 1000,
+    timeout: 3000,
+    maxTokens: 120,
+  },
   // Legacy — kept for rollback if Scout has issues
   'llama-3.3-70b-versatile': {
     id: 'llama-3.3-70b-versatile',
@@ -153,7 +161,7 @@ class ModelRateLimiter {
 // Create per-model limiters
 const limiters = new Map<string, ModelRateLimiter>()
 
-function getLimiter(modelId: string): ModelRateLimiter {
+export function getLimiter(modelId: string): ModelRateLimiter {
   if (!limiters.has(modelId)) {
     const config = getModelConfig(modelId)
     limiters.set(modelId, new ModelRateLimiter(config.rpm, config.rpd, modelId))
@@ -167,7 +175,7 @@ function getLimiter(modelId: string): ModelRateLimiter {
 
 let groqClient: Groq | null = null
 
-function getGroqClient(): Groq | null {
+export function getGroqClient(): Groq | null {
   if (!isLLMEnabled()) return null
 
   if (!groqClient) {
@@ -228,6 +236,11 @@ COMMON QUESTIONS (map to "about" with a helpfulMessage):
 - "Cuál es mi wallet?" / "My wallet?" → balance (they want their wallet info)
 - "Agregar saldo" / "Quiero recargar" / "Add funds" → fund
 - "Enviar/mandar a alguien" (without amount/recipient) → help, hint the format
+
+IMPORTANT — settings vs help:
+- "settings" is ONLY for when users explicitly want to manage their account settings (change limits, export keys, revoke permissions).
+- "Y ahora?" / "Que puedo hacer?" / "What can I do?" / "What else?" / "Que otras cosas puedo hacer?" → help (NOT settings). These users want to see their options.
+- When in doubt between help and settings, choose help.
 
 EDGE CASES:
 - Insults/trolling: stay calm, don't engage, redirect

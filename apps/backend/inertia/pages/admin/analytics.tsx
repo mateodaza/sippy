@@ -25,6 +25,7 @@ interface GasStatus {
   totalRefuels: number
   totalEthSpent: string
   isPaused: boolean
+  contractBalance?: string
 }
 
 interface Props {
@@ -74,6 +75,11 @@ export default function Analytics({
   const totalFlowVolume = fundFlow.reduce((s, r) => s + Number(r.volume), 0)
 
   // KPI progress
+  const contractBalanceNum = gasStatus?.contractBalance ? Number.parseFloat(gasStatus.contractBalance) : 0
+  const LOW_BALANCE_THRESHOLD = 0.005
+  const isLowBalance = contractBalanceNum < LOW_BALANCE_THRESHOLD && contractBalanceNum > 0
+  const isEmpty = contractBalanceNum === 0
+
   const volumeUSD = Number(totalVolume) / 1_000_000
   const volumeTarget = 10_000
   const volumePct = Math.min(Math.round((volumeUSD / volumeTarget) * 100), 100)
@@ -88,6 +94,36 @@ export default function Analytics({
         <h1 className="text-2xl font-bold tracking-[-0.025em] text-slate-900">Analytics</h1>
         <p className="mt-1 text-sm text-gray-500">On-chain volume, users, and KPI tracking</p>
       </div>
+
+      {/* Low Balance Warning */}
+      {(isEmpty || isLowBalance) && (
+        <div
+          className={`mb-6 flex items-center gap-3 rounded-2xl border px-5 py-4 ${
+            isEmpty
+              ? 'border-red-200 bg-red-50 text-red-800'
+              : 'border-amber-200 bg-amber-50 text-amber-800'
+          }`}
+        >
+          <span className="text-xl">{isEmpty ? '!!' : '!'}</span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold">
+              {isEmpty ? 'GasRefuel contract is empty' : 'GasRefuel contract balance is low'}
+            </p>
+            <p className="mt-0.5 text-xs opacity-80">
+              {isEmpty
+                ? 'Users cannot receive gas sponsorship. Send ETH to the contract immediately.'
+                : `Balance: ${contractBalanceNum.toFixed(4)} ETH (threshold: ${LOW_BALANCE_THRESHOLD} ETH). Refuel soon to avoid disruptions.`}
+            </p>
+          </div>
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+              isEmpty ? 'bg-red-200 text-red-900' : 'bg-amber-200 text-amber-900'
+            }`}
+          >
+            {isEmpty ? 'Critical' : 'Warning'}
+          </span>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="mb-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -173,6 +209,11 @@ export default function Analytics({
           <div className="mt-1 text-sm font-medium text-gray-500">Gas Refuels</div>
           <div className="mt-1.5 text-xs text-gray-400">
             {gasStatus ? formatETH(gasStatus.totalEthSpent) : '0 ETH'} spent
+            {gasStatus?.contractBalance && (
+              <span className="ml-1">
+                / {Number.parseFloat(gasStatus.contractBalance).toFixed(4)} ETH left
+              </span>
+            )}
             {gasStatus?.isPaused && (
               <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
                 Paused
