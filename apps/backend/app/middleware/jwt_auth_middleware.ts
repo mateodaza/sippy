@@ -1,9 +1,24 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import logger from '@adonisjs/core/services/logger'
+import env from '#start/env'
+import { CdpClient } from '@coinbase/cdp-sdk'
 import { jwtService } from '#services/jwt_service'
 import PhoneRegistry from '#models/phone_registry'
 import '#types/cdp_auth'
+
+let cdpClient: CdpClient | null = null
+
+function getCdpClient(): CdpClient {
+  if (!cdpClient) {
+    cdpClient = new CdpClient({
+      apiKeyId: env.get('CDP_API_KEY_ID'),
+      apiKeySecret: env.get('CDP_API_KEY_SECRET'),
+      walletSecret: env.get('CDP_WALLET_SECRET'),
+    })
+  }
+  return cdpClient
+}
 
 const REGISTER_WALLET_PATH = '/api/register-wallet'
 
@@ -44,18 +59,39 @@ export default class JwtAuthMiddleware {
           return await next()
         }
 
-        // No DB record — check request body for first-time registration
-        const { walletAddress: bodyWalletAddress } = ctx.request.body() as Record<string, unknown>
+        // No DB record — first-time registration requires CDP token proof
+        const { walletAddress: bodyWalletAddress, cdpAccessToken } = ctx.request.body() as Record<string, unknown>
 
-        if (bodyWalletAddress && ETH_ADDRESS_REGEX.test(bodyWalletAddress as string)) {
-          // Tier 2: No DB record, valid body address (first-time registration)
-          ctx.cdpUser = { phoneNumber, walletAddress: bodyWalletAddress as string }
-          return await next()
+        if (!bodyWalletAddress || !ETH_ADDRESS_REGEX.test(bodyWalletAddress as string)) {
+          logger.warn('JWT auth: register-wallet — no valid body address')
+          return ctx.response.unauthorized({ error: 'Unauthorized' })
         }
 
-        // Tier 3: No DB record AND no valid body address — cannot proceed
-        logger.warn('JWT auth: register-wallet — no registry row and no valid body address')
-        return ctx.response.unauthorized({ error: 'Unauthorized' })
+        if (cdpAccessToken && typeof cdpAccessToken === 'string') {
+          // CDP token provided — validate wallet ownership
+          try {
+            const cdp = getCdpClient()
+            const endUser = await cdp.endUser.validateAccessToken({ accessToken: cdpAccessToken })
+
+            const cdpWallets = endUser.evmSmartAccounts || []
+            const walletBelongsToUser = cdpWallets.some(
+              (addr: string) => addr.toLowerCase() === (bodyWalletAddress as string).toLowerCase()
+            )
+
+            if (!walletBelongsToUser) {
+              logger.warn('JWT auth: wallet %s not in CDP user accounts', bodyWalletAddress)
+              return ctx.response.unauthorized({ error: 'Unauthorized' })
+            }
+          } catch (error) {
+            logger.warn({ err: error }, 'JWT auth: CDP token validation failed for registration')
+            return ctx.response.unauthorized({ error: 'Unauthorized' })
+          }
+        } else {
+          logger.warn('JWT auth: register-wallet without CDP token — phone: %s', phoneNumber)
+        }
+
+        ctx.cdpUser = { phoneNumber, walletAddress: bodyWalletAddress as string }
+        return await next()
       }
 
       // Branch B — all other routes

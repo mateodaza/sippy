@@ -6,6 +6,9 @@ import {
   useIsSignedIn,
   useCurrentUser,
   useSignOut,
+  useSignInWithSms,
+  useVerifySmsOTP,
+  useGetAccessToken,
 } from '@coinbase/cdp-hooks'
 import {
   getStoredToken,
@@ -17,7 +20,7 @@ import {
   sendOtp,
   verifyOtp,
 } from './auth'
-import { isBlockedPrefix } from '@sippy/shared'
+import { isBlockedPrefix, isNANP } from '@sippy/shared'
 
 type ReAuthStep = 'phone' | 'otp'
 
@@ -70,6 +73,7 @@ export function useSessionGuard(): SessionGuardResult {
   const [reAuthOtp, setReAuthOtp] = useState('')
   const [reAuthError, setReAuthError] = useState<string | null>(null)
   const [reAuthLoading, setReAuthLoading] = useState(false)
+  const [reAuthFlowId, setReAuthFlowId] = useState<string | null>(null)
 
   const prevIsSignedInRef = useRef<boolean | undefined>(undefined)
 
@@ -77,6 +81,9 @@ export function useSessionGuard(): SessionGuardResult {
   const { isSignedIn } = useIsSignedIn()
   const { currentUser } = useCurrentUser()
   const { signOut } = useSignOut()
+  const { signInWithSms } = useSignInWithSms()
+  const { verifySmsOTP } = useVerifySmsOTP()
+  const { getAccessToken } = useGetAccessToken()
 
   // Session check on mount — mirrors existing wallet/settings logic
   useEffect(() => {
@@ -183,20 +190,46 @@ export function useSessionGuard(): SessionGuardResult {
         setReAuthError('This country is not available.')
         return
       }
-      await sendOtp(reAuthPhone)
+
+      if (isNANP(phone)) {
+        const result = await signInWithSms({ phoneNumber: phone })
+        setReAuthFlowId(result.flowId)
+      } else {
+        await sendOtp(reAuthPhone)
+      }
       setReAuthStep('otp')
     } catch (err) {
       setReAuthError(err instanceof Error ? err.message : 'Failed to send OTP')
     } finally {
       setReAuthLoading(false)
     }
-  }, [reAuthPhone])
+  }, [reAuthPhone, signInWithSms])
 
   const handleReAuthVerifyOtp = useCallback(async () => {
     setReAuthLoading(true)
     setReAuthError(null)
     try {
-      const newToken = await verifyOtp(reAuthPhone, reAuthOtp)
+      const phone = reAuthPhone.startsWith('+') ? reAuthPhone : `+${reAuthPhone}`
+      let newToken: string
+
+      if (isNANP(phone) && reAuthFlowId) {
+        await verifySmsOTP({ flowId: reAuthFlowId, otp: reAuthOtp })
+        const cdpToken = await getAccessToken()
+        if (!cdpToken) throw new Error('Failed to get CDP access token')
+
+        const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+        const res = await fetch(`${BACKEND_URL}/api/auth/exchange-cdp-token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cdpAccessToken: cdpToken }),
+        })
+        if (!res.ok) throw new Error('Failed to exchange CDP token')
+        const data = await res.json()
+        newToken = data.token
+      } else {
+        newToken = await verifyOtp(reAuthPhone, reAuthOtp)
+      }
+
       storeToken(newToken)
       await authenticateWithJWT()
       setToken(newToken)
@@ -206,12 +239,13 @@ export function useSessionGuard(): SessionGuardResult {
       setReAuthStep('phone')
       setReAuthPhone('')
       setReAuthOtp('')
+      setReAuthFlowId(null)
     } catch (err) {
       setReAuthError(err instanceof Error ? err.message : 'Failed to verify OTP')
     } finally {
       setReAuthLoading(false)
     }
-  }, [reAuthPhone, reAuthOtp, authenticateWithJWT])
+  }, [reAuthPhone, reAuthOtp, reAuthFlowId, authenticateWithJWT, verifySmsOTP, getAccessToken])
 
   const dismissReAuth = useCallback(() => {
     setReAuthVisible(false)

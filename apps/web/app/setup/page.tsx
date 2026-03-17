@@ -395,13 +395,14 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         try {
           const accessToken = getStoredToken();
           if (accessToken) {
+            const cdpToken = await getAccessToken();
             const response = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({ walletAddress: smartAccountAddress }),
+              body: JSON.stringify({ walletAddress: smartAccountAddress, cdpAccessToken: cdpToken }),
             });
 
             if (!response.ok) {
@@ -452,13 +453,14 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         if (BACKEND_URL) {
           const accessToken = getStoredToken();
           if (accessToken) {
+            const cdpToken = await getAccessToken();
             const response = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({ walletAddress: smartAccountAddress }),
+              body: JSON.stringify({ walletAddress: smartAccountAddress, cdpAccessToken: cdpToken }),
             });
 
             if (!response.ok) {

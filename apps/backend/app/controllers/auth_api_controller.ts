@@ -7,6 +7,8 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
+import app from '@adonisjs/core/services/app'
+import '#types/container'
 import env from '#start/env'
 import { CdpClient } from '@coinbase/cdp-sdk'
 import { otpService } from '#services/otp_service'
@@ -463,6 +465,13 @@ export default class AuthApiController {
       const canonicalPhone = canonicalizePhone(smsAuth.phoneNumber)
       if (!canonicalPhone) {
         return response.status(422).json({ error: 'Invalid phone number' })
+      }
+
+      const rateLimitService = await app.container.make('rateLimitService')
+      const exchangeCheck = rateLimitService.checkCdpExchangeThrottle(canonicalPhone)
+      if (!exchangeCheck.allowed) {
+        response.header('Retry-After', String(exchangeCheck.retryAfter))
+        return response.status(429).json({ error: 'Too many requests. Try again later.' })
       }
 
       const token = await jwtService.signToken(canonicalPhone)
