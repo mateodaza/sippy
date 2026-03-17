@@ -50,6 +50,7 @@ router
   .group(() => {
     router.post('/send-otp', [AuthApiController, 'sendOtp']).use(middleware.ipThrottle())
     router.post('/verify-otp', [AuthApiController, 'verifyOtp']).use(middleware.ipThrottle())
+    router.post('/exchange-cdp-token', [AuthApiController, 'exchangeCdpToken']).use(middleware.ipThrottle())
     router.get('/.well-known/jwks.json', [AuthApiController, 'jwks'])
   })
   .prefix('/api/auth')
