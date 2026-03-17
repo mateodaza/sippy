@@ -145,8 +145,8 @@ function FundPageContent() {
     return unsubscribe;
   }, [recipient]);
 
-  if (!token && !directAddress) {
-    return <NoTokenView />;
+  if (!token && !directAddress && !recipient) {
+    return <PhoneLookupView onResolved={setRecipient} />;
   }
 
   if (loading) {
@@ -416,7 +416,42 @@ function CoinbaseOnrampTab({ address }: { address: string }) {
   );
 }
 
-function NoTokenView() {
+function PhoneLookupView({ onResolved }: { onResolved: (r: RecipientInfo) => void }) {
+  const [phone, setPhone] = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+
+  const handleLookup = async () => {
+    const formatted = phone.startsWith('+') ? phone : `+${phone.replace(/\D/g, '')}`;
+    if (formatted.replace(/\D/g, '').length < 7) {
+      setLookupError('Enter a valid phone number');
+      return;
+    }
+
+    setLookupLoading(true);
+    setLookupError('');
+
+    try {
+      const res = await fetch('/api/resolve-by-phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: formatted }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setLookupError(data.error || 'Account not found');
+        return;
+      }
+
+      onResolved(data);
+    } catch {
+      setLookupError('Failed to look up account');
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
   return (
     <Shell>
       <div className='text-center py-16'>
@@ -426,17 +461,38 @@ function NoTokenView() {
         <h1 className='font-display text-3xl md:text-4xl font-bold uppercase text-[var(--text-primary)] leading-tight tracking-tight mb-4'>
           Fund a Sippy Account
         </h1>
-        <p className='text-lg text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto mb-8'>
-          You need a fund link to send money to someone. Ask them to share their
-          Sippy fund link with you.
+        <p className='text-lg text-[var(--text-secondary)] leading-relaxed max-w-md mx-auto mb-6'>
+          Enter the phone number of the person you want to fund.
         </p>
-        <a
-          href={SIPPY_HOME}
-          className='inline-flex items-center gap-2 px-6 py-3 bg-brand-primary text-white rounded-xl font-semibold hover:bg-brand-primary-hover transition-smooth'
-        >
-          <ArrowLeft className='w-4 h-4' />
-          Back to Home
-        </a>
+
+        <div className='max-w-sm mx-auto'>
+          {lookupError && (
+            <div className='mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm'>
+              {lookupError}
+            </div>
+          )}
+
+          <input
+            type='tel'
+            placeholder='+1 234 567 8900'
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && !lookupLoading && handleLookup()}
+            className='w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder:text-[var(--text-tertiary)] focus:outline-none focus:border-brand-primary mb-4 text-center text-lg'
+          />
+
+          <button
+            onClick={handleLookup}
+            disabled={lookupLoading || phone.replace(/\D/g, '').length < 7}
+            className='w-full px-6 py-3 bg-brand-primary text-white rounded-xl font-semibold hover:bg-brand-primary-hover transition-smooth disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2'
+          >
+            {lookupLoading ? (
+              <Loader2 className='w-5 h-5 animate-spin' />
+            ) : (
+              'Find Account'
+            )}
+          </button>
+        </div>
       </div>
     </Shell>
   );

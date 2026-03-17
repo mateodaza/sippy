@@ -64,6 +64,7 @@ export default await Env.create(new URL('../', import.meta.url), {
   // URLs
   RECEIPT_BASE_URL: Env.schema.string.optional(),
   FUND_URL: Env.schema.string.optional(),
+  FUND_TOKEN_SECRET: Env.schema.string.optional(),
   FRONTEND_URL: Env.schema.string.optional(),
 
   // Phone
