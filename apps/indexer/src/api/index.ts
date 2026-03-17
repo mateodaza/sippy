@@ -24,8 +24,8 @@ const app = new Hono()
 // ══════════════════════════════════════════════════════════════
 
 let restartScheduledAt: number | null = null
-const RESTART_DELAY_MS = 60_000
-const MAX_DEFERRAL_MS = 5 * 60_000
+const RESTART_DELAY_MS = 30 * 60_000   // 30 min — batch new wallets before restarting
+const MAX_DEFERRAL_MS = 60 * 60_000    // 1 hour — hard cap on deferral
 
 function scheduleRestart() {
   const now = Date.now()
@@ -176,7 +176,11 @@ function deduplicateLogs(logs: any[]): any[] {
 
 // ══════════════════════════════════════════════════════════════
 // BACKFILL (idempotent, batch block timestamps)
+// Uses writePool (raw SQL) because ponder:api db is read-only
+// for onchain tables. Schema-qualified to match DATABASE_SCHEMA.
 // ══════════════════════════════════════════════════════════════
+
+const PONDER_SCHEMA = process.env.DATABASE_SCHEMA || 'ponder'
 
 async function backfillWallet(address: string) {
   const rpcUrl = process.env.PONDER_RPC_URL_42161
@@ -208,14 +212,17 @@ async function backfillWallet(address: string) {
     blockTimestamps.set(blockNum, ts)
   }
 
+  const S = PONDER_SCHEMA  // shorthand for SQL interpolation
   let skippedNoTimestamp = 0
+  let backfilled = 0
+
   for (const log of allLogs) {
-    const from = ('0x' + log.topics[1].slice(26)).toLowerCase() as `0x${string}`
-    const to = ('0x' + log.topics[2].slice(26)).toLowerCase() as `0x${string}`
-    const amount = BigInt(log.data)
+    const from = ('0x' + log.topics[1].slice(26)).toLowerCase()
+    const to = ('0x' + log.topics[2].slice(26)).toLowerCase()
+    const amount = BigInt(log.data).toString()
     const blockNumber = parseInt(log.blockNumber, 16)
     const logIndex = parseInt(log.logIndex, 16)
-    const txHash = log.transactionHash.toLowerCase() as `0x${string}`
+    const txHash = log.transactionHash.toLowerCase()
     const transferId = `${txHash}-${logIndex}`
 
     const timestamp = blockTimestamps.get(log.blockNumber)
@@ -225,58 +232,57 @@ async function backfillWallet(address: string) {
     }
     const day = new Date(timestamp * 1000).toISOString().slice(0, 10)
 
-    // Insert transfer — returning() gates aggregate updates
-    const inserted = await db.insert(transfer).values({
-      id: transferId, from, to, amount, timestamp, blockNumber, txHash,
-    }).onConflictDoNothing().returning({ id: transfer.id })
+    // Insert transfer — ON CONFLICT DO NOTHING for idempotency
+    const insertResult = await writePool.query(
+      `INSERT INTO "${S}".transfer (id, "from", "to", amount, timestamp, block_number, tx_hash)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (id) DO NOTHING
+       RETURNING id`,
+      [transferId, from, to, amount, timestamp, blockNumber, txHash]
+    )
 
-    if (inserted.length === 0) continue
+    if (insertResult.rowCount === 0) continue
+    backfilled++
 
     // Upsert sender account
-    await db.insert(account).values({
-      address: from, balance: -amount, totalSent: amount,
-      totalReceived: 0n, txCount: 1, lastActivity: timestamp,
-    }).onConflictDoUpdate({
-      target: account.address,
-      set: {
-        balance: sql`${account.balance} - ${amount}`,
-        totalSent: sql`${account.totalSent} + ${amount}`,
-        txCount: sql`${account.txCount} + 1`,
-        lastActivity: sql`GREATEST(${account.lastActivity}, ${timestamp})`,
-      },
-    })
+    await writePool.query(
+      `INSERT INTO "${S}".account (address, balance, total_sent, total_received, tx_count, last_activity)
+       VALUES ($1, -$2::bigint, $2, 0, 1, $3)
+       ON CONFLICT (address) DO UPDATE SET
+         balance = "${S}".account.balance - $2::bigint,
+         total_sent = "${S}".account.total_sent + $2::bigint,
+         tx_count = "${S}".account.tx_count + 1,
+         last_activity = GREATEST("${S}".account.last_activity, $3)`,
+      [from, amount, timestamp]
+    )
 
     // Upsert receiver account
-    await db.insert(account).values({
-      address: to, balance: amount, totalSent: 0n,
-      totalReceived: amount, txCount: 1, lastActivity: timestamp,
-    }).onConflictDoUpdate({
-      target: account.address,
-      set: {
-        balance: sql`${account.balance} + ${amount}`,
-        totalReceived: sql`${account.totalReceived} + ${amount}`,
-        txCount: sql`${account.txCount} + 1`,
-        lastActivity: sql`GREATEST(${account.lastActivity}, ${timestamp})`,
-      },
-    })
+    await writePool.query(
+      `INSERT INTO "${S}".account (address, balance, total_sent, total_received, tx_count, last_activity)
+       VALUES ($1, $2::bigint, 0, $2, 1, $3)
+       ON CONFLICT (address) DO UPDATE SET
+         balance = "${S}".account.balance + $2::bigint,
+         total_received = "${S}".account.total_received + $2::bigint,
+         tx_count = "${S}".account.tx_count + 1,
+         last_activity = GREATEST("${S}".account.last_activity, $3)`,
+      [to, amount, timestamp]
+    )
 
     // Upsert daily volume
-    await db.insert(dailyVolume).values({
-      id: day, date: day, totalUsdcVolume: amount,
-      transferCount: 1, gasRefuelCount: 0, gasEthSpent: 0n,
-    }).onConflictDoUpdate({
-      target: dailyVolume.id,
-      set: {
-        totalUsdcVolume: sql`${dailyVolume.totalUsdcVolume} + ${amount}`,
-        transferCount: sql`${dailyVolume.transferCount} + 1`,
-      },
-    })
+    await writePool.query(
+      `INSERT INTO "${S}".daily_volume (id, date, total_usdc_volume, transfer_count, gas_refuel_count, gas_eth_spent)
+       VALUES ($1, $2, $3, 1, 0, 0)
+       ON CONFLICT (id) DO UPDATE SET
+         total_usdc_volume = "${S}".daily_volume.total_usdc_volume + $3::bigint,
+         transfer_count = "${S}".daily_volume.transfer_count + 1`,
+      [day, day, amount]
+    )
   }
 
   if (skippedNoTimestamp > 0) {
     console.warn(`Backfill ${address}: skipped ${skippedNoTimestamp} transfers (missing block timestamps)`)
   }
-  console.log(`Backfilled ${allLogs.length - skippedNoTimestamp} transfers for ${address}`)
+  console.log(`Backfilled ${backfilled} transfers for ${address}`)
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -330,10 +336,10 @@ app.post('/wallets/register', requireSecret, async (c) => {
     try {
       await backfillWallet(normalized)
     } catch (err) {
-      // Backfill may fail (ponder:api db is read-only for onchain tables).
-      // This is acceptable — Ponder re-indexes natively after restart.
-      console.warn(`Backfill skipped for ${normalized} (will index after restart):`, (err as Error).message)
+      console.warn(`Backfill failed for ${normalized}: ${(err as Error).message}`)
     }
+    // Restart is batched (30 min window) — backfill provides immediate data,
+    // restart updates the live event filter for future transfers.
     scheduleRestart()
   }
 
