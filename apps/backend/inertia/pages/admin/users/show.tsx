@@ -86,10 +86,15 @@ export default function UserShow({ user, activity, onchain }: { user: User | nul
     },
     { label: 'Registered', value: new Date(Number(user.created_at)).toLocaleDateString(), mono: false },
     {
-      label: 'Last Activity',
+      label: 'Last On-chain Activity',
       value: onchain?.lastActivity
         ? new Date(onchain.lastActivity * 1000).toLocaleDateString()
-        : new Date(Number(user.last_activity)).toLocaleDateString(),
+        : '---',
+      mono: false,
+    },
+    {
+      label: 'Last Message',
+      value: new Date(Number(user.last_activity)).toLocaleDateString(),
       mono: false,
     },
   ]

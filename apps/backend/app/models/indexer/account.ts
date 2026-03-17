@@ -11,15 +11,15 @@ export default class Account extends BaseModel {
   @column()
   declare balance: bigint
 
-  @column({ columnName: 'totalSent' })
+  @column({ columnName: 'total_sent' })
   declare totalSent: bigint
 
-  @column({ columnName: 'totalReceived' })
+  @column({ columnName: 'total_received' })
   declare totalReceived: bigint
 
-  @column({ columnName: 'txCount' })
+  @column({ columnName: 'tx_count' })
   declare txCount: number
 
-  @column({ columnName: 'lastActivity' })
+  @column({ columnName: 'last_activity' })
   declare lastActivity: number
 }

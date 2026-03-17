@@ -7,7 +7,7 @@ import {
   dailyVolume,
 } from 'ponder:schema'
 import * as offchainSchema from '../../offchain'
-import { eq, or, and, desc, sql, inArray, gte } from 'drizzle-orm'
+import { eq, or, and, desc, sql, inArray } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import pg from 'pg'
 import { Hono } from 'hono'
@@ -180,11 +180,11 @@ function deduplicateLogs(logs: any[]): any[] {
 // for onchain tables. Schema-qualified to match DATABASE_SCHEMA.
 // ══════════════════════════════════════════════════════════════
 
-const PONDER_SCHEMA = process.env.DATABASE_SCHEMA || 'ponder'
+const PONDER_SCHEMA = process.env.INDEXER_DB_SCHEMA || process.env.DATABASE_SCHEMA || 'ponder'
 
 async function backfillWallet(address: string) {
   const rpcUrl = process.env.PONDER_RPC_URL_42161
-  const startBlock = process.env.START_BLOCK || '290000000'
+  const startBlock = process.env.START_BLOCK || '437000000'
   if (!rpcUrl) return
 
   const startBlockHex = '0x' + parseInt(startBlock).toString(16)
@@ -204,12 +204,14 @@ async function backfillWallet(address: string) {
   const allLogs = deduplicateLogs([...sent, ...received])
   if (allLogs.length === 0) return
 
-  // Batch-fetch block timestamps for all unique blocks
+  // Batch-fetch block timestamps for all unique blocks (parallel, concurrency 10)
   const uniqueBlockNums = [...new Set(allLogs.map((l: any) => l.blockNumber as string))]
   const blockTimestamps = new Map<string, number>()
-  for (const blockNum of uniqueBlockNums) {
-    const ts = await fetchBlockTimestamp(rpcUrl, blockNum)
-    blockTimestamps.set(blockNum, ts)
+  const CONCURRENCY = 10
+  for (let i = 0; i < uniqueBlockNums.length; i += CONCURRENCY) {
+    const batch = uniqueBlockNums.slice(i, i + CONCURRENCY)
+    const results = await Promise.all(batch.map((bn) => fetchBlockTimestamp(rpcUrl, bn)))
+    batch.forEach((bn, idx) => blockTimestamps.set(bn, results[idx]))
   }
 
   const S = PONDER_SCHEMA  // shorthand for SQL interpolation
@@ -644,310 +646,6 @@ app.get('/sync-status', async (c) => {
   })
 })
 
-// ══════════════════════════════════════════════════════════════
-// ADMIN DASHBOARD ENDPOINTS
-// ══════════════════════════════════════════════════════════════
-
-// Dashboard overview — single-call summary for the admin home page
-app.get('/dashboard/overview', async (c) => {
-  const walletSet = await loadWalletSet()
-  const walletAddresses = Array.from(walletSet) as `0x${string}`[]
-  const registeredCount = walletAddresses.length
-
-  const oneDayAgo = Math.floor(Date.now() / 1000) - 86400
-  let activeTodayCount = 0
-  let totalSippyVolume = '0'
-
-  if (walletAddresses.length > 0) {
-    const activeToday = await db
-      .select({ count: sql<number>`count(distinct "from")` })
-      .from(transfer)
-      .where(
-        and(
-          gte(transfer.timestamp, oneDayAgo),
-          or(
-            inArray(transfer.from, walletAddresses),
-            inArray(transfer.to, walletAddresses),
-          ),
-        ),
-      )
-    activeTodayCount = activeToday[0]?.count || 0
-
-    const volumeResult = await db
-      .select({ volume: sql<string>`coalesce(sum(amount), 0)` })
-      .from(transfer)
-      .where(
-        or(
-          inArray(transfer.from, walletAddresses),
-          inArray(transfer.to, walletAddresses),
-        ),
-      )
-    totalSippyVolume = volumeResult[0]?.volume || '0'
-  }
-
-  const gasStatus = await db
-    .select()
-    .from(gasRefuelStatus)
-    .where(eq(gasRefuelStatus.id, 'singleton'))
-
-  return c.json({
-    registeredUsers: registeredCount,
-    activeUsersToday: activeTodayCount,
-    totalSippyVolume,
-    totalSippyVolumeFormatted: (Number(totalSippyVolume) / 1e6).toFixed(2),
-    gasRefuel: gasStatus[0] || null,
-  })
-})
-
-// List all registered users with their on-chain stats
-app.get('/dashboard/users', async (c) => {
-  const limit = Math.min(Number(c.req.query('limit') || 50), 200)
-  const offset = Number(c.req.query('offset') || 0)
-
-  const wallets = await db
-    .select()
-    .from(offchainSchema.sippyWallet)
-    .where(eq(offchainSchema.sippyWallet.isActive, true))
-    .limit(limit)
-    .offset(offset)
-
-  const enriched = []
-  for (const w of wallets) {
-    const acct = await db
-      .select()
-      .from(account)
-      .where(eq(account.address, w.address as `0x${string}`))
-
-    enriched.push({
-      address: w.address,
-      registeredAt: w.registeredAt,
-      balance: acct[0]?.balance?.toString() || '0',
-      balanceFormatted: (Number(acct[0]?.balance || 0) / 1e6).toFixed(2),
-      totalSent: acct[0]?.totalSent?.toString() || '0',
-      totalReceived: acct[0]?.totalReceived?.toString() || '0',
-      txCount: acct[0]?.txCount || 0,
-      lastActivity: acct[0]?.lastActivity || null,
-    })
-  }
-
-  return c.json({ users: enriched, pagination: { limit, offset } })
-})
-
-// Single user detail
-app.get('/dashboard/users/:address', async (c) => {
-  const address = c.req.param('address').toLowerCase() as `0x${string}`
-
-  const wallet = await db
-    .select()
-    .from(offchainSchema.sippyWallet)
-    .where(eq(offchainSchema.sippyWallet.address, address))
-
-  const acct = await db
-    .select()
-    .from(account)
-    .where(eq(account.address, address))
-
-  const recentTransfers = await db
-    .select()
-    .from(transfer)
-    .where(or(eq(transfer.from, address), eq(transfer.to, address)))
-    .orderBy(desc(transfer.timestamp))
-    .limit(20)
-
-  const recentRefuels = await db
-    .select()
-    .from(refuelEvent)
-    .where(eq(refuelEvent.user, address))
-    .orderBy(desc(refuelEvent.timestamp))
-    .limit(10)
-
-  const walletSet = await loadWalletSet()
-
-  const registration = wallet[0]
-    ? { address: wallet[0].address, registeredAt: wallet[0].registeredAt, isActive: wallet[0].isActive }
-    : null
-
-  return c.json({
-    address,
-    isSippyUser: wallet.length > 0,
-    registration,
-    account: acct[0]
-      ? {
-          balance: acct[0].balance.toString(),
-          balanceFormatted: (Number(acct[0].balance) / 1e6).toFixed(2),
-          totalSent: acct[0].totalSent.toString(),
-          totalReceived: acct[0].totalReceived.toString(),
-          txCount: acct[0].txCount,
-          lastActivity: acct[0].lastActivity,
-        }
-      : null,
-    recentTransfers: recentTransfers.map((t) => ({
-      id: t.id,
-      from: t.from,
-      to: t.to,
-      amount: t.amount.toString(),
-      amountFormatted: (Number(t.amount) / 1e6).toFixed(2),
-      direction: t.from === address ? 'sent' : 'received',
-      transferType: classifyTransfer(t.from, t.to, walletSet),
-      timestamp: t.timestamp,
-      txHash: t.txHash,
-    })),
-    recentRefuels: recentRefuels.map((r) => ({
-      amount: r.amount.toString(),
-      timestamp: r.timestamp,
-      txHash: r.txHash,
-    })),
-  })
-})
-
-// Per-user daily activity
-app.get('/dashboard/users/:address/activity', async (c) => {
-  const address = c.req.param('address').toLowerCase() as `0x${string}`
-  const days = Math.min(Number(c.req.query('days') || 30), 90)
-
-  const activity = await db
-    .select({
-      date: sql<string>`to_char(to_timestamp(${transfer.timestamp}), 'YYYY-MM-DD')`,
-      sentCount: sql<number>`count(*) filter (where "from" = ${address})`,
-      receivedCount: sql<number>`count(*) filter (where "to" = ${address})`,
-      sentVolume: sql<string>`coalesce(sum(amount) filter (where "from" = ${address}), 0)`,
-      receivedVolume: sql<string>`coalesce(sum(amount) filter (where "to" = ${address}), 0)`,
-    })
-    .from(transfer)
-    .where(or(eq(transfer.from, address), eq(transfer.to, address)))
-    .groupBy(sql`to_char(to_timestamp(${transfer.timestamp}), 'YYYY-MM-DD')`)
-    .orderBy(desc(sql`to_char(to_timestamp(${transfer.timestamp}), 'YYYY-MM-DD')`))
-    .limit(days)
-
-  return c.json({
-    address,
-    activity: activity.map((d) => ({
-      date: d.date,
-      sentCount: d.sentCount,
-      receivedCount: d.receivedCount,
-      sentVolume: (Number(d.sentVolume) / 1e6).toFixed(2),
-      receivedVolume: (Number(d.receivedVolume) / 1e6).toFixed(2),
-    })),
-  })
-})
-
-// Top users by volume or tx count
-app.get('/dashboard/top-users', async (c) => {
-  const metric = c.req.query('metric') || 'volume'
-  const limit = Math.min(Number(c.req.query('limit') || 20), 100)
-
-  const walletSet = await loadWalletSet()
-  const walletAddresses = Array.from(walletSet) as `0x${string}`[]
-  if (walletAddresses.length === 0) return c.json({ users: [] })
-
-  const orderCol =
-    metric === 'txCount'
-      ? desc(account.txCount)
-      : metric === 'balance'
-        ? desc(account.balance)
-        : desc(sql`${account.totalSent} + ${account.totalReceived}`)
-
-  const results = await db
-    .select()
-    .from(account)
-    .where(inArray(account.address, walletAddresses))
-    .orderBy(orderCol)
-    .limit(limit)
-
-  return c.json({
-    metric,
-    users: results.map((a) => ({
-      address: a.address,
-      balance: a.balance.toString(),
-      balanceFormatted: (Number(a.balance) / 1e6).toFixed(2),
-      totalVolume: (a.totalSent + a.totalReceived).toString(),
-      totalVolumeFormatted: (Number(a.totalSent + a.totalReceived) / 1e6).toFixed(2),
-      txCount: a.txCount,
-      lastActivity: a.lastActivity,
-    })),
-  })
-})
-
-// Fund flow analysis — net in vs out for Sippy ecosystem
-app.get('/dashboard/flow', async (c) => {
-  const days = Math.min(Number(c.req.query('days') || 30), 90)
-
-  const walletSet = await loadWalletSet()
-  const walletAddresses = Array.from(walletSet) as `0x${string}`[]
-  if (walletAddresses.length === 0) return c.json({ flow: [] })
-
-  const flow = await db
-    .select({
-      date: sql<string>`to_char(to_timestamp(${transfer.timestamp}), 'YYYY-MM-DD')`,
-      inbound: sql<string>`coalesce(sum(amount) filter (
-        where "to" = any(${walletAddresses}) and "from" != all(${walletAddresses})
-      ), 0)`,
-      outbound: sql<string>`coalesce(sum(amount) filter (
-        where "from" = any(${walletAddresses}) and "to" != all(${walletAddresses})
-      ), 0)`,
-      internal: sql<string>`coalesce(sum(amount) filter (
-        where "from" = any(${walletAddresses}) and "to" = any(${walletAddresses})
-      ), 0)`,
-    })
-    .from(transfer)
-    .where(
-      or(
-        inArray(transfer.from, walletAddresses),
-        inArray(transfer.to, walletAddresses),
-      ),
-    )
-    .groupBy(sql`to_char(to_timestamp(${transfer.timestamp}), 'YYYY-MM-DD')`)
-    .orderBy(desc(sql`to_char(to_timestamp(${transfer.timestamp}), 'YYYY-MM-DD')`))
-    .limit(days)
-
-  return c.json({
-    flow: flow.map((d) => ({
-      date: d.date,
-      inbound: (Number(d.inbound) / 1e6).toFixed(2),
-      outbound: (Number(d.outbound) / 1e6).toFixed(2),
-      internal: (Number(d.internal) / 1e6).toFixed(2),
-      netFlow: ((Number(d.inbound) - Number(d.outbound)) / 1e6).toFixed(2),
-    })),
-  })
-})
-
-// Retention — daily active Sippy users over time
-app.get('/dashboard/retention', async (c) => {
-  const days = Math.min(Number(c.req.query('days') || 30), 90)
-
-  const walletSet = await loadWalletSet()
-  const walletAddresses = Array.from(walletSet) as `0x${string}`[]
-  if (walletAddresses.length === 0) return c.json({ totalRegistered: 0, daily: [] })
-
-  const retention = await db
-    .select({
-      date: sql<string>`to_char(to_timestamp(${transfer.timestamp}), 'YYYY-MM-DD')`,
-      activeUsers: sql<number>`count(distinct case
-        when "from" = any(${walletAddresses}) then "from"
-        when "to" = any(${walletAddresses}) then "to"
-      end)`,
-      totalTransactions: sql<number>`count(*)`,
-    })
-    .from(transfer)
-    .where(
-      or(
-        inArray(transfer.from, walletAddresses),
-        inArray(transfer.to, walletAddresses),
-      ),
-    )
-    .groupBy(sql`to_char(to_timestamp(${transfer.timestamp}), 'YYYY-MM-DD')`)
-    .orderBy(desc(sql`to_char(to_timestamp(${transfer.timestamp}), 'YYYY-MM-DD')`))
-    .limit(days)
-
-  return c.json({
-    totalRegistered: walletAddresses.length,
-    daily: retention.map((d) => ({
-      date: d.date,
-      activeUsers: d.activeUsers,
-      totalTransactions: d.totalTransactions,
-    })),
-  })
-})
 
 // ══════════════════════════════════════════════════════════════
 // HELPERS

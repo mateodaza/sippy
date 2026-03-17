@@ -57,7 +57,7 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
               <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Total Sent</th>
               <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Total Received</th>
               <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Txs</th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Last Activity</th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Last Seen</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -87,8 +87,8 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
                 </td>
                 <td className="px-5 py-4 text-gray-400">
                   {user.onchain?.lastActivity
-                    ? new Date(user.onchain.lastActivity * 1000).toLocaleDateString()
-                    : new Date(Number(user.last_activity)).toLocaleDateString()}
+                    ? <span title="On-chain activity">{new Date(user.onchain.lastActivity * 1000).toLocaleDateString()}</span>
+                    : <span className="text-gray-300" title="Last WhatsApp message">{new Date(Number(user.last_activity)).toLocaleDateString()}</span>}
                 </td>
               </tr>
             ))}

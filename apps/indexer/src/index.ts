@@ -128,34 +128,6 @@ ponder.on('GasRefuel:Refueled', async ({ event, context }) => {
     }))
 })
 
-// ── GasRefuel: FundsDeposited / FundsWithdrawn ─────────────
-
-ponder.on('GasRefuel:FundsDeposited', async ({ event, context }) => {
-  await context.db
-    .insert(gasRefuelStatus)
-    .values({
-      id: 'singleton',
-      totalRefuels: 0,
-      totalEthSpent: 0n,
-      isPaused: false,
-      lastRefuelAt: 0,
-    })
-    .onConflictDoNothing()
-})
-
-ponder.on('GasRefuel:FundsWithdrawn', async ({ event, context }) => {
-  await context.db
-    .insert(gasRefuelStatus)
-    .values({
-      id: 'singleton',
-      totalRefuels: 0,
-      totalEthSpent: 0n,
-      isPaused: false,
-      lastRefuelAt: 0,
-    })
-    .onConflictDoNothing()
-})
-
 // ── GasRefuel: Paused / Unpaused ───────────────────────────
 
 ponder.on('GasRefuel:Paused', async ({ event, context }) => {

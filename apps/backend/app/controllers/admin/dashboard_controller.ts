@@ -8,7 +8,8 @@ export default class DashboardController {
       db.from('phone_registry').whereNotNull('wallet_address').count('* as total').first(),
       db
         .from('parse_log')
-        .whereRaw("created_at >= NOW() - INTERVAL '24 hours'")
+        .whereRaw('created_at >= CURRENT_DATE')
+        .whereIn('status', ['regex-matched', 'normalized-send', 'llm-success', 'loose-matched', 'format-hint'])
         .count('* as total')
         .first(),
     ])

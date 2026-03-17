@@ -43,8 +43,10 @@ function formatUSDC(raw: string): string {
 }
 
 function formatETH(raw: string): string {
-  const num = Number(raw) / 1e18
-  return `${num.toFixed(4)} ETH`
+  const padded = raw.padStart(19, '0')
+  const whole = padded.slice(0, padded.length - 18) || '0'
+  const frac = padded.slice(padded.length - 18, padded.length - 14)
+  return `${whole}.${frac} ETH`
 }
 
 function truncateAddress(addr: string): string {
