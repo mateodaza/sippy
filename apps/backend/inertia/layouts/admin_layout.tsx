@@ -14,6 +14,15 @@ interface FlashMessages {
   error?: string
 }
 
+function timeAgo(ts: number): string {
+  const seconds = Math.floor((Date.now() - ts) / 1000)
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  return `${hours}h ago`
+}
+
 const navItems = [
   {
     href: '/admin',
@@ -62,7 +71,7 @@ const navItems = [
 ]
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const { auth, flash } = usePage().props as { auth: AuthUser | null; flash: FlashMessages }
+  const { auth, flash, indexerHeartbeat } = usePage().props as { auth: AuthUser | null; flash: FlashMessages; indexerHeartbeat: number | null }
   const currentPath = usePage().url
 
   function isActive(href: string) {
@@ -107,8 +116,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           ))}
         </div>
 
+        {/* Indexer status */}
+        {indexerHeartbeat && (
+          <div className="mt-auto px-3 pb-3">
+            <div className="flex items-center gap-2 text-[11px] text-gray-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-sippy" />
+              Indexer synced {timeAgo(indexerHeartbeat)}
+            </div>
+          </div>
+        )}
+
         {/* User footer */}
-        <div className="mt-auto border-t border-gray-100 pt-4">
+        <div className={`${indexerHeartbeat ? '' : 'mt-auto '}border-t border-gray-100 pt-4`}>
           {auth && (
             <div className="rounded-xl bg-gray-50 p-3">
               <div className="mb-3 flex items-center gap-3">

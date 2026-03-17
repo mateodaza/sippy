@@ -1,10 +1,24 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
+import db from '@adonisjs/lucid/services/db'
 
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
   async share(ctx: HttpContext) {
     const user = ctx.auth?.user
+
+    let indexerHeartbeat: number | null = null
+    if (ctx.request.url().startsWith('/admin')) {
+      try {
+        const row = await db.connection('indexer')
+          .from('_ponder_meta')
+          .where('key', 'app')
+          .select(db.raw("(value->>'heartbeat_at')::bigint as heartbeat"))
+          .first()
+        indexerHeartbeat = row?.heartbeat ? Number(row.heartbeat) : null
+      } catch {}
+    }
+
     return {
       auth: user
         ? {
@@ -19,6 +33,7 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
         success: ctx.session?.flashMessages.get('success'),
         error: ctx.session?.flashMessages.get('error'),
       },
+      indexerHeartbeat,
     }
   }
 
