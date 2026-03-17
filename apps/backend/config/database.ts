@@ -35,7 +35,7 @@ const dbConfig = defineConfig({
         database: env.get('INDEXER_DB_DATABASE', 'sippy_indexer'),
         ssl: sslConfig,
       },
-      searchPath: ['ponder', 'offchain', 'public'],
+      searchPath: [env.get('INDEXER_DB_SCHEMA', 'ponder_v2'), 'offchain', 'public'],
     },
   },
 })
