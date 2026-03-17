@@ -103,8 +103,9 @@ export function useSessionGuard(): SessionGuardResult {
             // triggering this effect again. Don't set hasCheckedSession yet
             // so the next run can proceed to the token-validation path.
             return
-          } catch {
+          } catch (err) {
             // JWT auth failed — clear stale token and fall through
+            console.warn('Session recovery: JWT auth failed, clearing token', err)
             clearToken()
           }
         }
@@ -215,7 +216,12 @@ export function useSessionGuard(): SessionGuardResult {
       if (isNANP(phone) && reAuthFlowId) {
         await verifySmsOTP({ flowId: reAuthFlowId, otp: reAuthOtp })
         const cdpToken = await getAccessToken()
-        if (!cdpToken) throw new Error('Failed to get CDP access token')
+        if (!cdpToken) {
+          // CDP session is now inconsistent (verifySmsOTP succeeded but no token).
+          // Clean up CDP state before surfacing the error.
+          await signOut()
+          throw new Error('Failed to get CDP access token. Please try again.')
+        }
 
         const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
         const res = await fetch(`${BACKEND_URL}/api/auth/exchange-cdp-token`, {

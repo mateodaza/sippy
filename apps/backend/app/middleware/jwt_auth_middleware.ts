@@ -87,7 +87,11 @@ export default class JwtAuthMiddleware {
             return ctx.response.unauthorized({ error: 'Unauthorized' })
           }
         } else {
-          logger.warn('JWT auth: register-wallet without CDP token — phone: %s', phoneNumber)
+          // CDP token is required to prove wallet ownership. Without it, an attacker
+          // with a valid JWT could register any arbitrary wallet address.
+          // See SECURITY_AUDIT.md #5 for context.
+          logger.warn('JWT auth: register-wallet rejected — no CDP token for phone: %s', phoneNumber)
+          return ctx.response.unauthorized({ error: 'Unauthorized' })
         }
 
         ctx.cdpUser = { phoneNumber, walletAddress: bodyWalletAddress as string }

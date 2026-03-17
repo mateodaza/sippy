@@ -111,7 +111,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       const token = getStoredToken();
       resolveLanguage(null, token, BACKEND_URL)
         .then(resolved => { storeLanguage(resolved); setLang(resolved) })
-        .catch(() => {})
+        .catch((err: unknown) => { console.debug('language fetch failed:', (err as Error).message) })
     }
   }, [phoneFromUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -358,7 +358,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         setLang(phoneLang);
         fetchUserLanguage(token, BACKEND_URL)
           .then(({ language }) => { storeLanguage(language); setLang(language) })
-          .catch(() => {});
+          .catch((err: unknown) => { console.debug('language fetch failed:', (err as Error).message) });
 
         // After verifySmsOTP, CDP SDK updates its internal state asynchronously.
         // React won't re-render mid-handler, so `currentUser` from the closure is stale.
@@ -378,7 +378,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       setLang(phoneLang);
       fetchUserLanguage(sippyJwt, BACKEND_URL)
         .then(({ language }) => { storeLanguage(language); setLang(language) })
-        .catch(() => {});
+        .catch((err: unknown) => { console.debug('language fetch failed:', (err as Error).message) });
 
       const { user } = await authenticateWithJWT();
 
@@ -437,14 +437,24 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
 
   // Effect: After CDP SMS OTP verification, wait for currentUser to populate with a wallet.
   // verifySmsOTP triggers an internal SDK state update; React re-renders with the new
-  // currentUser on the next tick. This effect fires on that re-render.
+  // currentUser in a subsequent render cycle. This effect fires on that re-render.
   useEffect(() => {
     if (!awaitingCdpWallet) return;
 
-    const smartAccountAddress = currentUser?.evmSmartAccounts?.[0] || currentUser?.evmAccounts?.[0];
-    if (!smartAccountAddress) return; // Not yet populated, wait for next render
+    // Timeout: if the wallet never populates (SDK error, network issue), unblock the UI.
+    const timeout = setTimeout(() => {
+      setAwaitingCdpWallet(false);
+      setIsLoading(false);
+      setError(lang === 'es' ? 'La creación de la billetera expiró. Intenta de nuevo.' :
+               lang === 'pt' ? 'A criação da carteira expirou. Tente novamente.' :
+               'Wallet creation timed out. Please try again.');
+    }, 30000);
 
-    // Wallet is available — continue the setup flow
+    const smartAccountAddress = currentUser?.evmSmartAccounts?.[0] || currentUser?.evmAccounts?.[0];
+    if (!smartAccountAddress) return () => clearTimeout(timeout); // Not yet populated, wait for next render
+
+    // Wallet is available — clear timeout and continue the setup flow
+    clearTimeout(timeout);
     setAwaitingCdpWallet(false);
     setWalletAddress(smartAccountAddress);
 
@@ -562,6 +572,9 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
     try {
       if (BACKEND_URL) {
         const accessToken = getStoredToken();
+        if (!accessToken) {
+          console.warn('handleAcceptTos: no access token — ToS acceptance will not be recorded on backend');
+        }
         if (accessToken) {
           const response = await fetch(`${BACKEND_URL}/api/accept-tos`, {
             method: 'POST',

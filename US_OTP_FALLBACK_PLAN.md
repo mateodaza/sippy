@@ -63,22 +63,37 @@ Has Sippy JWT in localStorage
   → CDPProviderCustomAuth wraps settings page
   → useSessionGuard checks JWT, calls authenticateWithJWT()
   → Works identically for US and international users
+  → Re-auth for +1 users diverges — see re-auth section below
 ```
 
 ### Re-auth when JWT expires (any country, settings/wallet pages)
+
+**Implementation note:** The actual implementation diverged from the original plan below.
+Instead of routing +1 re-auth through the backend (`otp_service.ts`), re-auth uses
+client-side CDP hooks directly in `useSessionGuard.ts`.
+
 ```
 JWT expired on settings/wallet page
   → useSessionGuard shows re-auth modal
   → User enters phone + OTP
-  → handleReAuthSendOtp → POST /api/auth/send-otp
-    → Backend routes: +1 → CDP server-side SMS, others → Twilio
-  → handleReAuthVerifyOtp → POST /api/auth/verify-otp → new Sippy JWT
-  → storeToken(newJwt)
-  → authenticateWithJWT() → restores CDP session
-  → setIsAuthenticated(true), dismiss modal
+
+  +1 (NANP) path:
+    → handleReAuthSendOtp → signInWithSms({ phoneNumber }) via CDP hooks (client-side)
+    → handleReAuthVerifyOtp → verifySmsOTP → getAccessToken()
+    → POST /api/auth/exchange-cdp-token → new Sippy JWT
+    → storeToken(newJwt)
+    → authenticateWithJWT() → restores CDP session
+    → setIsAuthenticated(true), dismiss modal
+
+  International path (unchanged):
+    → handleReAuthSendOtp → POST /api/auth/send-otp (Twilio)
+    → handleReAuthVerifyOtp → POST /api/auth/verify-otp → new Sippy JWT
+    → storeToken(newJwt)
+    → authenticateWithJWT() → restores CDP session
+    → setIsAuthenticated(true), dismiss modal
 ```
 
-The full re-auth cycle (send → verify → JWT → authenticateWithJWT → restore) works identically for both US and international users. The only backend change is the SMS delivery provider selection in `send-otp`.
+Both paths converge at `storeToken` → `authenticateWithJWT()` → session restored.
 
 ## Implementation Steps
 
@@ -232,36 +247,26 @@ router.post('/exchange-cdp-token', [AuthApiController, 'exchangeCdpToken']).use(
 
 In the public auth group (no JWT required — the CDP token is the proof of identity).
 
-### 9. `apps/backend/app/services/otp_service.ts` — re-auth SMS routing
+### 9. `apps/web/lib/useSessionGuard.ts` — re-auth for +1 users (IMPLEMENTED)
 
-**Audit fix (🔴 #2): complete re-auth flow for +1 users.**
+**Actual implementation:** Instead of modifying `otp_service.ts` on the backend, re-auth
+for +1 users is handled entirely client-side using CDP hooks inside `useSessionGuard.ts`.
 
-The re-auth flow in `useSessionGuard.ts` calls:
-1. `sendOtp(phone)` → `POST /api/auth/send-otp` (line 186)
-2. `verifyOtp(phone, otp)` → `POST /api/auth/verify-otp` → returns new Sippy JWT (line 199)
-3. `storeToken(newToken)` (line 200)
-4. `authenticateWithJWT()` → restores CDP session (line 201)
+The hook detects NANP phones via `isNANP()` and branches:
 
-Steps 2-4 work identically regardless of SMS provider. Only step 1 (SMS delivery) needs to change for `+1`.
+**+1 (NANP) re-auth:**
+1. `signInWithSms({ phoneNumber })` — CDP sends SMS directly (client-side)
+2. `verifySmsOTP({ flowId, otp })` — CDP verifies
+3. `getAccessToken()` — retrieves CDP access token
+4. `POST /api/auth/exchange-cdp-token` — backend validates CDP token, mints Sippy JWT
+5. `storeToken(newToken)` + `authenticateWithJWT()` — session restored
 
-Backend change in `otp_service.ts` — make the SMS sender phone-aware:
+**International re-auth (unchanged):**
+1. `sendOtp(phone)` → `POST /api/auth/send-otp` (Twilio)
+2. `verifyOtp(phone, otp)` → Sippy JWT
+3. `storeToken(newToken)` + `authenticateWithJWT()` — session restored
 
-```ts
-// In sendOtp(), choose sender based on phone prefix:
-const sender = isNANP(phone) ? cdpSmsSender : twilioSmsSender;
-await sender(phone, message);
-```
-
-For CDP server-side SMS sending, use the CDP SDK:
-```ts
-const cdpSmsSender = async (to: string, body: string) => {
-  const cdp = getCdpClient()
-  // CDP server-side SMS API — need to verify this exists in @coinbase/cdp-sdk
-  // If not available, alternative: use Amazon SNS or another provider for +1
-}
-```
-
-**Fallback if CDP has no server-side SMS API:** Use Amazon SNS, which works for US numbers without A2P registration for low volumes. Or: redirect +1 re-auth to a page that re-mounts with `CDPProviderNative` and does the full CDP SMS flow again (heavier UX but no new backend dependency).
+No backend `otp_service.ts` changes were needed.
 
 ### 10. Tests
 
@@ -282,6 +287,6 @@ Step 0 (wallet determinism) must pass before anything else. Backend (1, 7, 8) ca
 
 ## Open Items
 
-1. **CDP server-side SMS API** — Does `@coinbase/cdp-sdk` expose a server-side method to send SMS to a phone number? If not, re-auth for +1 users needs an alternative (Amazon SNS, or redirect to a CDP native SMS page). Investigate before step 9.
+1. ~~**CDP server-side SMS API**~~ — Resolved. Re-auth uses client-side CDP hooks (`signInWithSms`/`verifySmsOTP` in `useSessionGuard.ts`), so no backend SMS routing was needed.
 
 2. **`useGetAccessToken` after native SMS auth** — The hook exists in `@coinbase/cdp-hooks` (confirmed: `export declare const useGetAccessToken: () => { getAccessToken: () => Promise<string | null> }`). Verify it returns a non-null token after `verifySmsOTP` succeeds. Test in step 0 alongside wallet determinism.

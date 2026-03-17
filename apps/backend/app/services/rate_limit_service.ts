@@ -81,6 +81,10 @@ export default class RateLimitService {
    */
   private loginThrottle: Map<string, ThrottleBucket> = new Map()
 
+  /**
+   * Map 6: CDP exchange per-phone throttle
+   * phone (E.164) -> { count, resetAt }
+   */
   private cdpExchangeThrottle: Map<string, ThrottleBucket> = new Map()
 
   /** Interval handles so we can stop them on shutdown */

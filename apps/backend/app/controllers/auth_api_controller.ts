@@ -477,18 +477,12 @@ export default class AuthApiController {
       const token = await jwtService.signToken(canonicalPhone)
       return response.status(200).json({ token, expiresIn: 3600 })
     } catch (error) {
-      // Distinguish CDP auth failures (invalid/expired tokens) from actual server errors.
-      // The CDP SDK throws when validateAccessToken fails — these are auth rejections,
-      // not server errors, and should return 401 so the frontend can offer a retry path.
-      const errMsg = error instanceof Error ? error.message : String(error)
-      const isAuthFailure =
-        errMsg.includes('invalid') ||
-        errMsg.includes('expired') ||
-        errMsg.includes('unauthorized') ||
-        errMsg.includes('401') ||
-        errMsg.includes('UNAUTHENTICATED')
-      if (isAuthFailure) {
-        logger.warn('exchangeCdpToken auth failure: %s', errMsg)
+      // Distinguish CDP auth failures from server errors using HTTP status codes
+      // from the SDK response, not fragile string matching on error messages.
+      const status = (error as Record<string, unknown>)?.status ??
+        (error as Record<string, unknown> & { response?: { status?: number } })?.response?.status
+      if (status === 401 || status === 403) {
+        logger.warn('exchangeCdpToken auth failure (status=%d): %s', status, (error as Error).message)
         return response.status(401).json({ error: 'CDP token invalid or expired' })
       }
       logger.error('exchangeCdpToken error: %o', error)

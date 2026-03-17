@@ -24,8 +24,12 @@ const sharedConfig = {
  */
 export function CDPProviderCustomAuth({ children }: CDPProviderProps) {
   if (!CDP_PROJECT_ID) {
-    console.warn('CDP Project ID not configured. Embedded wallets will not work.');
-    return <>{children}</>;
+    console.error('CDP_PROJECT_ID is not set. Wallet functionality is unavailable.');
+    return (
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4">
+        <div className="text-red-600 text-center">Wallet setup is temporarily unavailable. Please try again later.</div>
+      </div>
+    );
   }
 
   return (
@@ -48,8 +52,12 @@ export function CDPProviderCustomAuth({ children }: CDPProviderProps) {
  */
 export function CDPProviderNative({ children }: CDPProviderProps) {
   if (!CDP_PROJECT_ID) {
-    console.warn('CDP Project ID not configured. Embedded wallets will not work.');
-    return <>{children}</>;
+    console.error('CDP_PROJECT_ID is not set. Wallet functionality is unavailable.');
+    return (
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4">
+        <div className="text-red-600 text-center">Wallet setup is temporarily unavailable. Please try again later.</div>
+      </div>
+    );
   }
 
   return (
