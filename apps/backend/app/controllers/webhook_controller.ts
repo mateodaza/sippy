@@ -73,8 +73,30 @@ export const pendingTransactions = new Map<string, PendingTransaction>()
 export const activeSends = new Set<string>()
 
 const FUND_URL = env.get('FUND_URL', 'https://fund.sippy.lat')
+const FUND_TOKEN_SECRET = env.get('FUND_TOKEN_SECRET', '')
 
+/**
+ * Generate a signed fund URL for a phone number.
+ * If FUND_TOKEN_SECRET is set, generates the token locally (no network dependency).
+ * Otherwise falls back to calling the fund app's API.
+ */
 async function generateFundUrl(phoneNumber: string): Promise<string> {
+  // Local token generation — same algorithm as apps/fund/lib/fund-token.ts
+  if (FUND_TOKEN_SECRET) {
+    try {
+      const { createHmac } = await import('node:crypto')
+      const expiry = Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
+      const payload = `${phoneNumber}|${expiry}`
+      const encoded = Buffer.from(payload).toString('base64url')
+      const signature = createHmac('sha256', FUND_TOKEN_SECRET).update(encoded).digest('base64url')
+      const token = `${encoded}.${signature}`
+      return `${FUND_URL}?t=${token}`
+    } catch (err) {
+      logger.warn('Local fund token generation failed: %o', err)
+    }
+  }
+
+  // Fallback: call fund app API
   try {
     const res = await fetch(`${FUND_URL}/api/fund-token`, {
       method: 'POST',
