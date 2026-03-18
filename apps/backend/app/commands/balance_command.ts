@@ -25,6 +25,7 @@ import {
 } from '#utils/messages'
 import { toUserErrorMessage } from '#utils/errors'
 import { getRefuelService } from '#services/refuel.service'
+import { maskPhone } from '#utils/phone'
 
 export function appendSecurityLimitSuffix(
   limitStatus: { remaining: number; effectiveLimit: number },
@@ -41,7 +42,7 @@ export async function handleBalanceCommand(
   localRate: number | null,
   localCurrency: string | null
 ): Promise<void> {
-  logger.info(`BALANCE command from ${phoneNumber}`)
+  logger.info(`BALANCE command from ${maskPhone(phoneNumber)}`)
 
   try {
     // Check for embedded wallet first (new self-custodial system)
@@ -66,7 +67,7 @@ export async function handleBalanceCommand(
 
     await updateLastActivity(phoneNumber)
 
-    logger.info(`Fetching balance for ${phoneNumber}...`)
+    logger.info(`Fetching balance for ${maskPhone(phoneNumber)}...`)
     const balance = await getUserBalance(phoneNumber)
 
     let ethBalance: string | undefined
@@ -101,7 +102,7 @@ export async function handleBalanceCommand(
 
     await sendTextMessage(phoneNumber, message, lang)
 
-    logger.info(`Balance sent to ${phoneNumber}: ${balance} USD`)
+    logger.info(`Balance sent to ${maskPhone(phoneNumber)}: ${balance} USD`)
   } catch (error) {
     logger.error(`Failed to get balance for ${phoneNumber}: %o`, error)
 
@@ -122,7 +123,7 @@ async function handleEmbeddedBalance(
   localRate: number | null,
   localCurrency: string | null
 ): Promise<void> {
-  logger.info(`Fetching embedded wallet balance for ${phoneNumber}...`)
+  logger.info(`Fetching embedded wallet balance for ${maskPhone(phoneNumber)}...`)
 
   const balance = await getEmbeddedBalance(phoneNumber)
 
@@ -156,5 +157,5 @@ async function handleEmbeddedBalance(
 
   await sendTextMessage(phoneNumber, message, lang)
 
-  logger.info(`Balance sent to ${phoneNumber}: ${balance} USD`)
+  logger.info(`Balance sent to ${maskPhone(phoneNumber)}: ${balance} USD`)
 }

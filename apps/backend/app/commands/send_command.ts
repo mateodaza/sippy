@@ -43,6 +43,7 @@ import { getUserLanguage } from '#services/db'
 import logger from '@adonisjs/core/services/logger'
 import { velocityService } from '#services/velocity_service'
 import { notifyPaymentReceived } from '#services/notification.service'
+import { maskPhone } from '#utils/phone'
 import { createInvite } from '#services/invite.service'
 import {
   formatInviteSentToSender,
@@ -61,7 +62,7 @@ export async function handleSendCommand(
   recipientRate: number | null,
   recipientCurrency: string | null
 ): Promise<boolean> {
-  logger.info(`SEND command: +${fromPhoneNumber} -> +${toPhoneNumber} (${amount} USD)`)
+  logger.info(`SEND command: ${maskPhone(fromPhoneNumber)} -> ${maskPhone(toPhoneNumber)} (${amount} USD)`)
 
   let transferCompleted = false
   try {

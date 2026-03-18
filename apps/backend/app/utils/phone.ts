@@ -118,6 +118,23 @@ export function canonicalizePhone(input: string): string | null {
   return e164
 }
 
+/**
+ * Mask a phone number for logging: keeps country code and last 2 digits.
+ * E.g. "+5215512345678" → "+52*********78", "+15551234567" → "+1********67"
+ */
+export function maskPhone(phone: string): string {
+  if (!phone || phone.length < 6) return '***'
+  if (!phone.startsWith('+')) {
+    const last2 = phone.slice(-2)
+    return `${'*'.repeat(phone.length - 2)}${last2}`
+  }
+  // Detect country code length: +1 is 1 digit, most LATAM codes are 2 digits
+  const ccLen = phone.startsWith('+1') && !phone.startsWith('+1\u2060') ? 1 : 2
+  const prefix = phone.slice(0, 1 + ccLen) // '+' + country code
+  const last2 = phone.slice(-2)
+  return `${prefix}${'*'.repeat(phone.length - prefix.length - 2)}${last2}`
+}
+
 export type SendVerificationMismatch = 'amount' | 'recipient' | 'invalid'
 
 export interface SendVerificationResult {

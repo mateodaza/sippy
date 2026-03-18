@@ -5,6 +5,7 @@ import env from '#start/env'
 import { CdpClient } from '@coinbase/cdp-sdk'
 import { jwtService } from '#services/jwt_service'
 import PhoneRegistry from '#models/phone_registry'
+import { maskPhone } from '#utils/phone'
 import '#types/cdp_auth'
 
 let cdpClient: CdpClient | null = null
@@ -95,7 +96,7 @@ export default class JwtAuthMiddleware {
           // CDP token is required to prove wallet ownership. Without it, an attacker
           // with a valid JWT could register any arbitrary wallet address.
           // See SECURITY_AUDIT.md #5 for context.
-          logger.warn('JWT auth: register-wallet rejected — no CDP token for phone: %s', phoneNumber)
+          logger.warn('JWT auth: register-wallet rejected — no CDP token for phone: %s', maskPhone(phoneNumber))
           return ctx.response.unauthorized({ error: 'Unauthorized' })
         }
 

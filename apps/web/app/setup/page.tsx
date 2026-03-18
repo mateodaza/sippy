@@ -112,7 +112,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       const token = getStoredToken();
       resolveLanguage(null, token, BACKEND_URL)
         .then(resolved => { storeLanguage(resolved); setLang(resolved) })
-        .catch((err: unknown) => { console.debug('language fetch failed:', (err as Error).message) })
+        .catch(() => { /* language fetch failed */ })
     }
   }, [phoneFromUrl]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -135,13 +135,10 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         return;
       }
 
-      console.log('Found existing CDP session, checking state...');
-
       try {
         // Get wallet address from current user
         const smartAccountAddress = currentUser.evmSmartAccounts?.[0] || currentUser.evmAccounts?.[0];
         if (!smartAccountAddress) {
-          console.log('No wallet in session, starting fresh');
           clearToken();
           await signOut();
           setIsCheckingSession(false);
@@ -149,24 +146,27 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         }
 
         setWalletAddress(smartAccountAddress);
-        console.log('Found wallet:', smartAccountAddress);
 
         // Check backend status
         if (BACKEND_URL) {
           const accessToken = getStoredToken();
           if (accessToken) {
             // First ensure wallet is registered (this also triggers refuel)
+            const cdpToken = await getAccessToken().catch((err: unknown) => {
+              console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
+              return null;
+            });
             const registerResponse = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({ walletAddress: smartAccountAddress }),
+              body: JSON.stringify({ walletAddress: smartAccountAddress, ...(cdpToken && { cdpAccessToken: cdpToken }) }),
             });
 
             if (registerResponse.ok) {
-              console.log('Wallet registered/confirmed in backend');
+              // Wallet registered/confirmed
             } else {
               const errText = await registerResponse.text();
               console.error('Wallet registration failed on recovery:', errText);
@@ -186,25 +186,18 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
 
             if (statusResponse.ok) {
               const status = await statusResponse.json();
-              console.log('Backend wallet status:', status);
 
               if (status.hasPermission) {
-                // Already complete
-                console.log('User already has permission, going to done');
                 setStep('done');
               } else if (status.tosAccepted) {
-                // ToS accepted, resume at permission step
-                console.log('ToS accepted, resuming at permission step');
                 setStep('permission');
               } else {
                 // Wallet registered but ToS not accepted — resume at ToS step.
                 // Email step is only shown in the initial fresh flow, not on recovery.
-                console.log('Wallet registered but ToS not accepted, resuming at tos step');
                 setStep('tos');
               }
             } else {
               // wallet-status returned non-OK — resume at tos step (safe default).
-              console.log('Wallet status unavailable, resuming at tos step');
               setStep('tos');
             }
           }
@@ -242,7 +235,6 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         throw new Error('No access token');
       }
 
-      console.log('Ensuring wallet has gas...');
       const response = await fetch(`${BACKEND_URL}/api/ensure-gas`, {
         method: 'POST',
         headers: {
@@ -259,7 +251,6 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       }
 
       const result = await response.json();
-      console.log('Gas status:', result);
 
       if (result.ready) {
         setGasReady(true);
@@ -360,7 +351,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         setLang(phoneLang);
         fetchUserLanguage(token, BACKEND_URL)
           .then(({ language }) => { storeLanguage(language); setLang(language) })
-          .catch((err: unknown) => { console.debug('language fetch failed:', (err as Error).message) });
+          .catch(() => { /* language fetch failed */ });
 
         // After verifySmsOTP, CDP SDK updates its internal state asynchronously.
         // React won't re-render mid-handler, so `currentUser` from the closure is stale.
@@ -380,7 +371,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       setLang(phoneLang);
       fetchUserLanguage(sippyJwt, BACKEND_URL)
         .then(({ language }) => { storeLanguage(language); setLang(language) })
-        .catch((err: unknown) => { console.debug('language fetch failed:', (err as Error).message) });
+        .catch(() => { /* language fetch failed */ });
 
       const { user } = await authenticateWithJWT();
 
@@ -617,19 +608,12 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       }
 
       // First ensure wallet has gas (this will wait for refuel if needed)
-      console.log('Checking gas availability...');
       const hasGas = await ensureGasReady();
       if (!hasGas) {
         // ensureGasReady already set the specific error in state — just bail
         setIsLoading(false);
         return;
       }
-
-      console.log('Creating spend permission for:', {
-        spender: SIPPY_SPENDER_ADDRESS,
-        dailyLimit,
-        network: NETWORK,
-      });
 
       // Create spend permission using CDP SDK
       // This will prompt the user to sign the permission
@@ -641,11 +625,8 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         periodInDays: 1, // Daily limit
       });
 
-      console.log('Spend permission created:', result);
-
       // The userOpHash is NOT the permissionHash - we need to let the backend
       // fetch the actual permissionHash from CDP after the permission is created onchain
-      console.log('Permission userOpHash:', result.userOperationHash);
 
       // Register permission with backend - this MUST succeed for transfers to work
       // Backend will verify and fetch the actual permissionHash from CDP
@@ -688,14 +669,21 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
           try {
             const accessToken = getStoredToken();
             if (accessToken) {
-              await fetch(`${BACKEND_URL}/api/register-wallet`, {
+              const cdpToken = await getAccessToken().catch((err: unknown) => {
+                console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
+                return null;
+              });
+              const regRes = await fetch(`${BACKEND_URL}/api/register-wallet`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                   'Authorization': `Bearer ${accessToken}`,
                 },
-                body: JSON.stringify({ walletAddress }),
+                body: JSON.stringify({ walletAddress, ...(cdpToken && { cdpAccessToken: cdpToken }) }),
               });
+              if (!regRes.ok) {
+                console.error('Wallet re-registration for refuel failed:', regRes.status);
+              }
             }
           } catch (regErr) {
             console.error('Wallet re-registration failed:', regErr);

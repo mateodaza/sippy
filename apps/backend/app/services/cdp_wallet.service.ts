@@ -12,6 +12,7 @@ import { type UserWallet, type SecurityLimits, type TransferResult } from '#type
 import { query } from '#services/db'
 import { registerWalletWithIndexer } from '#services/indexer.service'
 import { getRpcUrl } from '#config/network'
+import { maskPhone } from '#utils/phone'
 
 const CDP_TIMEOUT_MS = 30_000
 
@@ -73,7 +74,7 @@ const SECURITY_LIMITS: SecurityLimits = {
  */
 export async function createUserWallet(phoneNumber: string): Promise<UserWallet> {
   try {
-    logger.info(`Creating CDP wallet for ${phoneNumber}...`)
+    logger.info(`Creating CDP wallet for ${maskPhone(phoneNumber)}...`)
 
     const cdp = getCDPClient()
 
@@ -123,7 +124,7 @@ export async function createUserWallet(phoneNumber: string): Promise<UserWallet>
       ]
     )
 
-    logger.info(`User wallet registered in database for ${phoneNumber}`)
+    logger.info(`User wallet registered in database for ${maskPhone(phoneNumber)}`)
 
     // Register with indexer (fire-and-forget — never blocks wallet creation)
     registerWalletWithIndexer(walletAddress, phoneNumber).catch((err) => logger.warn('Indexer registration failed (non-blocking): %o', err))
@@ -187,7 +188,7 @@ export async function updateLastActivity(phoneNumber: string): Promise<boolean> 
     let dailySpent = userWallet.dailySpent
     if (userWallet.lastResetDate !== today) {
       dailySpent = 0
-      logger.info(`Daily spending reset for ${phoneNumber}`)
+      logger.info(`Daily spending reset for ${maskPhone(phoneNumber)}`)
     }
 
     let updateResult = await query(
@@ -309,7 +310,7 @@ export async function getUserBalance(phoneNumber: string): Promise<number> {
   }
 
   try {
-    logger.info(`Getting USDC balance for ${phoneNumber}...`)
+    logger.info(`Getting USDC balance for ${maskPhone(phoneNumber)}...`)
 
     // Use ethers to check USDC balance directly
     const provider = new ethers.providers.JsonRpcProvider(getRpcUrl())
@@ -340,7 +341,7 @@ export async function sendUSDC(
   }
 
   try {
-    logger.info(`Sending ${amount} USDC from +${fromPhoneNumber} to ${toAddress}...`)
+    logger.info(`Sending ${amount} USDC from ${maskPhone(fromPhoneNumber)} to ${toAddress}...`)
 
     const cdp = getCDPClient()
 
@@ -383,10 +384,17 @@ export async function sendUSDC(
     )
     // SH-003 fallback: retry with bare-digit format. Remove after backfill confirmed.
     if ((updateResult.rowCount ?? 0) === 0 && fromPhoneNumber.startsWith('+')) {
-      await query(
+      const fallbackResult = await query(
         'UPDATE phone_registry SET daily_spent = $1, last_activity = $2 WHERE phone_number = $3',
         [newDailySpent, Date.now(), fromPhoneNumber.slice(1)]
       )
+      if ((fallbackResult.rowCount ?? 0) === 0) {
+        const maskedPhone = maskPhone(fromPhoneNumber)
+        logger.error({ alert: 'spend-tracking-failure', phone: maskedPhone, amount }, 'Daily spend update failed after successful transfer — spend limits may not advance')
+      }
+    } else if ((updateResult.rowCount ?? 0) === 0) {
+      const maskedPhone = maskPhone(fromPhoneNumber)
+      logger.error({ alert: 'spend-tracking-failure', phone: maskedPhone, amount }, 'Daily spend update failed after successful transfer — spend limits may not advance')
     }
 
     return {

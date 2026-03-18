@@ -8,6 +8,7 @@ import env from '#start/env'
 import logger from '@adonisjs/core/services/logger'
 import { type WhatsAppAPIResponse, type WhatsAppAPIError } from '#types/index'
 import { sanitizeOutboundMessage } from '#utils/sanitize'
+import { maskPhone } from '#utils/phone'
 
 const WHATSAPP_API_URL = `https://graph.facebook.com/${env.get('WHATSAPP_API_VERSION', 'v21.0')}`
 const PHONE_NUMBER_ID = env.get('WHATSAPP_PHONE_NUMBER_ID')
@@ -33,7 +34,7 @@ export async function sendTextMessage(
   const normalizedTo = to.startsWith('+') ? to.slice(1) : to
   if (sanitized.violations.length > 0) {
     logger.warn(
-      `Sanitizer [${sanitized.blocked ? 'BLOCKED' : 'CLEANED'}] to +${normalizedTo}: ${sanitized.violations.join(', ')}`
+      `Sanitizer [${sanitized.blocked ? 'BLOCKED' : 'CLEANED'}] to ${maskPhone(`+${normalizedTo}`)}: ${sanitized.violations.join(', ')}`
     )
     if (sanitized.blocked) {
       logger.warn(`  Original length: ${text.length} chars`)
@@ -41,7 +42,7 @@ export async function sendTextMessage(
   }
   const body = sanitized.text
 
-  logger.info(`Sending message to +${normalizedTo}: "${body}"`)
+  logger.info(`Sending message to ${maskPhone(`+${normalizedTo}`)}: "${body}"`)
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -155,11 +156,11 @@ export async function sendButtonMessage(
   // Normalize: accept E.164 with or without '+'; always send bare international digits to Meta
   const normalizedTo = to.startsWith('+') ? to.slice(1) : to
   if (sanitized.violations.length > 0) {
-    logger.warn(`Sanitizer [button] to +${normalizedTo}: ${sanitized.violations.join(', ')}`)
+    logger.warn(`Sanitizer [button] to ${maskPhone(`+${normalizedTo}`)}: ${sanitized.violations.join(', ')}`)
   }
   const cleanBody = sanitized.text
 
-  logger.info(`Sending button message to +${normalizedTo}`)
+  logger.info(`Sending button message to ${maskPhone(`+${normalizedTo}`)}`)
 
   try {
     const response = await fetch(`${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`, {
@@ -232,7 +233,7 @@ export async function sendTemplateMessage(
 ): Promise<WhatsAppAPIResponse | null> {
   const normalizedTo = to.startsWith('+') ? to.slice(1) : to
 
-  logger.info(`Sending template "${templateName}" (${languageCode}) to +${normalizedTo}`)
+  logger.info(`Sending template "${templateName}" (${languageCode}) to ${maskPhone(`+${normalizedTo}`)}`)
 
   try {
     const response = await fetch(`${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`, {

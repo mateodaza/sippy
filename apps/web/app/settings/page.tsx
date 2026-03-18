@@ -426,8 +426,6 @@ function SettingsContent() {
       }
 
       // STEP 1: Onchain revoke via CDP SDK.
-      console.log('Finding spend permission to revoke...');
-
       // refetch() returns void on CDP hooks, so we trigger it for side-effect.
       // permissionsData in this closure is stale after refetch because React
       // state updates are async. We read from permissionsDataRef instead,
@@ -458,8 +456,6 @@ function SettingsContent() {
       if (!sippyPermission) {
         throw new Error('No active Sippy permission found to revoke.');
       }
-
-      console.log('Revoking spend permission:', sippyPermission.permissionHash);
 
       await revokeSpendPermission({
         network: NETWORK as 'arbitrum',
@@ -538,8 +534,6 @@ function SettingsContent() {
         allowance: parseUnits(clampedLimit, 6), // USDC has 6 decimals
         periodInDays: 1, // Daily limit
       });
-
-      console.log('Spend permission created:', result);
 
       // Register permission with backend - this MUST succeed for transfers to work
       if (BACKEND_URL) {
@@ -1160,7 +1154,7 @@ function SettingsContent() {
             </div>
 
             <button
-              onClick={handleChangeLimit}
+              onClick={() => handleChangeLimit()}
               disabled={
                 permissionStatus === 'loading' ||
                 newLimit === walletStatus.dailyLimit?.toString()
@@ -1295,7 +1289,7 @@ function SettingsContent() {
             </div>
 
             <button
-              onClick={handleChangeLimit}
+              onClick={() => handleChangeLimit()}
               disabled={permissionStatus === 'loading'}
               className='w-full py-3 bg-brand-crypto text-white rounded-lg font-semibold hover:bg-brand-crypto/90 disabled:opacity-50 disabled:cursor-not-allowed'
             >

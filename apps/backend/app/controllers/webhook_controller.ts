@@ -65,7 +65,7 @@ import { handleSendCommand } from '#commands/send_command'
 import { generateResponse } from '#services/llm.service'
 import { type SetupStatus, getSetupStatus } from '#services/embedded_wallet.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
-import { canonicalizePhone } from '#utils/phone'
+import { canonicalizePhone, maskPhone } from '#utils/phone'
 import { getIsPaused } from '#controllers/admin/moderation_controller'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { getDialect, dialectHint, type Dialect } from '#utils/dialect'
@@ -153,7 +153,7 @@ function clearPendingIfUnrelated(
   if (command.command !== 'confirm' && command.command !== 'cancel') {
     if (pendingTxs.has(from)) {
       pendingTxs.delete(from)
-      logger.info('Pending tx cancelled due to new command from %s', from)
+      logger.info('Pending tx cancelled due to new command from %s', maskPhone(from))
     }
   }
   // Clear partial sends on any non-send command (user moved on)
@@ -779,7 +779,7 @@ export default class WebhookController {
 
     // ── Spam protection ────────────────────────────────────────────────
     if (rateLimitService.isSpamming(from)) {
-      logger.warn('Spam detected from %s, ignoring', from)
+      logger.warn('Spam detected from %s, ignoring', maskPhone(from))
       // Mark as processed so Meta doesn't retry spam
       rateLimitService.markProcessed(messageId)
       return
@@ -803,14 +803,14 @@ export default class WebhookController {
       return
     }
 
-    logger.info('Message from %s: "%s"', from, text)
+    logger.info('Message from %s: "%s"', maskPhone(from), text)
 
     // Mark as read (non-blocking, best-effort)
     await markAsRead(messageId)
 
     // ── Non-text messages (image, audio, sticker, video, location) ────
     if (!text && message.type && message.type !== 'text' && message.type !== 'interactive') {
-      logger.info('Non-text message (%s) from %s', message.type, from)
+      logger.info('Non-text message (%s) from %s', message.type, maskPhone(from))
       const mediaLang = (await getUserLanguage(from)) || 'en'
       await sendTextMessage(from, formatTextOnlyMessage(mediaLang), mediaLang)
       rateLimitService.markProcessed(messageId)
@@ -828,7 +828,7 @@ export default class WebhookController {
       const resolved = resolvePartialSend(partial, text)
       if (resolved) {
         partialSends.delete(from)
-        logger.info('Partial send resolved for %s: amount=%s recipient=%s', from, resolved.amount, resolved.recipient)
+        logger.info('Partial send resolved for %s: amount=%s recipient=%s', maskPhone(from), resolved.amount, maskPhone(resolved.recipient))
         // Synthesize a complete send command and skip normal parsing
         const command: ParsedCommand = {
           command: 'send',

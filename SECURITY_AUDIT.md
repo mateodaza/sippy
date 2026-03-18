@@ -1,67 +1,81 @@
-# Security Audit — Post OTP Fallback Implementation
+# Security Audit — Sippy
 
-Date: 2026-03-17
+Date: 2026-03-18
+Scope: Full backend + frontend audit
 
-## Original findings, corrected
+---
 
-### Confirmed vulnerabilities
+## Part 1 — Original findings, corrected
+
+### Confirmed vulnerabilities (now fixed)
 
 **#1 Public phone/wallet enumeration (HIGH)**
-`GET /resolve-phone` and `GET /resolve-address` are public with IP throttling only. Returns exact phone↔wallet mappings. Anyone can enumerate the user base.
+`GET /resolve-phone` and `GET /resolve-address` were public with IP throttling only. `byAddress` returned full phone numbers regardless of privacy setting.
 
 **#3 Public profile leaks privacy preference (MEDIUM)**
-`GET /api/profile` is public and returned `phoneVisible` in the response, defeating the privacy setting.
+`GET /api/profile` returned `phoneVisible` in the response body, defeating the privacy setting.
 
 **#4 No RBAC in admin routes (MEDIUM)**
-All admin routes guarded by session auth only. Any authenticated backoffice user could hit `PUT /roles/:id`, `POST /pause`, `POST /resume`. Self-elevation risk is limited (only admin/viewer roles exist), but the authorization gap was real.
+All admin write routes guarded by session auth only. Any authenticated backoffice user could modify roles, block users, or pause the system.
 
 **#5 JWT middleware trusts request body for wallet on first registration (MEDIUM)**
-jwt_auth_middleware.ts accepted any syntactically valid `walletAddress` from the request body if no DB record existed. No CDP ownership proof on that path.
+jwt_auth_middleware.ts accepted any syntactically valid `walletAddress` from the request body if no DB record existed. No CDP ownership proof.
+
+**#9 Re-auth broken for +1 users (HIGH — functional)**
+NANP users locked out after JWT expiry because re-auth routed through Twilio which can't deliver to +1 (no A2P 10DLC).
+
+**#10 exchange-cdp-token had no per-user rate limiting (MEDIUM)**
+`POST /api/auth/exchange-cdp-token` used only IP throttle. No per-phone rate limiting.
+
+**#12 PII in production logs (HIGH)**
+20+ locations across backend logged full phone numbers at INFO/WARN level in plaintext.
+
+**#13 Silent spend tracking failure (HIGH)**
+On-chain transfer succeeded but daily spend DB update could return 0 rows silently, allowing users to exceed daily limits.
+
+**#16 Phone echoed in 404 response (MEDIUM)**
+`byPhone` returned canonicalized phone in the 404 error body, aiding enumeration scripts.
+
+**#17 Console.log in frontend (MEDIUM)**
+15+ `console.log` calls in setup/settings pages exposed wallet addresses and operational data in browser DevTools.
+
+**#19 Onramp error body leaked to client (MEDIUM)**
+Coinbase API error details forwarded directly to the browser in the fund app.
 
 ### Downgraded / removed
 
 **#2 Webhook signature verification (was P0 → removed)**
-False positive. `WHATSAPP_APP_SECRET` is required by env schema (env.ts:16) and startup hard-fails without it (rate_limit_provider.ts:19). The `if (appSecret)` branch in webhook_controller.ts is dead code in practice — not an active vulnerability.
+False positive. `WHATSAPP_APP_SECRET` is required by env schema and startup hard-fails without it.
 
-**#6 Notify-fund auth (was MEDIUM → LOW)**
-Uses shared header secret with `timingSafeEqual`. Not unauthenticated. Replay protection and rotation would harden it, but functional server-to-server auth. Not broken.
+**#6 Notify-fund auth (LOW)**
+Shared header secret with `timingSafeEqual`. Functional server-to-server auth.
 
-**#7 Rate limiting on authenticated resolve (was MEDIUM → LOW)**
-Per-user throttle exists in embedded_wallet_controller.ts backed by rate_limit_service.ts. IP throttling on public resolver. Limits are enforced. Fair criticism: no anomaly detection or exponential backoff on enumeration patterns.
+**#7 Rate limiting on authenticated resolve (LOW)**
+Per-user throttle and IP throttling are enforced. No anomaly detection.
 
 **#8 Debug endpoints in test mode (LOW)**
-True but operational. Only matters if a test environment is network-reachable.
-
-### New findings from OTP fallback implementation
-
-**#9 Re-auth was broken for +1 users (HIGH — functional)**
-When a NANP user's JWT expired, `useSessionGuard` triggered re-auth via `POST /api/auth/send-otp`, which always sent via Twilio. Twilio cannot deliver to +1 numbers (no A2P 10DLC) — so +1 users were locked out after JWT expiry.
-
-**#10 exchange-cdp-token had no per-user rate limiting (MEDIUM)**
-`POST /api/auth/exchange-cdp-token` used only IP throttle. No per-phone rate limiting after extracting identity from the CDP token.
+Only exposed when `app.inDev || app.inTest`.
 
 **#11 Error classification in exchange-cdp-token uses string matching (LOW)**
-Auth failure detection relies on substring matching against error messages. Fragile if CDP SDK changes error wording. Not a direct vulnerability.
+Fragile if CDP SDK changes error wording. Not a direct vulnerability.
 
 ---
 
-## Fixes applied
+## Part 2 — Fixes applied
 
 ### #1 — Resolve endpoint privacy (HIGH → mitigated)
 
 | | Before | After |
 |---|--------|-------|
 | Routes | Public, no privacy checks | Public, IP-throttled (unchanged URLs) |
-| `byAddress` response | Always returns full phone | Returns `phone: null` when user set `phoneVisible: false` |
-| `byPhone` response | Returns wallet address | Unchanged (wallet addresses are public on-chain) |
+| `byAddress` response | Always returns full phone | Returns `phone: null` when `phoneVisible: false` |
+| `byPhone` response | Returns wallet address + phone | Returns wallet address only (phone removed from 404) |
 
 **Files:** resolve_controller.ts, routes.ts
 
-**Trade-off:** Endpoints remain public because server-to-server callers (Next.js API routes, fund app) don't have JWTs. Privacy is enforced at the controller level instead. Users who set `phoneVisible: false` are protected from reverse lookup. Users who haven't changed the default remain discoverable — this matches the product's phone-based payment model.
+**Trade-off:** Endpoints remain public because server-to-server callers (Next.js API routes, fund app) don't have JWTs. Privacy is enforced at the controller level. The `byPhone` success response still includes `phone: canonicalPhone` because callers (fund flow, Next.js proxy) depend on it for display.
 
-**Residual risk:** `byPhone` still confirms whether a phone number has a Sippy wallet. This is inherent to the product's design (send USDC to a phone number). IP throttle (10 req/min) limits bulk enumeration.
-
----
+**Residual risk:** `byPhone` confirms whether a phone number has a Sippy wallet. Inherent to the product's phone-based payment model. IP throttle limits bulk enumeration.
 
 ### #3 — Profile privacy (MEDIUM → fixed)
 
@@ -70,10 +84,6 @@ Auth failure detection relies on substring matching against error messages. Frag
 | Response body | `{ address, phone, phoneVisible }` | `{ address, phone }` where phone is `null` when hidden |
 
 **Files:** embedded_wallet_controller.ts
-
-The `phoneVisible` preference is no longer leaked. Phone is masked when the user opted out. Public profile pages still load (endpoint remains public at `/api/profile`).
-
----
 
 ### #4 — Admin RBAC (MEDIUM → fixed)
 
@@ -87,46 +97,34 @@ The `phoneVisible` preference is no longer leaked. Phone is masked when the user
 
 **Files:** admin_role_middleware.ts (new), kernel.ts, routes.ts, roles_controller.ts
 
-New `adminRole` middleware checks `user.role` before allowing write operations. Viewers can see dashboards, users, analytics, and roles — but cannot modify anything. Admins cannot change their own role.
-
----
-
-### #5 — Wallet ownership verification (MEDIUM → partially fixed)
+### #5 — Wallet ownership verification (MEDIUM → fixed)
 
 | | Before | After |
 |---|--------|-------|
-| First-time registration | Accepts any wallet address from request body | Validates wallet via CDP access token when provided |
+| First-time registration | Accepts any wallet address from request body | Requires CDP access token proving wallet ownership |
 | CDP token present | N/A | Wallet must exist in `endUser.evmSmartAccounts` |
-| CDP token absent | Accepted blindly | Accepted with warning log |
+| CDP token absent | Accepted blindly | Rejected with 401 |
 | Returning users | DB lookup (unchanged) | DB lookup (unchanged) |
 
 **Files:** jwt_auth_middleware.ts, setup/page.tsx
 
-**Why graceful, not strict:** The frontend sends `cdpAccessToken` alongside `walletAddress` for first-time registration. However, `getAccessToken()` from `@coinbase/cdp-hooks` may not return a usable token after `authenticateWithJWT()` (custom JWT auth) — only confirmed to work after CDP native SMS auth (`verifySmsOTP`). Making the check mandatory could break international (Twilio) user onboarding.
+All register-wallet callers now send `cdpAccessToken`:
+- `handleCdpSmsVerify` (Twilio OTP verify flow) — sends cdpAccessToken ✓
+- `handleAwaitWallet` (CDP SMS await-wallet flow) — sends cdpAccessToken ✓
+- `checkExistingSession` (session recovery) — sends cdpAccessToken when available ✓
+- Gas error retry in `createSpendPermission` catch — sends cdpAccessToken when available ✓
 
-**Current behavior:**
-- CDP token provided + wallet matches → allowed (verified)
-- CDP token provided + wallet doesn't match → rejected (401)
-- CDP token provided + validation fails → rejected (401)
-- CDP token absent → allowed with warning log (unverified, old behavior)
-
-**Hardening path:** Test `getAccessToken()` after `authenticateWithJWT()` in both NANP and international flows. If it returns a valid token in both cases, change the `else` branch from warn-and-allow to reject. The warning logs will show how often registrations happen without CDP proof — if the count is zero, it's safe to make the check mandatory.
-
----
+For the recovery and retry paths, cdpAccessToken is optional: returning users hit Tier 1 (DB lookup) and skip the CDP check entirely. The cdpAccessToken is a belt-and-suspenders for the edge case where a new user's first register-wallet failed and they reload.
 
 ### #9 — NANP re-auth (HIGH → fixed)
 
 | | Before | After |
 |---|--------|-------|
-| +1 re-auth send OTP | Twilio (fails — no A2P 10DLC) | CDP native SMS via `signInWithSms` |
+| +1 re-auth send OTP | Twilio (fails) | CDP native SMS via `signInWithSms` |
 | +1 re-auth verify OTP | N/A (OTP never arrives) | CDP `verifySmsOTP` → `getAccessToken` → `exchange-cdp-token` → Sippy JWT |
 | International re-auth | Twilio (unchanged) | Twilio (unchanged) |
 
 **Files:** useSessionGuard.ts
-
-Re-auth now detects NANP phones via `isNANP()` and routes through CDP native SMS instead of the Twilio backend. The `exchange-cdp-token` endpoint converts the CDP access token into a Sippy JWT. Both flows converge at `storeToken` → `authenticateWithJWT()` → session restored.
-
----
 
 ### #10 — Exchange rate limit (MEDIUM → fixed)
 
@@ -136,37 +134,129 @@ Re-auth now detects NANP phones via `isNANP()` and routes through CDP native SMS
 
 **Files:** rate_limit_service.ts, auth_api_controller.ts
 
-New `cdpExchangeThrottle` map in rate limit service. After extracting and canonicalizing the phone from the CDP token, the endpoint checks the per-phone limit before issuing a Sippy JWT. Returns 429 with `Retry-After` header when exceeded.
+### #12 — PII masked in logs (HIGH → fixed)
+
+| | Before | After |
+|---|--------|-------|
+| Phone in INFO/WARN logs | Full plaintext (`+573001234567`) | Masked (`+57********67`) |
+| Phone in ERROR logs | Full plaintext | Full plaintext (kept for debugging) |
+| Console.error in otp_service | Used `console.error` with phone | Uses `logger.error` (structured) |
+
+**Files:** phone.ts (new `maskPhone` utility), embedded_wallet_controller.ts, cdp_wallet.service.ts, embedded_wallet.service.ts, notification.service.ts, notify_controller.ts, resolve_controller.ts, balance_command.ts, send_command.ts, otp_service.ts, jwt_auth_middleware.ts, whatsapp.service.ts, webhook_controller.ts
+
+### #13 — Spend tracking failure alerting (HIGH → fixed)
+
+| | Before | After |
+|---|--------|-------|
+| Both DB updates return 0 rows | Silent success | `logger.error({ alert: 'spend-tracking-failure', ... })` |
+| Transfer result | Returned to user (correct) | Returned to user (unchanged) |
+
+**Files:** cdp_wallet.service.ts, embedded_wallet.service.ts
+
+The structured `alert` tag allows monitoring systems to trigger on spend tracking failures without parsing log messages.
+
+### #16 — Phone removed from 404 response (MEDIUM → fixed)
+
+| | Before | After |
+|---|--------|-------|
+| 404 body | `{ error, message, phone, whatsappLink }` | `{ error, message, whatsappLink }` |
+
+**Files:** resolve_controller.ts
+
+### #17 — Console.log removed from frontend (MEDIUM → fixed)
+
+| | Before | After |
+|---|--------|-------|
+| setup/page.tsx | 16 `console.log` + 3 `console.debug` | 0 (all `console.error` preserved) |
+| settings/page.tsx | 4 `console.log` | 0 |
+
+**Files:** setup/page.tsx, settings/page.tsx
+
+### #19 — Onramp error body hidden (MEDIUM → fixed)
+
+| | Before | After |
+|---|--------|-------|
+| Error response to client | `{ error, detail: errorBody, status }` | `{ error: 'Failed to generate onramp token' }` |
+| Server-side logging | `console.error` with full details | Unchanged (kept for debugging) |
+
+**Files:** onramp-token/route.ts
 
 ---
 
-## Final status
+## Part 3 — Remaining items
 
-| # | Issue | Severity | Status | Residual risk |
-|---|-------|----------|--------|---------------|
-| 1 | Resolve endpoint enumeration | HIGH | Mitigated | `byPhone` still confirms user existence; `byAddress` respects `phoneVisible` |
-| 9 | NANP re-auth broken | HIGH | Fixed | None |
-| 5 | Wallet ownership on registration | MEDIUM | Partially fixed | Graceful mode: logs but allows unverified registrations. Needs testing to harden |
-| 4 | Admin RBAC | MEDIUM | Fixed | None |
-| 3 | Profile privacy leak | MEDIUM | Fixed | None |
-| 10 | Exchange rate limit | MEDIUM | Fixed | None |
-| 6 | Notify-fund replay | LOW | Accepted | Shared secret with timing-safe compare. Hardening: add nonce/timestamp |
-| 7 | Enumeration anomaly detection | LOW | Accepted | Throttles enforced. Hardening: pattern-based detection |
-| 11 | Fragile error classification | LOW | Accepted | Works today. Hardening: use CDP SDK error codes if available |
-| 8 | Debug endpoints in test | LOW | Accepted | Only if test env is network-reachable |
+### Accepted risks
+
+| # | Issue | Severity | Notes |
+|---|-------|----------|-------|
+| 14 | JWT in localStorage | HIGH | Accepted SPA trade-off. 1h expiry limits exposure. Hardening: migrate to httpOnly cookies |
+| 15 | JWT missing `aud` claim | MEDIUM | Single-service today. Add `.setAudience('sippy-api')` if multi-service |
+| 18 | AdminRole middleware only handles `admin` case | MEDIUM | Only `admin` used today. Generalize if `viewer`-restricted routes added |
+| 6 | Notify-fund replay | LOW | Shared secret + timing-safe. Hardening: add nonce/timestamp |
+| 7 | Enumeration anomaly detection | LOW | Throttles enforced. Hardening: pattern-based detection |
+| 8 | Debug endpoints in test | LOW | Only if test env is network-reachable |
+| 11 | Fragile error classification | LOW | Works today. Use CDP SDK error codes if available |
+| 20 | Language cookie SameSite=Lax | LOW | Non-sensitive cookie |
+| 21 | No CSRF on Next.js POST endpoints | LOW | Server-to-server proxies, not user-facing forms |
+| 22 | In-memory concurrency guard | LOW | Single-process deployment. Breaks if multi-process |
+| 23 | Rate limit map race conditions | LOW | Theoretical — single-threaded Node event loop |
+| 24 | Missing pagination validation | LOW | Negative page values cause empty results, not errors |
+
+---
+
+## Part 4 — Final status
+
+| # | Issue | Severity | Status |
+|---|-------|----------|--------|
+| 1 | Resolve enumeration | HIGH | **Mitigated** — `byAddress` respects privacy; `byPhone` inherent to product |
+| 9 | NANP re-auth broken | HIGH | **Fixed** |
+| 12 | PII in production logs | HIGH | **Fixed** — `maskPhone()` across 13 files |
+| 13 | Silent spend tracking failure | HIGH | **Fixed** — structured error alert |
+| 14 | JWT in localStorage | HIGH | **Accepted** |
+| 5 | Wallet ownership on registration | MEDIUM | **Fixed** — CDP token required |
+| 4 | Admin RBAC | MEDIUM | **Fixed** |
+| 3 | Profile privacy leak | MEDIUM | **Fixed** |
+| 10 | Exchange rate limit | MEDIUM | **Fixed** |
+| 15 | JWT missing `aud` claim | MEDIUM | **Accepted** |
+| 16 | Phone in 404 response | MEDIUM | **Fixed** |
+| 17 | Console.log in frontend | MEDIUM | **Fixed** |
+| 18 | AdminRole middleware gap | MEDIUM | **Accepted** |
+| 19 | Onramp error body leak | MEDIUM | **Fixed** |
+| 6-8, 11, 20-24 | Hardening items | LOW | **Accepted** |
+
+**Fixed: 12 issues** | **Mitigated: 1** | **Accepted: 11** (all LOW or architecture trade-offs)
+
+---
 
 ## Files changed
 
 ```
-apps/backend/app/controllers/admin/roles_controller.ts    — self-role modification block
-apps/backend/app/controllers/auth_api_controller.ts       — per-phone rate limit on exchange-cdp-token
-apps/backend/app/controllers/embedded_wallet_controller.ts — profile privacy fix
-apps/backend/app/controllers/resolve_controller.ts        — byAddress phoneVisible check
-apps/backend/app/middleware/admin_role_middleware.ts       — new RBAC middleware
-apps/backend/app/middleware/jwt_auth_middleware.ts         — CDP wallet ownership verification
-apps/backend/app/services/rate_limit_service.ts           — cdpExchangeThrottle map
-apps/backend/start/kernel.ts                              — adminRole middleware registration
-apps/backend/start/routes.ts                              — RBAC on admin write routes
-apps/web/app/setup/page.tsx                               — send cdpAccessToken with register-wallet
-apps/web/lib/useSessionGuard.ts                           — NANP re-auth via CDP native SMS
+Backend:
+  app/utils/phone.ts                              — maskPhone() utility
+  app/controllers/embedded_wallet_controller.ts    — profile privacy + masked logs
+  app/controllers/resolve_controller.ts            — byAddress privacy, phone removed from 404, masked logs
+  app/controllers/notify_controller.ts             — masked logs
+  app/controllers/webhook_controller.ts            — masked logs
+  app/controllers/admin/roles_controller.ts        — self-role modification block
+  app/controllers/auth_api_controller.ts           — per-phone rate limit on exchange-cdp-token
+  app/middleware/admin_role_middleware.ts           — new RBAC middleware
+  app/middleware/jwt_auth_middleware.ts             — CDP wallet ownership verification + masked logs
+  app/services/cdp_wallet.service.ts               — spend tracking alert + masked logs
+  app/services/embedded_wallet.service.ts          — spend tracking alert + masked logs
+  app/services/notification.service.ts             — masked logs
+  app/services/otp_service.ts                      — console.error → logger.error
+  app/services/rate_limit_service.ts               — cdpExchangeThrottle map
+  app/services/whatsapp.service.ts                 — masked logs
+  app/commands/balance_command.ts                  — masked logs
+  app/commands/send_command.ts                     — masked logs
+  start/kernel.ts                                  — adminRole middleware registration
+  start/routes.ts                                  — RBAC on admin write routes
+
+Frontend:
+  apps/web/app/setup/page.tsx                      — cdpAccessToken in register-wallet, console.log removed
+  apps/web/app/settings/page.tsx                   — console.log removed
+  apps/web/lib/useSessionGuard.ts                  — NANP re-auth via CDP native SMS
+
+Fund:
+  apps/fund/app/api/onramp-token/route.ts          — generic error response to client
 ```

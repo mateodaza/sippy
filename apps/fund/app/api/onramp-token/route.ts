@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       const errorBody = await response.text();
       console.error('Coinbase Onramp token error:', response.status, response.statusText, errorBody);
       return NextResponse.json(
-        { error: 'Failed to generate onramp token', detail: errorBody, status: response.status },
+        { error: 'Failed to generate onramp token' },
         { status: 502 }
       );
     }

@@ -14,6 +14,16 @@ import logger from '@adonisjs/core/services/logger'
 import { CdpClient } from '@coinbase/cdp-sdk'
 import { ethers } from 'ethers'
 import { query } from '#services/db'
+import { maskPhone } from '#utils/phone'
+import {
+  NETWORK,
+  SIPPY_SPENDER_ADDRESS,
+  USDC_DECIMALS,
+  getRpcUrl,
+  getUsdcAddress,
+} from '#config/network'
+import { getRefuelService } from '#services/refuel.service'
+import { type TransferResult } from '#types/index'
 
 /**
  * Compatibility helper: queries phone_registry with canonical phone first,
@@ -33,15 +43,6 @@ async function lookupByPhone(phoneNumber: string): Promise<{ rows: any[] }> {
     [phoneNumber.slice(1)]
   )
 }
-import {
-  NETWORK,
-  SIPPY_SPENDER_ADDRESS,
-  USDC_DECIMALS,
-  getRpcUrl,
-  getUsdcAddress,
-} from '#config/network'
-import { getRefuelService } from '#services/refuel.service'
-import { type TransferResult } from '#types/index'
 
 // SpendPermissionManager contract address (same on all supported networks)
 const SPEND_PERMISSION_MANAGER = '0xf85210B21cC50302F477BA56686d2019dC9b67Ad'
@@ -171,7 +172,7 @@ export async function getEmbeddedBalance(phoneNumber: string): Promise<number> {
   }
 
   try {
-    logger.info(`Getting USDC balance for ${phoneNumber}...`)
+    logger.info(`Getting USDC balance for ${maskPhone(phoneNumber)}...`)
 
     const provider = new ethers.providers.JsonRpcProvider(getRpcUrl())
     const usdcContract = new ethers.Contract(getUsdcAddress(), USDC_ABI, provider)
@@ -214,7 +215,7 @@ export async function sendWithSpendPermission(
 
   try {
     logger.info(
-      `Sending ${amount} USDC from +${fromPhoneNumber} to ${toAddress} (via spend permission)...`
+      `Sending ${amount} USDC from ${maskPhone(fromPhoneNumber)} to ${toAddress} (via spend permission)...`
     )
 
     const cdp = getCdpClient()
@@ -387,12 +388,19 @@ export async function sendWithSpendPermission(
 
     // SH-003 transition fallback: retry with bare-digit format
     if (updateResult.rowCount === 0 && fromPhoneNumber.startsWith('+')) {
-      await query(
+      const fallbackResult = await query(
         `UPDATE phone_registry
          SET last_activity = $1, daily_spent = $2, last_reset_date = $3
          WHERE phone_number = $4`,
         [Date.now(), newDailySpent, today, fromPhoneNumber.slice(1)]
       )
+      if ((fallbackResult.rowCount ?? 0) === 0) {
+        const maskedPhone = maskPhone(fromPhoneNumber)
+        logger.error({ alert: 'spend-tracking-failure', phone: maskedPhone, amount }, 'Daily spend update failed after successful transfer — spend limits may not advance')
+      }
+    } else if (updateResult.rowCount === 0) {
+      const maskedPhone = maskPhone(fromPhoneNumber)
+      logger.error({ alert: 'spend-tracking-failure', phone: maskedPhone, amount }, 'Daily spend update failed after successful transfer — spend limits may not advance')
     }
 
     // Get remaining allowance after the transfer

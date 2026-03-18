@@ -30,7 +30,7 @@ import { NETWORK, USDC_ADDRESSES, USDC_DECIMALS } from '#config/network'
 import UserPreference from '#models/user_preference'
 import { emailService } from '#services/email_service'
 import { DateTime } from 'luxon'
-import { canonicalizePhone } from '#utils/phone'
+import { canonicalizePhone, maskPhone } from '#utils/phone'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { velocityService } from '#services/velocity_service'
 import { checkAndNotifySender } from '#services/invite.service'
@@ -68,7 +68,7 @@ export default class EmbeddedWalletController {
         return response.status(400).json({ error: 'Invalid phone number' })
       }
 
-      logger.info(`Registering embedded wallet for ${canonicalPhone}: ${walletAddress}`)
+      logger.info(`Registering embedded wallet for ${maskPhone(canonicalPhone)}: ${walletAddress}`)
 
       // Compatibility: if a bare-digit row exists (pre-SH-003), update it in place to
       // avoid creating a duplicate row (ON CONFLICT won't match bare-digit vs canonical key).
@@ -104,7 +104,7 @@ export default class EmbeddedWalletController {
         )
       }
 
-      logger.info(`Embedded wallet registered for ${canonicalPhone}`)
+      logger.info(`Embedded wallet registered for ${maskPhone(canonicalPhone)}`)
 
       // Notify any senders who invited this user
       try {
@@ -155,7 +155,7 @@ export default class EmbeddedWalletController {
       const { phoneNumber, walletAddress } = cdpUser!
       const { dailyLimit } = request.body()
 
-      logger.info(`Registering spend permission for ${phoneNumber}`)
+      logger.info(`Registering spend permission for ${maskPhone(phoneNumber)}`)
       logger.info(`   Wallet: ${walletAddress}`)
       logger.info(`   Daily limit: $${dailyLimit}`)
 
@@ -250,7 +250,7 @@ export default class EmbeddedWalletController {
       }
 
       logger.info(
-        `Spend permission registered for ${canonicalPhone} with $${onchainAllowance}/day limit`
+        `Spend permission registered for ${maskPhone(canonicalPhone)} with $${onchainAllowance}/day limit`
       )
 
       return response.json({ success: true, permissionHash, dailyLimit: onchainAllowance })
@@ -286,7 +286,7 @@ export default class EmbeddedWalletController {
         }
       }
 
-      logger.info(`Revoking spend permission for ${dbPhone}`)
+      logger.info(`Revoking spend permission for ${maskPhone(dbPhone)}`)
 
       // Try UPDATE with canonical phone; fall back to bare-digit for pre-SH-003 rows
       let revokeResult = await query(
@@ -308,7 +308,7 @@ export default class EmbeddedWalletController {
         )
       }
 
-      logger.info(`Spend permission revoked for ${dbPhone}`)
+      logger.info(`Spend permission revoked for ${maskPhone(dbPhone)}`)
 
       return response.json({ success: true })
     } catch (error) {
@@ -743,7 +743,7 @@ export default class EmbeddedWalletController {
         { tosAcceptedAt: DateTime.now(), tosVersion: version }
       )
 
-      logger.info(`ToS v${version} accepted by ${dbPhone}`)
+      logger.info(`ToS v${version} accepted by ${maskPhone(dbPhone)}`)
       return response.json({ success: true, version })
     } catch (error) {
       logger.error('acceptTos error: %o', error)
