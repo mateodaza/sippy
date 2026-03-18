@@ -1154,7 +1154,7 @@ function SettingsContent() {
             </div>
 
             <button
-              onClick={handleChangeLimit}
+              onClick={() => handleChangeLimit()}
               disabled={
                 permissionStatus === 'loading' ||
                 newLimit === walletStatus.dailyLimit?.toString()
@@ -1289,7 +1289,7 @@ function SettingsContent() {
             </div>
 
             <button
-              onClick={handleChangeLimit}
+              onClick={() => handleChangeLimit()}
               disabled={permissionStatus === 'loading'}
               className='w-full py-3 bg-brand-crypto text-white rounded-lg font-semibold hover:bg-brand-crypto/90 disabled:opacity-50 disabled:cursor-not-allowed'
             >

@@ -109,10 +109,10 @@ Fragile if CDP SDK changes error wording. Not a direct vulnerability.
 **Files:** jwt_auth_middleware.ts, setup/page.tsx
 
 All register-wallet callers now send `cdpAccessToken`:
-- Line 398 (Twilio OTP verify flow) — sends cdpAccessToken ✓
-- Line 466 (CDP SMS await-wallet flow) — sends cdpAccessToken ✓
-- Line 153 (session recovery) — sends cdpAccessToken when available via `getAccessToken().catch(() => null)` ✓
-- Line 695 (gas error retry) — sends cdpAccessToken when available ✓
+- `handleCdpSmsVerify` (Twilio OTP verify flow) — sends cdpAccessToken ✓
+- `handleAwaitWallet` (CDP SMS await-wallet flow) — sends cdpAccessToken ✓
+- `checkExistingSession` (session recovery) — sends cdpAccessToken when available ✓
+- Gas error retry in `createSpendPermission` catch — sends cdpAccessToken when available ✓
 
 For the recovery and retry paths, cdpAccessToken is optional: returning users hit Tier 1 (DB lookup) and skip the CDP check entirely. The cdpAccessToken is a belt-and-suspenders for the edge case where a new user's first register-wallet failed and they reload.
 
@@ -168,7 +168,7 @@ The structured `alert` tag allows monitoring systems to trigger on spend trackin
 | | Before | After |
 |---|--------|-------|
 | setup/page.tsx | 16 `console.log` + 3 `console.debug` | 0 (all `console.error` preserved) |
-| settings/page.tsx | 4 `console.log` | 0 (all `console.error` preserved) |
+| settings/page.tsx | 4 `console.log` | 0 |
 
 **Files:** setup/page.tsx, settings/page.tsx
 

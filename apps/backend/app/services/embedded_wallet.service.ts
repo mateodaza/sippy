@@ -15,6 +15,15 @@ import { CdpClient } from '@coinbase/cdp-sdk'
 import { ethers } from 'ethers'
 import { query } from '#services/db'
 import { maskPhone } from '#utils/phone'
+import {
+  NETWORK,
+  SIPPY_SPENDER_ADDRESS,
+  USDC_DECIMALS,
+  getRpcUrl,
+  getUsdcAddress,
+} from '#config/network'
+import { getRefuelService } from '#services/refuel.service'
+import { type TransferResult } from '#types/index'
 
 /**
  * Compatibility helper: queries phone_registry with canonical phone first,
@@ -34,15 +43,6 @@ async function lookupByPhone(phoneNumber: string): Promise<{ rows: any[] }> {
     [phoneNumber.slice(1)]
   )
 }
-import {
-  NETWORK,
-  SIPPY_SPENDER_ADDRESS,
-  USDC_DECIMALS,
-  getRpcUrl,
-  getUsdcAddress,
-} from '#config/network'
-import { getRefuelService } from '#services/refuel.service'
-import { type TransferResult } from '#types/index'
 
 // SpendPermissionManager contract address (same on all supported networks)
 const SPEND_PERMISSION_MANAGER = '0xf85210B21cC50302F477BA56686d2019dC9b67Ad'

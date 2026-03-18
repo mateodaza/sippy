@@ -150,14 +150,14 @@ export async function notifyInviteRecipient(opts: {
       []
     )
     if (result) {
-      logger.info(`Invite notification sent to ${recipientPhone}`)
+      logger.info(`Invite notification sent to ${maskPhone(recipientPhone)}`)
       return true
     } else {
-      logger.warn(`Invite notification failed for ${recipientPhone} — template may not be approved yet`)
+      logger.warn(`Invite notification failed for ${maskPhone(recipientPhone)} — template may not be approved yet`)
       return false
     }
   } catch (error) {
-    logger.error('Failed to send invite notification to %s: %o', recipientPhone, error)
+    logger.error('Failed to send invite notification to %s: %o', maskPhone(recipientPhone), error)
     return false
   }
 }
@@ -198,11 +198,11 @@ export async function notifyInviteCompleted(opts: {
       ]
     )
     if (result) {
-      logger.info(`Invite completed notification sent to ${senderPhone} (recipient: ${masked})`)
+      logger.info(`Invite completed notification sent to ${maskPhone(senderPhone)} (recipient: ${masked})`)
     } else {
-      logger.warn(`Invite completed notification failed for ${senderPhone} — template may not be approved yet`)
+      logger.warn(`Invite completed notification failed for ${maskPhone(senderPhone)} — template may not be approved yet`)
     }
   } catch (error) {
-    logger.error('Failed to send invite completed notification to %s: %o', senderPhone, error)
+    logger.error('Failed to send invite completed notification to %s: %o', maskPhone(senderPhone), error)
   }
 }

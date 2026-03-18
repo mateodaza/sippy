@@ -2,6 +2,7 @@ import axios from 'axios'
 import crypto from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import UserPreference from '#models/user_preference'
+import { maskPhone } from '#utils/phone'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -205,7 +206,7 @@ class OtpService {
       })
     } catch (err: any) {
       const twilioError = err?.response?.data
-      logger.error('sendOtp Twilio error:', { to, status: err?.response?.status, twilioError })
+      logger.error('sendOtp Twilio error:', { to: maskPhone(to), status: err?.response?.status, twilioError })
       throw err
     }
   }

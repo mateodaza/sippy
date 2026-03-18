@@ -152,7 +152,10 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
           const accessToken = getStoredToken();
           if (accessToken) {
             // First ensure wallet is registered (this also triggers refuel)
-            const cdpToken = await getAccessToken().catch(() => null);
+            const cdpToken = await getAccessToken().catch((err: unknown) => {
+              console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
+              return null;
+            });
             const registerResponse = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
               headers: {
@@ -666,8 +669,11 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
           try {
             const accessToken = getStoredToken();
             if (accessToken) {
-              const cdpToken = await getAccessToken().catch(() => null);
-              await fetch(`${BACKEND_URL}/api/register-wallet`, {
+              const cdpToken = await getAccessToken().catch((err: unknown) => {
+                console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
+                return null;
+              });
+              const regRes = await fetch(`${BACKEND_URL}/api/register-wallet`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -675,6 +681,9 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
                 },
                 body: JSON.stringify({ walletAddress, ...(cdpToken && { cdpAccessToken: cdpToken }) }),
               });
+              if (!regRes.ok) {
+                console.error('Wallet re-registration for refuel failed:', regRes.status);
+              }
             }
           } catch (regErr) {
             console.error('Wallet re-registration failed:', regErr);
