@@ -22,7 +22,11 @@ import {
   sendToAddress,
   sendToPhoneNumber,
 } from '#services/embedded_wallet.service'
-import { getUserWallet, checkSecurityLimits, getSecurityLimitStatus } from '#services/cdp_wallet.service'
+import {
+  getUserWallet,
+  checkSecurityLimits,
+  getSecurityLimitStatus,
+} from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
 import { registerWalletWithIndexer } from '#services/indexer.service'
 import { exportEventSchema, webSendEventSchema, sendFromWebBodySchema } from '#types/schemas'
@@ -40,10 +44,10 @@ const webActiveSends = new Set<string>()
 
 // CDP client for spend permission queries — lazy to avoid crashing on import
 // when CDP credentials are not configured (e.g., in test environments)
-let _cdp: CdpClient | null = null
+let cdpInstance: CdpClient | null = null
 function getCdpClient(): CdpClient {
-  if (!_cdp) _cdp = new CdpClient()
-  return _cdp
+  if (!cdpInstance) cdpInstance = new CdpClient()
+  return cdpInstance
 }
 
 // Required for phone hashing in export audit logs and web send logs
@@ -135,9 +139,16 @@ export default class EmbeddedWalletController {
 
       return response.json({ success: true, network: NETWORK })
     } catch (error) {
-      logger.error({ err: error instanceof Error ? { message: error.message, stack: error.stack } : error }, 'Register wallet error')
-      const isAuth = error instanceof Error && (error.message.includes('authorization') || error.message.includes('token'))
-      return response.status(isAuth ? 401 : 500).json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
+      logger.error(
+        { err: error instanceof Error ? { message: error.message, stack: error.stack } : error },
+        'Register wallet error'
+      )
+      const isAuth =
+        error instanceof Error &&
+        (error.message.includes('authorization') || error.message.includes('token'))
+      return response
+        .status(isAuth ? 401 : 500)
+        .json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
     }
   }
 
@@ -170,14 +181,19 @@ export default class EmbeddedWalletController {
 
       const usdcAddress = USDC_ADDRESSES[NETWORK]
 
-      // Find all matching permissions and select the most recent one (highest start time)
-      const matchingPermissions =
-        ((allPermissions.spendPermissions ?? []) as unknown as Array<{ permissionHash: string; network: string; permission: { spender: string; token: string; allowance: bigint | string; start: number } }>).filter(
-          (p) =>
-            p.permission?.spender?.toLowerCase() === spenderAddress.toLowerCase() &&
-            p.permission?.token?.toLowerCase() === usdcAddress.toLowerCase() &&
-            p.network === NETWORK
-        )
+      // Find all matching permissions (spender + token + network)
+      const matchingPermissions = (
+        (allPermissions.spendPermissions ?? []) as unknown as Array<{
+          permissionHash: string
+          network: string
+          permission: { spender: string; token: string; allowance: bigint | string; start: number }
+        }>
+      ).filter(
+        (p) =>
+          p.permission?.spender?.toLowerCase() === spenderAddress.toLowerCase() &&
+          p.permission?.token?.toLowerCase() === usdcAddress.toLowerCase() &&
+          p.network === NETWORK
+      )
 
       if (matchingPermissions.length === 0) {
         logger.error(
@@ -191,10 +207,29 @@ export default class EmbeddedWalletController {
         })
       }
 
-      // Sort by start time descending to get the most recent permission
-      const matchingPermission = matchingPermissions.sort(
-        (a, b) => Number(b.permission?.start || 0) - Number(a.permission?.start || 0)
-      )[0]
+      // CDP doesn't return permissionHash from createSpendPermission, so we
+      // match by allowance the frontend just requested, then break ties by
+      // most-recent start time. Falls back to pure most-recent if no allowance sent.
+      const byStartDesc = (
+        a: (typeof matchingPermissions)[0],
+        b: (typeof matchingPermissions)[0]
+      ) => Number(b.permission?.start || 0) - Number(a.permission?.start || 0)
+
+      const requestedAllowance = dailyLimit ? Number.parseFloat(dailyLimit) : null
+      const allowanceMatches =
+        requestedAllowance !== null
+          ? matchingPermissions.filter((p) => {
+              const allowance = Number.parseFloat(
+                ethers.utils.formatUnits(p.permission.allowance, USDC_DECIMALS)
+              )
+              return Math.abs(allowance - requestedAllowance) < 0.01
+            })
+          : []
+
+      const matchingPermission =
+        allowanceMatches.length > 0
+          ? allowanceMatches.sort(byStartDesc)[0]
+          : matchingPermissions.sort(byStartDesc)[0]
 
       const permissionHash = matchingPermission.permissionHash
       const permission = matchingPermission.permission
@@ -231,7 +266,7 @@ export default class EmbeddedWalletController {
       }
 
       // Store the permission with onchain-derived limit
-      const canonicalPhone = phoneNumber  // already canonical from cdpUser JWT
+      const canonicalPhone = phoneNumber // already canonical from cdpUser JWT
 
       // Try UPDATE with canonical phone; fall back to bare-digit for pre-SH-003 rows
       let updateResult = await query(
@@ -256,8 +291,12 @@ export default class EmbeddedWalletController {
       return response.json({ success: true, permissionHash, dailyLimit: onchainAllowance })
     } catch (error) {
       logger.error('Register permission error: %o', error)
-      const isAuth = error instanceof Error && (error.message.includes('authorization') || error.message.includes('token'))
-      return response.status(isAuth ? 401 : 500).json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
+      const isAuth =
+        error instanceof Error &&
+        (error.message.includes('authorization') || error.message.includes('token'))
+      return response
+        .status(isAuth ? 401 : 500)
+        .json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
     }
   }
 
@@ -271,7 +310,7 @@ export default class EmbeddedWalletController {
   async revokePermission({ request, response, cdpUser }: HttpContext) {
     try {
       const { phoneNumber } = cdpUser!
-      const dbPhone = phoneNumber  // already canonical from cdpUser JWT
+      const dbPhone = phoneNumber // already canonical from cdpUser JWT
 
       // Gate enforcement: if user has a verified email, require a valid gateToken.
       const pref = await findUserPrefByPhone(dbPhone)
@@ -313,8 +352,12 @@ export default class EmbeddedWalletController {
       return response.json({ success: true })
     } catch (error) {
       logger.error('Revoke permission error: %o', error)
-      const isAuth = error instanceof Error && (error.message.includes('authorization') || error.message.includes('token'))
-      return response.status(isAuth ? 401 : 500).json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
+      const isAuth =
+        error instanceof Error &&
+        (error.message.includes('authorization') || error.message.includes('token'))
+      return response
+        .status(isAuth ? 401 : 500)
+        .json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
     }
   }
 
@@ -394,7 +437,7 @@ export default class EmbeddedWalletController {
   async walletStatus({ response, cdpUser }: HttpContext) {
     try {
       const { phoneNumber } = cdpUser!
-      const normalizedPhone = phoneNumber  // already canonical from cdpUser JWT
+      const normalizedPhone = phoneNumber // already canonical from cdpUser JWT
 
       let result = await query<{
         wallet_address: string
@@ -445,8 +488,12 @@ export default class EmbeddedWalletController {
       })
     } catch (error) {
       logger.error('Wallet status error: %o', error)
-      const isAuth = error instanceof Error && (error.message.includes('authorization') || error.message.includes('token'))
-      return response.status(isAuth ? 401 : 500).json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
+      const isAuth =
+        error instanceof Error &&
+        (error.message.includes('authorization') || error.message.includes('token'))
+      return response
+        .status(isAuth ? 401 : 500)
+        .json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
     }
   }
 
@@ -545,8 +592,12 @@ export default class EmbeddedWalletController {
       })
     } catch (error) {
       logger.error('Authenticated resolve-phone error: %o', error)
-      const isAuth = error instanceof Error && (error.message.includes('authorization') || error.message.includes('token'))
-      return response.status(isAuth ? 401 : 500).json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
+      const isAuth =
+        error instanceof Error &&
+        (error.message.includes('authorization') || error.message.includes('token'))
+      return response
+        .status(isAuth ? 401 : 500)
+        .json({ error: isAuth ? 'Unauthorized' : 'Internal server error' })
     }
   }
 
@@ -605,7 +656,7 @@ export default class EmbeddedWalletController {
    */
   async sendFromWeb({ request, response, cdpUser }: HttpContext) {
     const { phoneNumber } = cdpUser!
-    const fromPhone = phoneNumber  // already canonical from cdpUser JWT
+    const fromPhone = phoneNumber // already canonical from cdpUser JWT
 
     // Concurrency guard: reject if a send is already in-flight for this user
     if (webActiveSends.has(fromPhone)) {
@@ -629,7 +680,9 @@ export default class EmbeddedWalletController {
       if (!isAddress) {
         canonicalRecipient = canonicalizePhone(to)
         if (!canonicalRecipient) {
-          return response.status(422).json({ error: 'Recipient must be a phone number or 0x address' })
+          return response
+            .status(422)
+            .json({ error: 'Recipient must be a phone number or 0x address' })
         }
         // Self-send check (phone)
         if (canonicalRecipient === fromPhone) {
@@ -650,7 +703,12 @@ export default class EmbeddedWalletController {
       }
 
       // Velocity check (rate, volume, fan-out limits)
-      const velocityCheck = velocityService.check(fromPhone, canonicalRecipient || to, numAmount, 'en')
+      const velocityCheck = velocityService.check(
+        fromPhone,
+        canonicalRecipient || to,
+        numAmount,
+        'en'
+      )
       if (!velocityCheck.allowed) {
         return response.status(429).json({ error: velocityCheck.reason || 'Too many sends' })
       }
