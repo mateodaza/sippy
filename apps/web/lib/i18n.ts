@@ -11,13 +11,13 @@
  *  - formatRelativeTime (localized, independent of blockscout.ts)
  */
 
-import { getLanguageForPhone as _getLanguageForPhone } from '@sippy/shared';
+import { getLanguageForPhone as _getLanguageForPhone } from '@sippy/shared'
 
 // ── Types & constants ──────────────────────────────────────────────────────────
 
-export type Language = 'en' | 'es' | 'pt';
-export const LANG_KEY = 'sippy_lang';
-const VALID_LANGUAGES: Language[] = ['en', 'es', 'pt'];
+export type Language = 'en' | 'es' | 'pt'
+export const LANG_KEY = 'sippy_lang'
+const VALID_LANGUAGES: Language[] = ['en', 'es', 'pt']
 
 // ── Translation table ──────────────────────────────────────────────────────────
 
@@ -58,7 +58,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.tosContinue': 'Continue',
     'setup.tosRequired': 'You must accept the Terms of Service to continue.',
     'setup.spendTitle': 'Set Spending Limit',
-    'setup.spendSubtitle': 'Choose how much Sippy can send per day on your behalf. You can change this anytime.',
+    'setup.spendSubtitle':
+      'Choose how much Sippy can send per day on your behalf. You can change this anytime.',
     'setup.recommended': '(Recommended)',
     'setup.customPrefix': 'Custom: $',
     'setup.perDay': '/day',
@@ -88,7 +89,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.errSpenderNotConfigured': 'Sippy spender address not configured.',
     'setup.errPrepareTx': 'Could not prepare wallet for transaction. Please try again.',
     'setup.errRegisterPermission': 'Failed to register permission. Please try again.',
-    'setup.errInsufficientEth': "Insufficient ETH for gas fees. Please wait a moment and try again - we're sending you some ETH.",
+    'setup.errInsufficientEth':
+      "Insufficient ETH for gas fees. Please wait a moment and try again - we're sending you some ETH.",
     'setup.errCreatePermission': 'Failed to create permission',
     'setup.errRegisterWallet': 'Failed to register wallet',
     'setup.errSendEmailCode': 'Failed to send email code',
@@ -179,14 +181,18 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.recommended': '(Recommended)',
     'settings.customPrefix': 'Custom: $',
     'settings.perDay': '/day',
+    'settings.maxLimit': 'Max',
+    'settings.usedToday': 'Used today',
+    'settings.remaining': 'remaining',
     'settings.updateLimit': 'Update Limit',
     'settings.updating': 'Updating...',
     'settings.updateSuccess': 'Limit updated!',
     'settings.disableTitle': 'Disable Sippy',
-    'settings.disableDesc': 'This will revoke Sippy\'s permission to send on your behalf.',
+    'settings.disableDesc': "This will revoke Sippy's permission to send on your behalf.",
     'settings.revokePermission': 'Revoke Permission',
     'settings.revoking': 'Revoking...',
-    'settings.emailWarning': 'Warning: You have a verified email. Revoking permission requires re-verification.',
+    'settings.emailWarning':
+      'Warning: You have a verified email. Revoking permission requires re-verification.',
     'settings.cancel': 'Cancel',
     'settings.continueAnyway': 'Continue Anyway',
     'settings.verifyIdentity': 'Verify Identity',
@@ -215,7 +221,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.walletSecurity': 'Wallet Security',
     'settings.exportKey': 'Export Private Key',
     'settings.exportWarningTitle': 'Warning',
-    'settings.exportWarningBody': 'Your private key gives full access to your wallet. Never share it. Store it securely.',
+    'settings.exportWarningBody':
+      'Your private key gives full access to your wallet. Never share it. Store it securely.',
     'settings.understandContinue': 'I understand, continue',
     'settings.loadingKey': 'Loading...',
     'settings.transferFirst': 'Transfer funds first',
@@ -306,23 +313,30 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'landing.step2.desc': 'Add funds instantly using local payment methods, cards, or crypto.',
     'landing.step3.num': '03',
     'landing.step3.title': 'Send to anyone',
-    'landing.step3.desc': 'Text an amount and a phone number. They receive digital dollars instantly.',
-    'landing.step1.desc.desktop': 'Open WhatsApp and say hi.\nNo app to download, no bank to visit.',
+    'landing.step3.desc':
+      'Text an amount and a phone number. They receive digital dollars instantly.',
+    'landing.step1.desc.desktop':
+      'Open WhatsApp and say hi.\nNo app to download, no bank to visit.',
     'landing.step2.desc.desktop': 'Add funds instantly\nusing local cards, or crypto.',
-    'landing.step3.desc.desktop': 'Text an amount and a phone number.\nThey receive digital dollars instantly.',
-    'landing.step3.note': 'Non-custodial wallets linked to phone numbers.\nSub-second settlement on Arbitrum. No app required.',
+    'landing.step3.desc.desktop':
+      'Text an amount and a phone number.\nThey receive digital dollars instantly.',
+    'landing.step3.note':
+      'Non-custodial wallets linked to phone numbers.\nSub-second settlement on Arbitrum. No app required.',
     'landing.hood.title': 'Under the Hood',
     'landing.hood.desc': 'Built on robust blockchain infrastructure for security and speed.',
     'landing.spec1.title': 'USDC Native',
-    'landing.spec1.desc': 'Transactions settle in USDC, ensuring 1:1 backing with US Dollars. Fully transparent, fully audited, fully liquid.',
+    'landing.spec1.desc':
+      'Transactions settle in USDC, ensuring 1:1 backing with US Dollars. Fully transparent, fully audited, fully liquid.',
     'landing.spec1.tag1': 'AUTO // SETTLE',
     'landing.spec1.tag2': 'STABLE // 1:1',
     'landing.spec2.title': 'Arbitrum L2 Speed',
     'landing.spec2.desc': 'Sub-second transaction finality and near-zero fees on Arbitrum.',
     'landing.spec3.title': 'Non-Custodial',
-    'landing.spec3.desc': 'Smart contract wallets linked securely to your phone number. You own your keys.',
+    'landing.spec3.desc':
+      'Smart contract wallets linked securely to your phone number. You own your keys.',
     'landing.spec4.title': 'Agentic AI',
-    'landing.spec4.desc': 'An AI agent that understands how you talk, not the other way around. Just text what you need.',
+    'landing.spec4.desc':
+      'An AI agent that understands how you talk, not the other way around. Just text what you need.',
     'landing.everyone.title': 'Built for Everyone',
     'landing.pill.1': 'Remittance',
     'landing.pill.2': 'Freelancer Pay',
@@ -357,7 +371,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'about.badge.launch': 'Launching Q2 2026',
     'about.hero.title.line1': 'The dollar wallet',
     'about.hero.title.line2': 'for Latin America',
-    'about.hero.desc': 'Sippy turns WhatsApp into a USDC wallet on Arbitrum One so you can send, receive, and hold dollars through messages without downloading an app, managing seed phrases, or learning anything about crypto.',
+    'about.hero.desc':
+      'Sippy turns WhatsApp into a USDC wallet on Arbitrum One so you can send, receive, and hold dollars through messages without downloading an app, managing seed phrases, or learning anything about crypto.',
     'about.how.title.before': 'How it',
     'about.how.title.accent': 'works',
     'about.step1.title': 'Create wallet',
@@ -365,10 +380,12 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'about.step2.title': 'Fund wallet',
     'about.step2.desc': 'Buy USDC with local currency. Funds land directly in your wallet.',
     'about.step3.title': 'Send money',
-    'about.step3.desc': 'Type \u201csend $20 to +573001234567\u201d on WhatsApp. Arrives in seconds.',
+    'about.step3.desc':
+      'Type \u201csend $20 to +573001234567\u201d on WhatsApp. Arrives in seconds.',
     'about.thesis.title.before': 'Why this',
     'about.thesis.title.accent': 'matters',
-    'about.thesis': 'WhatsApp has 90%+ penetration across Latin America. Hundreds of millions of people open it before breakfast, and most of them want dollar stability because local currencies keep losing value. But nobody is downloading a new app to get it. Sippy puts a dollar wallet inside the app they already use, powered by an AI agent that speaks their language.',
+    'about.thesis':
+      'WhatsApp has 90%+ penetration across Latin America. Hundreds of millions of people open it before breakfast, and most of them want dollar stability because local currencies keep losing value. But nobody is downloading a new app to get it. Sippy puts a dollar wallet inside the app they already use, powered by an AI agent that speaks their language.',
     'about.arch.title': 'Architecture',
     'about.arch.subtitle': 'WhatsApp message in, on-chain transaction out',
     'about.arch1.title': 'WhatsApp Business API',
@@ -385,13 +402,17 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'about.arch6.desc': 'Gasless transactions for users',
     'about.trust.title.before': 'Trust &',
     'about.trust.title.accent': 'Security',
-    'about.trust.desc': 'Users own their wallets. Sippy operates through spend permissions that users set and can revoke at any time.',
+    'about.trust.desc':
+      'Users own their wallets. Sippy operates through spend permissions that users set and can revoke at any time.',
     'about.pillar1.title': 'Non-custodial',
-    'about.pillar1.desc': 'Coinbase CDP Embedded Wallets. Users control their own smart accounts and can export their private keys.',
+    'about.pillar1.desc':
+      'Coinbase CDP Embedded Wallets. Users control their own smart accounts and can export their private keys.',
     'about.pillar2.title': 'User-controlled limits',
-    'about.pillar2.desc': 'Daily spend limits enforced on-chain via SpendPermissionManager. Users set and revoke these anytime.',
+    'about.pillar2.desc':
+      'Daily spend limits enforced on-chain via SpendPermissionManager. Users set and revoke these anytime.',
     'about.pillar3.title': 'Fully transparent',
-    'about.pillar3.desc': 'Every transaction is verifiable on Arbiscan. Amount, recipient, timestamp, all on-chain.',
+    'about.pillar3.desc':
+      'Every transaction is verifiable on Arbiscan. Amount, recipient, timestamp, all on-chain.',
     'about.traction.title': 'Traction',
     'about.traction1.title': 'ETHOnline 2025 Finalist',
     'about.traction1.desc': 'Selected from hundreds of submissions at ETHGlobal.',
@@ -399,7 +420,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'about.traction2.title': 'Arbitrum Grants Program',
     'about.traction2.desc': 'Funded through Arbitrum New Protocols and Ideas 3.0 via Questbook.',
     'about.traction3.title': 'Live on mainnet',
-    'about.traction3.desc': 'Smart contracts deployed and operational on Arbitrum One. End-to-end payment flow validated.',
+    'about.traction3.desc':
+      'Smart contracts deployed and operational on Arbitrum One. End-to-end payment flow validated.',
     'about.cta.title': 'Money as fast as your\u00a0messages.',
     'about.cta.sub1': 'Launching Q2 2026 in Colombia.',
     'about.cta.sub2': 'Built to scale across Latin America.',
@@ -416,8 +438,10 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'terms.updated': 'Last updated: November 8, 2025',
     'terms.back': 'Back to Home',
     'terms.s1.title': '1. Introduction',
-    'terms.s1.p1': 'Welcome to Sippy. These Terms of Service (\u201cTerms\u201d) govern your use of the Sippy service (\u201cService\u201d), a WhatsApp-based payment application that enables users to send and receive digital dollars using phone numbers.',
-    'terms.s1.p2': 'By using our Service, you agree to be bound by these Terms. If you do not agree to these Terms, please do not use our Service.',
+    'terms.s1.p1':
+      'Welcome to Sippy. These Terms of Service (\u201cTerms\u201d) govern your use of the Sippy service (\u201cService\u201d), a WhatsApp-based payment application that enables users to send and receive digital dollars using phone numbers.',
+    'terms.s1.p2':
+      'By using our Service, you agree to be bound by these Terms. If you do not agree to these Terms, please do not use our Service.',
     'terms.s2.title': '2. Service Provider',
     'terms.s2.intro': 'The Service is provided by:',
     'terms.s2.name': 'Sippy',
@@ -434,19 +458,24 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'terms.s4.item2': 'Sending and receiving digital dollars to other phone numbers.',
     'terms.s4.item3': 'Checking your balance.',
     'terms.s4.item4': 'Viewing your transaction history.',
-    'terms.s4.footer': 'Our Service uses Coinbase CDP (Coinbase Developer Platform) for secure account management and the Arbitrum network (a public blockchain) for payment processing. Transaction data on Arbitrum is publicly visible and permanently recorded.',
+    'terms.s4.footer':
+      'Our Service uses Coinbase CDP (Coinbase Developer Platform) for secure account management and the Arbitrum network (a public blockchain) for payment processing. Transaction data on Arbitrum is publicly visible and permanently recorded.',
     'terms.s5.title': '5. Account Creation and Security',
-    'terms.s5.intro': 'When you create an account by sending \u201cstart\u201d to our WhatsApp bot:',
+    'terms.s5.intro':
+      'When you create an account by sending \u201cstart\u201d to our WhatsApp bot:',
     'terms.s5.item1': 'A payment account is automatically created and linked to your phone number.',
-    'terms.s5.item2': 'Your account security keys are securely stored by Coinbase in their Trusted Execution Environment (TEE).',
+    'terms.s5.item2':
+      'Your account security keys are securely stored by Coinbase in their Trusted Execution Environment (TEE).',
     'terms.s5.item3': 'You are responsible for maintaining the security of your WhatsApp account.',
-    'terms.s5.item4': 'You must notify us immediately if you suspect unauthorized access to your account.',
+    'terms.s5.item4':
+      'You must notify us immediately if you suspect unauthorized access to your account.',
     'terms.s6.title': '6. Transaction Limits and Fees',
     'terms.s6.intro': 'The following limits apply to your use of the Service:',
     'terms.s6.item1': 'Daily Limit: $500 USD equivalent per day.',
     'terms.s6.item2': 'Per Transaction Limit: $100 USD equivalent per transaction.',
     'terms.s6.item3': 'Transaction Fees: Sippy covers transaction fees during the beta period.',
-    'terms.s6.footer': 'These limits may be modified at our discretion. We will notify users of any changes.',
+    'terms.s6.footer':
+      'These limits may be modified at our discretion. We will notify users of any changes.',
     'terms.s7.title': '7. Acceptable Use',
     'terms.s7.intro': 'You agree NOT to use the Service for:',
     'terms.s7.item1': 'Any illegal activities or purposes.',
@@ -454,63 +483,98 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'terms.s7.item3': 'Fraud or deceptive practices.',
     'terms.s7.item4': 'Circumventing transaction limits or security measures.',
     'terms.s7.item5': 'Spamming or sending unsolicited messages.',
-    'terms.s7.item6': 'Attempting to gain unauthorized access to our systems or other users\u2019 accounts.',
+    'terms.s7.item6':
+      'Attempting to gain unauthorized access to our systems or other users\u2019 accounts.',
     'terms.s7.item7': 'Any activity that violates applicable laws or regulations.',
-    'terms.s7.footer': 'We reserve the right to suspend or terminate accounts that violate these terms.',
+    'terms.s7.footer':
+      'We reserve the right to suspend or terminate accounts that violate these terms.',
     'terms.s8.title': '8. Transaction Risks',
     'terms.s8.intro': 'By using our Service, you acknowledge and accept the following risks:',
-    'terms.s8.item1': 'Irreversible Transactions: Transactions are irreversible. Once a transaction is confirmed, it cannot be undone.',
-    'terms.s8.item2': 'Technology Risks: Digital payment systems are subject to technical issues, bugs, and security vulnerabilities.',
-    'terms.s8.item3': 'Regulatory Changes: Digital payment regulations may change, potentially affecting the Service.',
-    'terms.s8.item4': 'Network Delays: Transactions may be delayed during periods of high network activity.',
+    'terms.s8.item1':
+      'Irreversible Transactions: Transactions are irreversible. Once a transaction is confirmed, it cannot be undone.',
+    'terms.s8.item2':
+      'Technology Risks: Digital payment systems are subject to technical issues, bugs, and security vulnerabilities.',
+    'terms.s8.item3':
+      'Regulatory Changes: Digital payment regulations may change, potentially affecting the Service.',
+    'terms.s8.item4':
+      'Network Delays: Transactions may be delayed during periods of high network activity.',
     'terms.s9.title': '9. No Financial Advice',
-    'terms.s9.body': 'Sippy is a payment service and does not provide financial, investment, legal, or tax advice. The Service is not intended to be used for investment purposes. You should consult with qualified professionals before making any financial decisions.',
+    'terms.s9.body':
+      'Sippy is a payment service and does not provide financial, investment, legal, or tax advice. The Service is not intended to be used for investment purposes. You should consult with qualified professionals before making any financial decisions.',
     'terms.s10.title': '10. Compliance and Anti-Money Laundering',
-    'terms.s10.intro': 'Sippy is committed to complying with applicable anti-money laundering (AML) laws and regulations. By using our Service, you agree to:',
-    'terms.s10.item1': 'Use the Service only for lawful purposes and in compliance with all applicable laws.',
+    'terms.s10.intro':
+      'Sippy is committed to complying with applicable anti-money laundering (AML) laws and regulations. By using our Service, you agree to:',
+    'terms.s10.item1':
+      'Use the Service only for lawful purposes and in compliance with all applicable laws.',
     'terms.s10.item2': 'Provide accurate information when requested for verification purposes.',
-    'terms.s10.item3': 'Not use the Service to launder money, finance terrorism, or engage in other illegal financial activities.',
-    'terms.s10.item4': 'Acknowledge that we may be required to report suspicious activities to relevant authorities.',
-    'terms.s10.footer': 'We reserve the right to suspend or terminate your account immediately, without prior notice, if we suspect any illegal activity or violation of these compliance requirements. We may also be required to freeze funds or disclose information to law enforcement agencies as required by law.',
+    'terms.s10.item3':
+      'Not use the Service to launder money, finance terrorism, or engage in other illegal financial activities.',
+    'terms.s10.item4':
+      'Acknowledge that we may be required to report suspicious activities to relevant authorities.',
+    'terms.s10.footer':
+      'We reserve the right to suspend or terminate your account immediately, without prior notice, if we suspect any illegal activity or violation of these compliance requirements. We may also be required to freeze funds or disclose information to law enforcement agencies as required by law.',
     'terms.s11.title': '11. Third-Party Services',
     'terms.s11.intro': 'Our Service relies on third-party providers including:',
-    'terms.s11.item1': 'Meta (WhatsApp): For messaging services. Your use is also subject to WhatsApp\u2019s Terms of Service.',
+    'terms.s11.item1':
+      'Meta (WhatsApp): For messaging services. Your use is also subject to WhatsApp\u2019s Terms of Service.',
     'terms.s11.item2': 'Coinbase CDP: For account infrastructure and security management.',
-    'terms.s11.item3': 'Arbitrum Network: A public blockchain for transaction processing. On-chain data is publicly visible and immutable.',
-    'terms.s11.footer': 'We are not responsible for the availability, performance, or conduct of third-party services.',
+    'terms.s11.item3':
+      'Arbitrum Network: A public blockchain for transaction processing. On-chain data is publicly visible and immutable.',
+    'terms.s11.footer':
+      'We are not responsible for the availability, performance, or conduct of third-party services.',
     'terms.s12.title': '12. Limitation of Liability',
     'terms.s12.intro': 'To the maximum extent permitted by law:',
-    'terms.s12.item1': 'The Service is provided \u201cAS IS\u201d and \u201cAS AVAILABLE\u201d without warranties of any kind.',
-    'terms.s12.item2': 'We are not liable for any direct, indirect, incidental, special, or consequential damages arising from your use of the Service.',
-    'terms.s12.item3': 'We are not responsible for losses due to user error, including sending funds to incorrect phone numbers.',
-    'terms.s12.item4': 'We are not liable for service interruptions caused by third-party providers or network issues.',
+    'terms.s12.item1':
+      'The Service is provided \u201cAS IS\u201d and \u201cAS AVAILABLE\u201d without warranties of any kind.',
+    'terms.s12.item2':
+      'We are not liable for any direct, indirect, incidental, special, or consequential damages arising from your use of the Service.',
+    'terms.s12.item3':
+      'We are not responsible for losses due to user error, including sending funds to incorrect phone numbers.',
+    'terms.s12.item4':
+      'We are not liable for service interruptions caused by third-party providers or network issues.',
     'terms.s13.title': '13. Indemnification',
-    'terms.s13.body': 'You agree to indemnify and hold harmless Sippy, its operators, and affiliates from any claims, damages, losses, or expenses arising from your use of the Service, your violation of these Terms, or your violation of any rights of a third party.',
+    'terms.s13.body':
+      'You agree to indemnify and hold harmless Sippy, its operators, and affiliates from any claims, damages, losses, or expenses arising from your use of the Service, your violation of these Terms, or your violation of any rights of a third party.',
     'terms.s14.title': '14. Termination and Suspension',
-    'terms.s14.intro': 'We may suspend or terminate your access to the Service at any time, without prior notice, for conduct that we believe:',
+    'terms.s14.intro':
+      'We may suspend or terminate your access to the Service at any time, without prior notice, for conduct that we believe:',
     'terms.s14.item1': 'Violates these Terms or applicable laws.',
     'terms.s14.item2': 'Is harmful to other users, us, or third parties.',
     'terms.s14.item3': 'Is fraudulent or illegal.',
-    'terms.s14.item4': 'Involves suspicious activity that may indicate money laundering or other financial crimes.',
+    'terms.s14.item4':
+      'Involves suspicious activity that may indicate money laundering or other financial crimes.',
     'terms.s14.item5': 'Exceeds transaction limits or triggers security alerts.',
-    'terms.s14.suspension': 'Suspension: During a suspension, your account will be temporarily disabled while we investigate. You will not be able to send or receive funds through Sippy during this period.',
-    'terms.s14.termination': 'Termination: You may stop using the Service at any time. Upon termination, your funds remain on the Arbitrum network. To withdraw any remaining balance, please contact us at hello@sippy.lat with a withdrawal request including your phone number and a destination wallet address. We will process withdrawal requests within 15 business days.',
+    'terms.s14.suspension':
+      'Suspension: During a suspension, your account will be temporarily disabled while we investigate. You will not be able to send or receive funds through Sippy during this period.',
+    'terms.s14.termination':
+      'Termination: You may stop using the Service at any time. Upon termination, your funds remain on the Arbitrum network. To withdraw any remaining balance, please contact us at hello@sippy.lat with a withdrawal request including your phone number and a destination wallet address. We will process withdrawal requests within 15 business days.',
     'terms.s15.title': '15. Disputes, Complaints, and Refunds',
-    'terms.s15.intro': 'If you have a complaint or dispute regarding our Service, please follow these steps:',
-    'terms.s15.item1': 'Contact Support: Email us at hello@sippy.lat with subject line \u201cComplaint\u201d or \u201cDispute\u201d and include your phone number, transaction details, and a description of the issue.',
-    'terms.s15.item2': 'Response Time: We will acknowledge your complaint within 3 business days and aim to resolve it within 15 business days.',
-    'terms.s15.item3': 'Investigation: For transaction disputes, we will review transaction records and our system logs to investigate the issue.',
+    'terms.s15.intro':
+      'If you have a complaint or dispute regarding our Service, please follow these steps:',
+    'terms.s15.item1':
+      'Contact Support: Email us at hello@sippy.lat with subject line \u201cComplaint\u201d or \u201cDispute\u201d and include your phone number, transaction details, and a description of the issue.',
+    'terms.s15.item2':
+      'Response Time: We will acknowledge your complaint within 3 business days and aim to resolve it within 15 business days.',
+    'terms.s15.item3':
+      'Investigation: For transaction disputes, we will review transaction records and our system logs to investigate the issue.',
     'terms.s15.refunds.title': 'Refunds and Transaction Errors',
-    'terms.s15.refunds.item1': 'Transactions are irreversible. Once confirmed, transactions cannot be reversed or refunded by Sippy.',
-    'terms.s15.refunds.item2': 'User error: Sippy is not responsible for funds sent to incorrect phone numbers. Please verify recipient details before confirming transactions.',
-    'terms.s15.refunds.item3': 'System errors: If a technical error on our part results in an incorrect transaction, we will work with you to resolve the issue to the extent possible.',
-    'terms.s15.footer': 'If you are unsatisfied with our resolution, you may file a complaint with the Superintendencia de Industria y Comercio (SIC) in Colombia.',
+    'terms.s15.refunds.item1':
+      'Transactions are irreversible. Once confirmed, transactions cannot be reversed or refunded by Sippy.',
+    'terms.s15.refunds.item2':
+      'User error: Sippy is not responsible for funds sent to incorrect phone numbers. Please verify recipient details before confirming transactions.',
+    'terms.s15.refunds.item3':
+      'System errors: If a technical error on our part results in an incorrect transaction, we will work with you to resolve the issue to the extent possible.',
+    'terms.s15.footer':
+      'If you are unsatisfied with our resolution, you may file a complaint with the Superintendencia de Industria y Comercio (SIC) in Colombia.',
     'terms.s16.title': '16. Modifications to Terms',
-    'terms.s16.body': 'We reserve the right to modify these Terms at any time. We will notify users of material changes by posting the updated Terms on our website. Your continued use of the Service after changes become effective constitutes acceptance of the new Terms.',
+    'terms.s16.body':
+      'We reserve the right to modify these Terms at any time. We will notify users of material changes by posting the updated Terms on our website. Your continued use of the Service after changes become effective constitutes acceptance of the new Terms.',
     'terms.s17.title': '17. Governing Law',
-    'terms.s17.body': 'These Terms shall be governed by and construed in accordance with the laws of the Republic of Colombia. Any disputes arising from these Terms or your use of the Service shall be subject to the exclusive jurisdiction of the courts of Colombia.',
+    'terms.s17.body':
+      'These Terms shall be governed by and construed in accordance with the laws of the Republic of Colombia. Any disputes arising from these Terms or your use of the Service shall be subject to the exclusive jurisdiction of the courts of Colombia.',
     'terms.s18.title': '18. Severability',
-    'terms.s18.body': 'If any provision of these Terms is found to be unenforceable or invalid, that provision shall be limited or eliminated to the minimum extent necessary, and the remaining provisions shall remain in full force and effect.',
+    'terms.s18.body':
+      'If any provision of these Terms is found to be unenforceable or invalid, that provision shall be limited or eliminated to the minimum extent necessary, and the remaining provisions shall remain in full force and effect.',
     'terms.s19.title': '19. Contact Us',
     'terms.s19.intro': 'If you have any questions about these Terms, please contact us:',
     'terms.s19.name': 'Sippy',
@@ -528,8 +592,10 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'privacy.updated': 'Last updated: November 8, 2025',
     'privacy.back': 'Back to Home',
     'privacy.s1.title': '1. Introduction',
-    'privacy.s1.p1': 'Welcome to Sippy (\u201cwe,\u201d \u201cour,\u201d or \u201cus\u201d). Sippy is a WhatsApp-based payment service that allows users to send and receive digital dollars using phone numbers. This Privacy Policy explains how we collect, use, disclose, and protect your information when you use our service.',
-    'privacy.s1.p2': 'By using Sippy, you agree to the collection and use of information in accordance with this policy. This policy complies with Colombian data protection laws (Ley 1581 de 2012) and applicable regulations.',
+    'privacy.s1.p1':
+      'Welcome to Sippy (\u201cwe,\u201d \u201cour,\u201d or \u201cus\u201d). Sippy is a WhatsApp-based payment service that allows users to send and receive digital dollars using phone numbers. This Privacy Policy explains how we collect, use, disclose, and protect your information when you use our service.',
+    'privacy.s1.p2':
+      'By using Sippy, you agree to the collection and use of information in accordance with this policy. This policy complies with Colombian data protection laws (Ley 1581 de 2012) and applicable regulations.',
     'privacy.s2.title': '2. Data Controller',
     'privacy.s2.intro': 'The data controller responsible for your personal information is:',
     'privacy.s2.name': 'Sippy',
@@ -537,26 +603,42 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'privacy.s3.title': '3. Information We Collect',
     'privacy.s3.intro': 'We collect the following types of information when you use our service:',
     'privacy.s3.provided.title': '3.1 Information You Provide',
-    'privacy.s3.provided.item1': 'Phone Number: Your WhatsApp phone number, which serves as your account identifier and wallet address.',
-    'privacy.s3.provided.item2': 'Messages: The messages you send to our WhatsApp bot to execute commands (e.g., \u201csend $10 to +573001234567\u201d).',
+    'privacy.s3.provided.item1':
+      'Phone Number: Your WhatsApp phone number, which serves as your account identifier and wallet address.',
+    'privacy.s3.provided.item2':
+      'Messages: The messages you send to our WhatsApp bot to execute commands (e.g., \u201csend $10 to +573001234567\u201d).',
     'privacy.s3.auto.title': '3.2 Information Collected Automatically',
-    'privacy.s3.auto.item1': 'Account Address: A unique payment address automatically generated and associated with your phone number.',
-    'privacy.s3.auto.item2': 'Transaction History: Records of dollar transfers you make or receive, stored on the Arbitrum network (a public blockchain).',
-    'privacy.s3.auto.item3': 'Account Activity: Timestamps of your last activity, daily transaction amounts for security limits.',
+    'privacy.s3.auto.item1':
+      'Account Address: A unique payment address automatically generated and associated with your phone number.',
+    'privacy.s3.auto.item2':
+      'Transaction History: Records of dollar transfers you make or receive, stored on the Arbitrum network (a public blockchain).',
+    'privacy.s3.auto.item3':
+      'Account Activity: Timestamps of your last activity, daily transaction amounts for security limits.',
     'privacy.s4.title': '4. Consent and Opt-In',
-    'privacy.s4.intro': 'By initiating a conversation with our WhatsApp bot (sending \u201cstart\u201d or any message), you:',
-    'privacy.s4.item1': 'Opt-in to receive messages: You consent to receive transactional messages, notifications, and responses from Sippy via WhatsApp.',
-    'privacy.s4.item2': 'Consent to data processing: You agree to the collection and processing of your data as described in this policy.',
-    'privacy.s4.item3': 'Acknowledge the service terms: You confirm that you have read and accept our Terms of Service.',
-    'privacy.s4.footer': 'You may withdraw your consent at any time by contacting us at hello@sippy.lat or by stopping interaction with our WhatsApp bot.',
+    'privacy.s4.intro':
+      'By initiating a conversation with our WhatsApp bot (sending \u201cstart\u201d or any message), you:',
+    'privacy.s4.item1':
+      'Opt-in to receive messages: You consent to receive transactional messages, notifications, and responses from Sippy via WhatsApp.',
+    'privacy.s4.item2':
+      'Consent to data processing: You agree to the collection and processing of your data as described in this policy.',
+    'privacy.s4.item3':
+      'Acknowledge the service terms: You confirm that you have read and accept our Terms of Service.',
+    'privacy.s4.footer':
+      'You may withdraw your consent at any time by contacting us at hello@sippy.lat or by stopping interaction with our WhatsApp bot.',
     'privacy.s5.title': '5. How We Use Your Information',
     'privacy.s5.intro': 'We use the collected information for the following purposes:',
-    'privacy.s5.item1': 'Provide Services: To create and manage your wallet, process transactions, and respond to your commands.',
-    'privacy.s5.item2': 'Security: To enforce daily spending limits and detect fraudulent or unauthorized activity.',
-    'privacy.s5.item3': 'Communication: To send you transaction confirmations, notifications, and support messages via WhatsApp.',
-    'privacy.s5.item4': 'Service Improvement: To understand how our service is used and improve user experience.',
-    'privacy.s5.item5': 'Legal Compliance: To comply with applicable laws, regulations, and legal requests.',
-    'privacy.s5.footer': 'Important: We only use data obtained through WhatsApp for purposes reasonably necessary to provide our payment service. We do not use your data for marketing or share it with third parties for advertising purposes.',
+    'privacy.s5.item1':
+      'Provide Services: To create and manage your wallet, process transactions, and respond to your commands.',
+    'privacy.s5.item2':
+      'Security: To enforce daily spending limits and detect fraudulent or unauthorized activity.',
+    'privacy.s5.item3':
+      'Communication: To send you transaction confirmations, notifications, and support messages via WhatsApp.',
+    'privacy.s5.item4':
+      'Service Improvement: To understand how our service is used and improve user experience.',
+    'privacy.s5.item5':
+      'Legal Compliance: To comply with applicable laws, regulations, and legal requests.',
+    'privacy.s5.footer':
+      'Important: We only use data obtained through WhatsApp for purposes reasonably necessary to provide our payment service. We do not use your data for marketing or share it with third parties for advertising purposes.',
     'privacy.s6.title': '6. Information We Do NOT Collect',
     'privacy.s6.intro': 'To protect your privacy and security, we do NOT collect or request:',
     'privacy.s6.item1': 'Bank account numbers or banking credentials',
@@ -564,42 +646,65 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'privacy.s6.item3': 'Government-issued identification numbers (c\u00e9dula, passport)',
     'privacy.s6.item4': 'Passwords or PINs',
     'privacy.s6.item5': 'Biometric data',
-    'privacy.s6.footer': 'Warning: Sippy will never ask you to share sensitive financial information through WhatsApp. If someone requests this information claiming to be Sippy, do not respond and report it to us immediately.',
+    'privacy.s6.footer':
+      'Warning: Sippy will never ask you to share sensitive financial information through WhatsApp. If someone requests this information claiming to be Sippy, do not respond and report it to us immediately.',
     'privacy.s7.title': '7. Third-Party Services',
     'privacy.s7.intro': 'We use the following third-party services to provide our service:',
-    'privacy.s7.item1': 'Meta (WhatsApp Business API): To receive and send messages through WhatsApp. Your messages are processed through Meta\u2019s servers.',
-    'privacy.s7.item2': 'Coinbase (CDP - Coinbase Developer Platform): To securely create and manage payment accounts. Security keys are stored in Coinbase\u2019s secure infrastructure.',
-    'privacy.s7.item3': 'Arbitrum Network: To process dollar transactions. Arbitrum is a public blockchain, meaning transaction data (amounts, addresses, timestamps) is publicly visible and permanently recorded.',
+    'privacy.s7.item1':
+      'Meta (WhatsApp Business API): To receive and send messages through WhatsApp. Your messages are processed through Meta\u2019s servers.',
+    'privacy.s7.item2':
+      'Coinbase (CDP - Coinbase Developer Platform): To securely create and manage payment accounts. Security keys are stored in Coinbase\u2019s secure infrastructure.',
+    'privacy.s7.item3':
+      'Arbitrum Network: To process dollar transactions. Arbitrum is a public blockchain, meaning transaction data (amounts, addresses, timestamps) is publicly visible and permanently recorded.',
     'privacy.s7.item4': 'Blockscout: To retrieve transaction history and balance information.',
-    'privacy.s7.item5': 'Groq (optional): When enabled, your message text may be sent to Groq\u2019s AI service for natural language processing to understand your commands. This feature can be disabled.',
+    'privacy.s7.item5':
+      'Groq (optional): When enabled, your message text may be sent to Groq\u2019s AI service for natural language processing to understand your commands. This feature can be disabled.',
     'privacy.s8.title': '8. Data Storage and Security',
     'privacy.s8.intro': 'We implement appropriate security measures to protect your information:',
-    'privacy.s8.item1': 'Your wallet private keys are stored securely by Coinbase in their Trusted Execution Environment (TEE) and are never exposed to our servers.',
-    'privacy.s8.item2': 'Your phone number and wallet address are stored in a secure PostgreSQL database with encrypted connections (TLS).',
-    'privacy.s8.item3': 'Message handling: Message IDs are cached temporarily in memory for deduplication (approximately 2 minutes). Spam counters are maintained in memory and reset periodically. We do not permanently store message content in our database. However, server logs may include message content for operational purposes and may be retained by our hosting provider according to their data retention policies.',
-    'privacy.s8.item4': 'Transaction data is stored on the Arbitrum network (a public blockchain), which provides a permanent and publicly visible record.',
+    'privacy.s8.item1':
+      'Your wallet private keys are stored securely by Coinbase in their Trusted Execution Environment (TEE) and are never exposed to our servers.',
+    'privacy.s8.item2':
+      'Your phone number and wallet address are stored in a secure PostgreSQL database with encrypted connections (TLS).',
+    'privacy.s8.item3':
+      'Message handling: Message IDs are cached temporarily in memory for deduplication (approximately 2 minutes). Spam counters are maintained in memory and reset periodically. We do not permanently store message content in our database. However, server logs may include message content for operational purposes and may be retained by our hosting provider according to their data retention policies.',
+    'privacy.s8.item4':
+      'Transaction data is stored on the Arbitrum network (a public blockchain), which provides a permanent and publicly visible record.',
     'privacy.s9.title': '9. Data Retention',
     'privacy.s9.intro': 'We retain different types of data for different periods:',
-    'privacy.s9.item1': 'Account data (phone number, wallet address): Retained for as long as your account is active, or until you request deletion.',
-    'privacy.s9.item2': 'Activity data (last activity timestamp, daily spending counters): Retained in the database for as long as your account is active. Daily spending counters reset automatically each day.',
-    'privacy.s9.item3': 'Message cache (message IDs, spam counters): Stored in memory only, cleared on server restart or after short intervals (2 minutes for deduplication). Server logs containing message content may be retained by our hosting provider per their policies.',
-    'privacy.s9.item4': 'Payment transactions: Permanently stored on the Arbitrum network (a public blockchain). This data cannot be deleted due to the immutable nature of blockchain records.',
+    'privacy.s9.item1':
+      'Account data (phone number, wallet address): Retained for as long as your account is active, or until you request deletion.',
+    'privacy.s9.item2':
+      'Activity data (last activity timestamp, daily spending counters): Retained in the database for as long as your account is active. Daily spending counters reset automatically each day.',
+    'privacy.s9.item3':
+      'Message cache (message IDs, spam counters): Stored in memory only, cleared on server restart or after short intervals (2 minutes for deduplication). Server logs containing message content may be retained by our hosting provider per their policies.',
+    'privacy.s9.item4':
+      'Payment transactions: Permanently stored on the Arbitrum network (a public blockchain). This data cannot be deleted due to the immutable nature of blockchain records.',
     'privacy.s9.deletion.title': 'Requesting Data Deletion',
-    'privacy.s9.deletion.body': 'To request deletion of your account and associated data, email us at hello@sippy.lat with subject line \u201cData Deletion Request\u201d and include the phone number associated with your account. We will process your request within 15 business days and confirm deletion via email. Note: Transaction records on the Arbitrum blockchain cannot be deleted due to the immutable nature of public blockchains.',
+    'privacy.s9.deletion.body':
+      'To request deletion of your account and associated data, email us at hello@sippy.lat with subject line \u201cData Deletion Request\u201d and include the phone number associated with your account. We will process your request within 15 business days and confirm deletion via email. Note: Transaction records on the Arbitrum blockchain cannot be deleted due to the immutable nature of public blockchains.',
     'privacy.s10.title': '10. Your Rights',
-    'privacy.s10.intro': 'Under Colombian data protection law (Ley 1581 de 2012), you have the following rights:',
-    'privacy.s10.item1': 'Right to Access: Request information about the personal data we hold about you.',
-    'privacy.s10.item2': 'Right to Rectification: Request correction of inaccurate or incomplete data.',
-    'privacy.s10.item3': 'Right to Deletion: Request deletion of your personal data, subject to legal retention requirements.',
-    'privacy.s10.item4': 'Right to Revoke Consent: Withdraw your consent for data processing at any time.',
-    'privacy.s10.item5': 'Right to Lodge a Complaint: File a complaint with the Superintendencia de Industria y Comercio (SIC) if you believe your rights have been violated.',
+    'privacy.s10.intro':
+      'Under Colombian data protection law (Ley 1581 de 2012), you have the following rights:',
+    'privacy.s10.item1':
+      'Right to Access: Request information about the personal data we hold about you.',
+    'privacy.s10.item2':
+      'Right to Rectification: Request correction of inaccurate or incomplete data.',
+    'privacy.s10.item3':
+      'Right to Deletion: Request deletion of your personal data, subject to legal retention requirements.',
+    'privacy.s10.item4':
+      'Right to Revoke Consent: Withdraw your consent for data processing at any time.',
+    'privacy.s10.item5':
+      'Right to Lodge a Complaint: File a complaint with the Superintendencia de Industria y Comercio (SIC) if you believe your rights have been violated.',
     'privacy.s10.footer': 'To exercise any of these rights, please contact us at hello@sippy.lat.',
     'privacy.s11.title': "11. Children's Privacy",
-    'privacy.s11.body': 'Our service is not intended for use by individuals under the age of 18. We do not knowingly collect personal information from children. If you are a parent or guardian and believe your child has provided us with personal information, please contact us at hello@sippy.lat so we can take appropriate action.',
+    'privacy.s11.body':
+      'Our service is not intended for use by individuals under the age of 18. We do not knowingly collect personal information from children. If you are a parent or guardian and believe your child has provided us with personal information, please contact us at hello@sippy.lat so we can take appropriate action.',
     'privacy.s12.title': '12. Changes to This Policy',
-    'privacy.s12.body': 'We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the \u201cLast updated\u201d date. We encourage you to review this Privacy Policy periodically for any changes.',
+    'privacy.s12.body':
+      'We may update this Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the \u201cLast updated\u201d date. We encourage you to review this Privacy Policy periodically for any changes.',
     'privacy.s13.title': '13. Contact Us',
-    'privacy.s13.intro': 'If you have any questions about this Privacy Policy or our data practices, please contact us:',
+    'privacy.s13.intro':
+      'If you have any questions about this Privacy Policy or our data practices, please contact us:',
     'privacy.s13.name': 'Sippy',
     'privacy.s13.registration': 'Company registration in progress',
     'privacy.s13.response': 'We will respond to your inquiry within 15 business days.',
@@ -640,7 +745,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.tosContinue': 'Continuar',
     'setup.tosRequired': 'Debes aceptar los Términos de Servicio para continuar.',
     'setup.spendTitle': 'Establecer Límite de Gasto',
-    'setup.spendSubtitle': 'Elige cuánto puede enviar Sippy por día en tu nombre. Puedes cambiarlo en cualquier momento.',
+    'setup.spendSubtitle':
+      'Elige cuánto puede enviar Sippy por día en tu nombre. Puedes cambiarlo en cualquier momento.',
     'setup.recommended': '(Recomendado)',
     'setup.customPrefix': 'Personalizado: $',
     'setup.perDay': '/día',
@@ -669,7 +775,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.errSpenderNotConfigured': 'Dirección del gastador Sippy no configurada.',
     'setup.errPrepareTx': 'No se pudo preparar la billetera para la transacción. Intenta de nuevo.',
     'setup.errRegisterPermission': 'No se pudo registrar el permiso. Intenta de nuevo.',
-    'setup.errInsufficientEth': 'ETH insuficiente para comisiones de gas. Espera un momento e intenta de nuevo.',
+    'setup.errInsufficientEth':
+      'ETH insuficiente para comisiones de gas. Espera un momento e intenta de nuevo.',
     'setup.errCreatePermission': 'No se pudo crear el permiso',
     'setup.errRegisterWallet': 'No se pudo registrar la billetera',
     'setup.errSendEmailCode': 'No se pudo enviar el código de correo',
@@ -726,7 +833,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'wallet.errInvalidInput': 'Ingresa un número de teléfono o dirección 0x válida.',
     'wallet.errNetwork': 'Error de red. Intenta de nuevo.',
     'wallet.errSessionExpired': 'Sesión expirada. Inicia sesión de nuevo.',
-    'wallet.errNoWallet': 'No se encontró billetera. Configura tu billetera primero en sippy.lat/setup',
+    'wallet.errNoWallet':
+      'No se encontró billetera. Configura tu billetera primero en sippy.lat/setup',
     'wallet.errSendFailed': 'Envío fallido',
     'wallet.errTransactionFailed': 'Transacción fallida.',
 
@@ -758,6 +866,9 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.recommended': '(Recomendado)',
     'settings.customPrefix': 'Personalizado: $',
     'settings.perDay': '/día',
+    'settings.maxLimit': 'Máx',
+    'settings.usedToday': 'Usado hoy',
+    'settings.remaining': 'disponible',
     'settings.updateLimit': 'Actualizar Límite',
     'settings.updating': 'Actualizando...',
     'settings.updateSuccess': '¡Límite actualizado!',
@@ -765,7 +876,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.disableDesc': 'Esto revocará el permiso de Sippy para enviar en tu nombre.',
     'settings.revokePermission': 'Revocar Permiso',
     'settings.revoking': 'Revocando...',
-    'settings.emailWarning': 'Advertencia: Tienes un correo verificado. Revocar el permiso requiere re-verificación.',
+    'settings.emailWarning':
+      'Advertencia: Tienes un correo verificado. Revocar el permiso requiere re-verificación.',
     'settings.cancel': 'Cancelar',
     'settings.continueAnyway': 'Continuar de Todas Formas',
     'settings.verifyIdentity': 'Verificar Identidad',
@@ -781,7 +893,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.recoveryEmail': 'Correo de Recuperación',
     'settings.emailLoadError': 'No se pudo cargar el estado del correo.',
     'settings.emailLoadRetry': 'Reintentar',
-    'settings.addEmailBanner': 'Agrega un correo de recuperación para desbloquear límites más altos',
+    'settings.addEmailBanner':
+      'Agrega un correo de recuperación para desbloquear límites más altos',
     'settings.emailLabel': 'Correo Electrónico',
     'settings.emailPlaceholder': 'tu@ejemplo.com',
     'settings.addEmailBtn': 'Agregar Correo',
@@ -794,7 +907,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.walletSecurity': 'Seguridad de Billetera',
     'settings.exportKey': 'Exportar Clave Privada',
     'settings.exportWarningTitle': 'Advertencia',
-    'settings.exportWarningBody': 'Tu clave privada da acceso total a tu billetera. Nunca la compartas. Guárdala de forma segura.',
+    'settings.exportWarningBody':
+      'Tu clave privada da acceso total a tu billetera. Nunca la compartas. Guárdala de forma segura.',
     'settings.understandContinue': 'Entiendo, continuar',
     'settings.loadingKey': 'Cargando...',
     'settings.transferFirst': 'Transfiere fondos primero',
@@ -803,7 +917,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.transferTo': 'Transferir a Billetera Web',
     'settings.transferBtn': 'Transferir',
     'settings.skipShowKey': 'Omitir y mostrar clave de todas formas',
-    'settings.skipWarning': 'Tu EOA todavía tiene fondos. Transfíerelos primero para evitar pérdidas.',
+    'settings.skipWarning':
+      'Tu EOA todavía tiene fondos. Transfíerelos primero para evitar pérdidas.',
     'settings.transferring': 'Transfiriendo...',
     'settings.movingFunds': 'Moviendo fondos...',
     'settings.retryTransfer': 'Reintentar transferencia',
@@ -882,26 +997,35 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'landing.step1.desc': 'Abre WhatsApp y saluda. Sin descargar apps, sin ir al banco.',
     'landing.step2.num': '02',
     'landing.step2.title': 'Fondea tu billetera',
-    'landing.step2.desc': 'Agrega fondos al instante con m\u00e9todos de pago locales, tarjetas o crypto.',
+    'landing.step2.desc':
+      'Agrega fondos al instante con m\u00e9todos de pago locales, tarjetas o crypto.',
     'landing.step3.num': '03',
     'landing.step3.title': 'Env\u00eda a cualquiera',
-    'landing.step3.desc': 'Manda un monto y un n\u00famero de tel\u00e9fono. Reciben d\u00f3lares digitales al instante.',
+    'landing.step3.desc':
+      'Manda un monto y un n\u00famero de tel\u00e9fono. Reciben d\u00f3lares digitales al instante.',
     'landing.step1.desc.desktop': 'Abre WhatsApp y saluda.\nSin descargar apps, sin ir al banco.',
     'landing.step2.desc.desktop': 'Agrega fondos al instante\ncon tarjetas locales o crypto.',
-    'landing.step3.desc.desktop': 'Manda un monto y un n\u00famero de tel\u00e9fono.\nReciben d\u00f3lares digitales al instante.',
-    'landing.step3.note': 'Billeteras non-custodial vinculadas a n\u00fameros de tel\u00e9fono.\nLiquidaci\u00f3n en menos de un segundo en Arbitrum. Sin app.',
+    'landing.step3.desc.desktop':
+      'Manda un monto y un n\u00famero de tel\u00e9fono.\nReciben d\u00f3lares digitales al instante.',
+    'landing.step3.note':
+      'Billeteras non-custodial vinculadas a n\u00fameros de tel\u00e9fono.\nLiquidaci\u00f3n en menos de un segundo en Arbitrum. Sin app.',
     'landing.hood.title': 'Por Dentro',
-    'landing.hood.desc': 'Construido sobre infraestructura blockchain robusta para seguridad y velocidad.',
+    'landing.hood.desc':
+      'Construido sobre infraestructura blockchain robusta para seguridad y velocidad.',
     'landing.spec1.title': 'USDC Nativo',
-    'landing.spec1.desc': 'Las transacciones liquidan en USDC, con respaldo 1:1 en d\u00f3lares estadounidenses. Totalmente transparente, auditado y l\u00edquido.',
+    'landing.spec1.desc':
+      'Las transacciones liquidan en USDC, con respaldo 1:1 en d\u00f3lares estadounidenses. Totalmente transparente, auditado y l\u00edquido.',
     'landing.spec1.tag1': 'AUTO // LIQUIDAR',
     'landing.spec1.tag2': 'ESTABLE // 1:1',
     'landing.spec2.title': 'Velocidad Arbitrum L2',
-    'landing.spec2.desc': 'Finalidad de transacci\u00f3n en menos de un segundo y comisiones casi nulas en Arbitrum.',
+    'landing.spec2.desc':
+      'Finalidad de transacci\u00f3n en menos de un segundo y comisiones casi nulas en Arbitrum.',
     'landing.spec3.title': 'Non-Custodial',
-    'landing.spec3.desc': 'Billeteras de contrato inteligente vinculadas de forma segura a tu n\u00famero. T\u00fa controlas tus llaves.',
+    'landing.spec3.desc':
+      'Billeteras de contrato inteligente vinculadas de forma segura a tu n\u00famero. T\u00fa controlas tus llaves.',
     'landing.spec4.title': 'IA Agente',
-    'landing.spec4.desc': 'Un agente de IA que entiende c\u00f3mo hablas, no al rev\u00e9s. Solo manda un mensaje con lo que necesitas.',
+    'landing.spec4.desc':
+      'Un agente de IA que entiende c\u00f3mo hablas, no al rev\u00e9s. Solo manda un mensaje con lo que necesitas.',
     'landing.everyone.title': 'Hecho para Todos',
     'landing.pill.1': 'Remesas',
     'landing.pill.2': 'Pago Freelance',
@@ -913,7 +1037,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'landing.cta.title': 'Empieza Ya',
     'landing.cta.desc': 'Abre WhatsApp, saluda y empieza a mover plata en segundos.',
     'landing.cta.button': 'Empezar en WhatsApp',
-    'landing.footer.desc': 'Agente de d\u00f3lares digitales nativo de WhatsApp\npara Latinoam\u00e9rica',
+    'landing.footer.desc':
+      'Agente de d\u00f3lares digitales nativo de WhatsApp\npara Latinoam\u00e9rica',
     'landing.footer.features': '/funciones',
     'landing.footer.fund': '/fondear',
     'landing.footer.about': '/nosotros',
@@ -936,7 +1061,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'about.badge.launch': 'Lanzamiento Q2 2026',
     'about.hero.title.line1': 'La billetera de d\u00f3lares',
     'about.hero.title.line2': 'para Latinoam\u00e9rica',
-    'about.hero.desc': 'Sippy convierte WhatsApp en una billetera USDC en Arbitrum One para que puedas enviar, recibir y guardar d\u00f3lares por mensajes, sin descargar una app, sin seed phrases y sin saber nada de crypto.',
+    'about.hero.desc':
+      'Sippy convierte WhatsApp en una billetera USDC en Arbitrum One para que puedas enviar, recibir y guardar d\u00f3lares por mensajes, sin descargar una app, sin seed phrases y sin saber nada de crypto.',
     'about.how.title.before': 'C\u00f3mo',
     'about.how.title.accent': 'funciona',
     'about.step1.title': 'Crea tu billetera',
@@ -944,10 +1070,12 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'about.step2.title': 'Fondea tu billetera',
     'about.step2.desc': 'Compra USDC con moneda local. Los fondos llegan directo a tu billetera.',
     'about.step3.title': 'Env\u00eda plata',
-    'about.step3.desc': 'Escribe \u201cenviar $20 a +573001234567\u201d en WhatsApp. Llega en segundos.',
+    'about.step3.desc':
+      'Escribe \u201cenviar $20 a +573001234567\u201d en WhatsApp. Llega en segundos.',
     'about.thesis.title.before': 'Por qu\u00e9',
     'about.thesis.title.accent': 'importa',
-    'about.thesis': 'WhatsApp tiene m\u00e1s del 90% de penetraci\u00f3n en Latinoam\u00e9rica. Cientos de millones de personas lo abren antes del desayuno, y la mayor\u00eda quiere estabilidad en d\u00f3lares porque las monedas locales no paran de perder valor. Pero nadie se va a descargar una app nueva para eso. Sippy pone una billetera de d\u00f3lares dentro de la app que ya usan, con un agente de IA que habla su idioma.',
+    'about.thesis':
+      'WhatsApp tiene m\u00e1s del 90% de penetraci\u00f3n en Latinoam\u00e9rica. Cientos de millones de personas lo abren antes del desayuno, y la mayor\u00eda quiere estabilidad en d\u00f3lares porque las monedas locales no paran de perder valor. Pero nadie se va a descargar una app nueva para eso. Sippy pone una billetera de d\u00f3lares dentro de la app que ya usan, con un agente de IA que habla su idioma.',
     'about.arch.title': 'Arquitectura',
     'about.arch.subtitle': 'Mensaje de WhatsApp entra, transacci\u00f3n on-chain sale',
     'about.arch1.title': 'WhatsApp Business API',
@@ -964,21 +1092,27 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'about.arch6.desc': 'Transacciones sin gas para los usuarios',
     'about.trust.title.before': 'Confianza y',
     'about.trust.title.accent': 'Seguridad',
-    'about.trust.desc': 'Los usuarios son due\u00f1os de sus billeteras. Sippy opera mediante permisos de gasto que los usuarios configuran y pueden revocar en cualquier momento.',
+    'about.trust.desc':
+      'Los usuarios son due\u00f1os de sus billeteras. Sippy opera mediante permisos de gasto que los usuarios configuran y pueden revocar en cualquier momento.',
     'about.pillar1.title': 'Non-custodial',
-    'about.pillar1.desc': 'Coinbase CDP Embedded Wallets. Los usuarios controlan sus propias smart accounts y pueden exportar sus llaves privadas.',
+    'about.pillar1.desc':
+      'Coinbase CDP Embedded Wallets. Los usuarios controlan sus propias smart accounts y pueden exportar sus llaves privadas.',
     'about.pillar2.title': 'L\u00edmites controlados por el usuario',
-    'about.pillar2.desc': 'L\u00edmites diarios de gasto aplicados on-chain v\u00eda SpendPermissionManager. Los usuarios los configuran y revocan cuando quieran.',
+    'about.pillar2.desc':
+      'L\u00edmites diarios de gasto aplicados on-chain v\u00eda SpendPermissionManager. Los usuarios los configuran y revocan cuando quieran.',
     'about.pillar3.title': 'Totalmente transparente',
-    'about.pillar3.desc': 'Cada transacci\u00f3n es verificable en Arbiscan. Monto, destinatario, timestamp, todo on-chain.',
+    'about.pillar3.desc':
+      'Cada transacci\u00f3n es verificable en Arbiscan. Monto, destinatario, timestamp, todo on-chain.',
     'about.traction.title': 'Tracci\u00f3n',
     'about.traction1.title': 'Finalista ETHOnline 2025',
     'about.traction1.desc': 'Seleccionado entre cientos de proyectos en ETHGlobal.',
     'about.traction1.link': 'Ver showcase',
     'about.traction2.title': 'Programa de Grants de Arbitrum',
-    'about.traction2.desc': 'Financiado por Arbitrum New Protocols and Ideas 3.0 v\u00eda Questbook.',
+    'about.traction2.desc':
+      'Financiado por Arbitrum New Protocols and Ideas 3.0 v\u00eda Questbook.',
     'about.traction3.title': 'En vivo en mainnet',
-    'about.traction3.desc': 'Contratos inteligentes desplegados y operativos en Arbitrum One. Flujo de pago end-to-end validado.',
+    'about.traction3.desc':
+      'Contratos inteligentes desplegados y operativos en Arbitrum One. Flujo de pago end-to-end validado.',
     'about.cta.title': 'Plata tan r\u00e1pida como tus\u00a0mensajes.',
     'about.cta.sub1': 'Lanzamiento Q2 2026 en Colombia.',
     'about.cta.sub2': 'Hecho para escalar en toda Latinoam\u00e9rica.',
@@ -1026,7 +1160,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.tosContinue': 'Continuar',
     'setup.tosRequired': 'Você deve aceitar os Termos de Serviço para continuar.',
     'setup.spendTitle': 'Definir Limite de Gasto',
-    'setup.spendSubtitle': 'Escolha quanto o Sippy pode enviar por dia em seu nome. Você pode alterar isso a qualquer momento.',
+    'setup.spendSubtitle':
+      'Escolha quanto o Sippy pode enviar por dia em seu nome. Você pode alterar isso a qualquer momento.',
     'setup.recommended': '(Recomendado)',
     'setup.customPrefix': 'Personalizado: $',
     'setup.perDay': '/dia',
@@ -1049,13 +1184,15 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.poweredBy': 'Desenvolvido por Coinbase',
     'setup.errSendCode': 'Falha ao enviar código de verificação',
     'setup.errVerify': 'Verificação falhou',
-    'setup.errFundGas': 'Não foi possível financiar a carteira com gas. Tente novamente mais tarde.',
+    'setup.errFundGas':
+      'Não foi possível financiar a carteira com gas. Tente novamente mais tarde.',
     'setup.errPrepare': 'Falha ao preparar a carteira. Tente novamente.',
     'setup.errNoWallet': 'Nenhuma carteira encontrada. Tente novamente.',
     'setup.errSpenderNotConfigured': 'Endereço do gastador Sippy não configurado.',
     'setup.errPrepareTx': 'Não foi possível preparar a carteira para a transação. Tente novamente.',
     'setup.errRegisterPermission': 'Falha ao registrar permissão. Tente novamente.',
-    'setup.errInsufficientEth': 'ETH insuficiente para taxas de gas. Aguarde um momento e tente novamente.',
+    'setup.errInsufficientEth':
+      'ETH insuficiente para taxas de gas. Aguarde um momento e tente novamente.',
     'setup.errCreatePermission': 'Falha ao criar permissão',
     'setup.errRegisterWallet': 'Falha ao registrar carteira',
     'setup.errSendEmailCode': 'Falha ao enviar código de e-mail',
@@ -1112,7 +1249,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'wallet.errInvalidInput': 'Digite um número de telefone ou endereço 0x válido.',
     'wallet.errNetwork': 'Erro de rede. Tente novamente.',
     'wallet.errSessionExpired': 'Sessão expirada. Entre novamente.',
-    'wallet.errNoWallet': 'Nenhuma carteira encontrada. Configure sua carteira primeiro em sippy.lat/setup',
+    'wallet.errNoWallet':
+      'Nenhuma carteira encontrada. Configure sua carteira primeiro em sippy.lat/setup',
     'wallet.errSendFailed': 'Envio falhou',
     'wallet.errTransactionFailed': 'Transação falhou.',
 
@@ -1144,6 +1282,9 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.recommended': '(Recomendado)',
     'settings.customPrefix': 'Personalizado: $',
     'settings.perDay': '/dia',
+    'settings.maxLimit': 'Máx',
+    'settings.usedToday': 'Usado hoje',
+    'settings.remaining': 'disponível',
     'settings.updateLimit': 'Atualizar Limite',
     'settings.updating': 'Atualizando...',
     'settings.updateSuccess': 'Limite atualizado!',
@@ -1151,7 +1292,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.disableDesc': 'Isso revogará a permissão do Sippy para enviar em seu nome.',
     'settings.revokePermission': 'Revogar Permissão',
     'settings.revoking': 'Revogando...',
-    'settings.emailWarning': 'Aviso: Você tem um e-mail verificado. Revogar a permissão requer reverificação.',
+    'settings.emailWarning':
+      'Aviso: Você tem um e-mail verificado. Revogar a permissão requer reverificação.',
     'settings.cancel': 'Cancelar',
     'settings.continueAnyway': 'Continuar Mesmo Assim',
     'settings.verifyIdentity': 'Verificar Identidade',
@@ -1167,7 +1309,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.recoveryEmail': 'E-mail de Recuperação',
     'settings.emailLoadError': 'Não foi possível carregar o status do e-mail.',
     'settings.emailLoadRetry': 'Tentar novamente',
-    'settings.addEmailBanner': 'Adicione um e-mail de recuperação para desbloquear limites de gasto mais altos',
+    'settings.addEmailBanner':
+      'Adicione um e-mail de recuperação para desbloquear limites de gasto mais altos',
     'settings.emailLabel': 'Endereço de E-mail',
     'settings.emailPlaceholder': 'voce@exemplo.com',
     'settings.addEmailBtn': 'Adicionar E-mail',
@@ -1180,7 +1323,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.walletSecurity': 'Segurança da Carteira',
     'settings.exportKey': 'Exportar Chave Privada',
     'settings.exportWarningTitle': 'Aviso',
-    'settings.exportWarningBody': 'Sua chave privada dá acesso total à sua carteira. Nunca a compartilhe. Guarde-a com segurança.',
+    'settings.exportWarningBody':
+      'Sua chave privada dá acesso total à sua carteira. Nunca a compartilhe. Guarde-a com segurança.',
     'settings.understandContinue': 'Entendo, continuar',
     'settings.loadingKey': 'Carregando...',
     'settings.transferFirst': 'Transfira fundos primeiro',
@@ -1268,26 +1412,36 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'landing.step1.desc': 'Abra o WhatsApp e mande um oi. Sem baixar app, sem ir ao banco.',
     'landing.step2.num': '02',
     'landing.step2.title': 'Carregue sua carteira',
-    'landing.step2.desc': 'Adicione fundos na hora com m\u00e9todos de pagamento locais, cart\u00f5es ou crypto.',
+    'landing.step2.desc':
+      'Adicione fundos na hora com m\u00e9todos de pagamento locais, cart\u00f5es ou crypto.',
     'landing.step3.num': '03',
     'landing.step3.title': 'Envie pra qualquer pessoa',
-    'landing.step3.desc': 'Mande um valor e um n\u00famero de telefone. A pessoa recebe d\u00f3lares digitais na hora.',
-    'landing.step1.desc.desktop': 'Abra o WhatsApp e mande um oi.\nSem baixar app, sem ir ao banco.',
+    'landing.step3.desc':
+      'Mande um valor e um n\u00famero de telefone. A pessoa recebe d\u00f3lares digitais na hora.',
+    'landing.step1.desc.desktop':
+      'Abra o WhatsApp e mande um oi.\nSem baixar app, sem ir ao banco.',
     'landing.step2.desc.desktop': 'Adicione fundos na hora\ncom cart\u00f5es locais ou crypto.',
-    'landing.step3.desc.desktop': 'Mande um valor e um n\u00famero de telefone.\nA pessoa recebe d\u00f3lares digitais na hora.',
-    'landing.step3.note': 'Carteiras non-custodial vinculadas a n\u00fameros de telefone.\nLiquida\u00e7\u00e3o em menos de um segundo na Arbitrum. Sem app.',
+    'landing.step3.desc.desktop':
+      'Mande um valor e um n\u00famero de telefone.\nA pessoa recebe d\u00f3lares digitais na hora.',
+    'landing.step3.note':
+      'Carteiras non-custodial vinculadas a n\u00fameros de telefone.\nLiquida\u00e7\u00e3o em menos de um segundo na Arbitrum. Sem app.',
     'landing.hood.title': 'Por Dentro',
-    'landing.hood.desc': 'Constru\u00eddo sobre infraestrutura blockchain robusta para seguran\u00e7a e velocidade.',
+    'landing.hood.desc':
+      'Constru\u00eddo sobre infraestrutura blockchain robusta para seguran\u00e7a e velocidade.',
     'landing.spec1.title': 'USDC Nativo',
-    'landing.spec1.desc': 'Transa\u00e7\u00f5es liquidam em USDC, garantindo lastro 1:1 com d\u00f3lares americanos. Totalmente transparente, auditado e l\u00edquido.',
+    'landing.spec1.desc':
+      'Transa\u00e7\u00f5es liquidam em USDC, garantindo lastro 1:1 com d\u00f3lares americanos. Totalmente transparente, auditado e l\u00edquido.',
     'landing.spec1.tag1': 'AUTO // LIQUIDAR',
     'landing.spec1.tag2': 'EST\u00c1VEL // 1:1',
     'landing.spec2.title': 'Velocidade Arbitrum L2',
-    'landing.spec2.desc': 'Finalidade de transa\u00e7\u00e3o em menos de um segundo e taxas quase zero na Arbitrum.',
+    'landing.spec2.desc':
+      'Finalidade de transa\u00e7\u00e3o em menos de um segundo e taxas quase zero na Arbitrum.',
     'landing.spec3.title': 'Non-Custodial',
-    'landing.spec3.desc': 'Carteiras de contrato inteligente vinculadas com seguran\u00e7a ao seu n\u00famero. Voc\u00ea controla suas chaves.',
+    'landing.spec3.desc':
+      'Carteiras de contrato inteligente vinculadas com seguran\u00e7a ao seu n\u00famero. Voc\u00ea controla suas chaves.',
     'landing.spec4.title': 'IA Agente',
-    'landing.spec4.desc': 'Um agente de IA que entende como voc\u00ea fala, n\u00e3o o contr\u00e1rio. S\u00f3 mande uma mensagem com o que precisa.',
+    'landing.spec4.desc':
+      'Um agente de IA que entende como voc\u00ea fala, n\u00e3o o contr\u00e1rio. S\u00f3 mande uma mensagem com o que precisa.',
     'landing.everyone.title': 'Feito pra Todo Mundo',
     'landing.pill.1': 'Remessas',
     'landing.pill.2': 'Pagamento Freelancer',
@@ -1299,7 +1453,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'landing.cta.title': 'Comece Agora',
     'landing.cta.desc': 'Abra o WhatsApp, mande um oi e comece a movimentar dinheiro em segundos.',
     'landing.cta.button': 'Comece no WhatsApp',
-    'landing.footer.desc': 'Agente de d\u00f3lares digitais nativo do WhatsApp\npara a Am\u00e9rica Latina',
+    'landing.footer.desc':
+      'Agente de d\u00f3lares digitais nativo do WhatsApp\npara a Am\u00e9rica Latina',
     'landing.footer.features': '/recursos',
     'landing.footer.fund': '/financiar',
     'landing.footer.about': '/sobre',
@@ -1322,18 +1477,22 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'about.badge.launch': 'Lan\u00e7amento Q2 2026',
     'about.hero.title.line1': 'A carteira de d\u00f3lares',
     'about.hero.title.line2': 'para a Am\u00e9rica Latina',
-    'about.hero.desc': 'Sippy transforma o WhatsApp em uma carteira USDC na Arbitrum One pra voc\u00ea enviar, receber e guardar d\u00f3lares por mensagens, sem baixar app, sem seed phrases e sem saber nada de crypto.',
+    'about.hero.desc':
+      'Sippy transforma o WhatsApp em uma carteira USDC na Arbitrum One pra voc\u00ea enviar, receber e guardar d\u00f3lares por mensagens, sem baixar app, sem seed phrases e sem saber nada de crypto.',
     'about.how.title.before': 'Como',
     'about.how.title.accent': 'funciona',
     'about.step1.title': 'Crie sua carteira',
-    'about.step1.desc': 'Verifica\u00e7\u00e3o por SMS. 30 segundos. Voc\u00ea ganha sua pr\u00f3pria smart wallet.',
+    'about.step1.desc':
+      'Verifica\u00e7\u00e3o por SMS. 30 segundos. Voc\u00ea ganha sua pr\u00f3pria smart wallet.',
     'about.step2.title': 'Carregue sua carteira',
     'about.step2.desc': 'Compre USDC com moeda local. Os fundos caem direto na sua carteira.',
     'about.step3.title': 'Envie grana',
-    'about.step3.desc': 'Digite \u201cenviar $20 para +573001234567\u201d no WhatsApp. Chega em segundos.',
+    'about.step3.desc':
+      'Digite \u201cenviar $20 para +573001234567\u201d no WhatsApp. Chega em segundos.',
     'about.thesis.title.before': 'Por que isso',
     'about.thesis.title.accent': 'importa',
-    'about.thesis': 'O WhatsApp tem mais de 90% de penetra\u00e7\u00e3o na Am\u00e9rica Latina. Centenas de milh\u00f5es de pessoas abrem ele antes do caf\u00e9 da manh\u00e3, e a maioria quer estabilidade em d\u00f3lar porque as moedas locais n\u00e3o param de perder valor. Mas ningu\u00e9m vai baixar um app novo pra isso. O Sippy coloca uma carteira de d\u00f3lares dentro do app que eles j\u00e1 usam, com um agente de IA que fala a l\u00edngua deles.',
+    'about.thesis':
+      'O WhatsApp tem mais de 90% de penetra\u00e7\u00e3o na Am\u00e9rica Latina. Centenas de milh\u00f5es de pessoas abrem ele antes do caf\u00e9 da manh\u00e3, e a maioria quer estabilidade em d\u00f3lar porque as moedas locais n\u00e3o param de perder valor. Mas ningu\u00e9m vai baixar um app novo pra isso. O Sippy coloca uma carteira de d\u00f3lares dentro do app que eles j\u00e1 usam, com um agente de IA que fala a l\u00edngua deles.',
     'about.arch.title': 'Arquitetura',
     'about.arch.subtitle': 'Mensagem no WhatsApp entra, transa\u00e7\u00e3o on-chain sai',
     'about.arch1.title': 'WhatsApp Business API',
@@ -1350,13 +1509,17 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'about.arch6.desc': 'Transa\u00e7\u00f5es sem gas para usu\u00e1rios',
     'about.trust.title.before': 'Confian\u00e7a e',
     'about.trust.title.accent': 'Seguran\u00e7a',
-    'about.trust.desc': 'Os usu\u00e1rios s\u00e3o donos das suas carteiras. O Sippy opera por permiss\u00f5es de gasto que os usu\u00e1rios configuram e podem revogar a qualquer momento.',
+    'about.trust.desc':
+      'Os usu\u00e1rios s\u00e3o donos das suas carteiras. O Sippy opera por permiss\u00f5es de gasto que os usu\u00e1rios configuram e podem revogar a qualquer momento.',
     'about.pillar1.title': 'Non-custodial',
-    'about.pillar1.desc': 'Coinbase CDP Embedded Wallets. Os usu\u00e1rios controlam suas pr\u00f3prias smart accounts e podem exportar suas chaves privadas.',
+    'about.pillar1.desc':
+      'Coinbase CDP Embedded Wallets. Os usu\u00e1rios controlam suas pr\u00f3prias smart accounts e podem exportar suas chaves privadas.',
     'about.pillar2.title': 'Limites controlados pelo usu\u00e1rio',
-    'about.pillar2.desc': 'Limites di\u00e1rios de gasto aplicados on-chain via SpendPermissionManager. Os usu\u00e1rios configuram e revogam quando quiserem.',
+    'about.pillar2.desc':
+      'Limites di\u00e1rios de gasto aplicados on-chain via SpendPermissionManager. Os usu\u00e1rios configuram e revogam quando quiserem.',
     'about.pillar3.title': 'Totalmente transparente',
-    'about.pillar3.desc': 'Cada transa\u00e7\u00e3o \u00e9 verific\u00e1vel no Arbiscan. Valor, destinat\u00e1rio, timestamp, tudo on-chain.',
+    'about.pillar3.desc':
+      'Cada transa\u00e7\u00e3o \u00e9 verific\u00e1vel no Arbiscan. Valor, destinat\u00e1rio, timestamp, tudo on-chain.',
     'about.traction.title': 'Tra\u00e7\u00e3o',
     'about.traction1.title': 'Finalista ETHOnline 2025',
     'about.traction1.desc': 'Selecionado entre centenas de projetos no ETHGlobal.',
@@ -1364,7 +1527,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'about.traction2.title': 'Programa de Grants da Arbitrum',
     'about.traction2.desc': 'Financiado pelo Arbitrum New Protocols and Ideas 3.0 via Questbook.',
     'about.traction3.title': 'Ativo na mainnet',
-    'about.traction3.desc': 'Contratos inteligentes implantados e operacionais na Arbitrum One. Fluxo de pagamento end-to-end validado.',
+    'about.traction3.desc':
+      'Contratos inteligentes implantados e operacionais na Arbitrum One. Fluxo de pagamento end-to-end validado.',
     'about.cta.title': 'Grana t\u00e3o r\u00e1pida quanto suas\u00a0mensagens.',
     'about.cta.sub1': 'Lan\u00e7amento Q2 2026 na Col\u00f4mbia.',
     'about.cta.sub2': 'Feito pra escalar em toda a Am\u00e9rica Latina.',
@@ -1376,38 +1540,38 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'about.footer.contact': 'Contato',
     'about.footer.built': 'Constru\u00eddo na Arbitrum One',
   },
-};
+}
 
 // ── Translation helper ─────────────────────────────────────────────────────────
 
 export function t(key: string, lang: Language): string {
-  return TRANSLATIONS[lang]?.[key] ?? TRANSLATIONS['en']?.[key] ?? key;
+  return TRANSLATIONS[lang]?.[key] ?? TRANSLATIONS['en']?.[key] ?? key
 }
 
 // ── Storage functions ──────────────────────────────────────────────────────────
 
 export function storeLanguage(lang: Language): void {
-  localStorage.setItem(LANG_KEY, lang);
-  document.cookie = `sippy_lang=${lang}; path=/; max-age=31536000; SameSite=Lax`;
+  localStorage.setItem(LANG_KEY, lang)
+  document.cookie = `sippy_lang=${lang}; path=/; max-age=31536000; SameSite=Lax`
 }
 
 export function getStoredLanguage(): Language | null {
-  const stored = localStorage.getItem(LANG_KEY);
+  const stored = localStorage.getItem(LANG_KEY)
   if (stored && (VALID_LANGUAGES as string[]).includes(stored)) {
-    return stored as Language;
+    return stored as Language
   }
-  return null;
+  return null
 }
 
 export function clearLanguage(): void {
-  localStorage.removeItem(LANG_KEY);
-  document.cookie = 'sippy_lang=; path=/; max-age=0; SameSite=Lax';
+  localStorage.removeItem(LANG_KEY)
+  document.cookie = 'sippy_lang=; path=/; max-age=0; SameSite=Lax'
 }
 
 // ── Detection + API fetch ──────────────────────────────────────────────────────
 
 export function detectLanguageFromPhone(phone: string): Language {
-  return _getLanguageForPhone(phone) as Language;
+  return _getLanguageForPhone(phone) as Language
 }
 
 export async function fetchUserLanguage(
@@ -1416,11 +1580,11 @@ export async function fetchUserLanguage(
 ): Promise<{ language: Language; source: 'preference' | 'phone' }> {
   const response = await fetch(`${backendUrl}/api/user-language`, {
     headers: { Authorization: `Bearer ${token}` },
-  });
+  })
   if (!response.ok) {
-    throw new Error(`Failed to fetch user language: ${response.status}`);
+    throw new Error(`Failed to fetch user language: ${response.status}`)
   }
-  return response.json();
+  return response.json()
 }
 
 // ── Orchestration ──────────────────────────────────────────────────────────────
@@ -1442,33 +1606,33 @@ export async function resolveLanguage(
 ): Promise<Language> {
   if (token !== null) {
     try {
-      const { language } = await fetchUserLanguage(token, backendUrl);
-      storeLanguage(language);
-      return language;
+      const { language } = await fetchUserLanguage(token, backendUrl)
+      storeLanguage(language)
+      return language
     } catch (err) {
-      console.warn('[i18n] resolveLanguage: API fetch failed, falling back to local sources', err);
+      console.warn('[i18n] resolveLanguage: API fetch failed, falling back to local sources', err)
     }
   }
 
-  const cached = getStoredLanguage();
+  const cached = getStoredLanguage()
   if (cached !== null) {
-    return cached;
+    return cached
   }
 
   // Browser locale (set by proxy from Accept-Language, or from navigator)
-  const browserLang = detectBrowserLanguage();
+  const browserLang = detectBrowserLanguage()
   if (browserLang !== null) {
-    storeLanguage(browserLang);
-    return browserLang;
+    storeLanguage(browserLang)
+    return browserLang
   }
 
   if (phone !== null && phone !== '') {
-    const lang = detectLanguageFromPhone(phone);
-    storeLanguage(lang);
-    return lang;
+    const lang = detectLanguageFromPhone(phone)
+    storeLanguage(lang)
+    return lang
   }
 
-  return 'en';
+  return 'en'
 }
 
 /**
@@ -1476,15 +1640,15 @@ export async function resolveLanguage(
  * Returns null if no supported language matches.
  */
 function detectBrowserLanguage(): Language | null {
-  if (typeof navigator === 'undefined') return null;
-  const langs = navigator.languages?.length ? navigator.languages : [navigator.language];
+  if (typeof navigator === 'undefined') return null
+  const langs = navigator.languages?.length ? navigator.languages : [navigator.language]
   for (const tag of langs) {
-    const code = tag.toLowerCase();
-    if (code.startsWith('es')) return 'es';
-    if (code.startsWith('pt')) return 'pt';
-    if (code.startsWith('en')) return 'en';
+    const code = tag.toLowerCase()
+    if (code.startsWith('es')) return 'es'
+    if (code.startsWith('pt')) return 'pt'
+    if (code.startsWith('en')) return 'en'
   }
-  return null;
+  return null
 }
 
 // ── Error localization ─────────────────────────────────────────────────────────
@@ -1503,64 +1667,57 @@ type ErrorContext =
   | 'export-gate-send'
   | 'export-gate-verify'
   | 'sweep'
-  | 'export';
+  | 'export'
 
-export function localizeError(
-  err: unknown,
-  context: ErrorContext,
-  lang: Language
-): string {
-  const code =
-    (err as { error?: string; code?: string })?.error ??
-    (err as Error)?.message ??
-    '';
+export function localizeError(err: unknown, context: ErrorContext, lang: Language): string {
+  const code = (err as { error?: string; code?: string })?.error ?? (err as Error)?.message ?? ''
 
   // Cross-context code-specific overrides
   if (code === 'gate_required') {
-    return t('settings.errGateRequired', lang);
+    return t('settings.errGateRequired', lang)
   }
   if (
     code === 'invalid_or_expired_code' &&
     (context === 'email-verify' || context === 'export-gate-verify')
   ) {
-    return t('settings.errInvalidCode', lang);
+    return t('settings.errInvalidCode', lang)
   }
   if (code === 'no_verified_email' && context === 'export-gate-send') {
-    return t('settings.errNoVerifiedEmail', lang);
+    return t('settings.errNoVerifiedEmail', lang)
   }
 
   // Context-based fallbacks
   switch (context) {
     case 'otp-send':
-      return t('setup.errSendCode', lang);
+      return t('setup.errSendCode', lang)
     case 'otp-verify':
-      return t('setup.errVerify', lang);
+      return t('setup.errVerify', lang)
     case 'fund-gas':
-      return t('setup.errFundGas', lang);
+      return t('setup.errFundGas', lang)
     case 'register-wallet':
-      return t('setup.errRegisterWallet', lang);
+      return t('setup.errRegisterWallet', lang)
     case 'email-send':
-      return t('setup.errSendEmailCode', lang);
+      return t('setup.errSendEmailCode', lang)
     case 'email-verify':
-      return t('setup.errVerifyEmailCode', lang);
+      return t('setup.errVerifyEmailCode', lang)
     case 'register-permission':
-      return t('setup.errRegisterPermission', lang);
+      return t('setup.errRegisterPermission', lang)
     case 'revoke-permission':
-      return t('settings.errRevokeFailed', lang);
+      return t('settings.errRevokeFailed', lang)
     case 'enable-permission':
-      return t('settings.errEnableFailed', lang);
+      return t('settings.errEnableFailed', lang)
     case 'send':
-      return t('wallet.errSendFailed', lang);
+      return t('wallet.errSendFailed', lang)
     case 'sweep':
-      return t('settings.errSweepFailed', lang);
+      return t('settings.errSweepFailed', lang)
     case 'export':
-      return t('settings.errExportFailed', lang);
+      return t('settings.errExportFailed', lang)
     case 'export-gate-send':
-      return t('settings.errSendEmailCode', lang);
+      return t('settings.errSendEmailCode', lang)
     case 'export-gate-verify':
-      return t('settings.errVerifyEmailCode', lang);
+      return t('settings.errVerifyEmailCode', lang)
     default:
-      return t('settings.errGeneric', lang);
+      return t('settings.errGeneric', lang)
   }
 }
 
@@ -1571,20 +1728,20 @@ export function localizeError(
  * Independent implementation (does not call blockscout.ts).
  */
 export function formatRelativeTime(timestamp: number, lang: Language): string {
-  const now = Date.now();
-  const diffSec = Math.floor((now - timestamp * 1000) / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
+  const now = Date.now()
+  const diffSec = Math.floor((now - timestamp * 1000) / 1000)
+  const diffMin = Math.floor(diffSec / 60)
+  const diffHour = Math.floor(diffMin / 60)
+  const diffDay = Math.floor(diffHour / 24)
 
   if (diffSec < 60) {
-    return t('time.justNow', lang);
+    return t('time.justNow', lang)
   }
   if (diffMin < 60) {
-    return t('time.mAgo', lang).replace('{n}', String(diffMin));
+    return t('time.mAgo', lang).replace('{n}', String(diffMin))
   }
   if (diffHour < 24) {
-    return t('time.hAgo', lang).replace('{n}', String(diffHour));
+    return t('time.hAgo', lang).replace('{n}', String(diffHour))
   }
-  return t('time.dAgo', lang).replace('{n}', String(diffDay));
+  return t('time.dAgo', lang).replace('{n}', String(diffDay))
 }

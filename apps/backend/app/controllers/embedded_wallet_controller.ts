@@ -209,22 +209,64 @@ export default class EmbeddedWalletController {
 
       // CDP doesn't return permissionHash from createSpendPermission, so we
       // match by allowance the frontend just requested, then break ties by
-      // most-recent start time. Falls back to pure most-recent if no allowance sent.
+      // most-recent start time.
       const byStartDesc = (
         a: (typeof matchingPermissions)[0],
         b: (typeof matchingPermissions)[0]
       ) => Number(b.permission?.start || 0) - Number(a.permission?.start || 0)
 
       const requestedAllowance = dailyLimit ? Number.parseFloat(dailyLimit) : null
-      const allowanceMatches =
+
+      // Helper: find permissions matching the requested allowance
+      const findAllowanceMatches = (perms: typeof matchingPermissions) =>
         requestedAllowance !== null
-          ? matchingPermissions.filter((p) => {
+          ? perms.filter((p) => {
               const allowance = Number.parseFloat(
                 ethers.utils.formatUnits(p.permission.allowance, USDC_DECIMALS)
               )
               return Math.abs(allowance - requestedAllowance) < 0.01
             })
           : []
+
+      let allowanceMatches = findAllowanceMatches(matchingPermissions)
+
+      // Retry if allowance match fails — listSpendPermissions may not
+      // have indexed the just-created permission yet (race condition).
+      if (allowanceMatches.length === 0 && requestedAllowance !== null) {
+        logger.info('   No allowance match on first try, retrying after 5s...')
+        await new Promise((resolve) => setTimeout(resolve, 5000))
+        const retryPermissions = await getCdpClient().evm.listSpendPermissions({
+          address: walletAddress as `0x${string}`,
+        })
+        const retryMatching = (
+          (retryPermissions.spendPermissions ?? []) as unknown as typeof matchingPermissions
+        ).filter(
+          (p) =>
+            p.permission?.spender?.toLowerCase() === spenderAddress.toLowerCase() &&
+            p.permission?.token?.toLowerCase() === usdcAddress.toLowerCase() &&
+            p.network === NETWORK
+        )
+        allowanceMatches = findAllowanceMatches(retryMatching)
+
+        // If retry found new permissions, use the full retry set
+        if (retryMatching.length > matchingPermissions.length) {
+          matchingPermissions.length = 0
+          matchingPermissions.push(...retryMatching)
+        }
+      }
+
+      // If a specific allowance was requested but never found, reject instead
+      // of silently falling back to a different (wrong) permission.
+      if (requestedAllowance !== null && allowanceMatches.length === 0) {
+        logger.error(
+          `   Requested allowance $${requestedAllowance} not found onchain after retry. ` +
+            `Available: ${matchingPermissions.map((p) => ethers.utils.formatUnits(p.permission.allowance, USDC_DECIMALS)).join(', ')}`
+        )
+        return response.status(400).json({
+          error:
+            'Permission not found onchain for the requested amount. Please try again in a few seconds.',
+        })
+      }
 
       const matchingPermission =
         allowanceMatches.length > 0
@@ -478,11 +520,15 @@ export default class EmbeddedWalletController {
       const pref = await findUserPrefByPhone(normalizedPhone)
       const tosAccepted = !!pref?.tosAcceptedAt
 
+      // Get daily usage info
+      const limitStatus = await getSecurityLimitStatus(normalizedPhone)
+
       return response.json({
         hasWallet: true,
         walletAddress: row.wallet_address,
         hasPermission: !!row.spend_permission_hash,
         dailyLimit: row.daily_limit ? Number.parseFloat(row.daily_limit) : null,
+        dailySpent: limitStatus.dailySpent,
         tosAccepted,
         phoneNumber,
       })
