@@ -30,13 +30,20 @@ export function encodeUsdcTransfer(
 /**
  * One-shot gas check via /api/ensure-gas.
  * Retries up to maxRetries times with exponential backoff on network failure.
- * Returns true if wallet has gas, false otherwise.
+ * Throws with the backend error message on failure so callers can surface it.
+ *
+ * @param smartAccountAddress - If provided, refuels this address instead of the
+ *   JWT wallet address. Required for UserOps (createSpendPermission, sendUserOperation)
+ *   because the smart account pays gas, not the EOA.
  */
 export async function ensureGasReady(
   backendUrl: string,
   accessToken: string,
-  maxRetries = 2
+  maxRetries = 2,
+  smartAccountAddress?: string
 ): Promise<boolean> {
+  let lastError: string | undefined;
+
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await fetch(`${backendUrl}/api/ensure-gas`, {
@@ -45,6 +52,9 @@ export async function ensureGasReady(
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
+        body: JSON.stringify({
+          ...(smartAccountAddress && { smartAccountAddress }),
+        }),
       });
 
       if (!response.ok) {
@@ -52,18 +62,21 @@ export async function ensureGasReady(
       }
 
       const result = await response.json();
-      return result.ready === true;
+      if (result.ready === true) return true;
+
+      // Backend returned ready: false with a reason
+      lastError = result.error || 'Gas preparation failed';
     } catch (err) {
+      lastError = err instanceof Error ? err.message : 'Network error';
       if (attempt < maxRetries) {
         // Exponential backoff: 3s, 6s
         await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
         continue;
       }
-      console.error('ensureGasReady failed after retries:', err);
-      return false;
     }
   }
-  return false;
+
+  throw new Error(lastError || 'Unable to prepare wallet for transaction');
 }
 
 /**

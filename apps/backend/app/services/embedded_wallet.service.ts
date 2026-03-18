@@ -34,7 +34,6 @@ async function lookupByPhone(phoneNumber: string): Promise<{ rows: any[] }> {
     [phoneNumber.slice(1)]
   )
 }
-import env from '#start/env'
 import {
   NETWORK,
   SIPPY_SPENDER_ADDRESS,
@@ -42,6 +41,7 @@ import {
   getRpcUrl,
   getUsdcAddress,
 } from '#config/network'
+import { getRefuelService } from '#services/refuel.service'
 import { type TransferResult } from '#types/index'
 
 // SpendPermissionManager contract address (same on all supported networks)
@@ -319,11 +319,28 @@ export async function sendWithSpendPermission(
 
     logger.info(`Executing batched spend + transfer in one transaction...`)
 
+    // Ensure spender smart account has ETH for gas (Arbitrum requires it)
+    const refuelService = getRefuelService()
+    if (refuelService.isAvailable()) {
+      const refuelResult = await refuelService.checkAndRefuel(spenderAccount.address)
+      if (refuelResult.success) {
+        logger.info(`Spender gas refueled: ${refuelResult.txHash}`)
+      } else if (refuelResult.error?.includes('sufficient ETH')) {
+        // Already funded, proceed
+      } else {
+        throw new Error(`Spender wallet has no gas and refuel failed: ${refuelResult.error}`)
+      }
+    } else {
+      // Refuel service unavailable — check balance directly as a safety net
+      const provider = new ethers.providers.JsonRpcProvider(getRpcUrl())
+      const spenderBalance = await provider.getBalance(spenderAccount.address)
+      const minBalance = ethers.utils.parseEther('0.00005')
+      if (spenderBalance.lt(minBalance)) {
+        throw new Error('Spender wallet has no gas and refuel service is unavailable')
+      }
+    }
+
     // Execute both calls atomically in a single user operation
-
-    const paymasterUrl = env.get('PAYMASTER_URL')
-    logger.info(`Paymaster URL: ${paymasterUrl ? 'configured' : 'NOT SET'}`)
-
     const userOpResult = await cdp.evm.sendUserOperation({
       smartAccount: spenderAccount,
       network: NETWORK as any, // Network string validated at config level
@@ -339,7 +356,6 @@ export async function sendWithSpendPermission(
           data: transferCallData as `0x${string}`,
         },
       ],
-      ...(paymasterUrl && { paymasterUrl }),
     })
 
     // Wait for the user operation to complete

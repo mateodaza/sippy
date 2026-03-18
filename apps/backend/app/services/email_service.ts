@@ -26,7 +26,7 @@ interface SendBucket {
   resetAt: number
 }
 
-type EmailSender = (to: string, subject: string, text: string) => Promise<void>
+type EmailSender = (to: string, subject: string, text: string, html: string) => Promise<void>
 
 // ── Localization ──────────────────────────────────────────────────────────────
 
@@ -39,8 +39,47 @@ const EMAIL_SUBJECTS = {
 const EMAIL_BODIES = {
   es: (code: string) => `Tu código de verificación de Sippy es: ${code}`,
   en: (code: string) => `Your Sippy verification code is: ${code}`,
-  pt: (code: string) => `Seu código de verificação del Sippy é: ${code}`,
+  pt: (code: string) => `Seu código de verificação do Sippy é: ${code}`,
 } as const
+
+const EMAIL_LABELS = {
+  es: { heading: 'Tu código de verificación', expires: 'Este código expira en 10 minutos.' },
+  en: { heading: 'Your verification code', expires: 'This code expires in 10 minutes.' },
+  pt: { heading: 'Seu código de verificação', expires: 'Este código expira em 10 minutos.' },
+} as const
+
+const LOGO_URL = 'https://sippy.lat/images/logos/sippy-wordmark-white.svg'
+
+function buildEmailHtml(code: string, lang: 'es' | 'en' | 'pt'): string {
+  const labels = EMAIL_LABELS[lang]
+  return `<!DOCTYPE html>
+<html lang="${lang}">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:420px;background:#ffffff;border-radius:12px;overflow:hidden">
+        <!-- Header -->
+        <tr><td style="background:#1A1A2E;padding:28px 32px;text-align:center">
+          <img src="${LOGO_URL}" alt="sippy" width="120" style="display:inline-block" />
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:36px 32px 16px;text-align:center">
+          <p style="margin:0 0 24px;font-size:15px;color:#71717a">${labels.heading}</p>
+          <div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#1A1A2E;font-family:'Courier New',monospace;padding:16px 0">${code}</div>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:8px 32px 32px;text-align:center">
+          <p style="margin:0;font-size:13px;color:#a1a1aa">${labels.expires}</p>
+        </td></tr>
+        <!-- Bottom accent -->
+        <tr><td style="height:4px;background:linear-gradient(90deg,#00AFD7,#00D796)"></td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+}
 
 // ── Service ───────────────────────────────────────────────────────────────────
 
@@ -82,7 +121,8 @@ class EmailService {
       lang === 'es' || lang === 'en' || lang === 'pt' ? lang : 'es'
 
     try {
-      await this.emailSender(email, EMAIL_SUBJECTS[resolvedLang], EMAIL_BODIES[resolvedLang](code))
+      const html = buildEmailHtml(code, resolvedLang)
+      await this.emailSender(email, EMAIL_SUBJECTS[resolvedLang], EMAIL_BODIES[resolvedLang](code), html)
     } catch (err: unknown) {
       return { error: err instanceof Error ? err.message : String(err) }
     }
@@ -216,12 +256,12 @@ class EmailService {
 
   // ── Internal: Resend email sender ───────────────────────────────────────────
 
-  private async defaultEmailSender(to: string, subject: string, text: string): Promise<void> {
+  private async defaultEmailSender(to: string, subject: string, text: string, html: string): Promise<void> {
     const apiKey = process.env.RESEND_API_KEY
     if (!apiKey) throw new Error('RESEND_API_KEY env var not configured')
 
     const resend = new Resend(apiKey)
-    const { error } = await resend.emails.send({ from: DEFAULT_FROM, to, subject, text })
+    const { error } = await resend.emails.send({ from: DEFAULT_FROM, to, subject, text, html })
     if (error) throw new Error(error.message)
   }
 

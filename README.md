@@ -251,4 +251,4 @@ See [M1_PLAN.md](./M1_PLAN.md) for detailed implementation plan.
 - [Arbitrum Explorer](https://arbiscan.io/)
 - [USDC on Arbitrum](https://arbiscan.io/token/0xaf88d065e77c8cC2239327C5EDb3A432268e5831)
 - [Coinbase CDP Docs](https://docs.cdp.coinbase.com/)
-- [GasRefuel Contract](https://arbiscan.io/address/0xC8367a549e05D9184B8e320856cb9A10FDc1DE46)
+- [GasRefuel Contract](https://arbiscan.io/address/0xE4e5474E97E89d990082505fC5708A6a11849936)

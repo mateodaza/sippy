@@ -22,7 +22,7 @@ import {
   sendToAddress,
   sendToPhoneNumber,
 } from '#services/embedded_wallet.service'
-import { getUserWallet, checkSecurityLimits } from '#services/cdp_wallet.service'
+import { getUserWallet, checkSecurityLimits, getSecurityLimitStatus } from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
 import { registerWalletWithIndexer } from '#services/indexer.service'
 import { exportEventSchema, webSendEventSchema, sendFromWebBodySchema } from '#types/schemas'
@@ -208,6 +208,21 @@ export default class EmbeddedWalletController {
       )
       logger.info(`   Onchain allowance: $${onchainAllowance}/period`)
 
+      // Enforce tier cap — reject if on-chain allowance exceeds the user's max
+      const limitStatus = await getSecurityLimitStatus(phoneNumber)
+      if (onchainAllowance > limitStatus.effectiveLimit) {
+        logger.warn(
+          `   Onchain allowance ($${onchainAllowance}) exceeds tier max ($${limitStatus.effectiveLimit}). Rejecting.`
+        )
+        return response.status(400).json({
+          error: `Daily limit cannot exceed $${limitStatus.effectiveLimit}. ${
+            limitStatus.emailVerified
+              ? 'This is your maximum verified limit.'
+              : 'Verify your email at sippy.lat/settings to increase your limit.'
+          }`,
+        })
+      }
+
       // Warn if client-provided limit doesn't match onchain (but use onchain as truth)
       if (dailyLimit && Math.abs(Number.parseFloat(dailyLimit) - onchainAllowance) > 0.01) {
         logger.warn(
@@ -310,11 +325,15 @@ export default class EmbeddedWalletController {
    * Triggers refuel if needed and waits for it to complete.
    * Returns when wallet is ready or after timeout.
    */
-  async ensureGas({ response, cdpUser }: HttpContext) {
+  async ensureGas({ request, response, cdpUser }: HttpContext) {
     try {
       const { walletAddress } = cdpUser!
+      const body = request.body()
+      // Smart account address takes priority — UserOps need gas on the smart
+      // account, not the EOA. Falls back to JWT wallet for backward compat.
+      const targetAddress = body?.smartAccountAddress || walletAddress
 
-      logger.info(`Ensuring gas for wallet: ${walletAddress}`)
+      logger.info(`Ensuring gas for wallet: ${targetAddress}`)
 
       const refuelService = getRefuelService()
       if (!refuelService.isAvailable()) {
@@ -327,7 +346,7 @@ export default class EmbeddedWalletController {
       }
 
       // Check current balance
-      let balance = await refuelService.getUserBalance(walletAddress)
+      let balance = await refuelService.getUserBalance(targetAddress)
       const minBalance = 0.00005 // Same as contract MIN_BALANCE (50k gwei for UserOp)
 
       if (Number.parseFloat(balance) >= minBalance) {
@@ -341,12 +360,12 @@ export default class EmbeddedWalletController {
 
       // Attempt refuel
       logger.info(`Wallet needs refuel (balance: ${balance} ETH)`)
-      const refuelResult = await refuelService.checkAndRefuel(walletAddress)
+      const refuelResult = await refuelService.checkAndRefuel(targetAddress)
 
       if (refuelResult.success) {
         // tx.wait() already confirmed the transaction, so user has gas now
         logger.info(`Refueled wallet: ${refuelResult.txHash}`)
-        balance = await refuelService.getUserBalance(walletAddress)
+        balance = await refuelService.getUserBalance(targetAddress)
         return response.json({
           ready: true,
           balance,

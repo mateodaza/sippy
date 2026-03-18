@@ -31,7 +31,6 @@ import { CDPProviderCustomAuth } from '../providers/cdp-provider';
 const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
-const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL || '';
 
 type SendStep = 'form' | 'confirm' | 'sending' | 'success' | 'error';
 type SendFrom = 'whatsapp' | 'web';
@@ -279,16 +278,13 @@ function WalletContent() {
         const accessToken = getStoredToken();
         if (!accessToken) throw new Error('Session expired. Please sign in again.');
 
-        const gasReady = await ensureGasReady(BACKEND_URL, accessToken);
-        if (!gasReady)
-          throw new Error('Unable to prepare transaction. Try again in a few minutes.');
+        await ensureGasReady(BACKEND_URL, accessToken, 2, smartAccountAddress ?? undefined);
 
         const call = buildUsdcTransferCall(resolvedAddress, amount);
         await sendUserOperation({
           evmSmartAccount: smartAccountAddress as `0x${string}`,
           network: NETWORK as 'arbitrum',
           calls: [call],
-          ...(PAYMASTER_URL && { paymasterUrl: PAYMASTER_URL }),
         });
         // success handled by useEffect watching sendOpStatus
       }

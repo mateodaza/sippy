@@ -19,4 +19,4 @@ export const USDC_ADDRESSES: Record<string, string> = {
 }
 
 // GasRefuel contract on Arbitrum One
-export const GAS_REFUEL_ADDRESS = '0xC8367a549e05D9184B8e320856cb9A10FDc1DE46' as const
+export const GAS_REFUEL_ADDRESS = '0xE4e5474E97E89d990082505fC5708A6a11849936' as const

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Chakra_Petch, Electrolize, Space_Mono } from 'next/font/google';
 import { ThemeWrapper } from '@/components/ui/theme-wrapper';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import './globals.css';
 import { Web3Provider } from './providers/Web3Provider';
 import { BlockscoutProvider } from './providers/BlockscoutProvider';
@@ -72,6 +73,7 @@ export default async function RootLayout({
                     }),
                   }}
                 />
+                <ThemeToggle />
                 {children}
                 </Web3Provider>
             </BlockscoutProvider>
