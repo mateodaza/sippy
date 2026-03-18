@@ -26,6 +26,7 @@ const SIPPY_SPENDER_ADDRESS =
 const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
+const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL || '';
 
 // USDC addresses by network (CDP SDK doesn't support 'usdc' shortcut on Arbitrum)
 const USDC_ADDRESSES: Record<string, string> = {
@@ -636,8 +637,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         token: USDC_ADDRESS as `0x${string}`,
         allowance: parseUnits(dailyLimit, 6), // USDC has 6 decimals
         periodInDays: 1, // Daily limit
-        // CDP paymaster only works on Base - users on Arbitrum need ETH for gas
-        ...(NETWORK === 'base' && { useCdpPaymaster: true }),
+        ...(PAYMASTER_URL ? { paymasterUrl: PAYMASTER_URL } : NETWORK === 'base' ? { useCdpPaymaster: true } : {}),
       });
 
       console.log('Spend permission created:', result);

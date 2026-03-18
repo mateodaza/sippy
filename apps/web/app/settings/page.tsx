@@ -30,6 +30,7 @@ const SIPPY_SPENDER_ADDRESS =
 const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
+const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL || '';
 
 const DAILY_LIMIT_UNVERIFIED = 50   // must match backend EL-001 constant
 const DAILY_LIMIT_VERIFIED   = 500
@@ -528,8 +529,7 @@ function SettingsContent() {
         token: USDC_ADDRESS as `0x${string}`,
         allowance: parseUnits(newLimit, 6), // USDC has 6 decimals
         periodInDays: 1, // Daily limit
-        // CDP paymaster only works on Base - users on Arbitrum need ETH for gas
-        ...(NETWORK === 'base' && { useCdpPaymaster: true }),
+        ...(PAYMASTER_URL ? { paymasterUrl: PAYMASTER_URL } : NETWORK === 'base' ? { useCdpPaymaster: true } : {}),
       });
 
       console.log('Spend permission created:', result);
@@ -680,6 +680,7 @@ function SettingsContent() {
         evmSmartAccount: smartAccountAddress as `0x${string}`,
         network: NETWORK as 'arbitrum',
         calls: [call],
+        ...(PAYMASTER_URL && { paymasterUrl: PAYMASTER_URL }),
       });
     } catch (err) {
       console.error('Sweep failed:', err);
