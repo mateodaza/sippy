@@ -128,9 +128,9 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       // Mark that we've checked
       setHasCheckedSession(true);
 
-      // If not signed in, just show the phone step
+      // If not signed in, wipe any stale JWT and show the phone step
       if (!isSignedIn || !currentUser) {
-        console.log('No existing session, starting fresh');
+        clearToken();
         setIsCheckingSession(false);
         return;
       }

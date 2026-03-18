@@ -56,6 +56,9 @@ export default await Env.create(new URL('../', import.meta.url), {
   BASE_SEPOLIA_RPC_URL: Env.schema.string.optional(),
   BASE_CHAIN_ID: Env.schema.string.optional(),
 
+  // Paymaster (ERC-7677 URL for gas sponsorship on non-Base networks)
+  PAYMASTER_URL: Env.schema.string.optional(),
+
   // Gas Refuel
   REFUEL_CONTRACT_ADDRESS: Env.schema.string.optional(),
   REFUEL_ADMIN_PRIVATE_KEY: Env.schema.string.optional(),

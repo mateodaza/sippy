@@ -33,6 +33,7 @@ async function lookupByPhone(phoneNumber: string): Promise<{ rows: any[] }> {
     [phoneNumber.slice(1)]
   )
 }
+import env from '#start/env'
 import {
   NETWORK,
   SIPPY_SPENDER_ADDRESS,
@@ -319,6 +320,8 @@ export async function sendWithSpendPermission(
 
     // Execute both calls atomically in a single user operation
 
+    const paymasterUrl = env.get('PAYMASTER_URL')
+
     const userOpResult = await cdp.evm.sendUserOperation({
       smartAccount: spenderAccount,
       network: NETWORK as any, // Network string validated at config level
@@ -334,6 +337,7 @@ export async function sendWithSpendPermission(
           data: transferCallData as `0x${string}`,
         },
       ],
+      ...(paymasterUrl && { paymasterUrl }),
     })
 
     // Wait for the user operation to complete
