@@ -59,9 +59,12 @@ export default class ResolveController {
 
       logger.info(`Wallet found: ${wallet.walletAddress}`)
 
+      const pref = await findUserPrefByPhone(canonicalPhone)
+      const phoneVisible = pref?.phoneVisible ?? true
+
       return response.json({
         address: wallet.walletAddress,
-        phone: canonicalPhone,
+        phone: phoneVisible ? canonicalPhone : null,
         isNew: !wallet.lastActivity || wallet.lastActivity === wallet.createdAt,
       })
     } catch (error) {

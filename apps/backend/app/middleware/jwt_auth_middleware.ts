@@ -66,7 +66,10 @@ export default class JwtAuthMiddleware {
         }
 
         // No DB record — first-time registration requires CDP token proof
-        const { walletAddress: bodyWalletAddress, cdpAccessToken } = ctx.request.body() as Record<string, unknown>
+        const { walletAddress: bodyWalletAddress, cdpAccessToken } = ctx.request.body() as Record<
+          string,
+          unknown
+        >
 
         if (!bodyWalletAddress || !ETH_ADDRESS_REGEX.test(bodyWalletAddress as string)) {
           logger.warn('JWT auth: register-wallet — no valid body address')
@@ -74,7 +77,10 @@ export default class JwtAuthMiddleware {
         }
 
         if (cdpAccessToken && typeof cdpAccessToken === 'string') {
-          // CDP token provided — validate wallet ownership
+          // TODO(post-beta): verify CDP token phone matches JWT phone to prevent
+          // mixed-identity registration (attacker with valid JWT + stolen CDP token
+          // could bind someone else's wallet to their phone). Low risk while
+          // single-device, but must fix before multi-instance or wider launch.
           try {
             const cdp = getCdpClient()
             const endUser = await cdp.endUser.validateAccessToken({ accessToken: cdpAccessToken })
@@ -96,7 +102,10 @@ export default class JwtAuthMiddleware {
           // CDP token is required to prove wallet ownership. Without it, an attacker
           // with a valid JWT could register any arbitrary wallet address.
           // See SECURITY_AUDIT.md #5 for context.
-          logger.warn('JWT auth: register-wallet rejected — no CDP token for phone: %s', maskPhone(phoneNumber))
+          logger.warn(
+            'JWT auth: register-wallet rejected — no CDP token for phone: %s',
+            maskPhone(phoneNumber)
+          )
           return ctx.response.unauthorized({ error: 'Unauthorized' })
         }
 
