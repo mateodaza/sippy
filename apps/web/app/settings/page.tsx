@@ -34,6 +34,9 @@ const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
 const DAILY_LIMIT_UNVERIFIED = 50   // must match backend EL-001 constant
 const DAILY_LIMIT_VERIFIED   = 500
 
+const LIMIT_OPTIONS_UNVERIFIED = ['10', '25', '50']
+const LIMIT_OPTIONS_VERIFIED   = ['50', '100', '200', '500']
+
 // USDC addresses by network (CDP SDK doesn't support 'usdc' shortcut on Arbitrum)
 const USDC_ADDRESSES: Record<string, string> = {
   arbitrum: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
@@ -499,13 +502,24 @@ function SettingsContent() {
   }, [walletAddress, emailStatus, refetchPermissions, revokeSpendPermission, lang]);
 
   // Create/update permission with new limit
-  const handleChangeLimit = async () => {
+  const tierMax = emailStatus?.verified ? DAILY_LIMIT_VERIFIED : DAILY_LIMIT_UNVERIFIED;
+  const limitOptions = emailStatus?.verified ? LIMIT_OPTIONS_VERIFIED : LIMIT_OPTIONS_UNVERIFIED;
+
+  const handleChangeLimit = async (overrideLimit?: string) => {
     setPermissionStatus('loading');
     setError(null);
 
     try {
       if (!SIPPY_SPENDER_ADDRESS) {
         throw new Error('Sippy spender address not configured.');
+      }
+
+      // Submit-time clamp: enforce tier max regardless of what the input says
+      const rawLimit = overrideLimit ?? newLimit;
+      const parsedLimit = Math.min(Math.max(1, Number(rawLimit) || 0), tierMax);
+      const clampedLimit = parsedLimit.toString();
+      if (clampedLimit !== newLimit) {
+        setNewLimit(clampedLimit);
       }
 
       // Ensure smart account has gas for the onchain UserOp (Arbitrum needs ETH)
@@ -521,7 +535,7 @@ function SettingsContent() {
         network: NETWORK as 'arbitrum',
         spender: SIPPY_SPENDER_ADDRESS as `0x${string}`,
         token: USDC_ADDRESS as `0x${string}`,
-        allowance: parseUnits(newLimit, 6), // USDC has 6 decimals
+        allowance: parseUnits(clampedLimit, 6), // USDC has 6 decimals
         periodInDays: 1, // Daily limit
       });
 
@@ -541,7 +555,7 @@ function SettingsContent() {
             'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
-            dailyLimit: newLimit,
+            dailyLimit: clampedLimit,
           }),
         });
 
@@ -553,12 +567,12 @@ function SettingsContent() {
 
         // Use the backend response as source of truth (derives limit from onchain)
         const data = await response.json();
-        const onchainLimit = data.dailyLimit ?? parseFloat(newLimit);
+        const onchainLimit = data.dailyLimit ?? parseFloat(clampedLimit);
         setWalletStatus((prev) => prev ? { ...prev, hasPermission: true, dailyLimit: onchainLimit } : null);
         setNewLimit(onchainLimit.toString());
       } else {
         // No backend configured, use local value
-        setWalletStatus((prev) => prev ? { ...prev, hasPermission: true, dailyLimit: parseFloat(newLimit) } : null);
+        setWalletStatus((prev) => prev ? { ...prev, hasPermission: true, dailyLimit: parseFloat(clampedLimit) } : null);
       }
 
       setPermissionStatus('success');
@@ -571,8 +585,9 @@ function SettingsContent() {
 
   // Enable permission (for users who revoked or don't have one)
   const handleEnablePermission = async () => {
-    setNewLimit('100');
-    await handleChangeLimit();
+    const defaultLimit = limitOptions[0];
+    setNewLimit(defaultLimit);
+    await handleChangeLimit(defaultLimit);
   };
 
   // ============================================================================
@@ -1054,13 +1069,13 @@ function SettingsContent() {
           )}
           {(emailSectionStep === 'verified' || emailSectionStep === 'change_entry' || emailSectionStep === 'change_sent') && (
             <>
-              <p className='text-2xl font-bold text-[var(--text-primary)]'>${DAILY_LIMIT_VERIFIED}{t('settings.perDay', lang)}</p>
+              <p className='text-2xl font-bold text-[var(--text-primary)]'>${walletStatus?.dailyLimit ?? DAILY_LIMIT_VERIFIED}{t('settings.perDay', lang)}</p>
               <p className='text-xs text-green-600 mt-1'>✓ {t('settings.emailVerified', lang)}</p>
             </>
           )}
           {emailSectionStep === 'unverified' && (
             <>
-              <p className='text-2xl font-bold text-[var(--text-primary)]'>${DAILY_LIMIT_UNVERIFIED}{t('settings.perDay', lang)}</p>
+              <p className='text-2xl font-bold text-[var(--text-primary)]'>${walletStatus?.dailyLimit ?? DAILY_LIMIT_UNVERIFIED}{t('settings.perDay', lang)}</p>
               <div className='mt-3 border border-amber-400 bg-amber-50 rounded-lg p-3'>
                 <p className='text-sm text-amber-800 mb-2'>{t('settings.verifyEmailCta', lang)}</p>
                 <button
@@ -1074,7 +1089,7 @@ function SettingsContent() {
           )}
           {(emailSectionStep === 'no_email' || emailSectionStep === 'add_sent' || emailSectionStep === 'verify_entry') && (
             <>
-              <p className='text-2xl font-bold text-[var(--text-primary)]'>${DAILY_LIMIT_UNVERIFIED}{t('settings.perDay', lang)}</p>
+              <p className='text-2xl font-bold text-[var(--text-primary)]'>${walletStatus?.dailyLimit ?? DAILY_LIMIT_UNVERIFIED}{t('settings.perDay', lang)}</p>
               <div className='mt-3 border border-amber-400 bg-amber-50 rounded-lg p-3'>
                 <p className='text-sm text-amber-800 mb-2'>{t('settings.verifyEmailCta', lang)}</p>
                 <button
@@ -1105,7 +1120,7 @@ function SettingsContent() {
               {t('settings.changeLimitLabel', lang)}
             </label>
             <div className='space-y-3 mb-4'>
-              {['50', '100', '250', '500'].map((amount) => (
+              {limitOptions.map((amount) => (
                 <button
                   key={amount}
                   onClick={() => setNewLimit(amount)}
@@ -1130,10 +1145,18 @@ function SettingsContent() {
                   type='number'
                   value={newLimit}
                   onChange={(e) => setNewLimit(e.target.value)}
+                  onBlur={() => {
+                    const clamped = Math.min(Math.max(1, Number(newLimit) || 0), tierMax);
+                    setNewLimit(clamped.toString());
+                  }}
+                  max={tierMax}
                   className='w-24 p-2 border rounded text-[var(--text-primary)]'
                 />
                 <span className='text-[var(--text-secondary)]'>{t('settings.perDay', lang)}</span>
               </div>
+              <p className='text-xs text-[var(--text-muted)]'>
+                {t('settings.maxLabel', lang) || 'Max'}: ${tierMax}{t('settings.perDay', lang)}
+              </p>
             </div>
 
             <button
@@ -1248,7 +1271,7 @@ function SettingsContent() {
             </p>
 
             <div className='space-y-3 mb-4'>
-              {['50', '100', '250', '500'].map((amount) => (
+              {limitOptions.map((amount) => (
                 <button
                   key={amount}
                   onClick={() => setNewLimit(amount)}
@@ -1259,10 +1282,13 @@ function SettingsContent() {
                   }`}
                 >
                   <span className='font-bold text-[var(--text-primary)]'>${amount}{t('settings.perDay', lang)}</span>
-                  {amount === '100' && (
+                  {amount === limitOptions[0] && (
                     <span className='ml-2 text-sm text-brand-crypto'>
                       {t('settings.recommended', lang)}
                     </span>
+                  )}
+                  {amount === String(tierMax) && (
+                    <span className='ml-2 text-xs text-[var(--text-muted)]'>max</span>
                   )}
                 </button>
               ))}

@@ -22,7 +22,7 @@ import {
   sendToAddress,
   sendToPhoneNumber,
 } from '#services/embedded_wallet.service'
-import { getUserWallet, checkSecurityLimits } from '#services/cdp_wallet.service'
+import { getUserWallet, checkSecurityLimits, getSecurityLimitStatus } from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
 import { registerWalletWithIndexer } from '#services/indexer.service'
 import { exportEventSchema, webSendEventSchema, sendFromWebBodySchema } from '#types/schemas'
@@ -207,6 +207,21 @@ export default class EmbeddedWalletController {
         ethers.utils.formatUnits(permission.allowance, USDC_DECIMALS)
       )
       logger.info(`   Onchain allowance: $${onchainAllowance}/period`)
+
+      // Enforce tier cap — reject if on-chain allowance exceeds the user's max
+      const limitStatus = await getSecurityLimitStatus(phoneNumber)
+      if (onchainAllowance > limitStatus.effectiveLimit) {
+        logger.warn(
+          `   Onchain allowance ($${onchainAllowance}) exceeds tier max ($${limitStatus.effectiveLimit}). Rejecting.`
+        )
+        return response.status(400).json({
+          error: `Daily limit cannot exceed $${limitStatus.effectiveLimit}. ${
+            limitStatus.emailVerified
+              ? 'This is your maximum verified limit.'
+              : 'Verify your email at sippy.lat/settings to increase your limit.'
+          }`,
+        })
+      }
 
       // Warn if client-provided limit doesn't match onchain (but use onchain as truth)
       if (dailyLimit && Math.abs(Number.parseFloat(dailyLimit) - onchainAllowance) > 0.01) {
