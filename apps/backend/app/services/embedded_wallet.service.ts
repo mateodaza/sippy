@@ -321,6 +321,7 @@ export async function sendWithSpendPermission(
     // Execute both calls atomically in a single user operation
 
     const paymasterUrl = env.get('PAYMASTER_URL')
+    logger.info(`Paymaster URL: ${paymasterUrl ? 'configured' : 'NOT SET'}`)
 
     const userOpResult = await cdp.evm.sendUserOperation({
       smartAccount: spenderAccount,
