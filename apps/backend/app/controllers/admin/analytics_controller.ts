@@ -4,6 +4,9 @@ import { query } from '#services/db'
 import GasRefuelStatus from '#models/indexer/gas_refuel_status'
 import SippyWallet from '#models/indexer/sippy_wallet'
 import { getRefuelService } from '#services/refuel.service'
+import { getSippySpenderAccount } from '#services/embedded_wallet.service'
+import { getRpcUrl } from '#config/network'
+import { ethers } from 'ethers'
 
 export default class AnalyticsController {
   async index({ inertia }: HttpContext) {
@@ -70,11 +73,23 @@ export default class AnalyticsController {
           .limit(30),
       ])
 
-    // Fetch live contract balance from on-chain
+    // Fetch live balances from on-chain
     const refuelService = getRefuelService()
     const contractBalanceEth = refuelService.isAvailable()
       ? await refuelService.getContractBalance()
       : '0'
+
+    let spenderBalanceEth = '0'
+    let spenderAddress = ''
+    try {
+      const spender = await getSippySpenderAccount()
+      spenderAddress = spender.address
+      const provider = new ethers.providers.JsonRpcProvider(getRpcUrl())
+      const balance = await provider.getBalance(spenderAddress)
+      spenderBalanceEth = ethers.utils.formatEther(balance)
+    } catch {
+      // Spender not initialized or RPC error — show 0
+    }
 
     // Serialize for Inertia
     const gasStatusData = gasStatus
@@ -83,6 +98,8 @@ export default class AnalyticsController {
           totalEthSpent: String(gasStatus.totalEthSpent),
           isPaused: gasStatus.isPaused,
           contractBalance: contractBalanceEth,
+          spenderBalance: spenderBalanceEth,
+          spenderAddress,
         }
       : null
 

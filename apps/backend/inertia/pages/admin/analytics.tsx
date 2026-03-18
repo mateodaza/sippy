@@ -26,6 +26,8 @@ interface GasStatus {
   totalEthSpent: string
   isPaused: boolean
   contractBalance?: string
+  spenderBalance?: string
+  spenderAddress?: string
 }
 
 interface Props {
@@ -76,9 +78,12 @@ export default function Analytics({
 
   // KPI progress
   const contractBalanceNum = gasStatus?.contractBalance ? Number.parseFloat(gasStatus.contractBalance) : 0
+  const spenderBalanceNum = gasStatus?.spenderBalance ? Number.parseFloat(gasStatus.spenderBalance) : 0
   const LOW_BALANCE_THRESHOLD = 0.005
+  const SPENDER_LOW_THRESHOLD = 0.0001
   const isLowBalance = contractBalanceNum < LOW_BALANCE_THRESHOLD && contractBalanceNum > 0
   const isEmpty = contractBalanceNum === 0
+  const isSpenderLow = spenderBalanceNum < SPENDER_LOW_THRESHOLD
 
   const volumeUSD = Number(totalVolume) / 1_000_000
   const volumeTarget = 10_000
@@ -95,7 +100,7 @@ export default function Analytics({
         <p className="mt-1 text-sm text-gray-500">On-chain volume, users, and KPI tracking</p>
       </div>
 
-      {/* Low Balance Warning */}
+      {/* Gas Warnings */}
       {(isEmpty || isLowBalance) && (
         <div
           className={`mb-6 flex items-center gap-3 rounded-2xl border px-5 py-4 ${
@@ -121,6 +126,23 @@ export default function Analytics({
             }`}
           >
             {isEmpty ? 'Critical' : 'Warning'}
+          </span>
+        </div>
+      )}
+      {isSpenderLow && (
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-800">
+          <span className="text-xl">!</span>
+          <div className="flex-1">
+            <p className="text-sm font-semibold">Sippy Spender needs gas</p>
+            <p className="mt-0.5 text-xs opacity-80">
+              Balance: {spenderBalanceNum.toFixed(6)} ETH. WhatsApp sends will fail without gas.
+              {gasStatus?.spenderAddress && (
+                <span className="ml-1">Send ETH to {gasStatus.spenderAddress.slice(0, 6)}...{gasStatus.spenderAddress.slice(-4)}</span>
+              )}
+            </p>
+          </div>
+          <span className="shrink-0 rounded-full bg-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-900">
+            Warning
           </span>
         </div>
       )}
@@ -207,18 +229,24 @@ export default function Analytics({
             {gasStatus?.totalRefuels ?? 0}
           </div>
           <div className="mt-1 text-sm font-medium text-gray-500">Gas Refuels</div>
-          <div className="mt-1.5 text-xs text-gray-400">
-            {gasStatus ? formatETH(gasStatus.totalEthSpent) : '0 ETH'} spent
-            {gasStatus?.contractBalance && (
-              <span className="ml-1">
-                / {Number.parseFloat(gasStatus.contractBalance).toFixed(4)} ETH left
-              </span>
-            )}
-            {gasStatus?.isPaused && (
-              <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                Paused
-              </span>
-            )}
+          <div className="mt-1.5 space-y-0.5 text-xs text-gray-400">
+            <div>
+              {gasStatus ? formatETH(gasStatus.totalEthSpent) : '0 ETH'} spent
+              {gasStatus?.isPaused && (
+                <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                  Paused
+                </span>
+              )}
+            </div>
+            <div>
+              Contract: {contractBalanceNum.toFixed(4)} ETH
+              {isLowBalance && <span className="ml-1 text-amber-600">low</span>}
+              {isEmpty && <span className="ml-1 text-red-600">empty</span>}
+            </div>
+            <div>
+              Spender: {spenderBalanceNum.toFixed(6)} ETH
+              {isSpenderLow && <span className="ml-1 text-amber-600">low</span>}
+            </div>
           </div>
         </div>
       </div>
