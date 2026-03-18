@@ -1,7 +1,7 @@
 import { ethers } from 'hardhat';
 
 async function main() {
-  const contractAddress = '0xC8367a549e05D9184B8e320856cb9A10FDc1DE46';
+  const contractAddress = '0xE4e5474E97E89d990082505fC5708A6a11849936';
   const userAddress = '0x2DaB49B266f91D99eeF75072535FC6A86C73FCfF'; // Phone: 57356547372
 
   console.log('🔍 Checking user refuel status...\n');
@@ -47,16 +47,16 @@ async function main() {
     );
   }
 
-  console.log('\n📋 Contract Constants:');
-  const MIN_BALANCE = await gasRefuel.MIN_BALANCE();
-  const REFUEL_AMOUNT = await gasRefuel.REFUEL_AMOUNT();
-  const MAX_DAILY_REFUELS = await gasRefuel.MAX_DAILY_REFUELS();
-  const REFUEL_COOLDOWN = await gasRefuel.REFUEL_COOLDOWN();
+  console.log('\n📋 Contract Config:');
+  const minBal = await gasRefuel.minBalance();
+  const refuelAmt = await gasRefuel.refuelAmount();
+  const maxDaily = await gasRefuel.maxDailyRefuels();
+  const cooldown = await gasRefuel.refuelCooldown();
 
-  console.log('  • MIN_BALANCE:', ethers.formatEther(MIN_BALANCE), 'ETH');
-  console.log('  • REFUEL_AMOUNT:', ethers.formatEther(REFUEL_AMOUNT), 'ETH');
-  console.log('  • MAX_DAILY_REFUELS:', MAX_DAILY_REFUELS.toString());
-  console.log('  • REFUEL_COOLDOWN:', REFUEL_COOLDOWN.toString(), 'seconds');
+  console.log('  • minBalance:', ethers.formatEther(minBal), 'ETH');
+  console.log('  • refuelAmount:', ethers.formatEther(refuelAmt), 'ETH');
+  console.log('  • maxDailyRefuels:', maxDaily.toString());
+  console.log('  • refuelCooldown:', cooldown.toString(), 'seconds');
 }
 
 main()

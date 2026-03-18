@@ -1,7 +1,7 @@
 import { ethers } from 'hardhat';
 
 async function main() {
-  const contractAddress = '0xC8367a549e05D9184B8e320856cb9A10FDc1DE46';
+  const contractAddress = '0xE4e5474E97E89d990082505fC5708A6a11849936';
   const userAddress = '0x5Aa5B05d77C45E00C023ff90a7dB2c9FBD9bcde4';
 
   console.log('⛽ Manual Refuel Test\n');
@@ -36,16 +36,16 @@ async function main() {
   if (!canRefuel) {
     console.log('❌ User cannot be refueled. Checking why...\n');
 
-    const MIN_BALANCE = await gasRefuel.MIN_BALANCE();
+    const minBal = await gasRefuel.minBalance();
     console.log(
-      '  • MIN_BALANCE required:',
-      ethers.formatEther(MIN_BALANCE),
+      '  • minBalance required:',
+      ethers.formatEther(minBal),
       'ETH'
     );
     console.log('  • User has:', ethers.formatEther(userBalanceBefore), 'ETH');
     console.log(
-      '  • User balance < MIN_BALANCE?',
-      userBalanceBefore.lt(MIN_BALANCE) ? '✅ YES' : '❌ NO'
+      '  • User balance < minBalance?',
+      userBalanceBefore < minBal ? '✅ YES' : '❌ NO'
     );
 
     return;
@@ -71,7 +71,7 @@ async function main() {
     );
     console.log(
       '  • Difference:',
-      ethers.formatEther(userBalanceAfter.sub(userBalanceBefore)),
+      ethers.formatEther(userBalanceAfter - userBalanceBefore),
       'ETH'
     );
   } catch (error: any) {

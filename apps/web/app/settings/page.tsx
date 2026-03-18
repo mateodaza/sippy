@@ -30,7 +30,6 @@ const SIPPY_SPENDER_ADDRESS =
 const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
-const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL || '';
 
 const DAILY_LIMIT_UNVERIFIED = 50   // must match backend EL-001 constant
 const DAILY_LIMIT_VERIFIED   = 500
@@ -509,18 +508,13 @@ function SettingsContent() {
         throw new Error('Sippy spender address not configured.');
       }
 
-      // Ensure wallet has gas for the onchain transaction (Arbitrum needs ETH)
+      // Ensure smart account has gas for the onchain UserOp (Arbitrum needs ETH)
       if (BACKEND_URL) {
         const accessToken = getStoredToken();
         if (accessToken) {
-          const gasReady = await ensureGasReady(BACKEND_URL, accessToken);
-          if (!gasReady) {
-            throw new Error('Unable to prepare gas for transaction. Please try again.');
-          }
+          await ensureGasReady(BACKEND_URL, accessToken, 2, smartAccountAddress ?? undefined);
         }
       }
-
-      console.log('Creating new spend permission with limit:', newLimit);
 
       // Create new spend permission using CDP SDK
       const result = await createSpendPermission({
@@ -529,7 +523,6 @@ function SettingsContent() {
         token: USDC_ADDRESS as `0x${string}`,
         allowance: parseUnits(newLimit, 6), // USDC has 6 decimals
         periodInDays: 1, // Daily limit
-        ...(PAYMASTER_URL ? { paymasterUrl: PAYMASTER_URL } : NETWORK === 'base' ? { useCdpPaymaster: true } : {}),
       });
 
       console.log('Spend permission created:', result);
@@ -671,8 +664,7 @@ function SettingsContent() {
       const accessToken = getStoredToken();
       if (!accessToken) throw new Error('Session expired. Please sign in again.');
 
-      const gasReady = await ensureGasReady(BACKEND_URL, accessToken);
-      if (!gasReady) throw new Error('Unable to prepare transaction. Try again in a few minutes.');
+      await ensureGasReady(BACKEND_URL, accessToken, 2, smartAccountAddress ?? undefined);
 
       // Step 2: Build and send UserOperation
       const call = buildUsdcTransferCall(eoaAddress, smartAccountBalance);
@@ -680,7 +672,6 @@ function SettingsContent() {
         evmSmartAccount: smartAccountAddress as `0x${string}`,
         network: NETWORK as 'arbitrum',
         calls: [call],
-        ...(PAYMASTER_URL && { paymasterUrl: PAYMASTER_URL }),
       });
     } catch (err) {
       console.error('Sweep failed:', err);

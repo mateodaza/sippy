@@ -84,7 +84,7 @@ export default createConfig({
     GasRefuel: {
       abi: GasRefuelAbi,
       chain: 'arbitrum',
-      address: '0xC8367a549e05D9184B8e320856cb9A10FDc1DE46',
+      address: '0xE4e5474E97E89d990082505fC5708A6a11849936',
       startBlock: START_BLOCK,
     },
   },

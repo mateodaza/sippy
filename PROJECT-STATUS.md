@@ -90,7 +90,7 @@ All security, privacy, language, and monitoring tasks are complete. Remaining wo
 
 ### Smart Contracts — Deployed
 
-- GasRefuel.sol on Arbitrum One (`0xC8367a549e05D9184B8e320856cb9A10FDc1DE46`)
+- GasRefuel.sol on Arbitrum One (`0xE4e5474E97E89d990082505fC5708A6a11849936`)
 - Automatic gas refueling before USDC transfers
 - Admin-funded, configurable minimum balance threshold
 

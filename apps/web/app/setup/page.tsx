@@ -26,7 +26,6 @@ const SIPPY_SPENDER_ADDRESS =
 const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
-const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL || '';
 
 // USDC addresses by network (CDP SDK doesn't support 'usdc' shortcut on Arbitrum)
 const USDC_ADDRESSES: Record<string, string> = {
@@ -250,10 +249,13 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${accessToken}`,
         },
+        body: JSON.stringify({
+          ...(walletAddress && { smartAccountAddress: walletAddress }),
+        }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to check gas status');
+        throw new Error(`Gas check failed (HTTP ${response.status})`);
       }
 
       const result = await response.json();
@@ -263,14 +265,12 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         setGasReady(true);
         return true;
       } else {
-        // Refuel failed - show the actual error
-        console.error('Gas ensure failed:', result.error);
-        setError(localizeError(result, 'fund-gas', lang));
-        return false;
+        throw new Error(result.error || 'Gas preparation failed');
       }
     } catch (err) {
       console.error('Failed to ensure gas:', err);
-      setError(t('setup.errPrepare', lang));
+      const msg = err instanceof Error ? err.message : t('setup.errPrepare', lang);
+      setError(msg);
       return false;
     } finally {
       setIsPreparingWallet(false);
@@ -620,7 +620,9 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       console.log('Checking gas availability...');
       const hasGas = await ensureGasReady();
       if (!hasGas) {
-        throw new Error('Could not prepare wallet for transaction. Please try again.');
+        // ensureGasReady already set the specific error in state — just bail
+        setIsLoading(false);
+        return;
       }
 
       console.log('Creating spend permission for:', {
@@ -637,7 +639,6 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         token: USDC_ADDRESS as `0x${string}`,
         allowance: parseUnits(dailyLimit, 6), // USDC has 6 decimals
         periodInDays: 1, // Daily limit
-        ...(PAYMASTER_URL ? { paymasterUrl: PAYMASTER_URL } : NETWORK === 'base' ? { useCdpPaymaster: true } : {}),
       });
 
       console.log('Spend permission created:', result);
