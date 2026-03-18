@@ -508,6 +508,17 @@ function SettingsContent() {
         throw new Error('Sippy spender address not configured.');
       }
 
+      // Ensure wallet has gas for the onchain transaction (Arbitrum needs ETH)
+      if (BACKEND_URL) {
+        const accessToken = getStoredToken();
+        if (accessToken) {
+          const gasReady = await ensureGasReady(BACKEND_URL, accessToken);
+          if (!gasReady) {
+            throw new Error('Unable to prepare gas for transaction. Please try again.');
+          }
+        }
+      }
+
       console.log('Creating new spend permission with limit:', newLimit);
 
       // Create new spend permission using CDP SDK

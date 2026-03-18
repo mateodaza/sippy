@@ -12,7 +12,7 @@ import { z } from 'zod'
  * Note: 'send' is intentionally excluded — send commands are regex-only for M1.
  */
 export const llmResultSchema = z.object({
-  command: z.enum(['balance', 'start', 'history', 'settings', 'about', 'help', 'unknown']),
+  command: z.enum(['balance', 'start', 'history', 'settings', 'about', 'help', 'fund', 'greeting', 'social', 'unknown']),
   amount: z.number().positive().max(100_000).nullable(),
   recipient: z.string().min(10).nullable(),
   confidence: z.number().min(0).max(1),
