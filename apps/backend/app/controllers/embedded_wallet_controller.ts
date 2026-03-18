@@ -33,6 +33,7 @@ import { DateTime } from 'luxon'
 import { canonicalizePhone } from '#utils/phone'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { velocityService } from '#services/velocity_service'
+import { checkAndNotifySender } from '#services/invite.service'
 
 // Concurrency guard: prevent duplicate web sends from the same user
 const webActiveSends = new Set<string>()
@@ -104,6 +105,14 @@ export default class EmbeddedWalletController {
       }
 
       logger.info(`Embedded wallet registered for ${canonicalPhone}`)
+
+      // Notify any senders who invited this user
+      try {
+        await checkAndNotifySender(canonicalPhone)
+      } catch (err) {
+        logger.error('Failed to check/notify invite senders: %o', err)
+        // Non-critical -- wallet registration succeeds regardless
+      }
 
       // Auto-refuel new wallet so user has gas for spend permission creation
       const refuelService = getRefuelService()

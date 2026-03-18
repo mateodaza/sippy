@@ -85,6 +85,27 @@ export class ParseLogSchema extends BaseModel {
   declare matchedPhrase: string | null
 }
 
+export class PendingInviteSchema extends BaseModel {
+  static $columns = ['id', 'senderPhone', 'recipientPhone', 'status', 'createdAt', 'expiresAt', 'claimedAt', 'notifiedAt'] as const
+  $columns = PendingInviteSchema.$columns
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare senderPhone: string
+  @column()
+  declare recipientPhone: string
+  @column()
+  declare status: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare expiresAt: bigint | number
+  @column()
+  declare claimedAt: bigint | number | null
+  @column()
+  declare notifiedAt: bigint | number | null
+}
+
 export class PhoneRegistrySchema extends BaseModel {
   static $columns = ['phoneNumber', 'cdpWalletName', 'walletAddress', 'createdAt', 'lastActivity', 'dailySpent', 'lastResetDate', 'spendPermissionHash', 'dailyLimit', 'permissionCreatedAt'] as const
   $columns = PhoneRegistrySchema.$columns

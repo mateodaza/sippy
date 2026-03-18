@@ -15,7 +15,6 @@ import {
 import { LiFiWidget, WidgetEvent, type WidgetConfig, WidgetSkeleton, widgetEvents } from '@lifi/widget';
 import { ChainType } from '@lifi/sdk';
 import { generateOnRampURL } from '@coinbase/cbpay-js';
-import { useTheme } from 'next-themes';
 
 const SIPPY_HOME = 'https://www.sippy.lat';
 const USDC_ARBITRUM = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
@@ -98,7 +97,6 @@ function FundPageContent() {
   );
   const [loading, setLoading] = useState(!!token && !directAddress);
   const [error, setError] = useState('');
-  const { resolvedTheme } = useTheme();
   const coinbaseAvailable = COINBASE_APP_ID && COINBASE_ALLOWED_COUNTRIES.has(detectUserCountry());
   const [activeTab, setActiveTab] = useState<FundTab>(coinbaseAvailable ? 'card' : 'crypto');
 
@@ -207,7 +205,7 @@ function FundPageContent() {
       ],
     },
     hiddenUI: ['toAddress', 'toToken'],
-    appearance: (resolvedTheme as 'light' | 'dark') ?? 'light',
+    appearance: 'light',
     theme: {
       container: {
         boxShadow: '0 8px 32px rgba(0,0,0,0.08)',

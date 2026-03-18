@@ -35,6 +35,7 @@ const USDC_ADDRESSES: Record<string, string> = {
 const USDC_ADDRESS = USDC_ADDRESSES[NETWORK] || USDC_ADDRESSES.arbitrum;
 
 type Step = 'phone' | 'otp' | 'email' | 'tos' | 'permission' | 'done';
+const STEPS: Step[] = ['phone', 'otp', 'email', 'tos', 'permission', 'done'];
 type AuthMode = 'twilio' | 'cdp-sms';
 
 const TOS_VERSION = '1.0';
@@ -727,21 +728,8 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
     <div className='min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4'>
       <div className='max-w-md w-full bg-[var(--bg-primary)] panel-frame rounded-2xl p-8'>
         {/* Progress indicator */}
-        <div className='flex justify-between mb-8'>
-          {(['phone', 'otp', 'email', 'tos', 'permission', 'done'] as const).map((s, i) => (
-            <div
-              key={s}
-              className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                step === s
-                  ? 'bg-brand-primary text-white'
-                  : (['phone', 'otp', 'email', 'tos', 'permission', 'done'] as const).indexOf(step) > i
-                    ? 'bg-brand-primary-light text-brand-primary-hover'
-                    : 'bg-[var(--border-default)] text-[var(--text-muted)]'
-              }`}
-            >
-              {i + 1}
-            </div>
-          ))}
+        <div className='mb-8 text-sm text-[var(--text-secondary)] font-medium tracking-wide'>
+          {({ en: 'Step', es: 'Paso', pt: 'Passo' }[lang] || 'Step')} {STEPS.indexOf(step) + 1} of {STEPS.length}
         </div>
 
         {/* Error display */}
