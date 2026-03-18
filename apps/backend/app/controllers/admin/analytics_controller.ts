@@ -3,6 +3,7 @@ import db from '@adonisjs/lucid/services/db'
 import { query } from '#services/db'
 import GasRefuelStatus from '#models/indexer/gas_refuel_status'
 import SippyWallet from '#models/indexer/sippy_wallet'
+import { getRefuelService } from '#services/refuel.service'
 
 export default class AnalyticsController {
   async index({ inertia }: HttpContext) {
@@ -69,12 +70,19 @@ export default class AnalyticsController {
           .limit(30),
       ])
 
+    // Fetch live contract balance from on-chain
+    const refuelService = getRefuelService()
+    const contractBalanceEth = refuelService.isAvailable()
+      ? await refuelService.getContractBalance()
+      : '0'
+
     // Serialize for Inertia
     const gasStatusData = gasStatus
       ? {
           totalRefuels: gasStatus.totalRefuels,
           totalEthSpent: String(gasStatus.totalEthSpent),
           isPaused: gasStatus.isPaused,
+          contractBalance: contractBalanceEth,
         }
       : null
 

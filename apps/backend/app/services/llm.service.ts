@@ -68,6 +68,14 @@ const MODEL_CATALOG: Record<string, ModelConfig> = {
   },
   // Tiering fallback — 60 RPM (double others), good quality for classification
   'qwen/qwen3-32b': { id: 'qwen/qwen3-32b', rpm: 60, rpd: 1000, timeout: 5000, maxTokens: 512 },
+  // Validator primary — OpenAI safety classification model, purpose-built for policy enforcement
+  'openai/gpt-oss-safeguard-20b': {
+    id: 'openai/gpt-oss-safeguard-20b',
+    rpm: 30,
+    rpd: 1000,
+    timeout: 3000,
+    maxTokens: 120,
+  },
   // Legacy — kept for rollback if Scout has issues
   'llama-3.3-70b-versatile': {
     id: 'llama-3.3-70b-versatile',
@@ -153,7 +161,7 @@ class ModelRateLimiter {
 // Create per-model limiters
 const limiters = new Map<string, ModelRateLimiter>()
 
-function getLimiter(modelId: string): ModelRateLimiter {
+export function getLimiter(modelId: string): ModelRateLimiter {
   if (!limiters.has(modelId)) {
     const config = getModelConfig(modelId)
     limiters.set(modelId, new ModelRateLimiter(config.rpm, config.rpd, modelId))
@@ -167,7 +175,7 @@ function getLimiter(modelId: string): ModelRateLimiter {
 
 let groqClient: Groq | null = null
 
-function getGroqClient(): Groq | null {
+export function getGroqClient(): Groq | null {
   if (!isLLMEnabled()) return null
 
   if (!groqClient) {
@@ -196,9 +204,11 @@ const SYSTEM_PROMPT = `You are Sippy, a chill WhatsApp money assistant for Latin
 
 Your job: parse the user's message into a structured command AND reply naturally when needed.
 
-Available commands: balance, start, history, settings, about, help, fund, unknown.
+Available commands: balance, start, history, settings, about, help, fund, greeting, social, unknown.
 NOTE: "send" is NOT a valid command for you. Send commands are handled separately.
 NOTE: "fund" = user wants to add money/deposit/top-up/fundear/recargar their wallet.
+NOTE: "greeting" = user is saying hi, hello, how are you, what's up, etc. Respond naturally.
+NOTE: "social" = user is acknowledging, thanking, saying bye, or just vibing (ok, dale, gracias, listo, chao, etc.). Respond naturally.
 
 ABOUT SIPPY (use these facts — never guess):
 - Send dollars to any phone number, right from WhatsApp
@@ -206,6 +216,7 @@ ABOUT SIPPY (use these facts — never guess):
 - Transfers arrive in seconds
 - Works in English, Spanish, and Portuguese
 - Money stays in digital dollars, always worth $1
+- If someone isn't on Sippy yet, users can try sending to their number via WhatsApp chat -- we'll invite them automatically
 
 HOW TO SUGGEST ACTIONS (always in the user's language):
 - EN: "send 10 to +57...", "balance", "help"
@@ -228,11 +239,17 @@ COMMON QUESTIONS (map to "about" with a helpfulMessage):
 - "Cuál es mi wallet?" / "My wallet?" → balance (they want their wallet info)
 - "Agregar saldo" / "Quiero recargar" / "Add funds" → fund
 - "Enviar/mandar a alguien" (without amount/recipient) → help, hint the format
+- "Can I send to someone not on Sippy?" / "Mi mama no tiene Sippy" -> help, reply: just try sending to their number here in WhatsApp, we'll invite them automatically
+
+IMPORTANT — settings vs help:
+- "settings" is ONLY for when users explicitly want to manage their account settings (change limits, export keys, revoke permissions).
+- "Y ahora?" / "Que puedo hacer?" / "What can I do?" / "What else?" / "Que otras cosas puedo hacer?" → help (NOT settings). These users want to see their options.
+- When in doubt between help and settings, choose help.
 
 EDGE CASES:
 - Insults/trolling: stay calm, don't engage, redirect
 - Gibberish: say you didn't catch that, suggest trying "ayuda"/"help"
-- Off-topic: brief friendly deflection, one sentence max
+- Off-topic (random questions, trivia, jokes): have fun with it! Answer briefly or joke around, then casually steer back to what Sippy does. Example: "2+2? 4, obviously... unless you're sending 4 dollars to someone, then I'm your guy" — be witty, not robotic. Never just dump the help menu.
 
 RULES:
 - Detect the user's language (en, es, pt, or ambiguous)
@@ -242,7 +259,7 @@ RULES:
 - Output ONLY the JSON object, nothing else.
 
 Return ONLY valid JSON:
-{"command": "balance"|"start"|"history"|"settings"|"about"|"help"|"fund"|"unknown", "amount": null, "recipient": null, "confidence": 0.0-1.0, "helpfulMessage": string|null, "detectedLanguage": "en"|"es"|"pt"|"ambiguous"}`
+{"command": "balance"|"start"|"history"|"settings"|"about"|"help"|"fund"|"greeting"|"social"|"unknown", "amount": null, "recipient": null, "confidence": 0.0-1.0, "helpfulMessage": string|null, "detectedLanguage": "en"|"es"|"pt"|"ambiguous"}`
 
 // ============================================================================
 // Core LLM Call (single model)

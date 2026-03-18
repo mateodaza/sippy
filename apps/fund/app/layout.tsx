@@ -49,7 +49,7 @@ export default function RootLayout({
   return (
     <html lang='en' suppressHydrationWarning className={`${chakraPetch.variable} ${electrolize.variable} ${spaceMono.variable}`}>
       <body className='min-h-screen bg-[var(--bg-primary)] antialiased font-sans text-[var(--text-primary)]'>
-        <ThemeProvider attribute='class' defaultTheme='system' storageKey='sippy_fund_theme'>
+        <ThemeProvider attribute='class' defaultTheme='light' forcedTheme='light' storageKey='sippy_fund_theme'>
           <Web3Provider>{children}</Web3Provider>
         </ThemeProvider>
       </body>

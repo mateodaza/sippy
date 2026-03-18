@@ -20,7 +20,7 @@ import BlurFade from '@/components/ui/blur-fade';
 import ScrollNav from '@/components/ui/scroll-nav';
 import { getRequestLang } from '@/lib/i18n-server';
 import { t } from '@/lib/i18n';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
+
 import { LanguageSwitcher } from '@/components/ui/language-switcher';
 
 export const metadata = {
@@ -56,7 +56,6 @@ export default async function AboutPage() {
               className='transition-smooth hover:scale-105'
             />
           </Link>
-          <ThemeToggle />
         </div>
       </ScrollNav>
 

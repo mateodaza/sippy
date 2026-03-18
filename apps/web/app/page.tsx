@@ -16,7 +16,7 @@ import BlurFade from '@/components/ui/blur-fade';
 import { getRequestLang } from '@/lib/i18n-server';
 import { t } from '@/lib/i18n';
 import { LanguageSwitcher } from '@/components/ui/language-switcher';
-import { ThemeToggle } from '@/components/ui/theme-toggle';
+
 
 const SIPPY_NUMBER =
   process.env.NEXT_PUBLIC_SIPPY_WHATSAPP_NUMBER || '+1 (472) 226-1449';
@@ -69,7 +69,6 @@ export default async function HomePage() {
             />
           </div>
           <div className='pointer-events-auto flex items-center gap-2 shrink-0'>
-            <ThemeToggle />
             <a
               href={`https://wa.me/${SIPPY_NUMBER.replace(/\D/g, '')}?text=${encodeURIComponent('Hey Sippy!')}`}
               target='_blank'

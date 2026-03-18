@@ -44,6 +44,13 @@ import logger from '@adonisjs/core/services/logger'
 import { velocityService } from '#services/velocity_service'
 import { notifyPaymentReceived } from '#services/notification.service'
 import { maskPhone } from '#utils/phone'
+import { createInvite } from '#services/invite.service'
+import {
+  formatInviteSentToSender,
+  formatInviteDeliveryFailed,
+  formatInviteAlreadyPending,
+  formatInviteDailyLimitReached,
+} from '#utils/messages'
 
 export async function handleSendCommand(
   fromPhoneNumber: string,
@@ -86,15 +93,7 @@ export async function handleSendCommand(
     // Check recipient has a wallet (either embedded or legacy)
     const recipientEmbedded = await getEmbeddedWallet(toPhoneNumber)
     const recipientLegacy = await getUserWallet(toPhoneNumber)
-
-    if (!recipientEmbedded && !recipientLegacy) {
-      await sendTextMessage(
-        fromPhoneNumber,
-        formatRecipientNotFoundMessage(toPhoneNumber, lang),
-        lang
-      )
-      return false
-    }
+    const recipientMissing = !recipientEmbedded && !recipientLegacy
 
     const senderBalance = await getUserBalance(fromPhoneNumber)
 
@@ -130,6 +129,25 @@ export async function handleSendCommand(
     const velocityCheck = velocityService.check(fromPhoneNumber, toPhoneNumber, amount, lang)
     if (!velocityCheck.allowed) {
       await sendTextMessage(fromPhoneNumber, velocityCheck.reason!, lang)
+      return false
+    }
+
+    // Recipient not on Sippy — invite them (only after sender validation passes)
+    if (recipientMissing) {
+      try {
+        const inviteResult = await createInvite(fromPhoneNumber, toPhoneNumber, amount, lang)
+        if (inviteResult.dailyLimitReached) {
+          await sendTextMessage(fromPhoneNumber, formatInviteDailyLimitReached(lang), lang)
+        } else if (inviteResult.alreadyInvited) {
+          await sendTextMessage(fromPhoneNumber, formatInviteAlreadyPending(toPhoneNumber, lang), lang)
+        } else if (inviteResult.delivered) {
+          await sendTextMessage(fromPhoneNumber, formatInviteSentToSender(toPhoneNumber, lang), lang)
+        } else {
+          await sendTextMessage(fromPhoneNumber, formatInviteDeliveryFailed(toPhoneNumber, lang), lang)
+        }
+      } catch {
+        await sendTextMessage(fromPhoneNumber, formatRecipientNotFoundMessage(toPhoneNumber, lang), lang)
+      }
       return false
     }
 
@@ -269,15 +287,7 @@ async function handleEmbeddedSend(
   // Check recipient has a wallet (either embedded or legacy)
   const recipientEmbedded = await getEmbeddedWallet(toPhoneNumber)
   const recipientLegacy = await getUserWallet(toPhoneNumber)
-
-  if (!recipientEmbedded && !recipientLegacy) {
-    await sendTextMessage(
-      fromPhoneNumber,
-      formatRecipientNotFoundMessage(toPhoneNumber, lang),
-      lang
-    )
-    return false
-  }
+  const recipientMissing = !recipientEmbedded && !recipientLegacy
 
   // Check balance
   const senderBalance = await getEmbeddedBalance(fromPhoneNumber)
@@ -307,6 +317,25 @@ async function handleEmbeddedSend(
   const velocityCheck = velocityService.check(fromPhoneNumber, toPhoneNumber, amount, lang)
   if (!velocityCheck.allowed) {
     await sendTextMessage(fromPhoneNumber, velocityCheck.reason!, lang)
+    return false
+  }
+
+  // Recipient not on Sippy — invite them (only after sender validation passes)
+  if (recipientMissing) {
+    try {
+      const inviteResult = await createInvite(fromPhoneNumber, toPhoneNumber, amount, lang)
+      if (inviteResult.dailyLimitReached) {
+        await sendTextMessage(fromPhoneNumber, formatInviteDailyLimitReached(lang), lang)
+      } else if (inviteResult.alreadyInvited) {
+        await sendTextMessage(fromPhoneNumber, formatInviteAlreadyPending(toPhoneNumber, lang), lang)
+      } else if (inviteResult.delivered) {
+        await sendTextMessage(fromPhoneNumber, formatInviteSentToSender(toPhoneNumber, lang), lang)
+      } else {
+        await sendTextMessage(fromPhoneNumber, formatInviteDeliveryFailed(toPhoneNumber, lang), lang)
+      }
+    } catch {
+      await sendTextMessage(fromPhoneNumber, formatRecipientNotFoundMessage(toPhoneNumber, lang), lang)
+    }
     return false
   }
 

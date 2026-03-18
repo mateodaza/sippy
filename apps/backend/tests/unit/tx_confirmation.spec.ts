@@ -17,7 +17,6 @@ import { parseMessageWithRegex } from '#utils/message_parser'
 import {
   formatConfirmationPrompt,
   formatTransferCancelled,
-  formatNoPendingTransfer,
   formatCommandErrorMessage,
 } from '#utils/messages'
 import { routeCommand, dispatchCommand } from '#controllers/webhook_controller'
@@ -308,8 +307,8 @@ test.group('Group D | routeCommand confirm handler', () => {
 
     const cmd: ParsedCommand = { command: 'confirm' }
     // Start both without awaiting between — simulates concurrent messages
-    const p1 = routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
-    const p2 = routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    const p1 = routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs, new Set(), 30_000, 'onboarded')
+    const p2 = routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs, new Set(), 30_000, 'onboarded')
     await Promise.all([p1, p2])
 
     assert.equal(sendHandlerCallCount, 1)
@@ -327,7 +326,7 @@ test.group('Group D | routeCommand confirm handler', () => {
     const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
 
     const cmd: ParsedCommand = { command: 'confirm' }
-    await routeCommand('+1555000006', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand('+1555000006', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs, new Set(), 30_000, 'onboarded')
 
     assert.isFalse(sendHandlerCalled)
     // Now returns social reply instead of "No pending transfer"
@@ -350,7 +349,7 @@ test.group('Group D | routeCommand confirm handler', () => {
     const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
 
     const cmd: ParsedCommand = { command: 'confirm' }
-    await routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs, new Set(), 30_000, 'onboarded')
 
     assert.isFalse(sendHandlerCalled)
     assert.isTrue(capturedMessages.length > 0)

@@ -1162,3 +1162,52 @@ export function formatConfirmationPromptWithWarning(
   }
   return base + `\n\n${warning[lang]}`
 }
+
+// ============================================================================
+// Invite-a-friend messages
+// ============================================================================
+
+export function formatInviteSentToSender(recipientPhone: string, lang: Lang = 'en'): string {
+  const phone = recipientPhone
+  const m = {
+    en: () =>
+      `${phone} isn't on Sippy yet.\n\nWe sent them an invite. We'll let you know when they join.`,
+    es: () =>
+      `${phone} no esta en Sippy todavia.\n\nLe enviamos una invitacion. Te avisamos cuando se una.`,
+    pt: () =>
+      `${phone} ainda nao esta no Sippy.\n\nEnviamos um convite. Avisamos quando entrar.`,
+  }
+  return m[lang]()
+}
+
+export function formatInviteDeliveryFailed(recipientPhone: string, lang: Lang = 'en'): string {
+  const phone = recipientPhone
+  const m = {
+    en: () =>
+      `${phone} isn't on Sippy yet.\n\nWe couldn't reach them right now, but if they join we'll let you know.`,
+    es: () =>
+      `${phone} no esta en Sippy todavia.\n\nNo pudimos contactarles ahora, pero si se unen te avisamos.`,
+    pt: () =>
+      `${phone} ainda nao esta no Sippy.\n\nNao conseguimos contata-los agora, mas se entrarem avisamos.`,
+  }
+  return m[lang]()
+}
+
+export function formatInviteAlreadyPending(recipientPhone: string, lang: Lang = 'en'): string {
+  const phone = recipientPhone
+  const m = {
+    en: () => `We already invited ${phone}. We'll let you know when they join.`,
+    es: () => `Ya invitamos a ${phone}. Te avisamos cuando se una.`,
+    pt: () => `Ja convidamos ${phone}. Avisamos quando entrar.`,
+  }
+  return m[lang]()
+}
+
+export function formatInviteDailyLimitReached(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `You've reached the daily invite limit. Try again tomorrow.`,
+    es: () => `Llegaste al limite de invitaciones diarias. Intenta manana.`,
+    pt: () => `Voce atingiu o limite diario de convites. Tente amanha.`,
+  }
+  return m[lang]()
+}

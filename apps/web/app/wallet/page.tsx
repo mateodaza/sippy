@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { Info } from 'lucide-react';
 import {
   useSendUserOperation,
 } from '@coinbase/cdp-hooks';
@@ -30,6 +31,7 @@ import { CDPProviderCustomAuth } from '../providers/cdp-provider';
 const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
+const PAYMASTER_URL = process.env.NEXT_PUBLIC_PAYMASTER_URL || '';
 
 type SendStep = 'form' | 'confirm' | 'sending' | 'success' | 'error';
 type SendFrom = 'whatsapp' | 'web';
@@ -286,6 +288,7 @@ function WalletContent() {
           evmSmartAccount: smartAccountAddress as `0x${string}`,
           network: NETWORK as 'arbitrum',
           calls: [call],
+          ...(PAYMASTER_URL && { paymasterUrl: PAYMASTER_URL }),
         });
         // success handled by useEffect watching sendOpStatus
       }
@@ -496,13 +499,32 @@ function WalletContent() {
         {/* Wallet cards */}
         <div className='grid grid-cols-2 gap-3'>
           {/* WhatsApp Wallet (EOA) */}
-          <button
+          <div
+            role='button'
+            tabIndex={0}
+            aria-pressed={sendFrom === 'whatsapp'}
             onClick={() => setSendFrom('whatsapp')}
-            className={`bg-[var(--bg-primary)] rounded-2xl border border-brand-primary/20 p-4 text-left transition-all ${
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSendFrom('whatsapp') } }}
+            className={`bg-[var(--bg-primary)] rounded-2xl border border-brand-primary/20 p-4 text-left transition-all cursor-pointer ${
               sendFrom === 'whatsapp' ? 'ring-2 ring-brand-primary' : 'opacity-70'
             }`}
           >
-            <p className='text-xs text-[var(--text-secondary)] mb-1 font-medium'>{t('wallet.whatsappWallet', lang)}</p>
+            <div className='flex items-center gap-1 mb-1'>
+              <p className='text-xs text-[var(--text-secondary)] font-medium'>{t('wallet.whatsappWallet', lang)}</p>
+              <div className='relative'>
+                <button
+                  type='button'
+                  aria-label='Info'
+                  className='peer p-0.5'
+                  onClick={(e) => { e.stopPropagation(); e.currentTarget.focus() }}
+                >
+                  <Info size={12} className='text-[var(--text-muted)]' />
+                </button>
+                <div className='absolute bottom-full left-0 mb-1 hidden peer-hover:block peer-focus:block bg-[var(--bg-tertiary)] text-xs text-[var(--text-secondary)] p-2 rounded-lg shadow-lg w-48 z-10'>
+                  {lang === 'es' ? 'Tu billetera principal. Sippy envia desde aqui por WhatsApp.' : lang === 'pt' ? 'Sua carteira principal. Sippy envia daqui pelo WhatsApp.' : 'Your main wallet. Sippy sends from here when you use WhatsApp.'}
+                </div>
+              </div>
+            </div>
             {isLoadingData ? (
               <div className='animate-pulse h-7 bg-[var(--bg-tertiary)] rounded w-20 mb-1' />
             ) : (
@@ -513,16 +535,35 @@ function WalletContent() {
             <p className='text-xs text-[var(--text-muted)] mt-1 truncate'>
               {eoaAddress ? formatAddress(eoaAddress) : '—'}
             </p>
-          </button>
+          </div>
 
           {/* Web Wallet (Smart Account) */}
-          <button
+          <div
+            role='button'
+            tabIndex={0}
+            aria-pressed={sendFrom === 'web'}
             onClick={() => setSendFrom('web')}
-            className={`bg-[var(--bg-primary)] rounded-2xl border border-brand-primary/20 p-4 text-left transition-all ${
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSendFrom('web') } }}
+            className={`bg-[var(--bg-primary)] rounded-2xl border border-brand-primary/20 p-4 text-left transition-all cursor-pointer ${
               sendFrom === 'web' ? 'ring-2 ring-brand-primary' : 'opacity-70'
             }`}
           >
-            <p className='text-xs text-[var(--text-secondary)] mb-1 font-medium'>{t('wallet.webWallet', lang)}</p>
+            <div className='flex items-center gap-1 mb-1'>
+              <p className='text-xs text-[var(--text-secondary)] font-medium'>{t('wallet.webWallet', lang)}</p>
+              <div className='relative'>
+                <button
+                  type='button'
+                  aria-label='Info'
+                  className='peer p-0.5'
+                  onClick={(e) => { e.stopPropagation(); e.currentTarget.focus() }}
+                >
+                  <Info size={12} className='text-[var(--text-muted)]' />
+                </button>
+                <div className='absolute bottom-full left-0 mb-1 hidden peer-hover:block peer-focus:block bg-[var(--bg-tertiary)] text-xs text-[var(--text-secondary)] p-2 rounded-lg shadow-lg w-48 z-10'>
+                  {lang === 'es' ? 'Tu billetera web. Una cuenta inteligente que agrupa transacciones.' : lang === 'pt' ? 'Sua carteira web. Uma conta inteligente que agrupa transacoes.' : 'Your web wallet. A smart account that batches transactions for lower fees.'}
+                </div>
+              </div>
+            </div>
             {isLoadingData ? (
               <div className='animate-pulse h-7 bg-[var(--bg-tertiary)] rounded w-20 mb-1' />
             ) : (
@@ -533,7 +574,7 @@ function WalletContent() {
             <p className='text-xs text-[var(--text-muted)] mt-1 truncate'>
               {smartAccountAddress ? formatAddress(smartAccountAddress) : '—'}
             </p>
-          </button>
+          </div>
         </div>
 
         {/* Selected wallet address + copy */}

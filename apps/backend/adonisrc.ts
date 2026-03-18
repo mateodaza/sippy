@@ -59,6 +59,7 @@ export default defineConfig({
     () => import('#providers/otp_provider'),
     () => import('#providers/email_provider'),
     () => import('#providers/velocity_provider'),
+    () => import('#providers/invite_provider'),
     () => import('@adonisjs/static/static_provider')
   ],
 

@@ -2,7 +2,7 @@ import { Resend } from 'resend'
 import crypto from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 
-const DEFAULT_FROM = 'noreply@sippy.app'
+const DEFAULT_FROM = 'noreply@sippy.lat'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 

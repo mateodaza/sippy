@@ -44,6 +44,7 @@ export default await Env.create(new URL('../', import.meta.url), {
   GROQ_API_KEY: Env.schema.string(),
   USE_LLM: Env.schema.string.optional(),
   LLM_TIERING: Env.schema.string.optional(),
+  LLM_VALIDATOR: Env.schema.string.optional(),
   PRIMARY_LLM_MODEL: Env.schema.string.optional(),
   FALLBACK_LLM_MODEL: Env.schema.string.optional(),
 
@@ -54,6 +55,9 @@ export default await Env.create(new URL('../', import.meta.url), {
   BASE_RPC_URL: Env.schema.string.optional(),
   BASE_SEPOLIA_RPC_URL: Env.schema.string.optional(),
   BASE_CHAIN_ID: Env.schema.string.optional(),
+
+  // Paymaster (ERC-7677 URL for gas sponsorship on non-Base networks)
+  PAYMASTER_URL: Env.schema.string.optional(),
 
   // Gas Refuel
   REFUEL_CONTRACT_ADDRESS: Env.schema.string.optional(),

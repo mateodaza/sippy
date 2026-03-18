@@ -207,6 +207,22 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
     }
   }
 
+  // Strip greeting/filler prefix and retry send patterns
+  // Catches: "Hola envia 5 a +57...", "Hey send 10 to ...", "Oi envia 5 para ..."
+  const GREETING_PREFIX = /^(?:hola|hey|hi|oi|buenas|oye|epa|que tal|buenos d[ií]as|buenas (?:tardes|noches))[,!.;]?\s+/i
+  const withoutGreeting = trimmedText.replace(GREETING_PREFIX, '')
+  if (withoutGreeting !== trimmedText) {
+    for (const { pattern, lang } of SEND_PATTERNS) {
+      const match = withoutGreeting.match(pattern)
+      if (match) {
+        return parseSendMatch(match, text, lang)
+      }
+    }
+    // Also try partial sends after stripping greeting
+    const partialAfterGreeting = matchPartialSend(withoutGreeting)
+    if (partialAfterGreeting) return partialAfterGreeting
+  }
+
   // Check partial send patterns (recipient only, no amount)
   const partialResult = matchPartialSend(trimmedText)
   if (partialResult) return partialResult

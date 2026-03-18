@@ -114,13 +114,14 @@ export function ProfileHeader({
               </button>
             </div>
 
-            {/* ETH Balance Badge */}
+            {/* ETH balance hidden -- re-enable when relevant
             <div className='flex flex-col items-end'>
               <div className='text-white/60 text-xs font-medium mb-1'>ETH</div>
               <div className='text-white text-lg sm:text-xl font-bold tracking-tight'>
                 {parseFloat(balances.eth).toFixed(4)}
               </div>
             </div>
+            */}
           </div>
 
           {/* Main USD Balance */}
