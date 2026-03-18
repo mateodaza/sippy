@@ -12,7 +12,7 @@ import env from '#start/env'
 import { getUserLanguage } from '#services/db'
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { notifyFundReceived } from '#services/notification.service'
-import { canonicalizePhone } from '#utils/phone'
+import { canonicalizePhone, maskPhone } from '#utils/phone'
 
 export default class NotifyController {
   /**
@@ -64,7 +64,7 @@ export default class NotifyController {
         return response.status(400).json({ error: 'Invalid phone number' })
       }
 
-      logger.info(`Sending Fund notification to ${canonicalPhone}: ${amount} ${type.toUpperCase()}`)
+      logger.info(`Sending Fund notification to ${maskPhone(canonicalPhone)}: ${amount} ${type.toUpperCase()}`)
 
       // Verify wallet exists (user must have started via WhatsApp first)
       const wallet = await getUserWallet(canonicalPhone)
@@ -85,7 +85,7 @@ export default class NotifyController {
         lang: fundLang,
       })
 
-      logger.info(`Notification sent to ${canonicalPhone}`)
+      logger.info(`Notification sent to ${maskPhone(canonicalPhone)}`)
 
       return response.json({
         success: true,

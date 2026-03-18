@@ -118,6 +118,17 @@ export function canonicalizePhone(input: string): string | null {
   return e164
 }
 
+/**
+ * Mask a phone number for logging: keeps country prefix (+XX) and last 2 digits.
+ * E.g. "+5215512345678" → "+52*********78"
+ */
+export function maskPhone(phone: string): string {
+  if (phone.length < 6) return '***'
+  const prefix = phone.startsWith('+') ? phone.slice(0, 3) : ''
+  const last2 = phone.slice(-2)
+  return `${prefix}${'*'.repeat(phone.length - prefix.length - 2)}${last2}`
+}
+
 export type SendVerificationMismatch = 'amount' | 'recipient' | 'invalid'
 
 export interface SendVerificationResult {

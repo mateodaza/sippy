@@ -423,8 +423,6 @@ function SettingsContent() {
       }
 
       // STEP 1: Onchain revoke via CDP SDK.
-      console.log('Finding spend permission to revoke...');
-
       // refetch() returns void on CDP hooks, so we trigger it for side-effect.
       // permissionsData in this closure is stale after refetch because React
       // state updates are async. We read from permissionsDataRef instead,
@@ -455,8 +453,6 @@ function SettingsContent() {
       if (!sippyPermission) {
         throw new Error('No active Sippy permission found to revoke.');
       }
-
-      console.log('Revoking spend permission:', sippyPermission.permissionHash);
 
       await revokeSpendPermission({
         network: NETWORK as 'arbitrum',
@@ -508,8 +504,6 @@ function SettingsContent() {
         throw new Error('Sippy spender address not configured.');
       }
 
-      console.log('Creating new spend permission with limit:', newLimit);
-
       // Create new spend permission using CDP SDK
       const result = await createSpendPermission({
         network: NETWORK as 'arbitrum',
@@ -520,8 +514,6 @@ function SettingsContent() {
         // CDP paymaster only works on Base - users on Arbitrum need ETH for gas
         ...(NETWORK === 'base' && { useCdpPaymaster: true }),
       });
-
-      console.log('Spend permission created:', result);
 
       // Register permission with backend - this MUST succeed for transfers to work
       if (BACKEND_URL) {

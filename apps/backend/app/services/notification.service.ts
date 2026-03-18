@@ -12,6 +12,7 @@
 
 import logger from '@adonisjs/core/services/logger'
 import { sendTemplateMessage } from '#services/whatsapp.service'
+import { maskPhone } from '#utils/phone'
 
 // Map app language codes to WhatsApp template language codes
 const TEMPLATE_LANG_MAP: Record<string, string> = {
@@ -71,9 +72,9 @@ export async function notifyPaymentReceived(opts: {
       ]
     )
     if (result) {
-      logger.info(`Payment notification sent to ${recipientPhone} (${amountWithAsset}, tx: ${txHash})`)
+      logger.info(`Payment notification sent to ${maskPhone(recipientPhone)} (${amountWithAsset}, tx: ${txHash})`)
     } else {
-      logger.warn(`Payment notification failed for ${recipientPhone} — template may not be approved yet`)
+      logger.warn(`Payment notification failed for ${maskPhone(recipientPhone)} — template may not be approved yet`)
     }
   } catch (error) {
     logger.error('Failed to send payment notification to %s: %o', recipientPhone, error)
@@ -115,9 +116,9 @@ export async function notifyFundReceived(opts: {
       ]
     )
     if (result) {
-      logger.info(`Fund notification sent to ${recipientPhone} (${amount} ${assetLabel}, tx: ${txHash})`)
+      logger.info(`Fund notification sent to ${maskPhone(recipientPhone)} (${amount} ${assetLabel}, tx: ${txHash})`)
     } else {
-      logger.warn(`Fund notification failed for ${recipientPhone} — template may not be approved yet`)
+      logger.warn(`Fund notification failed for ${maskPhone(recipientPhone)} — template may not be approved yet`)
     }
   } catch (error) {
     logger.error('Failed to send fund notification to %s: %o', recipientPhone, error)

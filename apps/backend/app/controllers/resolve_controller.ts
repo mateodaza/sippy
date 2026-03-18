@@ -10,7 +10,7 @@ import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import { query } from '#services/db'
 import { getUserWallet } from '#services/cdp_wallet.service'
-import { canonicalizePhone } from '#utils/phone'
+import { canonicalizePhone, maskPhone } from '#utils/phone'
 import { findUserPrefByPhone } from '#utils/user_pref_lookup'
 
 export default class ResolveController {
@@ -42,7 +42,7 @@ export default class ResolveController {
 
       // If wallet doesn't exist, return error - user must start via WhatsApp first
       if (!wallet) {
-        logger.info(`Wallet not found for ${canonicalPhone}`)
+        logger.info(`Wallet not found for ${maskPhone(canonicalPhone)}`)
 
         // Get Sippy WhatsApp number from env
         const sippyWhatsAppNumber = env.get('SIPPY_WHATSAPP_NUMBER')
@@ -53,7 +53,6 @@ export default class ResolveController {
         return response.status(404).json({
           error: 'Wallet not found',
           message: `This phone number hasn't started using Sippy yet. They need to send "start" to Sippy on WhatsApp first.`,
-          phone: canonicalPhone,
           ...(whatsappLink && { whatsappLink }),
         })
       }
