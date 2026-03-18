@@ -493,6 +493,46 @@ test.group('Conversation | Send with Currency Words', () => {
   })
 })
 
+test.group('Conversation | Send with Greeting Prefix', () => {
+  test('"Hola envia 0.1 a +573153007266" → send $0.1', async ({ assert }) => {
+    const result = await parseMessage('Hola envia 0.1 a +573153007266')
+    assert.equal(result.command, 'send')
+    assert.approximately(result.amount!, 0.1, 0.01)
+    assert.isOk(result.recipient)
+  })
+
+  test('"Hey send 5 to +573001234567" → send $5', async ({ assert }) => {
+    const result = await parseMessage('Hey send 5 to +573001234567')
+    assert.equal(result.command, 'send')
+    assert.approximately(result.amount!, 5, 0.01)
+  })
+
+  test('"Buenas, manda 10 a +573001234567" → send $10', async ({ assert }) => {
+    const result = await parseMessage('Buenas, manda 10 a +573001234567')
+    assert.equal(result.command, 'send')
+    assert.approximately(result.amount!, 10, 0.01)
+  })
+
+  test('"Oi envia 5 para +5511999887766" → send $5', async ({ assert }) => {
+    const result = await parseMessage('Oi envia 5 para +5511999887766')
+    assert.equal(result.command, 'send')
+    assert.approximately(result.amount!, 5, 0.01)
+  })
+
+  test('"Hola envia 0.1 a +57 315 3007266" (spaces in phone) → send', async ({ assert }) => {
+    const result = await parseMessage('Hola envia 0.1 a +57 315 3007266')
+    assert.equal(result.command, 'send')
+    assert.approximately(result.amount!, 0.1, 0.01)
+  })
+
+  test('"Hola enviar dinero a +573001234567" (greeting + partial) → partial send', async ({ assert }) => {
+    const result = await parseMessage('Hola enviar dinero a +573001234567')
+    assert.equal(result.command, 'send')
+    assert.isOk(result.recipient)
+    assert.isNotOk(result.amount)
+  })
+})
+
 test.group('Conversation | Social Acknowledgments (Loop Prevention)', () => {
   const socialPhrases = [
     'ya', 'ya vi', 'entendido', 'enterado', 'arre', 'sale', 'joya',
