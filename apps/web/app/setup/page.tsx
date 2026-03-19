@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, Suspense, useEffect } from 'react';
+import { useState, Suspense, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuthenticateWithJWT, useCreateSpendPermission, useCurrentUser, useIsSignedIn, useSignOut, useSignInWithSms, useVerifySmsOTP, useGetAccessToken } from '@coinbase/cdp-hooks';
 import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken, getFreshToken } from '../../lib/auth';
@@ -64,12 +64,21 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
   const [isPreparingWallet, setIsPreparingWallet] = useState(false); // Waiting for gas
   const [gasReady, setGasReady] = useState(false);
   const [hasCheckedSession, setHasCheckedSession] = useState(false); // Only check once on mount
+  const cdpInitAttempts = useRef(0); // Track CDP initialization attempts to prevent infinite wait
   const [email, setEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
   const [emailSent, setEmailSent] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
   const [tosChecked, setTosChecked] = useState(false);
   const [lang, setLang] = useState<Language>('en');
+  const emailTimerRef = useRef<number | null>(null);
+
+  // Cleanup email verification timer on unmount
+  useEffect(() => {
+    return () => {
+      if (emailTimerRef.current !== null) clearTimeout(emailTimerRef.current);
+    };
+  }, []);
 
   // Keep html lang attribute in sync for screen readers
   useEffect(() => { document.documentElement.lang = lang }, [lang])
@@ -125,10 +134,20 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       // Wait for CDP to initialize
       if (isSignedIn === undefined) return;
 
+      // Under CDPProviderCustomAuth, CDP uses getJwt() (our stored JWT) to
+      // bootstrap. On the first render cycle isSignedIn may still be false
+      // while CDP is authenticating. Don't clear the token or give up yet —
+      // wait for the next effect cycle so CDP has a chance to complete.
+      // Give up after 3 cycles (~3 re-renders) to avoid hanging forever.
+      if (!isSignedIn && getStoredToken() && cdpInitAttempts.current < 3) {
+        cdpInitAttempts.current += 1;
+        return;
+      }
+
       // Mark that we've checked
       setHasCheckedSession(true);
 
-      // If not signed in, wipe any stale JWT and show the phone step
+      // If not signed in (and no stored token), show the phone step
       if (!isSignedIn || !currentUser) {
         clearToken();
         setIsCheckingSession(false);
@@ -190,7 +209,27 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
               if (status.hasPermission) {
                 setStep('done');
               } else if (status.tosAccepted) {
-                setStep('permission');
+                // BUG 2 fix: attempt to register an existing on-chain permission
+                // before asking the user to create a new one (avoids orphaned duplicates)
+                try {
+                  const regPermRes = await fetch(`${BACKEND_URL}/api/register-permission`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${accessToken}`,
+                    },
+                    body: JSON.stringify({ dailyLimit: null }),
+                  });
+                  if (regPermRes.ok) {
+                    console.log('Found and registered existing on-chain permission during recovery');
+                    setStep('done');
+                  } else {
+                    // No existing permission found — resume at permission step
+                    setStep('permission');
+                  }
+                } catch {
+                  setStep('permission');
+                }
               } else {
                 // Wallet registered but ToS not accepted — resume at ToS step.
                 // Email step is only shown in the initial fresh flow, not on recovery.
@@ -230,9 +269,9 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
     setError(null);
 
     try {
-      const accessToken = getStoredToken();
+      const accessToken = getFreshToken();
       if (!accessToken) {
-        throw new Error('No access token');
+        throw new Error('Session expired. Please refresh and try again.');
       }
 
       const response = await fetch(`${BACKEND_URL}/api/ensure-gas`, {
@@ -312,6 +351,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
   const handleVerifyOtp = async () => {
     setIsLoading(true);
     setError(null);
+    let shouldKeepLoading = false;
 
     try {
       if (authMode === 'cdp-sms') {
@@ -357,7 +397,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         // React won't re-render mid-handler, so `currentUser` from the closure is stale.
         // Set a flag so a useEffect can pick up the wallet once currentUser updates.
         setAwaitingCdpWallet(true);
-        // Keep isLoading true — the useEffect will clear it when the wallet arrives.
+        shouldKeepLoading = true;
         return;
       }
 
@@ -375,10 +415,16 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
 
       const { user } = await authenticateWithJWT();
 
-      // Get the user's smart account address
+      // Check if wallet is immediately available. CDP creates wallets
+      // asynchronously — the user object may not have it yet.
       const smartAccountAddress = user?.evmSmartAccounts?.[0] || user?.evmAccounts?.[0];
       if (!smartAccountAddress) {
-        throw new Error('No wallet found. Please try again.');
+        // Wallet not populated yet — wait for currentUser to update
+        // (same pattern as CDP-SMS path). The useEffect below will
+        // pick it up, register the wallet, and advance to email step.
+        setAwaitingCdpWallet(true);
+        shouldKeepLoading = true;
+        return;
       }
 
       setWalletAddress(smartAccountAddress);
@@ -388,14 +434,14 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         try {
           const accessToken = getStoredToken();
           if (accessToken) {
-            const cdpToken = await getAccessToken();
+            const cdpToken = await getAccessToken().catch(() => null);
             const response = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({ walletAddress: smartAccountAddress, cdpAccessToken: cdpToken }),
+              body: JSON.stringify({ walletAddress: smartAccountAddress, ...(cdpToken && { cdpAccessToken: cdpToken }) }),
             });
 
             if (!response.ok) {
@@ -421,8 +467,8 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       console.error('OTP verification failed:', err);
       setError(localizeError(err, 'otp-verify', lang));
     } finally {
-      // For CDP SMS flow with awaitingCdpWallet, keep isLoading true
-      if (authMode !== 'cdp-sms') {
+      // Keep isLoading true only when awaiting wallet population via useEffect
+      if (!shouldKeepLoading) {
         setIsLoading(false);
       }
     }
@@ -456,14 +502,14 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         if (BACKEND_URL) {
           const accessToken = getStoredToken();
           if (accessToken) {
-            const cdpToken = await getAccessToken();
+            const cdpToken = await getAccessToken().catch(() => null);
             const response = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${accessToken}`,
               },
-              body: JSON.stringify({ walletAddress: smartAccountAddress, cdpAccessToken: cdpToken }),
+              body: JSON.stringify({ walletAddress: smartAccountAddress, ...(cdpToken && { cdpAccessToken: cdpToken }) }),
             });
 
             if (!response.ok) {
@@ -498,7 +544,11 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
     setIsLoading(true);
     setError(null);
     try {
-      const accessToken = getStoredToken();
+      const accessToken = getFreshToken();
+      if (!accessToken) {
+        setError(t('setup.errSessionExpired', lang));
+        return;
+      }
       const response = await fetch(`${BACKEND_URL}/api/auth/send-email-code`, {
         method: 'POST',
         headers: {
@@ -525,7 +575,11 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
     setIsLoading(true);
     setError(null);
     try {
-      const accessToken = getStoredToken();
+      const accessToken = getFreshToken();
+      if (!accessToken) {
+        setError(t('setup.errSessionExpired', lang));
+        return;
+      }
       const response = await fetch(`${BACKEND_URL}/api/auth/verify-email-code`, {
         method: 'POST',
         headers: {
@@ -536,7 +590,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       });
       if (response.ok) {
         setEmailVerified(true);
-        setTimeout(() => setStep('tos'), 1500);
+        emailTimerRef.current = window.setTimeout(() => setStep('tos'), 1500);
       } else {
         setError(localizeError(response, 'email-verify', lang));
       }
@@ -564,23 +618,25 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
 
     try {
       if (BACKEND_URL) {
-        const accessToken = getStoredToken();
+        const accessToken = getFreshToken();
         if (!accessToken) {
-          console.warn('handleAcceptTos: no access token — ToS acceptance will not be recorded on backend');
+          throw new Error(
+            lang === 'es' ? 'Sesión expirada. Recarga la página e intenta de nuevo.' :
+            lang === 'pt' ? 'Sessão expirada. Recarregue a página e tente novamente.' :
+            'Session expired. Please refresh the page and try again.'
+          );
         }
-        if (accessToken) {
-          const response = await fetch(`${BACKEND_URL}/api/accept-tos`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({ version: TOS_VERSION }),
-          });
+        const response = await fetch(`${BACKEND_URL}/api/accept-tos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ version: TOS_VERSION }),
+        });
 
-          if (!response.ok) {
-            throw new Error('Failed to record ToS acceptance');
-          }
+        if (!response.ok) {
+          throw new Error('Failed to record ToS acceptance');
         }
       }
 
@@ -601,6 +657,18 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
     try {
       if (!walletAddress) {
         throw new Error('No wallet address. Please restart the process.');
+      }
+
+      // BUG 8 fix: validate daily limit before creating on-chain permission
+      const parsedLimit = Number(dailyLimit);
+      if (!Number.isFinite(parsedLimit) || parsedLimit < 1 || parsedLimit > 10000) {
+        setError(
+          lang === 'es' ? 'El límite diario debe ser entre $1 y $10,000.' :
+          lang === 'pt' ? 'O limite diário deve ser entre $1 e $10.000.' :
+          'Daily limit must be between $1 and $10,000.'
+        );
+        setIsLoading(false);
+        return;
       }
 
       if (!SIPPY_SPENDER_ADDRESS) {
@@ -631,9 +699,13 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       // Register permission with backend - this MUST succeed for transfers to work
       // Backend will verify and fetch the actual permissionHash from CDP
       if (BACKEND_URL) {
-        const accessToken = getStoredToken();
+        const accessToken = getFreshToken();
         if (!accessToken) {
-          throw new Error('Failed to get access token. Please try again.');
+          throw new Error(
+            lang === 'es' ? 'Sesión expirada. Recarga la página e intenta de nuevo.' :
+            lang === 'pt' ? 'Sessão expirada. Recarregue a página e tente novamente.' :
+            'Session expired. Please refresh the page and try again.'
+          );
         }
 
         const response = await fetch(`${BACKEND_URL}/api/register-permission`, {
@@ -667,7 +739,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         // Trigger a re-registration to attempt refuel again
         if (BACKEND_URL && walletAddress) {
           try {
-            const accessToken = getStoredToken();
+            const accessToken = getFreshToken();
             if (accessToken) {
               const cdpToken = await getAccessToken().catch((err: unknown) => {
                 console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
@@ -725,6 +797,14 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         {error && (
           <div className='mb-4 p-3 bg-[var(--fill-danger-light)] border border-red-200 rounded-lg text-red-700 text-sm'>
             {error}
+            {!getFreshToken() && step !== 'phone' && step !== 'otp' && (
+              <button
+                onClick={() => window.location.reload()}
+                className='block mt-2 text-red-800 underline font-semibold'
+              >
+                {lang === 'es' ? 'Recargar página' : lang === 'pt' ? 'Recarregar página' : 'Reload page'}
+              </button>
+            )}
           </div>
         )}
 
@@ -945,6 +1025,8 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
                   type='number'
                   value={dailyLimit}
                   onChange={(e) => setDailyLimit(e.target.value)}
+                  min={1}
+                  max={10000}
                   className='w-24 p-2 border rounded text-[var(--text-primary)]'
                 />
                 <span className='text-[var(--text-secondary)]'>{t('setup.perDay', lang)}</span>
