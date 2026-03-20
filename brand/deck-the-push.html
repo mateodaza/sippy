@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sippy — Company Presentation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Electrolize&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand-primary: #00AFD7;
+      --brand-crypto: #00D796;
+      --brand-dark: #0D0D1A;
+      --slide-w: 1280px;
+      --slide-h: 720px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #080810;
+      font-family: 'Chakra Petch', sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      padding: 24px 0;
+    }
+    @media print {
+      body { background: none; gap: 0; padding: 0; }
+      .slide { box-shadow: none !important; page-break-after: always; margin: 0; }
+      .slide:last-child { page-break-after: avoid; }
+    }
+    .slide {
+      width: var(--slide-w);
+      height: var(--slide-h);
+      background: var(--brand-dark);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .grid-bg {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,175,215,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,175,215,0.04) 1px, transparent 1px);
+      background-size: 80px 80px;
+      pointer-events: none;
+    }
+    .reg-marks::before, .reg-marks::after {
+      content: '+'; position: absolute;
+      font-family: 'Space Mono', monospace; font-size: 14px;
+      color: rgba(0,175,215,0.2); z-index: 1;
+    }
+    .reg-marks::before { top: 16px; left: 20px; }
+    .reg-marks::after { bottom: 16px; right: 20px; }
+    .spec-label {
+      font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase; color: var(--brand-primary);
+    }
+    .spec-label-dim {
+      font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase; color: rgba(0,175,215,0.4);
+    }
+    .panel-frame-subtle {
+      border: 1px solid rgba(0,175,215,0.3); position: relative;
+    }
+    .panel-frame-subtle::after {
+      content: ''; position: absolute; inset: 4px;
+      border: 1px solid rgba(0,175,215,0.15); pointer-events: none;
+    }
+    h2 {
+      font-family: 'Chakra Petch', sans-serif; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.04em; font-size: 32px; color: #fff;
+    }
+    h3 {
+      font-family: 'Chakra Petch', sans-serif; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em; font-size: 18px; color: var(--brand-primary);
+    }
+    p, li {
+      font-family: 'Chakra Petch', sans-serif; font-weight: 400;
+      font-size: 18px; line-height: 1.6; color: rgba(255,255,255,0.75);
+    }
+    .slide-nav {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 40px; border-top: 1px solid rgba(0,175,215,0.15);
+      background: rgba(13,13,26,0.8); z-index: 10;
+    }
+    .slide-content {
+      position: relative; z-index: 2; flex: 1;
+      display: flex; flex-direction: column; padding: 48px 64px 56px;
+    }
+    .indicator-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--brand-crypto);
+      box-shadow: 0 0 8px rgba(0,215,150,0.5); display: inline-block;
+    }
+    .data-readout { font-family: 'Electrolize', sans-serif; font-size: 42px; color: var(--brand-crypto); }
+    .stat-box { text-align: center; padding: 24px 16px; }
+    .stat-value { font-family: 'Electrolize', sans-serif; font-size: 36px; color: var(--brand-crypto); }
+    .stat-label {
+      font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase; color: rgba(0,175,215,0.6); margin-top: 8px;
+    }
+    .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+    .cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+    .chat-bubble {
+      background: rgba(0,175,215,0.08); border: 1px solid rgba(0,175,215,0.25);
+      border-radius: 0 12px 12px 12px; padding: 14px 20px;
+      font-family: 'Chakra Petch', sans-serif; font-size: 17px; color: #fff; max-width: 360px;
+    }
+    .chat-bubble-reply {
+      background: rgba(0,215,150,0.08); border: 1px solid rgba(0,215,150,0.25);
+      border-radius: 12px 0 12px 12px; padding: 14px 20px;
+      font-family: 'Chakra Petch', sans-serif; font-size: 17px; color: #fff;
+      max-width: 420px; margin-left: auto;
+    }
+    .team-card {
+      padding: 28px 24px; background: rgba(0,175,215,0.04);
+      border: 1px solid rgba(0,175,215,0.2);
+    }
+    .team-card h3 { font-size: 16px; margin-bottom: 4px; }
+    .team-role {
+      font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--brand-crypto); font-weight: 700; margin-bottom: 14px;
+    }
+    .team-card p { font-size: 14px; line-height: 1.55; color: rgba(255,255,255,0.65); }
+    .flow-arrow { color: rgba(0,175,215,0.4); font-size: 28px; font-weight: 300; }
+    .source { font-family: 'Space Mono', monospace; font-size: 9px; color: rgba(255,255,255,0.25); margin-top: 4px; }
+    ul { list-style: none; padding: 0; }
+    ul li { position: relative; padding-left: 20px; margin-bottom: 10px; }
+    ul li::before {
+      content: ''; position: absolute; left: 0; top: 10px;
+      width: 6px; height: 6px; background: var(--brand-primary);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ======== SLIDE 1: COVER ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content" style="justify-content: center; align-items: center; text-align: center;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="432" height="136" viewBox="80 376 864 272" style="margin-bottom: 40px;">
+      <rect fill="#00AFD7" x="80" y="376" width="160" height="32"/>
+      <rect fill="#00AFD7" x="80" y="426" width="160" height="32"/>
+      <rect fill="#00AFD7" x="208" y="476" width="32" height="172"/>
+      <rect fill="#00AFD7" x="80" y="616" width="160" height="32"/>
+      <rect fill="#00AFD7" x="280" y="376" width="64" height="32"/>
+      <rect fill="#00AFD7" x="312" y="376" width="32" height="272"/>
+      <rect fill="#00AFD7" x="384" y="376" width="32" height="272"/>
+      <rect fill="#00AFD7" x="384" y="376" width="160" height="32"/>
+      <rect fill="#00AFD7" x="512" y="376" width="32" height="160"/>
+      <rect fill="#00AFD7" x="384" y="512" width="160" height="32"/>
+      <rect fill="#00AFD7" x="584" y="376" width="32" height="272"/>
+      <rect fill="#00AFD7" x="584" y="376" width="160" height="32"/>
+      <rect fill="#00AFD7" x="712" y="376" width="32" height="160"/>
+      <rect fill="#00AFD7" x="584" y="512" width="160" height="32"/>
+      <rect fill="#00AFD7" x="784" y="376" width="32" height="160"/>
+      <rect fill="#00AFD7" x="784" y="512" width="160" height="32"/>
+      <rect fill="#00AFD7" x="912" y="376" width="32" height="272"/>
+    </svg>
+    <p style="font-size: 22px; color: rgba(255,255,255,0.7); margin-bottom: 12px; font-weight: 500;">
+      Send and hold stablecoins through WhatsApp.<br>No apps, no wallets, just text.
+    </p>
+    <div class="panel-frame-subtle" style="padding: 14px 32px; margin-top: 40px;">
+      <p style="font-size: 14px; color: var(--brand-primary); margin: 0;">
+        Seeking a stablecoin infrastructure partner for on/off ramp rails in Colombia.
+      </p>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">01 / 10</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 2: PROBLEM ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">The Problem</span>
+    <h2 style="font-size: 34px; line-height: 1.25; margin-bottom: 32px;">
+      Andrea is a graphic designer in Medell&iacute;n.
+    </h2>
+    <div class="cols-2" style="flex: 1; align-items: start; margin-top: 8px;">
+      <div>
+        <p style="margin-bottom: 20px;">
+          Her brother in Bogot&aacute; owes her for splitting rent. A bank transfer takes a day and costs fees on both sides. A remittance app charges 3-7%. Cash requires someone to physically go to a point.
+        </p>
+        <p style="margin-bottom: 20px;">
+          Stablecoins could solve this: a dollar-denominated transfer that settles in seconds for fractions of a cent. But today, using stablecoins means downloading a wallet app, managing a seed phrase, buying ETH for gas, and navigating interfaces built for traders.
+        </p>
+        <p>
+          Andrea isn't going to do any of that. Neither will her brother. Neither will the millions of people across LATAM in the same situation.
+        </p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 16px; padding: 16px;">
+        <div class="panel-frame-subtle" style="padding: 20px 24px;">
+          <span class="spec-label-dim" style="font-size: 9px;">Today</span>
+          <p style="font-size: 16px; color: #fff; margin-top: 6px;">Bank transfer: 1 day, fees on both ends</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 20px 24px;">
+          <span class="spec-label-dim" style="font-size: 9px;">Today</span>
+          <p style="font-size: 16px; color: #fff; margin-top: 6px;">Remittance apps: 3-7% cut, hours to clear</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 20px 24px;">
+          <span class="spec-label-dim" style="font-size: 9px;">Today</span>
+          <p style="font-size: 16px; color: #fff; margin-top: 6px;">Crypto wallets: seed phrase, gas, trader UX</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 20px 24px; border-color: rgba(0,215,150,0.3);">
+          <span class="spec-label-dim" style="font-size: 9px; color: var(--brand-crypto);">With Sippy</span>
+          <p style="font-size: 16px; color: var(--brand-crypto); margin-top: 6px;">WhatsApp message: seconds, near-zero cost</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">02 / 10</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 3: SOLUTION ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">The Solution</span>
+    <div class="panel-frame-subtle" style="padding: 16px 28px; margin-bottom: 28px; display: inline-block; align-self: start;">
+      <p style="font-size: 17px; color: #fff; margin: 0;">
+        Sippy lets users send and hold stablecoins through WhatsApp, without downloading a wallet app or managing gas.
+      </p>
+    </div>
+    <div class="cols-2" style="flex: 1; align-items: center;">
+      <div>
+        <p style="margin-bottom: 20px;">
+          The user texts a message in their own language. The AI agent parses it, creates a non-custodial wallet if needed, sponsors gas, executes the transfer on-chain, and confirms back in the same chat. All in seconds.
+        </p>
+        <p style="margin-bottom: 20px;">
+          Supports Spanish, Portuguese, and English. Understands slang and casual input across Colombian, Mexican, Argentine, and Venezuelan dialects.
+        </p>
+        <p style="font-size: 15px; color: rgba(255,255,255,0.45);">
+          Non-custodial. Users control their own wallet and keys.
+        </p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 14px; padding: 12px 24px;">
+        <div class="chat-bubble">
+          P&aacute;sale 50 a mi hermano
+        </div>
+        <div class="chat-bubble-reply">
+          <span class="indicator-dot" style="margin-right: 8px;"></span>
+          Listo. Le envi&eacute; $50.00 USDC a +57 300 123 4567.<br>
+          <span style="font-size: 13px; color: rgba(255,255,255,0.4);">~215,000 COP · confirmado en cadena</span>
+        </div>
+        <div class="chat-bubble">
+          &iquest;Cu&aacute;nto tengo?
+        </div>
+        <div class="chat-bubble-reply">
+          <span style="color: var(--brand-crypto);">$150.00 USDC</span><br>
+          <span style="font-size: 13px; color: rgba(255,255,255,0.4);">~645,000 COP</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">03 / 10</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 4: WHAT'S LIVE ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">Product Status</span>
+    <h2 style="margin-bottom: 32px;">What's live today</h2>
+    <div class="cols-2" style="flex: 1; align-items: start;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+          <span class="indicator-dot"></span>
+          <span class="spec-label" style="color: var(--brand-crypto);">Shipped &amp; functional</span>
+        </div>
+        <ul>
+          <li style="color: rgba(255,255,255,0.75);">P2P stablecoin transfers via WhatsApp</li>
+          <li style="color: rgba(255,255,255,0.75);">Automatic non-custodial wallet creation</li>
+          <li style="color: rgba(255,255,255,0.75);">Gas sponsorship (users never need ETH)</li>
+          <li style="color: rgba(255,255,255,0.75);">Trilingual AI: Spanish, Portuguese, English</li>
+          <li style="color: rgba(255,255,255,0.75);">Country-level dialect detection (CO/MX/AR/VE)</li>
+          <li style="color: rgba(255,255,255,0.75);">Dual currency display (USDC + 26 local currencies)</li>
+          <li style="color: rgba(255,255,255,0.75);">Transaction confirmation, velocity limits, audit logging</li>
+          <li style="color: rgba(255,255,255,0.75);">Web wallet with setup flow and settings</li>
+          <li style="color: rgba(255,255,255,0.75);">Admin dashboard with on-chain analytics</li>
+        </ul>
+      </div>
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+          <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--brand-primary); display: inline-block;"></span>
+          <span class="spec-label">Roadmap</span>
+        </div>
+        <ul>
+          <li style="color: rgba(255,255,255,0.75);">Fiat on/off ramp inside the chat</li>
+          <li style="color: rgba(255,255,255,0.75);">Multi-stablecoin support (USDC + USDT)</li>
+          <li style="color: rgba(255,255,255,0.75);">Yield routing: "put half somewhere safe"</li>
+          <li style="color: rgba(255,255,255,0.75);">Spending insights and financial guidance</li>
+        </ul>
+        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(0,175,215,0.15);">
+          <p style="font-size: 15px; color: var(--brand-primary); font-style: italic;">
+            End state: a user says "make my money grow" and the agent handles the rest.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">04 / 10</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 5: TRUST & SECURITY ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">Trust &amp; Security</span>
+    <h2 style="margin-bottom: 32px;">Security &amp; Trust</h2>
+    <div class="cols-3" style="flex: 1; align-items: start;">
+      <div class="panel-frame-subtle" style="padding: 28px 24px;">
+        <h3 style="font-size: 14px; margin-bottom: 14px;">Non-Custodial</h3>
+        <p style="font-size: 15px;">Users own their wallets and keys. Sippy never holds funds. Wallets are powered by Coinbase CDP with optional private key export.</p>
+      </div>
+      <div class="panel-frame-subtle" style="padding: 28px 24px;">
+        <h3 style="font-size: 14px; margin-bottom: 14px;">Transaction Controls</h3>
+        <p style="font-size: 15px;">Confirmation prompts above $5. Velocity limits: 5 sends per 10 min, $500/hr cap, 3 new recipients/hr. Tiered daily limits ($50 unverified, $500 with email).</p>
+      </div>
+      <div class="panel-frame-subtle" style="padding: 28px 24px;">
+        <h3 style="font-size: 14px; margin-bottom: 14px;">Fraud Prevention</h3>
+        <p style="font-size: 15px;">Spam detection, rate limiting per user and IP, self-send blocking, anti-injection validation on all AI inputs, full audit logging.</p>
+      </div>
+      <div class="panel-frame-subtle" style="padding: 28px 24px;">
+        <h3 style="font-size: 14px; margin-bottom: 14px;">Fast Settlement</h3>
+        <p style="font-size: 15px;">Transfers settle on Arbitrum in seconds. Gas is sponsored through a custom smart contract so users never need to hold ETH.</p>
+      </div>
+      <div class="panel-frame-subtle" style="padding: 28px 24px;">
+        <h3 style="font-size: 14px; margin-bottom: 14px;">Messaging Infrastructure</h3>
+        <p style="font-size: 15px;">WhatsApp Business API, production-approved by Meta. Reliable delivery with template notifications for payments and receipts.</p>
+      </div>
+      <div class="panel-frame-subtle" style="padding: 28px 24px;">
+        <h3 style="font-size: 14px; margin-bottom: 14px;">Monitoring</h3>
+        <p style="font-size: 15px;">PostHog analytics, on-chain indexer for real-time transaction monitoring, admin dashboard for user management.</p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">05 / 10</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 6: TRACTION ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">Traction</span>
+    <h2 style="margin-bottom: 36px;">Where we are</h2>
+    <div class="cols-2" style="flex: 1; align-items: start;">
+      <div>
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <div class="panel-frame-subtle" style="padding: 24px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span class="indicator-dot"></span>
+              <span style="font-size: 15px; color: #fff; font-weight: 600;">Product complete</span>
+            </div>
+            <p style="font-size: 14px;">Full WhatsApp send flow, web wallet, admin dashboard, on-chain indexer, gas sponsorship. 500+ automated tests across the stack.</p>
+          </div>
+          <div class="panel-frame-subtle" style="padding: 24px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span class="indicator-dot"></span>
+              <span style="font-size: 15px; color: #fff; font-weight: 600;">Closed beta launching</span>
+            </div>
+            <p style="font-size: 14px;">50-user beta in Colombia. E2E test matrix complete (50+ scenarios). WhatsApp Business API live, Meta-approved templates for payment notifications.</p>
+          </div>
+          <div class="panel-frame-subtle" style="padding: 24px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span class="indicator-dot"></span>
+              <span style="font-size: 15px; color: #fff; font-weight: 600;">Grant-funded</span>
+            </div>
+            <p style="font-size: 14px;">$25K ecosystem grant approved with milestone-based disbursement. Direct relationship with chain infrastructure team.</p>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+          <div class="panel-frame-subtle" style="padding: 24px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span class="indicator-dot"></span>
+              <span style="font-size: 15px; color: #fff; font-weight: 600;">Legal entity established</span>
+            </div>
+            <p style="font-size: 14px;">Set up in El Salvador. Co-founder with fintech regulatory counsel experience (Bancolombia, Efinti, EFY Finance) leads compliance.</p>
+          </div>
+          <div class="panel-frame-subtle" style="padding: 24px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span class="indicator-dot"></span>
+              <span style="font-size: 15px; color: #fff; font-weight: 600;">Infrastructure partners</span>
+            </div>
+            <p style="font-size: 14px;">Coinbase CDP (wallets), Meta WhatsApp Business API (messaging), Arbitrum (settlement). All production-integrated.</p>
+          </div>
+          <div class="panel-frame-subtle" style="padding: 24px;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+              <span class="indicator-dot"></span>
+              <span style="font-size: 15px; color: #fff; font-weight: 600;">Missing piece</span>
+            </div>
+            <p style="font-size: 14px;">Fiat on/off ramp. Everything works once a user has stablecoins. Converting local currency in and out is what's missing.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">06 / 10</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 7: MARKET ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">Market</span>
+    <h2 style="margin-bottom: 36px;">Colombia first, LATAM-ready</h2>
+    <div class="cols-2" style="flex: 1;">
+      <div>
+        <p style="margin-bottom: 24px;">
+          The product supports 26 LATAM currencies, trilingual parsing, and country-level dialect detection. The infrastructure is built for the whole region.
+        </p>
+        <p style="margin-bottom: 24px;">
+          We're starting in Colombia. All three co-founders are Colombian. The closed beta targets 50 users here. Currency display defaults to COP, the bot speaks Colombian Spanish, and our onramp partner operates in this market.
+        </p>
+        <p>
+          Colombia first, then expand with the same infrastructure already in place.
+        </p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <div class="panel-frame-subtle" style="padding: 24px;">
+          <div class="data-readout" style="margin-bottom: 4px;">660M</div>
+          <div class="stat-label">LATAM population</div>
+          <p class="source">UN Population Division, 2024</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 24px;">
+          <div class="data-readout" style="margin-bottom: 4px;">~200M</div>
+          <div class="stat-label">Underbanked adults</div>
+          <p class="source">World Bank Global Findex, 2021</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 24px;">
+          <div class="data-readout" style="margin-bottom: 4px;">90%+</div>
+          <div class="stat-label">WhatsApp penetration (CO, BR, MX)</div>
+          <p class="source">Statista, 2024</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">07 / 10</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 8: TEAM ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">Team</span>
+    <h2 style="margin-bottom: 36px;">Team</h2>
+    <div class="cols-3" style="flex: 1;">
+      <div class="team-card">
+        <h3>Mateo Daza</h3>
+        <div class="team-role">Co-Founder &middot; Product, Design &amp; Engineering</div>
+        <p>Built Sippy from scratch: product, design, and engineering. Previously at Asymmetry Finance, where he worked on the launch of USDaf, a stablecoin. That work on stablecoin mechanics and user trust led directly to Sippy.</p>
+      </div>
+      <div class="team-card">
+        <h3>Carlos Quintero</h3>
+        <div class="team-role">Co-Founder &middot; Engineering</div>
+        <p>Previously at Giveth, building public goods infrastructure on Ethereum. Has shipped production crypto products end to end: smart contracts, wallet integrations, on-chain indexing. Owns the full Sippy stack.</p>
+      </div>
+      <div class="team-card">
+        <h3>Lina Sandoval</h3>
+        <div class="team-role">Co-Founder &middot; Legal &amp; Compliance</div>
+        <p>Fintech &amp; Regulatory Counsel at ICHS Legal. Previously Head of Legal at Efinti and EFY Finance (2.5+ years), Litigation Paralegal at Bancolombia. Traditional banking compliance to specialized crypto counsel.</p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">08 / 10</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 9: COMPLIANCE ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">Compliance &amp; Risk</span>
+    <h2 style="margin-bottom: 32px;">Compliance &amp; Risk Controls</h2>
+    <div class="cols-2" style="flex: 1; align-items: start;">
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <div class="panel-frame-subtle" style="padding: 24px;">
+          <h3 style="font-size: 14px; margin-bottom: 10px;">Custody</h3>
+          <p style="font-size: 15px;">Non-custodial. Wallets are created via Coinbase CDP. Sippy never holds user funds or private keys. Users can export keys and sweep funds at any time.</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 24px;">
+          <h3 style="font-size: 14px; margin-bottom: 10px;">Jurisdictions</h3>
+          <p style="font-size: 15px;">Whitelist model: only allowed jurisdictions can onboard. US, EU, FATF high-risk, and sanctioned countries are blocked at onboarding (IP + phone prefix). Currently scoped to Colombia.</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 24px;">
+          <h3 style="font-size: 14px; margin-bottom: 10px;">Identity &amp; Limits</h3>
+          <p style="font-size: 15px;">Phone verification at onboarding (Twilio OTP). Tiered daily limits: $50 unverified, $500 with email. Per-transaction cap of $100. Velocity limits on send frequency and new recipients.</p>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <div class="panel-frame-subtle" style="padding: 24px;">
+          <h3 style="font-size: 14px; margin-bottom: 10px;">Fraud &amp; AML</h3>
+          <p style="font-size: 15px;">Rate limiting per user and IP. Spam detection via LLM validator. Self-send blocking. Full audit trail on all transfers and key exports. Admin can block users and pause the system.</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 24px;">
+          <h3 style="font-size: 14px; margin-bottom: 10px;">Legal Entity</h3>
+          <p style="font-size: 15px;">Established in El Salvador. Co-founder Lina Sandoval (Fintech &amp; Regulatory Counsel, former Bancolombia) leads compliance strategy across LATAM jurisdictions.</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 24px;">
+          <h3 style="font-size: 14px; margin-bottom: 10px;">Positioning</h3>
+          <p style="font-size: 15px;">Sippy is a technology interface for interacting with wallets on blockchain. It does not custody funds or offer regulated financial services. Landing page and all user-facing copy reviewed for regulatory alignment.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">09 / 10</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 10: CLOSE ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content" style="justify-content: center; align-items: center; text-align: center;">
+    <!-- Wordmark instead of S-mark -->
+    <svg xmlns="http://www.w3.org/2000/svg" width="280" height="88" viewBox="80 376 864 272" style="margin-bottom: 48px;">
+      <rect fill="#00AFD7" x="80" y="376" width="160" height="32"/>
+      <rect fill="#00AFD7" x="80" y="426" width="160" height="32"/>
+      <rect fill="#00AFD7" x="208" y="476" width="32" height="172"/>
+      <rect fill="#00AFD7" x="80" y="616" width="160" height="32"/>
+      <rect fill="#00AFD7" x="280" y="376" width="64" height="32"/>
+      <rect fill="#00AFD7" x="312" y="376" width="32" height="272"/>
+      <rect fill="#00AFD7" x="384" y="376" width="32" height="272"/>
+      <rect fill="#00AFD7" x="384" y="376" width="160" height="32"/>
+      <rect fill="#00AFD7" x="512" y="376" width="32" height="160"/>
+      <rect fill="#00AFD7" x="384" y="512" width="160" height="32"/>
+      <rect fill="#00AFD7" x="584" y="376" width="32" height="272"/>
+      <rect fill="#00AFD7" x="584" y="376" width="160" height="32"/>
+      <rect fill="#00AFD7" x="712" y="376" width="32" height="160"/>
+      <rect fill="#00AFD7" x="584" y="512" width="160" height="32"/>
+      <rect fill="#00AFD7" x="784" y="376" width="32" height="160"/>
+      <rect fill="#00AFD7" x="784" y="512" width="160" height="32"/>
+      <rect fill="#00AFD7" x="912" y="376" width="32" height="272"/>
+    </svg>
+    <div style="display: flex; gap: 48px; margin-bottom: 48px;">
+      <div>
+        <span class="spec-label" style="font-size: 10px; display: block; margin-bottom: 8px;">Why now</span>
+        <p style="font-size: 14px; max-width: 260px;">L2 costs, embedded wallets, and LLMs all crossed the production bar in the last two years. The pieces are in place.</p>
+      </div>
+      <div style="width: 1px; background: rgba(0,175,215,0.2);"></div>
+      <div>
+        <span class="spec-label" style="font-size: 10px; display: block; margin-bottom: 8px;">Next step</span>
+        <p style="font-size: 14px; max-width: 260px;">A conversation about stablecoin-to-fiat rails for our Colombia pilot. 50 users ready, product complete, legal entity in place.</p>
+      </div>
+    </div>
+    <div style="display: flex; gap: 32px; align-items: center;">
+      <div>
+        <span class="spec-label-dim" style="font-size: 9px;">Contact</span>
+        <p style="font-size: 16px; color: var(--brand-primary); margin-top: 4px;">hello@sippy.lat</p>
+      </div>
+      <div style="width: 1px; height: 32px; background: rgba(0,175,215,0.2);"></div>
+      <div>
+        <span class="spec-label-dim" style="font-size: 9px;">Web</span>
+        <p style="font-size: 16px; color: var(--brand-primary); margin-top: 4px;">sippy.lat</p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">10 / 10</span>
+  </div>
+</div>
+
+</body>
+</html>
