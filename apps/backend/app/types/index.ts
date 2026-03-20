@@ -31,15 +31,15 @@ export interface UserWallet {
 
 export interface PendingTransaction {
   amount: number
-  recipient: string   // canonical E.164 phone
-  timestamp: number   // Date.now()
-  lang: Lang          // user's lang at time of send command
+  recipient: string // canonical E.164 phone
+  timestamp: number // Date.now()
+  lang: Lang // user's lang at time of send command
 }
 
 export interface PartialSend {
-  amount?: number         // present if user gave an amount
-  recipient?: string      // present if user gave a phone (canonical E.164)
-  timestamp: number       // Date.now()
+  amount?: number // present if user gave an amount
+  recipient?: string // present if user gave a phone (canonical E.164)
+  timestamp: number // Date.now()
   lang: Lang
 }
 
@@ -59,6 +59,7 @@ export interface ParsedCommand {
     | 'social'
     | 'privacy'
     | 'fund'
+    | 'invite'
     | 'confirm'
     | 'cancel'
     | 'unknown'
@@ -80,9 +81,9 @@ export interface ParsedCommand {
     | 'low-confidence'
     | 'normalized'
     | 'validation-failed'
-  amountError?: AmountErrorCode      // set when send regex matched but amount is invalid
-  recipientError?: 'INVALID_PHONE'   // set when amount is valid but phone canonicalization fails
-  isLargeAmount?: boolean            // true iff amount > 500 and no amountError
+  amountError?: AmountErrorCode // set when send regex matched but amount is invalid
+  recipientError?: 'INVALID_PHONE' // set when amount is valid but phone canonicalization fails
+  isLargeAmount?: boolean // true iff amount > 500 and no amountError
 }
 
 export interface WalletInfo {

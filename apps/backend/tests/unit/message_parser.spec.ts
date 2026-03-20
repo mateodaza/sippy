@@ -198,6 +198,54 @@ test.group('Message Parser | Phone Number Validation', () => {
   })
 })
 
+test.group('Message Parser | Invite Command Parsing', () => {
+  const tests = [
+    // EN
+    { input: 'invite +573116613414', expectedCmd: 'invite', expectedLang: 'en' },
+    { input: 'invite +5531999998888', expectedCmd: 'invite', expectedLang: 'en' },
+    // ES
+    { input: 'invitar +573116613414', expectedCmd: 'invite', expectedLang: 'es' },
+    { input: 'invitar a +573116613414', expectedCmd: 'invite', expectedLang: 'es' },
+    { input: 'invita +573116613414', expectedCmd: 'invite', expectedLang: 'es' },
+    { input: 'invitale a +573116613414', expectedCmd: 'invite', expectedLang: 'es' },
+    { input: 'invítale a +573116613414', expectedCmd: 'invite', expectedLang: 'es' },
+    // PT
+    { input: 'convidar +5531999998888', expectedCmd: 'invite', expectedLang: 'pt' },
+    { input: 'convida +5531999998888', expectedCmd: 'invite', expectedLang: 'pt' },
+    { input: 'convidar o +5531999998888', expectedCmd: 'invite', expectedLang: 'pt' },
+  ]
+
+  for (const t of tests) {
+    test(`"${t.input}" → ${t.expectedCmd} (${t.expectedLang})`, ({ assert }) => {
+      const result = parseMessageWithRegex(t.input)
+      assert.equal(result.command, t.expectedCmd)
+      assert.equal(result.detectedLanguage, t.expectedLang)
+      assert.isOk(result.recipient)
+    })
+  }
+
+  test('invite extracts canonical phone number', ({ assert }) => {
+    const result = parseMessageWithRegex('invitar +573116613414')
+    assert.equal(result.recipient, '+573116613414')
+  })
+
+  test('invite with bare digits canonicalizes phone', ({ assert }) => {
+    const result = parseMessageWithRegex('invitar 573116613414')
+    assert.isOk(result.recipient)
+    assert.equal(result.recipient, '+573116613414')
+  })
+
+  test('invite with invalid phone → unknown (not invite)', ({ assert }) => {
+    const result = parseMessageWithRegex('invitar 12345')
+    assert.notEqual(result.command, 'invite')
+  })
+
+  test('"invitar" alone (no phone) → unknown', ({ assert }) => {
+    const result = parseMessageWithRegex('invitar')
+    assert.equal(result.command, 'unknown')
+  })
+})
+
 test.group('Message Parser | Edge Cases', () => {
   test('"" → unknown', async ({ assert }) => {
     const result = await parseMessage('')

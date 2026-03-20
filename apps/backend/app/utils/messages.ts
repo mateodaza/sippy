@@ -618,7 +618,11 @@ export function formatRateLimitedMessage(lang: Lang = 'en'): string {
   return m[lang]()
 }
 
-export function formatUnknownCommandMessage(_originalText: string, lang: Lang = 'en', dialect: Dialect = 'neutral'): string {
+export function formatUnknownCommandMessage(
+  _originalText: string,
+  lang: Lang = 'en',
+  dialect: Dialect = 'neutral'
+): string {
   if (lang === 'es' && dialect !== 'neutral') {
     const d: Record<string, string> = {
       co: `Hmm, no te entendi. Intenta "saldo", "enviar 5 a +57...", o "ayuda".`,
@@ -908,8 +912,10 @@ export function formatGreetingMessage(lang: Lang = 'en', dialect: Dialect = 'neu
     if (d[dialect]) return d[dialect]
   }
   const m = {
-    en: () => `Hey! What do you need? Check your balance, send money, or say "help" to see everything.`,
-    es: () => `Hola! Que necesitas? Puedes ver tu saldo, enviar dinero, o di "ayuda" para ver todo.`,
+    en: () =>
+      `Hey! What do you need? Check your balance, send money, or say "help" to see everything.`,
+    es: () =>
+      `Hola! Que necesitas? Puedes ver tu saldo, enviar dinero, o di "ayuda" para ver todo.`,
     pt: () => `Oi! O que precisa? Ver saldo, enviar dinheiro, ou diga "ajuda" pra ver tudo.`,
   }
   return m[lang]()
@@ -1174,8 +1180,7 @@ export function formatInviteSentToSender(recipientPhone: string, lang: Lang = 'e
       `${phone} isn't on Sippy yet.\n\nWe sent them an invite. We'll let you know when they join.`,
     es: () =>
       `${phone} no esta en Sippy todavia.\n\nLe enviamos una invitacion. Te avisamos cuando se una.`,
-    pt: () =>
-      `${phone} ainda nao esta no Sippy.\n\nEnviamos um convite. Avisamos quando entrar.`,
+    pt: () => `${phone} ainda nao esta no Sippy.\n\nEnviamos um convite. Avisamos quando entrar.`,
   }
   return m[lang]()
 }
@@ -1208,6 +1213,16 @@ export function formatInviteDailyLimitReached(lang: Lang = 'en'): string {
     en: () => `You've reached the daily invite limit. Try again tomorrow.`,
     es: () => `Llegaste al limite de invitaciones diarias. Intenta manana.`,
     pt: () => `Voce atingiu o limite diario de convites. Tente amanha.`,
+  }
+  return m[lang]()
+}
+
+export function formatInviteAlreadyOnSippy(recipientPhone: string, lang: Lang = 'en'): string {
+  const phone = recipientPhone
+  const m = {
+    en: () => `${phone} is already on Sippy. You can send them money directly.`,
+    es: () => `${phone} ya esta en Sippy. Puedes enviarle dinero directamente.`,
+    pt: () => `${phone} ja esta no Sippy. Voce pode enviar dinheiro diretamente.`,
   }
   return m[lang]()
 }

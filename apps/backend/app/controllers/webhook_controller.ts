@@ -56,14 +56,25 @@ import {
   formatGreetingNewUser,
   formatGreetingIncomplete,
   formatFundMessage,
+  formatInviteSentToSender,
+  formatInviteDeliveryFailed,
+  formatInviteAlreadyPending,
+  formatInviteDailyLimitReached,
+  formatInviteAlreadyOnSippy,
 } from '#utils/messages'
 
 import UserPreference from '#models/user_preference'
 import { handleStartCommand } from '#commands/start_command'
 import { handleBalanceCommand } from '#commands/balance_command'
 import { handleSendCommand } from '#commands/send_command'
+import { createInvite } from '#services/invite.service'
+import { getUserWallet } from '#services/cdp_wallet.service'
 import { generateResponse } from '#services/llm.service'
-import { type SetupStatus, getSetupStatus } from '#services/embedded_wallet.service'
+import {
+  type SetupStatus,
+  getSetupStatus,
+  getEmbeddedWallet,
+} from '#services/embedded_wallet.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
 import { canonicalizePhone, maskPhone } from '#utils/phone'
 import { getIsPaused } from '#controllers/admin/moderation_controller'
@@ -88,11 +99,11 @@ async function generateFundUrl(phoneNumber: string): Promise<string> {
   // Local token generation — same algorithm as apps/fund/lib/fund-token.ts
   if (FUND_TOKEN_SECRET) {
     try {
-      const { createHmac } = await import('node:crypto')
+      const { createHmac: hmac } = await import('node:crypto')
       const expiry = Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
       const payload = `${phoneNumber}|${expiry}`
       const encoded = Buffer.from(payload).toString('base64url')
-      const signature = createHmac('sha256', FUND_TOKEN_SECRET).update(encoded).digest('base64url')
+      const signature = hmac('sha256', FUND_TOKEN_SECRET).update(encoded).digest('base64url')
       const token = `${encoded}.${signature}`
       return `${FUND_URL}?t=${token}`
     } catch (err) {
@@ -126,7 +137,7 @@ const PENDING_TX_TTL_MS = 2 * 60 * 1000 // 2 minutes
 // on access in the confirm handler.
 // .unref() allows process to exit naturally without the interval keeping
 // the event loop alive. Pattern matches exchange_rate_service.ts:80-86.
-const _pendingTxCleanupInterval = setInterval(() => {
+const pendingTxCleanupInterval = setInterval(() => {
   try {
     const now = Date.now()
     for (const [phone, tx] of pendingTransactions.entries()) {
@@ -143,7 +154,7 @@ const _pendingTxCleanupInterval = setInterval(() => {
     logger.error('pendingTx cleanup error: %o', err)
   }
 }, 30_000)
-_pendingTxCleanupInterval.unref()
+pendingTxCleanupInterval.unref()
 
 function clearPendingIfUnrelated(
   from: string,
@@ -394,6 +405,65 @@ export async function routeCommand(
         break
       }
 
+      case 'invite': {
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+          break
+        }
+        if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+          break
+        }
+        if (!command.recipient) {
+          await sendMessageFn(phoneNumber, formatHelpMessage(lang), lang)
+          break
+        }
+        // Self-invite check
+        if (command.recipient === phoneNumber) {
+          await sendMessageFn(phoneNumber, formatSelfSendMessage(lang), lang)
+          break
+        }
+        // Already on Sippy check
+        const recipientEmbedded = await getEmbeddedWallet(command.recipient)
+        const recipientLegacy = await getUserWallet(command.recipient)
+        if (recipientEmbedded || recipientLegacy) {
+          await sendMessageFn(
+            phoneNumber,
+            formatInviteAlreadyOnSippy(command.recipient, lang),
+            lang
+          )
+          break
+        }
+        try {
+          const inviteResult = await createInvite(phoneNumber, command.recipient, 0, lang)
+          if (inviteResult.dailyLimitReached) {
+            await sendMessageFn(phoneNumber, formatInviteDailyLimitReached(lang), lang)
+          } else if (inviteResult.alreadyInvited) {
+            await sendMessageFn(
+              phoneNumber,
+              formatInviteAlreadyPending(command.recipient, lang),
+              lang
+            )
+          } else if (inviteResult.delivered) {
+            await sendMessageFn(
+              phoneNumber,
+              formatInviteSentToSender(command.recipient, lang),
+              lang
+            )
+          } else {
+            await sendMessageFn(
+              phoneNumber,
+              formatInviteDeliveryFailed(command.recipient, lang),
+              lang
+            )
+          }
+        } catch {
+          await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+        }
+        break
+      }
+
       case 'confirm': {
         const pending = pendingTxs.get(phoneNumber)
         // Lazy expiry check — guarantees 2-minute cutoff regardless of GC interval timing
@@ -408,7 +478,9 @@ export async function routeCommand(
             await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
           } else {
             const text = command.originalText ?? ''
-            const raw = text ? await generateResponseFn(text, lang, context, s, dialectHint(dialect)) : null
+            const raw = text
+              ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
+              : null
             const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
             await sendMessageFn(phoneNumber, reply || formatSocialReplyMessage(lang, dialect), lang)
           }
@@ -484,7 +556,9 @@ export async function routeCommand(
       case 'greeting': {
         const s = await resolveStatus()
         const text = command.originalText ?? ''
-        const raw = text ? await generateResponseFn(text, lang, context, s, dialectHint(dialect)) : null
+        const raw = text
+          ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
+          : null
         const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
         if (reply) {
           await sendMessageFn(phoneNumber, reply, lang)
@@ -501,7 +575,9 @@ export async function routeCommand(
       case 'social': {
         const s = await resolveStatus()
         const text = command.originalText ?? ''
-        const raw = text ? await generateResponseFn(text, lang, context, s, dialectHint(dialect)) : null
+        const raw = text
+          ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
+          : null
         const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
         if (reply) {
           await sendMessageFn(phoneNumber, reply, lang)
@@ -545,8 +621,18 @@ export async function routeCommand(
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
         } else if (command.helpfulMessage) {
-          const validated = await validateAndFallback(command.helpfulMessage, command.originalText ?? '', context, s, dialectHint(dialect))
-          await sendMessageFn(phoneNumber, validated || formatUnknownCommandMessage(command.originalText || '', lang, dialect), lang)
+          const validated = await validateAndFallback(
+            command.helpfulMessage,
+            command.originalText ?? '',
+            context,
+            s,
+            dialectHint(dialect)
+          )
+          await sendMessageFn(
+            phoneNumber,
+            validated || formatUnknownCommandMessage(command.originalText || '', lang, dialect),
+            lang
+          )
         } else {
           const rateLimitNote =
             command.llmStatus === 'rate-limited' ? `\n${formatRateLimitedMessage(lang)}\n\n` : ''
@@ -828,7 +914,12 @@ export default class WebhookController {
       const resolved = resolvePartialSend(partial, text)
       if (resolved) {
         partialSends.delete(from)
-        logger.info('Partial send resolved for %s: amount=%s recipient=%s', maskPhone(from), resolved.amount, maskPhone(resolved.recipient))
+        logger.info(
+          'Partial send resolved for %s: amount=%s recipient=%s',
+          maskPhone(from),
+          resolved.amount,
+          maskPhone(resolved.recipient)
+        )
         // Synthesize a complete send command and skip normal parsing
         const command: ParsedCommand = {
           command: 'send',

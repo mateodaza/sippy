@@ -34,7 +34,8 @@ export interface ParseContext {
 // Pre-LLM send attempt detector
 // ============================================================================
 
-const SEND_KEYWORDS = /\b(send|transfer|pay|enviar?|transferir|pagar?|envie|enviale|mand[aáe]|mandale|mandar|pasale?|pas[aá])\b/i
+const SEND_KEYWORDS =
+  /\b(send|transfer|pay|enviar?|transferir|pagar?|envie|enviale|mand[aáe]|mandale|mandar|pasale?|pas[aá])\b/i
 const HAS_NUMBER = /\d+/
 
 function isAttemptedSend(text: string): boolean {
@@ -89,12 +90,8 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(hola|buenas?|qu[eé] tal|buenos d[ií]as|buenas tardes|buenas noches|saludos)$/i,
     /^(oi|ol[aá]|bom dia|boa tarde|boa noite|e a[ií])$/i,
   ],
-  confirm: [
-    /^(yes|s[ií]|sim|confirmar|dale|va)$/i,
-  ],
-  cancel: [
-    /^(no|cancel|cancelar|n[aã]o)$/i,
-  ],
+  confirm: [/^(yes|s[ií]|sim|confirmar|dale|va)$/i],
+  cancel: [/^(no|cancel|cancelar|n[aã]o)$/i],
   fund: [
     /^(fund|add funds|add money|deposit|top.?up)$/i,
     /^(fundear|agregar fondos|agregar plata|agregar dinero|agregar saldo|agregar|recargar|depositar|cargar)$/i,
@@ -113,8 +110,8 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
 
 /** Privacy patterns — each paired with the language it signals */
 const PRIVACY_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
-  { pattern: /^privacy\s+(on|off)$/i,     lang: 'en' },
-  { pattern: /^privacidad\s+(on|off)$/i,  lang: 'es' },
+  { pattern: /^privacy\s+(on|off)$/i, lang: 'en' },
+  { pattern: /^privacidad\s+(on|off)$/i, lang: 'es' },
   { pattern: /^privacidade\s+(on|off)$/i, lang: 'pt' },
 ]
 
@@ -130,12 +127,34 @@ const PRIVACY_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
  */
 // Order matters: fund must come before balance so "agregar saldo" matches fund, not balance.
 const LOOSE_COMMAND_PATTERNS: Array<[string, RegExp]> = [
-  ['fund', /(?:^|\s)(fund|fundear|add funds|add money|deposit|top.?up|agregar (?:fondos|plata|dinero|saldo)|agregar$|recargar|depositar|adicionar (?:fundos|dinheiro|saldo)|cargar|carregar)(?:\s|$)/i],
-  ['balance', /(?:^|\s)(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi|mi (?:wallet|billetera|cartera)|my wallet|minha carteira)(?:\s|$)/i],
+  [
+    'fund',
+    /(?:^|\s)(fund|fundear|add funds|add money|deposit|top.?up|agregar (?:fondos|plata|dinero|saldo)|agregar$|recargar|depositar|adicionar (?:fundos|dinheiro|saldo)|cargar|carregar)(?:\s|$)/i,
+  ],
+  [
+    'balance',
+    /(?:^|\s)(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi|mi (?:wallet|billetera|cartera)|my wallet|minha carteira)(?:\s|$)/i,
+  ],
   ['help', /(?:^|\s)(help(?!ful|less|ing|er|ed)|ayuda|ajuda)(?:\s|$)/i],
-  ['history', /(?:^|\s)(history|historial|hist[oó]rico|transactions?|transacciones?|transa[cç][oõ]es?)(?:\s|$)/i],
+  [
+    'history',
+    /(?:^|\s)(history|historial|hist[oó]rico|transactions?|transacciones?|transa[cç][oõ]es?)(?:\s|$)/i,
+  ],
   ['settings', /(?:^|\s)(settings?|configuraci[oó]n|configura[cç][aã]o|ajustes)(?:\s|$)/i],
-  ['about', /(?:^|\s)(what is sippy|whats sippy|what's sippy|qu[eé] es sippy|o que [eé] sippy|qui[eé]n eres|who are you|quem [eé] voc[eê])(?:\s|$)/i],
+  [
+    'about',
+    /(?:^|\s)(what is sippy|whats sippy|what's sippy|qu[eé] es sippy|o que [eé] sippy|qui[eé]n eres|who are you|quem [eé] voc[eê])(?:\s|$)/i,
+  ],
+]
+
+/** Invite patterns: "invitar +573116613414", "invite +57...", "convidar +55..." */
+const INVITE_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
+  // EN: "invite +573001234567"
+  { pattern: /^invite\s+(.+)$/i, lang: 'en' },
+  // ES: "invitar +57...", "invitar a +57...", "invitale a +57...", "invita a +57...", "invítale a +57..."
+  { pattern: /^inv[ií]t[aá]r?(?:le|les)?\s+(?:a\s+)?(.+)$/i, lang: 'es' },
+  // PT: "convidar +55...", "convida +55...", "convidar o +55..."
+  { pattern: /^convid[aá]r?\s+(?:(?:o|a)\s+)?(.+)$/i, lang: 'pt' },
 ]
 
 // Optional currency word after amount: "1 dólar", "5 dolares", "10 pesos", "20 dollars"
@@ -144,25 +163,70 @@ const CURRENCY_WORD = `(?:\\s+(?:d[oó]lar(?:es)?|dollars?|pesos?|usd|plata))?`
 /** Trilingual send patterns — strict format, must extract amount + recipient */
 const SEND_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
   // EN: "send 10 to +573001234567" or "send $10 to ..." or "send 10 dollars to ..."
-  { pattern: new RegExp(`^send\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+to\\s+(.+)$`, 'i'), lang: 'en' },
+  {
+    pattern: new RegExp(`^send\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+to\\s+(.+)$`, 'i'),
+    lang: 'en',
+  },
   // ES: "enviar/envía/envia/envíe/envie 10 a ..." (infinitive, imperative, subjunctive)
   // Also handles pronoun suffixes: "enviale/envíale/enviales 10 a ..."
   // Accepts optional currency word: "envía 1 dólar a ..."
-  { pattern: new RegExp(`^env[ií][ae]?r?(?:le|les|lo|la|los|las)?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+a\\s+(.+)$`, 'i'), lang: 'es' },
+  {
+    pattern: new RegExp(
+      `^env[ií][ae]?r?(?:le|les|lo|la|los|las)?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+a\\s+(.+)$`,
+      'i'
+    ),
+    lang: 'es',
+  },
   // PT: "enviar/envie 10 para ..."
-  { pattern: new RegExp(`^env[ií][ae]?r?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+para\\s+(.+)$`, 'i'), lang: 'pt' },
+  {
+    pattern: new RegExp(
+      `^env[ií][ae]?r?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+para\\s+(.+)$`,
+      'i'
+    ),
+    lang: 'pt',
+  },
   // ES casual: "manda/mandá/mande/mandale 5 a ..." / "transfiere/transferir 5 a ..." / "pasa/pasale 5 a ..." / "paga/pague 5 a ..."
-  { pattern: new RegExp(`^(?:mand[aáe]|transfier[ae]|transferir|pas[aá]|pague?|pagar?)(?:le|les|lo|la|los|las)?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+a\\s+(.+)$`, 'i'), lang: 'es' },
+  {
+    pattern: new RegExp(
+      `^(?:mand[aáe]|transfier[ae]|transferir|pas[aá]|pague?|pagar?)(?:le|les|lo|la|los|las)?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+a\\s+(.+)$`,
+      'i'
+    ),
+    lang: 'es',
+  },
   // PT casual: "manda/mande 5 para ..." / "transfere/transferir 5 para ..." / "pague 5 para ..."
-  { pattern: new RegExp(`^(?:mand[aáe]|transfere|transferir|pague?)\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+para\\s+(.+)$`, 'i'), lang: 'pt' },
+  {
+    pattern: new RegExp(
+      `^(?:mand[aáe]|transfere|transferir|pague?)\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+para\\s+(.+)$`,
+      'i'
+    ),
+    lang: 'pt',
+  },
   // EN alt verbs: "transfer 5 to ..." / "pay 5 to ..."
-  { pattern: new RegExp(`^(?:transfer|pay)\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+to\\s+(.+)$`, 'i'), lang: 'en' },
+  {
+    pattern: new RegExp(
+      `^(?:transfer|pay)\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+to\\s+(.+)$`,
+      'i'
+    ),
+    lang: 'en',
+  },
   // Cross-language: "send 5 a ..." (EN verb + ES preposition)
-  { pattern: new RegExp(`^send\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+a\\s+(.+)$`, 'i'), lang: 'es' },
+  {
+    pattern: new RegExp(`^send\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+a\\s+(.+)$`, 'i'),
+    lang: 'es',
+  },
   // Cross-language: "send 5 para ..." (EN verb + PT preposition)
-  { pattern: new RegExp(`^send\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+para\\s+(.+)$`, 'i'), lang: 'pt' },
+  {
+    pattern: new RegExp(`^send\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+para\\s+(.+)$`, 'i'),
+    lang: 'pt',
+  },
   // Cross-language: "enviar/envie 5 to ..." (ES/PT verb + EN preposition)
-  { pattern: new RegExp(`^env[ií][ae]?r?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+to\\s+(.+)$`, 'i'), lang: 'en' },
+  {
+    pattern: new RegExp(
+      `^env[ií][ae]?r?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}\\s+to\\s+(.+)$`,
+      'i'
+    ),
+    lang: 'en',
+  },
 ]
 
 /**
@@ -207,9 +271,22 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
     }
   }
 
+  // Check invite patterns (need to extract recipient phone)
+  for (const { pattern, lang } of INVITE_PATTERNS) {
+    const match = trimmedText.match(pattern)
+    if (match) {
+      const rawRecipient = match[1].trim()
+      const recipient = canonicalizePhone(rawRecipient)
+      if (recipient) {
+        return { command: 'invite', recipient, detectedLanguage: lang, originalText: text }
+      }
+    }
+  }
+
   // Strip greeting/filler prefix and retry send patterns
   // Catches: "Hola envia 5 a +57...", "Hey send 10 to ...", "Oi envia 5 para ..."
-  const GREETING_PREFIX = /^(?:hola|hey|hi|oi|buenas|oye|epa|que tal|buenos d[ií]as|buenas (?:tardes|noches))[,!.;]?\s+/i
+  const GREETING_PREFIX =
+    /^(?:hola|hey|hi|oi|buenas|oye|epa|que tal|buenos d[ií]as|buenas (?:tardes|noches))[,!.;]?\s+/i
   const withoutGreeting = trimmedText.replace(GREETING_PREFIX, '')
   if (withoutGreeting !== trimmedText) {
     for (const { pattern, lang } of SEND_PATTERNS) {
@@ -240,19 +317,37 @@ const PARTIAL_RECIPIENT_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | '
   // EN: "send to +573001234567", "send money to +57..."
   { pattern: /^send(?:\s+(?:money|dollars?))?\s+to\s+(.+)$/i, lang: 'en' },
   // ES: "enviar a +57...", "enviar dinero a +57...", "envía a +57...", "mandar a +57..."
-  { pattern: /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir|pas[aá]r?)(?:le|les)?\s+(?:(?:dinero|plata|d[oó]lares?)\s+)?a\s+(.+)$/i, lang: 'es' },
+  {
+    pattern:
+      /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir|pas[aá]r?)(?:le|les)?\s+(?:(?:dinero|plata|d[oó]lares?)\s+)?a\s+(.+)$/i,
+    lang: 'es',
+  },
   // PT: "enviar para +55...", "enviar dinheiro para +55..."
-  { pattern: /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir)\s+(?:(?:dinheiro|grana)\s+)?para\s+(.+)$/i, lang: 'pt' },
+  {
+    pattern: /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir)\s+(?:(?:dinheiro|grana)\s+)?para\s+(.+)$/i,
+    lang: 'pt',
+  },
 ]
 
 /** Patterns for "send <amount>" without recipient */
 const PARTIAL_AMOUNT_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
   // EN: "send 5", "send $10"
-  { pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|dollars?|pesos?|usd|plata))?$/i, lang: 'en' },
+  {
+    pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|dollars?|pesos?|usd|plata))?$/i,
+    lang: 'en',
+  },
   // ES: "enviar 5", "envía 10 dólares"
-  { pattern: /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir|pas[aá]r?)(?:le|les)?\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|pesos?|usd|plata))?$/i, lang: 'es' },
+  {
+    pattern:
+      /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir|pas[aá]r?)(?:le|les)?\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|pesos?|usd|plata))?$/i,
+    lang: 'es',
+  },
   // PT: "enviar 5", "manda 10"
-  { pattern: /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir)\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|reais?|usd|grana))?$/i, lang: 'pt' },
+  {
+    pattern:
+      /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir)\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|reais?|usd|grana))?$/i,
+    lang: 'pt',
+  },
 ]
 
 /**
@@ -278,10 +373,21 @@ function matchPartialSend(text: string): ParsedCommand | null {
     if (match) {
       const result = parseAndValidateAmount(match[1])
       if (result.value !== null && result.errorCode === null) {
-        return { command: 'send', amount: result.value, isLargeAmount: result.isLarge, detectedLanguage: lang, originalText: text }
+        return {
+          command: 'send',
+          amount: result.value,
+          isLargeAmount: result.isLarge,
+          detectedLanguage: lang,
+          originalText: text,
+        }
       }
       if (result.errorCode) {
-        return { command: 'send', amountError: result.errorCode, detectedLanguage: lang, originalText: text }
+        return {
+          command: 'send',
+          amountError: result.errorCode,
+          detectedLanguage: lang,
+          originalText: text,
+        }
       }
     }
   }
@@ -294,7 +400,11 @@ function matchPartialSend(text: string): ParsedCommand | null {
  * Only fires when strict regex returned 'unknown'.
  */
 function matchLooseCommand(text: string): ParsedCommand | null {
-  const normalized = text.trim().toLowerCase().replace(/[?!.,;:¿¡]+/g, '').trim()
+  const normalized = text
+    .trim()
+    .toLowerCase()
+    .replace(/[?!.,;:¿¡]+/g, '')
+    .trim()
   for (const [command, pattern] of LOOSE_COMMAND_PATTERNS) {
     if (pattern.test(normalized)) {
       return { command: command as ParsedCommand['command'], originalText: text }
@@ -310,7 +420,7 @@ function matchLooseCommand(text: string): ParsedCommand | null {
 interface AmountParseResult {
   value: number | null
   errorCode: AmountErrorCode | null
-  isLarge: boolean   // true iff value > 500 and errorCode is null
+  isLarge: boolean // true iff value > 500 and errorCode is null
 }
 
 export function parseAndValidateAmount(raw: string): AmountParseResult {
@@ -329,8 +439,8 @@ export function parseAndValidateAmount(raw: string): AmountParseResult {
   }
 
   // Step 4: Parse float
-  const value = parseFloat(normalized)
-  if (isNaN(value)) {
+  const value = Number.parseFloat(normalized)
+  if (Number.isNaN(value)) {
     return { value: null, errorCode: 'INVALID_FORMAT', isLarge: false }
   }
 
@@ -362,8 +472,12 @@ export function parseAndValidateAmount(raw: string): AmountParseResult {
 // Send match extraction
 // ============================================================================
 
-function parseSendMatch(match: RegExpMatchArray, originalText: string, lang: 'en' | 'es' | 'pt'): ParsedCommand {
-  const rawAmount = match[1]   // literal text from regex, e.g. "10,50" or "1.000"
+function parseSendMatch(
+  match: RegExpMatchArray,
+  originalText: string,
+  lang: 'en' | 'es' | 'pt'
+): ParsedCommand {
+  const rawAmount = match[1] // literal text from regex, e.g. "10,50" or "1.000"
   const result = parseAndValidateAmount(rawAmount)
 
   if (result.errorCode !== null) {
@@ -375,7 +489,13 @@ function parseSendMatch(match: RegExpMatchArray, originalText: string, lang: 'en
   const canonicalRecipient = canonicalizePhone(rawRecipient)
   if (!canonicalRecipient) {
     // Amount is valid but phone is bad — carry error to controller
-    return { command: 'send', amount: result.value!, recipientError: 'INVALID_PHONE', detectedLanguage: lang, originalText }
+    return {
+      command: 'send',
+      amount: result.value!,
+      recipientError: 'INVALID_PHONE',
+      detectedLanguage: lang,
+      originalText,
+    }
   }
 
   return {
@@ -441,11 +561,23 @@ export async function parseMessage(
             const amountStr = String(reparse.amount)
             const amountComma = amountStr.replace('.', ',')
             const recipientDigits = reparse.recipient.replace(/\+/g, '')
-            if ((!text.includes(amountStr) && !text.includes(amountComma)) || !text.includes(recipientDigits)) {
-              logger.warn('normalizeSendCommand: LLM output contains data not in original text — original: "%s", normalized: "%s"', text, normalized)
+            if (
+              (!text.includes(amountStr) && !text.includes(amountComma)) ||
+              !text.includes(recipientDigits)
+            ) {
+              logger.warn(
+                'normalizeSendCommand: LLM output contains data not in original text — original: "%s", normalized: "%s"',
+                text,
+                normalized
+              )
               // Fall through to format hint
             } else {
-              const result: ParsedCommand = { ...reparse, originalText: text, usedLLM: true, llmStatus: 'normalized' }
+              const result: ParsedCommand = {
+                ...reparse,
+                originalText: text,
+                usedLLM: true,
+                llmStatus: 'normalized',
+              }
               if (ctx) {
                 logParse(ctx, result, 'llm', 'normalized-send', Date.now() - startTime)
               }
@@ -490,14 +622,29 @@ export async function parseMessage(
           llmStatus: 'success',
         }
         if (ctx) {
-          logParse(ctx, result, 'llm', 'llm-success', Date.now() - startTime, llmResponse.meta, text)
+          logParse(
+            ctx,
+            result,
+            'llm',
+            'llm-success',
+            Date.now() - startTime,
+            llmResponse.meta,
+            text
+          )
         }
         return result
       }
 
       // LLM returned null (low confidence / validation fail) — fall through to loose matching
       if (ctx) {
-        logParse(ctx, { ...regexResult, usedLLM: true, llmStatus: 'low-confidence' }, 'llm', 'llm-rejected', Date.now() - startTime, llmResponse?.meta)
+        logParse(
+          ctx,
+          { ...regexResult, usedLLM: true, llmStatus: 'low-confidence' },
+          'llm',
+          'llm-rejected',
+          Date.now() - startTime,
+          llmResponse?.meta
+        )
       }
     } catch (error) {
       const isTimeout = error instanceof Error && error.message === 'Timeout'
@@ -508,7 +655,13 @@ export async function parseMessage(
         logger.error('LLM error in parseMessage: %o', error)
       }
       if (ctx) {
-        logParse(ctx, { ...regexResult, usedLLM: true, llmStatus: fallbackLlmStatus }, 'llm', isTimeout ? 'llm-timeout' : 'llm-error', Date.now() - startTime)
+        logParse(
+          ctx,
+          { ...regexResult, usedLLM: true, llmStatus: fallbackLlmStatus },
+          'llm',
+          isTimeout ? 'llm-timeout' : 'llm-error',
+          Date.now() - startTime
+        )
       }
       // Fall through to loose matching
     }
@@ -527,7 +680,13 @@ export async function parseMessage(
   // Nothing matched — return unknown
   const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: fallbackLlmStatus }
   if (ctx) {
-    logParse(ctx, result, 'regex', fallbackLlmStatus === 'disabled' ? 'llm-disabled' : 'fallback-miss', Date.now() - startTime)
+    logParse(
+      ctx,
+      result,
+      'regex',
+      fallbackLlmStatus === 'disabled' ? 'llm-disabled' : 'fallback-miss',
+      Date.now() - startTime
+    )
   }
   return result
 }
