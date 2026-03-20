@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   createSpendPermission: vi.fn(),
   signOut: vi.fn(),
   searchParamsGet: vi.fn((_: string) => null as string | null),
+  routerReplace: vi.fn(),
   state: {
     isSignedIn: false as boolean | undefined,
     currentUser: null as unknown,
@@ -27,7 +28,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({
   useSearchParams: () => ({ get: mocks.searchParamsGet }),
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ replace: mocks.routerReplace, push: vi.fn() }),
 }))
 
 vi.mock('@coinbase/cdp-hooks', () => ({
@@ -42,7 +43,7 @@ vi.mock('@coinbase/cdp-hooks', () => ({
   useSignOut: () => ({ signOut: mocks.signOut }),
   useSignInWithSms: () => ({ signInWithSms: vi.fn() }),
   useVerifySmsOTP: () => ({ verifySmsOTP: vi.fn() }),
-  useGetAccessToken: () => ({ getAccessToken: vi.fn() }),
+  useGetAccessToken: () => ({ getAccessToken: vi.fn().mockResolvedValue('cdp-test-token') }),
 }))
 
 vi.mock('../../lib/i18n', async () => {
@@ -60,13 +61,16 @@ vi.mock('../../lib/i18n', async () => {
   }
 })
 
+// Token state: tracks the JWT stored by storeToken() so getStoredToken/getFreshToken
+// return null during session check (before OTP) and the real token after OTP verify.
+let _storedToken: string | null = null
 vi.mock('../../lib/auth', () => ({
   sendOtp: (...args: unknown[]) => mocks.sendOtp(...args),
   verifyOtp: (...args: unknown[]) => mocks.verifyOtp(...args),
-  storeToken: (...args: unknown[]) => mocks.storeToken(...args),
-  getStoredToken: () => mocks.getStoredToken(),
-  clearToken: vi.fn(),
-  getFreshToken: vi.fn(() => null),
+  storeToken: (token: string) => { _storedToken = token; mocks.storeToken(token) },
+  getStoredToken: () => _storedToken,
+  clearToken: () => { _storedToken = null },
+  getFreshToken: () => _storedToken,
 }))
 
 vi.mock('viem', () => ({
@@ -105,6 +109,8 @@ async function renderPage() {
     root = createRoot(container!)
     root.render(React.createElement(SetupPage))
   })
+  // Flush effects (session check + async recovery fetches)
+  await flushAsync()
 }
 
 function cleanup() {
@@ -173,7 +179,52 @@ async function goThroughTosStep() {
   })
 }
 
+/**
+ * Flush pending microtasks/promises so async handlers (fetch chains) resolve.
+ * Uses process.nextTick which flushes microtasks in jsdom better than setTimeout.
+ */
+async function flushAsync(rounds = 10) {
+  for (let i = 0; i < rounds; i++) {
+    await act(async () => {
+      await new Promise((r) => process.nextTick(r))
+    })
+  }
+}
+
+/**
+ * Wait for specific text to appear in the container.
+ * Polls with microtask flushing until the text appears or timeout.
+ */
+async function waitForContent(text: string, timeoutMs = 3000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    await act(async () => {
+      await new Promise((r) => process.nextTick(r))
+    })
+    if (container?.textContent?.includes(text)) return
+  }
+  throw new Error(
+    `waitForContent("${text}") timed out after ${timeoutMs}ms.\nContent: ${container?.textContent?.slice(0, 300)}`
+  )
+}
+
+/** Wait for router.replace to be called with a specific path */
+async function waitForRedirect(path: string, timeoutMs = 3000) {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    await act(async () => {
+      await new Promise((r) => process.nextTick(r))
+    })
+    if (mocks.routerReplace.mock.calls.some((c: unknown[]) => c[0] === path)) return
+  }
+  throw new Error(
+    `waitForRedirect("${path}") timed out. Calls: ${JSON.stringify(mocks.routerReplace.mock.calls)}`
+  )
+}
+
 // Advance to email step (after OTP verification)
+// When BACKEND_URL is set, handleVerifyOtp makes async fetch calls
+// (register-wallet, wallet-status, email-status) that need extra flushing.
 async function goToEmailStep(otpCode = '123456') {
   await act(async () => {
     const input = container!.querySelector('input[type="text"]') as HTMLInputElement
@@ -182,6 +233,8 @@ async function goToEmailStep(otpCode = '123456') {
   await act(async () => {
     findButton('Verify')!.click()
   })
+  // Flush async fetch chains (register-wallet → advanceToCorrectStep)
+  await flushAsync()
 }
 
 async function goToPermissionStepViaSkip() {
@@ -203,6 +256,7 @@ async function goToPermissionStep(otpCode = '123456') {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  _storedToken = null
   mocks.state.isSignedIn = false
   mocks.state.currentUser = null
   // Default: provide a Colombian phone via URL (Twilio auth mode)
@@ -210,7 +264,6 @@ beforeEach(() => {
   mocks.searchParamsGet.mockImplementation((key: string) =>
     key === 'phone' ? '573001234567' : null
   )
-  mocks.getStoredToken.mockReturnValue(null)
   vi.stubEnv('NEXT_PUBLIC_CDP_PROJECT_ID', 'test-project-id')
   vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', '')
   vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '')
@@ -263,7 +316,6 @@ describe('handleVerifyOtp', () => {
   it('happy path: verifies OTP, stores token, authenticates, advances to email step', async () => {
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.storeToken.mockImplementation(() => {})
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
       isNewUser: false,
@@ -296,7 +348,6 @@ describe('handleVerifyOtp', () => {
   it('shows error when authenticateWithJWT throws', async () => {
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.storeToken.mockImplementation(() => {})
     mocks.authenticateWithJWT.mockRejectedValue(new Error('Auth failed'))
     await renderPage()
 
@@ -306,10 +357,9 @@ describe('handleVerifyOtp', () => {
     expect(container!.textContent).toContain('Verification failed')
   })
 
-  it('shows no-wallet error when user has no accounts', async () => {
+  it('waits for wallet when user has no accounts yet (awaitingCdpWallet)', async () => {
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.storeToken.mockImplementation(() => {})
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: [], evmAccounts: [] },
     })
@@ -318,16 +368,18 @@ describe('handleVerifyOtp', () => {
     await goToOtpStep('+573001234567')
     await goToEmailStep('123456')
 
-    expect(container!.textContent).toContain('Verification failed')
+    // Should be in loading state waiting for wallet to populate
+    // (awaitingCdpWallet = true, useEffect polling currentUser)
+    expect(container!.textContent).toContain('Verifying')
   })
 })
 
 describe('session recovery', () => {
-  it('uses getStoredToken for register-wallet fetch during session recovery', async () => {
+  it('uses stored token for register-wallet fetch during session recovery', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
-    mocks.getStoredToken.mockReturnValue('stored-token-xyz')
+    _storedToken = 'stored-token-xyz'
 
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -357,7 +409,7 @@ describe('session recovery', () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
-    mocks.getStoredToken.mockReturnValue('stored-token-xyz')
+    _storedToken = 'stored-token-xyz'
 
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -384,7 +436,7 @@ describe('session recovery', () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
-    mocks.getStoredToken.mockReturnValue('stored-token-xyz')
+    _storedToken = 'stored-token-xyz'
 
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if ((url as string).includes('/api/wallet-status')) {
@@ -404,17 +456,15 @@ describe('session recovery', () => {
 })
 
 describe('ensureGasReady', () => {
-  it('uses getStoredToken for /api/ensure-gas fetch', async () => {
+  it('uses stored token for /api/ensure-gas fetch', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '0xspender')
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token')
-    mocks.storeToken.mockImplementation(() => {})
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xwallet'], evmAccounts: [] },
       isNewUser: true,
     })
-    mocks.getStoredToken.mockReturnValue('stored-token-gas')
 
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -437,7 +487,7 @@ describe('ensureGasReady', () => {
     )
     expect(ensureGasCall).toBeDefined()
     expect((ensureGasCall![1] as RequestInit).headers).toMatchObject({
-      Authorization: 'Bearer stored-token-gas',
+      Authorization: 'Bearer jwt-token',
     })
 
     vi.unstubAllGlobals()
@@ -445,17 +495,15 @@ describe('ensureGasReady', () => {
 })
 
 describe('handleApprovePermission', () => {
-  it('uses getStoredToken for /api/register-permission fetch', async () => {
+  it('uses stored token for /api/register-permission fetch', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '0xspender')
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token')
-    mocks.storeToken.mockImplementation(() => {})
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xwallet'], evmAccounts: [] },
       isNewUser: true,
     })
-    mocks.getStoredToken.mockReturnValue('stored-token-perm')
     mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
 
     const mockFetch = vi.fn().mockResolvedValue({
@@ -478,7 +526,7 @@ describe('handleApprovePermission', () => {
     )
     expect(registerPermCall).toBeDefined()
     expect((registerPermCall![1] as RequestInit).headers).toMatchObject({
-      Authorization: 'Bearer stored-token-perm',
+      Authorization: 'Bearer jwt-token',
     })
 
     vi.unstubAllGlobals()
@@ -490,12 +538,11 @@ describe('handleSendEmailCode', () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.storeToken.mockImplementation(() => {})
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
       isNewUser: false,
     })
-    mocks.getStoredToken.mockReturnValue('stored-token-email')
+    // Token is set automatically by storeToken() during OTP verify
 
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -522,7 +569,7 @@ describe('handleSendEmailCode', () => {
     )
     expect(sendCodeCall).toBeDefined()
     expect((sendCodeCall![1] as RequestInit).headers).toMatchObject({
-      Authorization: 'Bearer stored-token-email',
+      Authorization: 'Bearer jwt-token-abc',
       'Content-Type': 'application/json',
     })
     expect((sendCodeCall![1] as RequestInit).body).toBe(JSON.stringify({ email: 'user@example.com' }))
@@ -536,12 +583,11 @@ describe('handleSendEmailCode', () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.storeToken.mockImplementation(() => {})
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
       isNewUser: false,
     })
-    mocks.getStoredToken.mockReturnValue('stored-token-email')
+    // Token is set automatically by storeToken() during OTP verify
 
     // register-wallet (from handleVerifyOtp) must succeed so we reach the email step;
     // send-email-code should fail to exercise the error branch.
@@ -579,12 +625,11 @@ describe('handleVerifyEmailCode', () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.storeToken.mockImplementation(() => {})
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
       isNewUser: false,
     })
-    mocks.getStoredToken.mockReturnValue('stored-token-email')
+    // Token is set automatically by storeToken() during OTP verify
 
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -616,7 +661,7 @@ describe('handleVerifyEmailCode', () => {
     )
     expect(verifyCall).toBeDefined()
     expect((verifyCall![1] as RequestInit).headers).toMatchObject({
-      Authorization: 'Bearer stored-token-email',
+      Authorization: 'Bearer jwt-token-abc',
       'Content-Type': 'application/json',
     })
     expect((verifyCall![1] as RequestInit).body).toBe(JSON.stringify({ email: 'user@example.com', code: '654321' }))
@@ -635,19 +680,19 @@ describe('handleVerifyEmailCode', () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.storeToken.mockImplementation(() => {})
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
       isNewUser: false,
     })
-    mocks.getStoredToken.mockReturnValue('stored-token-email')
+    // Token is set automatically by storeToken() during OTP verify
 
-    // First call (register-wallet from handleVerifyOtp) succeeds,
-    // second (send-email-code) succeeds, third (verify-email-code) fails
-    const mockFetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, text: async () => '', json: async () => ({}) })
-      .mockResolvedValueOnce({ ok: true, text: async () => '', json: async () => ({}) })
-      .mockResolvedValueOnce({ ok: false, text: async () => 'Invalid code', json: async () => ({}) })
+    // verify-email-code fails; all other endpoints succeed
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (typeof url === 'string' && url.includes('/api/auth/verify-email-code')) {
+        return Promise.resolve({ ok: false, text: async () => 'Invalid code', json: async () => ({}) })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
     vi.stubGlobal('fetch', mockFetch)
 
     await renderPage()
@@ -678,7 +723,6 @@ describe('handleSkipEmail', () => {
   it('skip before sending code: advances directly to tos step with no API call', async () => {
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.storeToken.mockImplementation(() => {})
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
       isNewUser: false,
@@ -707,12 +751,11 @@ describe('handleSkipEmail', () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.storeToken.mockImplementation(() => {})
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
       isNewUser: false,
     })
-    mocks.getStoredToken.mockReturnValue('stored-token')
+    // Token is set automatically by storeToken() during OTP verify
 
     const mockFetch = vi.fn().mockResolvedValue({ ok: true, text: async () => '', json: async () => ({}) })
     vi.stubGlobal('fetch', mockFetch)
@@ -734,6 +777,160 @@ describe('handleSkipEmail', () => {
     expect(container!.textContent).toContain('Terms of Service')
 
     vi.unstubAllGlobals()
+  })
+})
+
+// --- Helpers for advanceToCorrectStep tests ---
+
+/** Standard OTP mocks for a returning-user test with backend enabled */
+function setupOtpMocksWithBackend() {
+  vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+  mocks.sendOtp.mockResolvedValue(undefined)
+  // verifyOtp returns a JWT which storeToken() saves → getStoredToken()/getFreshToken() pick it up
+  mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
+  mocks.authenticateWithJWT.mockResolvedValue({
+    user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
+    isNewUser: false,
+  })
+}
+
+/**
+ * Create a fetch mock that routes by URL pattern.
+ * register-wallet always succeeds; other URLs are configurable.
+ */
+function mockFetchByUrl(routes: Record<string, object>) {
+  const fn = vi.fn().mockImplementation((url: string) => {
+    for (const [pattern, body] of Object.entries(routes)) {
+      if (url.includes(pattern)) {
+        return Promise.resolve({ ok: true, text: async () => '', json: async () => body })
+      }
+    }
+    // Default: succeed with empty body (covers register-wallet, etc.)
+    return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+  })
+  vi.stubGlobal('fetch', fn)
+  return fn
+}
+
+describe('advanceToCorrectStep (after OTP verify with backend)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('fully onboarded user (hasPermission) → redirects to /settings', async () => {
+    setupOtpMocksWithBackend()
+    mockFetchByUrl({
+      '/api/wallet-status': { hasWallet: true, hasPermission: true, tosAccepted: true },
+    })
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goToEmailStep('123456')
+    await waitForRedirect('/settings')
+  })
+
+  it('returning user with tosAccepted but no permission → goes to permission step', async () => {
+    setupOtpMocksWithBackend()
+    mockFetchByUrl({
+      '/api/wallet-status': { hasWallet: true, hasPermission: false, tosAccepted: true },
+    })
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goToEmailStep('123456')
+    await waitForContent('Set Spending Limit')
+  })
+
+  it('returning user with verified email but no ToS → skips email, goes to tos step', async () => {
+    setupOtpMocksWithBackend()
+    mockFetchByUrl({
+      '/api/wallet-status': { hasWallet: true, hasPermission: false, tosAccepted: false },
+      '/api/auth/email-status': { hasEmail: true, verified: true, maskedEmail: 'u***@example.com' },
+    })
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goToEmailStep('123456')
+    await waitForContent('Terms of Service')
+  })
+
+  it('fresh user (no email, no ToS) → shows email step', async () => {
+    setupOtpMocksWithBackend()
+    mockFetchByUrl({
+      '/api/wallet-status': { hasWallet: true, hasPermission: false, tosAccepted: false },
+      '/api/auth/email-status': { hasEmail: false, verified: false, maskedEmail: null },
+    })
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goToEmailStep('123456')
+
+    expect(container!.textContent).toContain('Add a recovery email')
+    expect(mocks.routerReplace).not.toHaveBeenCalledWith('/settings')
+  })
+
+  it('wallet-status returns non-OK → falls back to email step (does not block onboarding)', async () => {
+    setupOtpMocksWithBackend()
+    const fn = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({ ok: false, text: async () => 'Server error', json: async () => ({}) })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', fn)
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goToEmailStep('123456')
+    await waitForContent('Add a recovery email')
+  })
+})
+
+describe('session recovery redirects', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('hasPermission on recovery → redirects to /settings (not done step)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
+    _storedToken = 'stored-token-xyz'
+
+    mockFetchByUrl({
+      '/api/wallet-status': { hasWallet: true, hasPermission: true, tosAccepted: true },
+    })
+
+    await renderPage()
+    await waitForRedirect('/settings')
+  })
+
+  it('recovered on-chain permission → redirects to /settings (not done step)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
+    _storedToken = 'stored-token-xyz'
+
+    const fn = vi.fn().mockImplementation((url: string, opts?: RequestInit) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true, text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: false, tosAccepted: true }),
+        })
+      }
+      if (url.includes('/api/register-permission') && opts?.method === 'POST') {
+        // Simulate finding an existing on-chain permission
+        return Promise.resolve({
+          ok: true, text: async () => '',
+          json: async () => ({ success: true, permissionHash: '0xhash', dailyLimit: 100 }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', fn)
+
+    await renderPage()
+    await waitForRedirect('/settings')
   })
 })
 

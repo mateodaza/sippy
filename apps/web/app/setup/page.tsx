@@ -131,6 +131,61 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
   // Check if CDP is configured
   const isCdpConfigured = !!CDP_PROJECT_ID;
 
+  /**
+   * Check wallet-status (and email-status) to advance to the correct step.
+   * Used after wallet registration to skip steps for returning users.
+   *
+   * Decision tree:
+   *   hasPermission   → redirect to /settings (fully onboarded)
+   *   tosAccepted     → permission step
+   *   email verified  → tos step (skip email, they already have one)
+   *   otherwise       → email step (genuinely fresh user)
+   */
+  const advanceToCorrectStep = async (accessToken: string): Promise<boolean> => {
+    if (!BACKEND_URL) {
+      setStep('email');
+      return false;
+    }
+    try {
+      const headers = { 'Authorization': `Bearer ${accessToken}` };
+
+      const statusResponse = await fetch(`${BACKEND_URL}/api/wallet-status`, { headers });
+      if (!statusResponse.ok) {
+        setStep('email');
+        return false;
+      }
+      const status = await statusResponse.json();
+
+      if (status.hasPermission) {
+        router.replace('/settings');
+        return true;
+      }
+      if (status.tosAccepted) {
+        setStep('permission');
+        return true;
+      }
+
+      // ToS not accepted — check if email is already verified to skip the email step
+      try {
+        const emailRes = await fetch(`${BACKEND_URL}/api/auth/email-status`, { headers });
+        if (emailRes.ok) {
+          const emailData = await emailRes.json();
+          if (emailData.verified) {
+            setStep('tos');
+            return true;
+          }
+        }
+      } catch {
+        // email-status failed — not critical, just show email step
+      }
+    } catch (err) {
+      console.error('advanceToCorrectStep failed:', err);
+    }
+    // Fresh user or no verified email — show email step
+    setStep('email');
+    return false;
+  };
+
   // Language init: phone prefix wins immediately, then API can override for returning users
   useEffect(() => {
     if (phoneFromUrl) {
@@ -243,7 +298,9 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
             const status = await statusResponse.json();
 
             if (status.hasPermission) {
-              setStep('done');
+              // Fully onboarded — go to settings, no need to show setup again
+              router.replace('/settings');
+              return;
             } else if (status.tosAccepted) {
               // Attempt to register an existing on-chain permission before asking
               // the user to create a new one. Handles the case where a permission
@@ -259,7 +316,8 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
                 });
                 if (regPermRes.ok) {
                   console.log('Found and registered existing on-chain permission during recovery');
-                  setStep('done');
+                  router.replace('/settings');
+                  return;
                 } else {
                   // No existing permission found — resume at permission step
                   setStep('permission');
@@ -500,7 +558,13 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         }
       }
 
-      setStep('email');
+      // Check if user is already onboarded — skip steps for returning users
+      const token = getStoredToken();
+      if (token) {
+        await advanceToCorrectStep(token);
+      } else {
+        setStep('email');
+      }
     } catch (err) {
       console.error('OTP verification failed:', err);
       setError(localizeError(err, 'otp-verify', lang));
@@ -562,7 +626,13 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
           }
         }
 
-        setStep('email');
+        // Check if user is already onboarded — skip steps for returning users
+        const token = getStoredToken();
+        if (token) {
+          await advanceToCorrectStep(token);
+        } else {
+          setStep('email');
+        }
       } catch (regErr) {
         console.error('Backend registration error:', regErr);
         setError(lang === 'es' ? 'Error registrando la billetera. Intenta de nuevo.' :
