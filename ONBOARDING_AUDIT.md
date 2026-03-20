@@ -159,7 +159,7 @@ The custom daily limit input accepts any number — 0, negative, or extremely la
 - `dailyLimit = "-5"` → `parseUnits` may throw or create an invalid permission
 - `dailyLimit = ""` → `parseUnits` throws
 
-**Fix:** Add `min="1" max="500"` on the input, and validate before calling `handleApprovePermission`.
+**Fix:** Add `min={1} max={10000}` on the input, and validate before calling `handleApprovePermission`.
 
 ---
 
@@ -297,12 +297,12 @@ All fixes applied in `setup/page.tsx`:
 
 | Bug | What was done |
 |-----|---------------|
-| 1 | Added `setIsLoading(false)` in catch block for CDP-SMS path when error occurs before `awaitingCdpWallet` is set |
+| 1 | Replaced `if (authMode !== 'cdp-sms')` guard in the `finally` block with a `shouldKeepLoading` flag. The flag only stays true when the success path completes (wallet-await path), so errors thrown before it is set cause the `finally` block to call `setIsLoading(false)` normally |
 | 2 | Session recovery now calls `register-permission` when `tosAccepted` but `hasPermission === false`, recovering orphaned onchain permissions before asking user to create a new one |
 | 4 | Replaced bare `setTimeout` with `emailTimerRef` (useRef) + cleanup on unmount |
 | 5 | `handleAcceptTos` now uses `getFreshToken()` and throws (blocking progression) if token is expired/missing |
 | 6 | Already fixed in current code — recovery register-wallet already includes `cdpAccessToken` |
-| 7 | Replaced `getStoredToken()` with `getFreshToken()` in `ensureGasReady`, `handleSendEmailCode`, `handleVerifyEmailCode`, `handleAcceptTos`, `handleApprovePermission` (register-permission + gas retry). Added null handling with session-expired error |
+| 7 | Replaced `getStoredToken()` with `getFreshToken()` in session recovery (`checkExistingSession`), `ensureGasReady`, `handleSendEmailCode`, `handleVerifyEmailCode`, `handleAcceptTos`, `handleApprovePermission` (register-permission + gas retry). Added null handling with session-expired error. Note: `getStoredToken()` intentionally kept in language resolution (best-effort), OTP handler register-wallet (token just created), and `awaitingCdpWallet` effect register-wallet (runs immediately after token storage) |
 | 8 | Added `min={1} max={10000}` on custom input + runtime validation in `handleApprovePermission` before onchain call |
 
 Additionally: error display now shows a "Reload page" button when the JWT is expired and the user is past the phone/otp steps. Page reload triggers session recovery which resumes at the correct step.

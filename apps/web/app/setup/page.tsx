@@ -58,13 +58,14 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
   const [otp, setOtp] = useState('');
   const [dailyLimit, setDailyLimit] = useState('100'); // Default $100/day
   const [error, setError] = useState<string | null>(null);
+  const [isSessionExpired, setIsSessionExpired] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true); // Start true to check on mount
   const [isPreparingWallet, setIsPreparingWallet] = useState(false); // Waiting for gas
   const [gasReady, setGasReady] = useState(false);
   const [hasCheckedSession, setHasCheckedSession] = useState(false); // Only check once on mount
-  const cdpInitAttempts = useRef(0); // Track CDP initialization attempts to prevent infinite wait
+  const [cdpInitAttempts, setCdpInitAttempts] = useState(0); // Track CDP initialization attempts to prevent infinite wait
   const [email, setEmail] = useState('');
   const [emailCode, setEmailCode] = useState('');
   const [emailSent, setEmailSent] = useState(false);
@@ -127,27 +128,33 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
 
   // Recovery: Check for existing session on mount (only once)
   useEffect(() => {
+    // Only run this check once on mount
+    if (hasCheckedSession) return;
+
+    // Wait for CDP to initialize
+    if (isSignedIn === undefined) return;
+
+    // Under CDPProviderCustomAuth, CDP uses getJwt() (our stored JWT) to
+    // bootstrap. On the first render cycle isSignedIn may still be false
+    // while CDP is authenticating. Don't clear the token or give up yet —
+    // schedule a retry after 1s so CDP has time to complete.
+    // Give up after 3 retries (~3s) to avoid hanging forever.
+    if (!isSignedIn && getStoredToken() && cdpInitAttempts < 3) {
+      const timer = setTimeout(() => setCdpInitAttempts(prev => prev + 1), 1000);
+      return () => clearTimeout(timer);
+    }
+
+    // If CDP init retries were exhausted, log it for diagnosability
+    if (!isSignedIn && cdpInitAttempts >= 3) {
+      console.warn('CDP initialization failed after 3 attempts — clearing stale session');
+    }
+
+    // Mark that we've checked
+    setHasCheckedSession(true);
+
     const checkExistingSession = async () => {
-      // Only run this check once on mount
-      if (hasCheckedSession) return;
 
-      // Wait for CDP to initialize
-      if (isSignedIn === undefined) return;
-
-      // Under CDPProviderCustomAuth, CDP uses getJwt() (our stored JWT) to
-      // bootstrap. On the first render cycle isSignedIn may still be false
-      // while CDP is authenticating. Don't clear the token or give up yet —
-      // wait for the next effect cycle so CDP has a chance to complete.
-      // Give up after 3 cycles (~3 re-renders) to avoid hanging forever.
-      if (!isSignedIn && getStoredToken() && cdpInitAttempts.current < 3) {
-        cdpInitAttempts.current += 1;
-        return;
-      }
-
-      // Mark that we've checked
-      setHasCheckedSession(true);
-
-      // If not signed in (and no stored token), show the phone step
+      // If not signed in after CDP init retries, wipe any stale JWT and show the phone step
       if (!isSignedIn || !currentUser) {
         clearToken();
         setIsCheckingSession(false);
@@ -168,77 +175,85 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
 
         // Check backend status
         if (BACKEND_URL) {
-          const accessToken = getStoredToken();
-          if (accessToken) {
-            // First ensure wallet is registered (this also triggers refuel)
-            const cdpToken = await getAccessToken().catch((err: unknown) => {
-              console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
-              return null;
-            });
-            const registerResponse = await fetch(`${BACKEND_URL}/api/register-wallet`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify({ walletAddress: smartAccountAddress, ...(cdpToken && { cdpAccessToken: cdpToken }) }),
-            });
+          const accessToken = getFreshToken();
+          if (!accessToken) {
+            // Token expired during reload — clear session and restart onboarding
+            clearToken();
+            await signOut();
+            setIsCheckingSession(false);
+            return;
+          }
 
-            if (registerResponse.ok) {
-              // Wallet registered/confirmed
-            } else {
-              const errText = await registerResponse.text();
-              console.error('Wallet registration failed on recovery:', errText);
-              setError(lang === 'es' ? 'Error registrando la billetera. Intenta de nuevo.' :
-                       lang === 'pt' ? 'Erro ao registrar a carteira. Tente novamente.' :
-                       'Failed to register wallet. Please try again.');
-              setIsCheckingSession(false);
-              return;
-            }
+          // First ensure wallet is registered (this also triggers refuel)
+          const cdpToken = await getAccessToken().catch((err: unknown) => {
+            console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
+            return null;
+          });
+          const registerResponse = await fetch(`${BACKEND_URL}/api/register-wallet`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({ walletAddress: smartAccountAddress, ...(cdpToken && { cdpAccessToken: cdpToken }) }),
+          });
 
-            // Check wallet status to determine which step to resume from
-            const statusResponse = await fetch(`${BACKEND_URL}/api/wallet-status`, {
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-              },
-            });
+          if (registerResponse.ok) {
+            // Wallet registered/confirmed
+          } else {
+            const errText = await registerResponse.text();
+            console.error('Wallet registration failed on recovery:', errText);
+            setError(lang === 'es' ? 'Error registrando la billetera. Intenta de nuevo.' :
+                     lang === 'pt' ? 'Erro ao registrar a carteira. Tente novamente.' :
+                     'Failed to register wallet. Please try again.');
+            setIsCheckingSession(false);
+            return;
+          }
 
-            if (statusResponse.ok) {
-              const status = await statusResponse.json();
+          // Check wallet status to determine which step to resume from
+          const statusResponse = await fetch(`${BACKEND_URL}/api/wallet-status`, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            },
+          });
 
-              if (status.hasPermission) {
-                setStep('done');
-              } else if (status.tosAccepted) {
-                // BUG 2 fix: attempt to register an existing on-chain permission
-                // before asking the user to create a new one (avoids orphaned duplicates)
-                try {
-                  const regPermRes = await fetch(`${BACKEND_URL}/api/register-permission`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${accessToken}`,
-                    },
-                    body: JSON.stringify({ dailyLimit: null }),
-                  });
-                  if (regPermRes.ok) {
-                    console.log('Found and registered existing on-chain permission during recovery');
-                    setStep('done');
-                  } else {
-                    // No existing permission found — resume at permission step
-                    setStep('permission');
-                  }
-                } catch {
+          if (statusResponse.ok) {
+            const status = await statusResponse.json();
+
+            if (status.hasPermission) {
+              setStep('done');
+            } else if (status.tosAccepted) {
+              // Attempt to register an existing on-chain permission before asking
+              // the user to create a new one. Handles the case where a permission
+              // was signed on-chain but registration was interrupted (tab close, network error).
+              try {
+                const regPermRes = await fetch(`${BACKEND_URL}/api/register-permission`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`,
+                  },
+                  body: JSON.stringify({ dailyLimit: null }),
+                });
+                if (regPermRes.ok) {
+                  console.log('Found and registered existing on-chain permission during recovery');
+                  setStep('done');
+                } else {
+                  // No existing permission found — resume at permission step
                   setStep('permission');
                 }
-              } else {
-                // Wallet registered but ToS not accepted — resume at ToS step.
-                // Email step is only shown in the initial fresh flow, not on recovery.
-                setStep('tos');
+              } catch (err) {
+                console.error('Permission recovery check failed:', err);
+                setStep('permission');
               }
             } else {
-              // wallet-status returned non-OK — resume at tos step (safe default).
+              // Wallet registered but ToS not accepted — resume at ToS step.
+              // Email step is only shown in the initial fresh flow, not on recovery.
               setStep('tos');
             }
+          } else {
+            // wallet-status returned non-OK — resume at tos step (safe default).
+            setStep('tos');
           }
         } else {
           // No backend, just go to tos step
@@ -259,7 +274,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
     };
 
     checkExistingSession();
-  }, [isSignedIn, currentUser, hasCheckedSession]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isSignedIn, currentUser, hasCheckedSession, cdpInitAttempts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ensure wallet has gas before allowing permission creation
   const ensureGasReady = async (): Promise<boolean> => {
@@ -271,6 +286,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
     try {
       const accessToken = getFreshToken();
       if (!accessToken) {
+        setIsSessionExpired(true);
         throw new Error('Session expired. Please refresh and try again.');
       }
 
@@ -434,7 +450,10 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         try {
           const accessToken = getStoredToken();
           if (accessToken) {
-            const cdpToken = await getAccessToken().catch(() => null);
+            const cdpToken = await getAccessToken().catch((err: unknown) => {
+              console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
+              return null;
+            });
             const response = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
               headers: {
@@ -502,7 +521,10 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         if (BACKEND_URL) {
           const accessToken = getStoredToken();
           if (accessToken) {
-            const cdpToken = await getAccessToken().catch(() => null);
+            const cdpToken = await getAccessToken().catch((err: unknown) => {
+              console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
+              return null;
+            });
             const response = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
               headers: {
@@ -546,7 +568,8 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
     try {
       const accessToken = getFreshToken();
       if (!accessToken) {
-        setError(t('setup.errSessionExpired', lang));
+        setIsSessionExpired(true);
+        setError(t('wallet.errSessionExpired', lang));
         return;
       }
       const response = await fetch(`${BACKEND_URL}/api/auth/send-email-code`, {
@@ -577,7 +600,8 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
     try {
       const accessToken = getFreshToken();
       if (!accessToken) {
-        setError(t('setup.errSessionExpired', lang));
+        setIsSessionExpired(true);
+        setError(t('wallet.errSessionExpired', lang));
         return;
       }
       const response = await fetch(`${BACKEND_URL}/api/auth/verify-email-code`, {
@@ -620,6 +644,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       if (BACKEND_URL) {
         const accessToken = getFreshToken();
         if (!accessToken) {
+          setIsSessionExpired(true);
           throw new Error(
             lang === 'es' ? 'Sesión expirada. Recarga la página e intenta de nuevo.' :
             lang === 'pt' ? 'Sessão expirada. Recarregue a página e tente novamente.' :
@@ -659,7 +684,8 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         throw new Error('No wallet address. Please restart the process.');
       }
 
-      // BUG 8 fix: validate daily limit before creating on-chain permission
+      // Validate daily limit before creating on-chain permission — invalid values
+      // would create a broken or expensive-to-undo permission on-chain
       const parsedLimit = Number(dailyLimit);
       if (!Number.isFinite(parsedLimit) || parsedLimit < 1 || parsedLimit > 10000) {
         setError(
@@ -701,6 +727,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
       if (BACKEND_URL) {
         const accessToken = getFreshToken();
         if (!accessToken) {
+          setIsSessionExpired(true);
           throw new Error(
             lang === 'es' ? 'Sesión expirada. Recarga la página e intenta de nuevo.' :
             lang === 'pt' ? 'Sessão expirada. Recarregue a página e tente novamente.' :
@@ -797,7 +824,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         {error && (
           <div className='mb-4 p-3 bg-[var(--fill-danger-light)] border border-red-200 rounded-lg text-red-700 text-sm'>
             {error}
-            {!getFreshToken() && step !== 'phone' && step !== 'otp' && (
+            {isSessionExpired && step !== 'phone' && step !== 'otp' && (
               <button
                 onClick={() => window.location.reload()}
                 className='block mt-2 text-red-800 underline font-semibold'
