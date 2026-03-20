@@ -20,6 +20,31 @@ import { CDPProviderCustomAuth, CDPProviderNative } from '../providers/cdp-provi
  * 4. User creates spend permission
  */
 
+/**
+ * Retry getAccessToken with delays. In the Twilio/customAuth flow,
+ * the CDP session may not be fully settled immediately after
+ * authenticateWithJWT(), so getAccessToken() can fail on the first call.
+ */
+async function getCdpTokenWithRetry(
+  getAccessToken: () => Promise<string | null>,
+  maxAttempts = 3,
+  delayMs = 1000
+): Promise<string | null> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const token = await getAccessToken();
+      if (token) return token;
+    } catch (err) {
+      console.warn(`CDP getAccessToken attempt ${attempt}/${maxAttempts} failed:`, err instanceof Error ? err.message : err);
+    }
+    if (attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, delayMs * attempt));
+    }
+  }
+  console.error('CDP getAccessToken failed after all retries');
+  return null;
+}
+
 // Environment variables
 const SIPPY_SPENDER_ADDRESS =
   process.env.NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS || '';
@@ -185,10 +210,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
           }
 
           // First ensure wallet is registered (this also triggers refuel)
-          const cdpToken = await getAccessToken().catch((err: unknown) => {
-            console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
-            return null;
-          });
+          const cdpToken = await getCdpTokenWithRetry(getAccessToken);
           const registerResponse = await fetch(`${BACKEND_URL}/api/register-wallet`, {
             method: 'POST',
             headers: {
@@ -450,10 +472,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         try {
           const accessToken = getStoredToken();
           if (accessToken) {
-            const cdpToken = await getAccessToken().catch((err: unknown) => {
-              console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
-              return null;
-            });
+            const cdpToken = await getCdpTokenWithRetry(getAccessToken);
             const response = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
               headers: {
@@ -521,10 +540,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
         if (BACKEND_URL) {
           const accessToken = getStoredToken();
           if (accessToken) {
-            const cdpToken = await getAccessToken().catch((err: unknown) => {
-              console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
-              return null;
-            });
+            const cdpToken = await getCdpTokenWithRetry(getAccessToken);
             const response = await fetch(`${BACKEND_URL}/api/register-wallet`, {
               method: 'POST',
               headers: {
@@ -768,10 +784,7 @@ function SetupContent({ authMode, phoneFromUrl: phoneFromUrlProp }: { authMode: 
           try {
             const accessToken = getFreshToken();
             if (accessToken) {
-              const cdpToken = await getAccessToken().catch((err: unknown) => {
-                console.error('CDP access token unavailable:', err instanceof Error ? err.message : err);
-                return null;
-              });
+              const cdpToken = await getCdpTokenWithRetry(getAccessToken);
               const regRes = await fetch(`${BACKEND_URL}/api/register-wallet`, {
                 method: 'POST',
                 headers: {
