@@ -7,7 +7,15 @@
  */
 
 import logger from '@adonisjs/core/services/logger'
+import env from '#start/env'
 import { query as _query, getUserLanguage as _getUserLanguage } from '#services/db'
+
+const INVITE_WHITELIST = new Set(
+  (env.get('VELOCITY_WHITELIST', '') as string)
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+)
 import {
   notifyInviteRecipient as _notifyInviteRecipient,
   notifyInviteCompleted as _notifyInviteCompleted,
@@ -62,14 +70,16 @@ export async function createInvite(
       [senderPhone, Date.now()]
     )
 
-    // 2. Count sender invites in last 24h
-    const countResult = await deps.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM pending_invites
-       WHERE sender_phone = $1 AND created_at > $2`,
-      [senderPhone, Date.now() - 24 * 60 * 60 * 1000]
-    )
-    if (parseInt(countResult.rows[0]?.count ?? '0', 10) >= 3) {
-      return { dailyLimitReached: true }
+    // 2. Count sender invites in last 24h (whitelisted senders skip this check)
+    if (!INVITE_WHITELIST.has(senderPhone)) {
+      const countResult = await deps.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM pending_invites
+         WHERE sender_phone = $1 AND created_at > $2`,
+        [senderPhone, Date.now() - 24 * 60 * 60 * 1000]
+      )
+      if (Number.parseInt(countResult.rows[0]?.count ?? '0', 10) >= 10) {
+        return { dailyLimitReached: true }
+      }
     }
 
     // 3. Atomic INSERT with conflict guard on partial unique index
@@ -147,7 +157,11 @@ export async function checkAndNotifySender(recipientPhone: string): Promise<void
           [Date.now(), row.id]
         )
       } catch (err) {
-        logger.error('Failed to notify sender %s about invite completion: %o', row.sender_phone, err)
+        logger.error(
+          'Failed to notify sender %s about invite completion: %o',
+          row.sender_phone,
+          err
+        )
         // Revert to 'pending' so a future retry can pick it up
         try {
           await deps.query(
