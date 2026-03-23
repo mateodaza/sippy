@@ -10,12 +10,24 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
     let indexerHeartbeat: number | null = null
     if (ctx.request.url().startsWith('/admin')) {
       try {
-        const row = await db.connection('indexer')
-          .from('_ponder_meta')
-          .where('key', 'app')
-          .select(db.raw("(value->>'heartbeat_at')::bigint as heartbeat"))
+        // Discover Ponder's active schema dynamically so we survive version upgrades
+        const schemaRow = await db
+          .connection('indexer')
+          .from('information_schema.tables')
+          .where('table_name', '_ponder_meta')
+          .whereILike('table_schema', 'ponder%')
+          .select('table_schema')
           .first()
-        indexerHeartbeat = row?.heartbeat ? Number(row.heartbeat) : null
+        if (schemaRow?.table_schema) {
+          const schema = schemaRow.table_schema
+          const row = await db
+            .connection('indexer')
+            .from(db.raw('??.??', [schema, '_ponder_meta']))
+            .where('key', 'app')
+            .select(db.raw("(value->>'heartbeat_at')::bigint as heartbeat"))
+            .first()
+          indexerHeartbeat = row?.heartbeat ? Number(row.heartbeat) : null
+        }
       } catch (err) {
         console.warn('Failed to query indexer heartbeat:', (err as Error).message)
       }
