@@ -635,7 +635,18 @@ function SettingsContent() {
       setPermissionStatus('success')
     } catch (err) {
       console.error('Change limit failed:', err)
-      setError(err instanceof Error ? err.message : localizeError(err, 'enable-permission', lang))
+      const rawMsg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null && 'message' in err
+            ? String((err as Record<string, unknown>).message)
+            : String(err)
+      const lower = rawMsg.toLowerCase()
+      if (lower.includes('insufficient') || lower.includes('gas') || lower.includes('funds')) {
+        setError(t('setup.errInsufficientEth', lang))
+      } else {
+        setError(localizeError(err, 'enable-permission', lang))
+      }
       setPermissionStatus('error')
     }
   }

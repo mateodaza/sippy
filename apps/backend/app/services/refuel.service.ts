@@ -161,7 +161,7 @@ class RefuelService {
         }
 
         const userBalance = await this.getUserBalance(userAddress)
-        if (Number.parseFloat(userBalance) >= 0.00005) {
+        if (Number.parseFloat(userBalance) >= 0.0005) {
           return {
             success: false,
             error: `User already has sufficient ETH: ${userBalance}`,

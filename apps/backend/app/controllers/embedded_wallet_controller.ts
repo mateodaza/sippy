@@ -432,7 +432,7 @@ export default class EmbeddedWalletController {
 
       // Check current balance
       let balance = await refuelService.getUserBalance(targetAddress)
-      const minBalance = 0.00005 // Same as contract MIN_BALANCE (50k gwei for UserOp)
+      const minBalance = 0.0005 // Must cover a CDP UserOp (~0.0005 ETH on Arbitrum)
 
       if (Number.parseFloat(balance) >= minBalance) {
         logger.info(`Wallet already has sufficient balance: ${balance} ETH`)

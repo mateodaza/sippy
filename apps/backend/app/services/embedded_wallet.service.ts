@@ -334,7 +334,7 @@ export async function sendWithSpendPermission(
       // Refuel service unavailable — check balance directly as a safety net
       const provider = new ethers.providers.JsonRpcProvider(getRpcUrl())
       const spenderBalance = await provider.getBalance(spenderAccount.address)
-      const minBalance = ethers.utils.parseEther('0.00005')
+      const minBalance = ethers.utils.parseEther('0.0005')
       if (spenderBalance.lt(minBalance)) {
         throw new Error('Spender wallet has no gas and refuel service is unavailable')
       }
@@ -396,11 +396,17 @@ export async function sendWithSpendPermission(
       )
       if ((fallbackResult.rowCount ?? 0) === 0) {
         const maskedPhone = maskPhone(fromPhoneNumber)
-        logger.error({ alert: 'spend-tracking-failure', phone: maskedPhone, amount }, 'Daily spend update failed after successful transfer — spend limits may not advance')
+        logger.error(
+          { alert: 'spend-tracking-failure', phone: maskedPhone, amount },
+          'Daily spend update failed after successful transfer — spend limits may not advance'
+        )
       }
     } else if (updateResult.rowCount === 0) {
       const maskedPhone = maskPhone(fromPhoneNumber)
-      logger.error({ alert: 'spend-tracking-failure', phone: maskedPhone, amount }, 'Daily spend update failed after successful transfer — spend limits may not advance')
+      logger.error(
+        { alert: 'spend-tracking-failure', phone: maskedPhone, amount },
+        'Daily spend update failed after successful transfer — spend limits may not advance'
+      )
     }
 
     // Get remaining allowance after the transfer
