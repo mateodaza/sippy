@@ -7,9 +7,13 @@ import { useSessionGuard, type SessionGuardResult } from './useSessionGuard'
 // Helper: build a minimal JWT with the given payload
 function makeJwt(payload: Record<string, unknown>): string {
   const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
   const body = btoa(JSON.stringify(payload))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
   return `${header}.${body}.fakesig`
 }
 
@@ -119,6 +123,9 @@ async function cleanupHook() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Pin Twilio off so CDP SMS is the default path.
+  // Tests that need Twilio override this explicitly (see test 9b).
+  vi.stubEnv('NEXT_PUBLIC_TWILIO_ENABLED', '')
   mocks.state.isSignedIn = false
   mocks.state.currentUser = null
   mocks.getStoredToken.mockReturnValue(null)

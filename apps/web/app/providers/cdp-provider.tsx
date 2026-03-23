@@ -1,14 +1,14 @@
-'use client';
+'use client'
 
-import { CDPHooksProvider } from '@coinbase/cdp-hooks';
-import { ReactNode } from 'react';
-import { getFreshToken } from '../../lib/auth';
-import { getDefaultProviderType } from '../../lib/auth-mode';
+import { CDPHooksProvider } from '@coinbase/cdp-hooks'
+import { ReactNode } from 'react'
+import { getFreshToken } from '../../lib/auth'
+import { getDefaultProviderType } from '../../lib/auth-mode'
 
-const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
+const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || ''
 
 interface CDPProviderProps {
-  children: ReactNode;
+  children: ReactNode
 }
 
 const sharedConfig = {
@@ -17,20 +17,22 @@ const sharedConfig = {
     createOnLogin: 'smart' as const,
     enableSpendPermissions: true,
   },
-};
+}
 
 /**
  * CDP provider with custom JWT auth (Twilio flow).
- * Used for international numbers and all returning users.
+ * Used for international (non-NANP) numbers when Twilio is enabled.
  */
 export function CDPProviderCustomAuth({ children }: CDPProviderProps) {
   if (!CDP_PROJECT_ID) {
-    console.error('CDP_PROJECT_ID is not set. Wallet functionality is unavailable.');
+    console.error('CDP_PROJECT_ID is not set. Wallet functionality is unavailable.')
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4">
-        <div className="text-red-600 text-center">Wallet setup is temporarily unavailable. Please try again later.</div>
+        <div className="text-red-600 text-center">
+          Wallet setup is temporarily unavailable. Please try again later.
+        </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -44,7 +46,7 @@ export function CDPProviderCustomAuth({ children }: CDPProviderProps) {
     >
       {children}
     </CDPHooksProvider>
-  );
+  )
 }
 
 /**
@@ -54,21 +56,17 @@ export function CDPProviderCustomAuth({ children }: CDPProviderProps) {
  */
 export function CDPProviderNative({ children }: CDPProviderProps) {
   if (!CDP_PROJECT_ID) {
-    console.error('CDP_PROJECT_ID is not set. Wallet functionality is unavailable.');
+    console.error('CDP_PROJECT_ID is not set. Wallet functionality is unavailable.')
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4">
-        <div className="text-red-600 text-center">Wallet setup is temporarily unavailable. Please try again later.</div>
+        <div className="text-red-600 text-center">
+          Wallet setup is temporarily unavailable. Please try again later.
+        </div>
       </div>
-    );
+    )
   }
 
-  return (
-    <CDPHooksProvider
-      config={sharedConfig}
-    >
-      {children}
-    </CDPHooksProvider>
-  );
+  return <CDPHooksProvider config={sharedConfig}>{children}</CDPHooksProvider>
 }
 
 /**
@@ -76,7 +74,7 @@ export function CDPProviderNative({ children }: CDPProviderProps) {
  * Kept for backward compatibility during migration.
  */
 export function CDPProvider({ children }: CDPProviderProps) {
-  return <CDPProviderCustomAuth>{children}</CDPProviderCustomAuth>;
+  return <CDPProviderCustomAuth>{children}</CDPProviderCustomAuth>
 }
 
 /**
@@ -85,8 +83,10 @@ export function CDPProvider({ children }: CDPProviderProps) {
  * CDPProviderCustomAuth when Twilio is enabled.
  */
 export function CDPProviderDefault({ children }: CDPProviderProps) {
-  const providerType = getDefaultProviderType();
-  return providerType === 'native'
-    ? <CDPProviderNative>{children}</CDPProviderNative>
-    : <CDPProviderCustomAuth>{children}</CDPProviderCustomAuth>;
+  const providerType = getDefaultProviderType()
+  return providerType === 'native' ? (
+    <CDPProviderNative>{children}</CDPProviderNative>
+  ) : (
+    <CDPProviderCustomAuth>{children}</CDPProviderCustomAuth>
+  )
 }

@@ -118,7 +118,8 @@ export function useSessionGuard(): SessionGuardResult {
       setHasCheckedSession(true)
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const addr = (currentUser as any)?.evmSmartAccounts?.[0] || (currentUser as any)?.evmAccounts?.[0]
+      const addr =
+        (currentUser as any)?.evmSmartAccounts?.[0] || (currentUser as any)?.evmAccounts?.[0]
       if (!addr) {
         await signOut()
         setIsCheckingSession(false)
@@ -214,7 +215,8 @@ export function useSessionGuard(): SessionGuardResult {
       const phone = reAuthPhone.startsWith('+') ? reAuthPhone : `+${reAuthPhone}`
       let newToken: string
 
-      if (!shouldUseTwilio(phone) && reAuthFlowId) {
+      if (!shouldUseTwilio(phone)) {
+        if (!reAuthFlowId) throw new Error('Missing SMS flow. Please resend the code.')
         await verifySmsOTP({ flowId: reAuthFlowId, otp: reAuthOtp })
         const cdpToken = await getAccessToken()
         if (!cdpToken) {
