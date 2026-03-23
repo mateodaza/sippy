@@ -11,35 +11,13 @@ export const GasRefuelAbi = [
   },
   {
     anonymous: false,
-    inputs: [
-      { indexed: true, internalType: 'address', name: 'sender', type: 'address' },
-      { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' },
-    ],
-    name: 'FundsDeposited',
-    type: 'event',
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, internalType: 'address', name: 'owner', type: 'address' },
-      { indexed: false, internalType: 'uint256', name: 'amount', type: 'uint256' },
-    ],
-    name: 'FundsWithdrawn',
-    type: 'event',
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: false, internalType: 'address', name: 'account', type: 'address' },
-    ],
+    inputs: [{ indexed: false, internalType: 'address', name: 'account', type: 'address' }],
     name: 'Paused',
     type: 'event',
   },
   {
     anonymous: false,
-    inputs: [
-      { indexed: false, internalType: 'address', name: 'account', type: 'address' },
-    ],
+    inputs: [{ indexed: false, internalType: 'address', name: 'account', type: 'address' }],
     name: 'Unpaused',
     type: 'event',
   },

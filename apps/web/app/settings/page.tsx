@@ -16,7 +16,38 @@ import {
 import { getStoredToken, clearToken } from '../../lib/auth'
 import { useSessionGuard } from '../../lib/useSessionGuard'
 import { parseUnits } from 'viem'
-import { getBalances } from '../../lib/blockscout'
+import { getBalance, readContract } from '@wagmi/core'
+import { wagmiConfig } from '../providers/Web3Provider'
+import { formatUnits, formatEther } from 'viem'
+import type { Balance } from '../../lib/blockscout'
+
+const USDC_ADDRESS_SETTINGS = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' as const
+const ERC20_ABI = [
+  {
+    inputs: [{ name: 'account', type: 'address' }],
+    name: 'balanceOf',
+    outputs: [{ type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const
+
+async function getBalancesRpcSettings(address: string): Promise<Balance> {
+  const [ethResult, usdcResult] = await Promise.all([
+    getBalance(wagmiConfig, { address: address as `0x${string}`, chainId: 42161 }),
+    readContract(wagmiConfig, {
+      address: USDC_ADDRESS_SETTINGS,
+      abi: ERC20_ABI,
+      functionName: 'balanceOf',
+      args: [address as `0x${string}`],
+      chainId: 42161,
+    }),
+  ])
+  return {
+    eth: formatEther(ethResult.value),
+    usdc: formatUnits(usdcResult as bigint, 6),
+  }
+}
 import { ensureGasReady, buildUsdcTransferCall } from '../../lib/usdc-transfer'
 import {
   Language,
@@ -675,7 +706,7 @@ function SettingsContent() {
     }
 
     try {
-      const balances = await getBalances(smartAccountAddress)
+      const balances = await getBalancesRpcSettings(smartAccountAddress)
       const balance = balances.usdc // Already formatted string (e.g. "10.5")
 
       // If balance < $0.01, auto-skip sweep

@@ -1,11 +1,5 @@
 import { db } from 'ponder:api'
-import {
-  account,
-  transfer,
-  refuelEvent,
-  gasRefuelStatus,
-  dailyVolume,
-} from 'ponder:schema'
+import { account, transfer, refuelEvent, gasRefuelStatus, dailyVolume } from 'ponder:schema'
 import * as offchainSchema from '../../offchain'
 import { eq, or, and, desc, sql, inArray } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
@@ -24,8 +18,8 @@ const app = new Hono()
 // ══════════════════════════════════════════════════════════════
 
 let restartScheduledAt: number | null = null
-const RESTART_DELAY_MS = 30 * 60_000   // 30 min — batch new wallets before restarting
-const MAX_DEFERRAL_MS = 60 * 60_000    // 1 hour — hard cap on deferral
+const RESTART_DELAY_MS = 30 * 60_000 // 30 min — batch new wallets before restarting
+const MAX_DEFERRAL_MS = 60 * 60_000 // 1 hour — hard cap on deferral
 
 function scheduleRestart() {
   const now = Date.now()
@@ -53,12 +47,10 @@ async function requireSecret(c: any, next: () => Promise<void>) {
   if (!INDEXER_API_SECRET) {
     return c.json({ error: 'Indexer API secret not configured' }, 503)
   }
-  const token = c.req.header('x-indexer-secret')
-  if (
-    !token ||
-    token.length !== INDEXER_API_SECRET.length ||
-    !timingSafeEqual(Buffer.from(token), Buffer.from(INDEXER_API_SECRET))
-  ) {
+  const token = c.req.header('x-indexer-secret') || ''
+  const a = Buffer.from(token.padEnd(64, '\0'))
+  const b = Buffer.from(INDEXER_API_SECRET.padEnd(64, '\0'))
+  if (!token || a.length !== b.length || !timingSafeEqual(a, b)) {
     return c.json({ error: 'Unauthorized' }, 401)
   }
   await next()
@@ -104,7 +96,7 @@ async function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<a
         signal: controller.signal,
       })
       clearTimeout(timeout)
-      const data = await res.json() as any
+      const data = (await res.json()) as any
       if (data.error) throw new Error(`${method} error: ${data.error.message}`)
       return data.result
     } catch (err: any) {
@@ -112,16 +104,20 @@ async function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<a
       if (attempt === RPC_MAX_RETRIES - 1) throw err
       const delay = 1000 * Math.pow(2, attempt)
       console.warn(`RPC ${method} attempt ${attempt + 1} failed, retrying in ${delay}ms`)
-      await new Promise(r => setTimeout(r, delay))
+      await new Promise((r) => setTimeout(r, delay))
     }
   }
 }
 
 function isRangeTooLargeError(err: any): boolean {
   const msg = (err.message || '').toLowerCase()
-  return msg.includes('too many') || msg.includes('query returned more than') ||
-    msg.includes('response size') || msg.includes('block range') ||
+  return (
+    msg.includes('too many') ||
+    msg.includes('query returned more than') ||
+    msg.includes('response size') ||
+    msg.includes('block range') ||
     msg.includes('log response size exceeded')
+  )
 }
 
 async function fetchLatestBlock(rpcUrl: string): Promise<number> {
@@ -144,11 +140,13 @@ async function fetchLogsChunked(rpcUrl: string, filter: any): Promise<any[]> {
   while (start <= latestBlock) {
     const end = Math.min(start + chunkSize - 1, latestBlock)
     try {
-      const logs = await rpcCall(rpcUrl, 'eth_getLogs', [{
-        ...filter,
-        fromBlock: '0x' + start.toString(16),
-        toBlock: '0x' + end.toString(16),
-      }])
+      const logs = await rpcCall(rpcUrl, 'eth_getLogs', [
+        {
+          ...filter,
+          fromBlock: '0x' + start.toString(16),
+          toBlock: '0x' + end.toString(16),
+        },
+      ])
       allLogs.push(...logs)
       start = end + 1
       chunkSize = Math.min(chunkSize * 2, INITIAL_CHUNK_SIZE)
@@ -185,15 +183,18 @@ if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(PONDER_SCHEMA)) {
   throw new Error(`Invalid PONDER_SCHEMA: ${PONDER_SCHEMA}`)
 }
 
+const MIN_BLOCK = 400_000_000
+const SPENDER_ADDRESS = (process.env.SIPPY_SPENDER_ADDRESS || '').toLowerCase()
+
 async function backfillWallet(address: string) {
   const rpcUrl = process.env.PONDER_RPC_URL_42161
-  const startBlock = process.env.START_BLOCK || '437000000'
+  const startBlock = Math.max(parseInt(process.env.START_BLOCK || '437000000'), MIN_BLOCK)
   if (!rpcUrl) {
     console.warn(`Skipping backfill for ${address}: PONDER_RPC_URL_42161 is not set`)
     return
   }
 
-  const startBlockHex = '0x' + parseInt(startBlock).toString(16)
+  const startBlockHex = '0x' + startBlock.toString(16)
   const paddedAddr = '0x' + address.slice(2).padStart(64, '0')
 
   const sent = await fetchLogsChunked(rpcUrl, {
@@ -224,7 +225,7 @@ async function backfillWallet(address: string) {
     })
   }
 
-  const S = PONDER_SCHEMA  // shorthand for SQL interpolation
+  const S = PONDER_SCHEMA // shorthand for SQL interpolation
   let skippedNoTimestamp = 0
   let backfilled = 0
 
@@ -244,55 +245,76 @@ async function backfillWallet(address: string) {
     }
     const day = new Date(timestamp * 1000).toISOString().slice(0, 10)
 
-    // Insert transfer — ON CONFLICT DO NOTHING for idempotency
-    const insertResult = await writePool.query(
-      `INSERT INTO "${S}".transfer (id, "from", "to", amount, timestamp, block_number, tx_hash)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (id) DO NOTHING
-       RETURNING id`,
-      [transferId, from, to, amount, timestamp, blockNumber, txHash]
-    )
+    const client = await writePool.connect()
+    try {
+      await client.query('BEGIN')
 
-    if (insertResult.rowCount === 0) continue
-    backfilled++
+      // Insert transfer — ON CONFLICT DO NOTHING for idempotency
+      const insertResult = await client.query(
+        `INSERT INTO "${S}".transfer (id, "from", "to", amount, timestamp, block_number, tx_hash)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (id) DO NOTHING
+         RETURNING id`,
+        [transferId, from, to, amount, timestamp, blockNumber, txHash]
+      )
 
-    // Upsert sender account
-    await writePool.query(
-      `INSERT INTO "${S}".account (address, balance, total_sent, total_received, tx_count, last_activity)
-       VALUES ($1, -$2::bigint, $2, 0, 1, $3)
-       ON CONFLICT (address) DO UPDATE SET
-         balance = "${S}".account.balance - $2::bigint,
-         total_sent = "${S}".account.total_sent + $2::bigint,
-         tx_count = "${S}".account.tx_count + 1,
-         last_activity = GREATEST("${S}".account.last_activity, $3)`,
-      [from, amount, timestamp]
-    )
+      if (insertResult.rowCount === 0) {
+        await client.query('ROLLBACK')
+        continue
+      }
+      backfilled++
 
-    // Upsert receiver account
-    await writePool.query(
-      `INSERT INTO "${S}".account (address, balance, total_sent, total_received, tx_count, last_activity)
-       VALUES ($1, $2::bigint, 0, $2, 1, $3)
-       ON CONFLICT (address) DO UPDATE SET
-         balance = "${S}".account.balance + $2::bigint,
-         total_received = "${S}".account.total_received + $2::bigint,
-         tx_count = "${S}".account.tx_count + 1,
-         last_activity = GREATEST("${S}".account.last_activity, $3)`,
-      [to, amount, timestamp]
-    )
+      // Upsert sender account (skip spender — matches live handler behavior)
+      if (from !== SPENDER_ADDRESS) {
+        await client.query(
+          `INSERT INTO "${S}".account (address, balance, total_sent, total_received, tx_count, last_activity)
+           VALUES ($1, -$2::bigint, $2, 0, 1, $3)
+           ON CONFLICT (address) DO UPDATE SET
+             balance = "${S}".account.balance - $2::bigint,
+             total_sent = "${S}".account.total_sent + $2::bigint,
+             tx_count = "${S}".account.tx_count + 1,
+             last_activity = GREATEST("${S}".account.last_activity, $3)`,
+          [from, amount, timestamp]
+        )
+      }
 
-    // Upsert daily volume
-    await writePool.query(
-      `INSERT INTO "${S}".daily_volume (id, date, total_usdc_volume, transfer_count, gas_refuel_count, gas_eth_spent)
-       VALUES ($1, $2, $3, 1, 0, 0)
-       ON CONFLICT (id) DO UPDATE SET
-         total_usdc_volume = "${S}".daily_volume.total_usdc_volume + $3::bigint,
-         transfer_count = "${S}".daily_volume.transfer_count + 1`,
-      [day, day, amount]
-    )
+      // Upsert receiver account (skip spender — matches live handler behavior)
+      if (to !== SPENDER_ADDRESS) {
+        await client.query(
+          `INSERT INTO "${S}".account (address, balance, total_sent, total_received, tx_count, last_activity)
+           VALUES ($1, $2::bigint, 0, $2, 1, $3)
+           ON CONFLICT (address) DO UPDATE SET
+             balance = "${S}".account.balance + $2::bigint,
+             total_received = "${S}".account.total_received + $2::bigint,
+             tx_count = "${S}".account.tx_count + 1,
+             last_activity = GREATEST("${S}".account.last_activity, $3)`,
+          [to, amount, timestamp]
+        )
+      }
+
+      // Upsert daily volume
+      await client.query(
+        `INSERT INTO "${S}".daily_volume (id, date, total_usdc_volume, transfer_count, gas_refuel_count, gas_eth_spent)
+         VALUES ($1, $2, $3, 1, 0, 0)
+         ON CONFLICT (id) DO UPDATE SET
+           total_usdc_volume = "${S}".daily_volume.total_usdc_volume + $3::bigint,
+           transfer_count = "${S}".daily_volume.transfer_count + 1`,
+        [day, day, amount]
+      )
+
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
   }
 
   if (skippedNoTimestamp > 0) {
-    console.warn(`Backfill ${address}: skipped ${skippedNoTimestamp} transfers (missing block timestamps)`)
+    console.warn(
+      `Backfill ${address}: skipped ${skippedNoTimestamp} transfers (missing block timestamps)`
+    )
   }
   console.log(`Backfilled ${backfilled} transfers for ${address}`)
 }
@@ -344,18 +366,21 @@ app.post('/wallets/register', requireSecret, async (c) => {
   }
 
   // Only backfill + restart if filter membership actually changed
+  let backfillOk = false
   if (isNewOrReactivated) {
     try {
       await backfillWallet(normalized)
+      backfillOk = true
     } catch (err) {
       console.error(`Backfill failed for ${normalized}: ${(err as Error).message}`)
     }
     // Restart is batched (30 min window) — backfill provides immediate data,
     // restart updates the live event filter for future transfers.
+    invalidateWalletSetCache()
     scheduleRestart()
   }
 
-  return c.json({ ok: true, address: normalized, isNew: isNewOrReactivated })
+  return c.json({ ok: true, address: normalized, isNew: isNewOrReactivated, backfillOk })
 })
 
 // Bulk sync all wallets from backend (call on demand)
@@ -368,7 +393,10 @@ app.post('/wallets/sync', requireSecret, async (c) => {
   let newInserts = 0
   let reactivations = 0
   let processed = 0
+  let backfilled = 0
+  let backfillErrors = 0
   const skipped: string[] = []
+  const walletsToBackfill: string[] = []
 
   for (const w of wallets) {
     if (!isValidAddress(w.address)) {
@@ -396,6 +424,7 @@ app.post('/wallets/sync', requireSecret, async (c) => {
     processed++
     if (inserted.length > 0) {
       newInserts++
+      walletsToBackfill.push(normalized)
       continue
     }
 
@@ -411,18 +440,43 @@ app.post('/wallets/sync', requireSecret, async (c) => {
       )
       .returning({ address: offchainSchema.sippyWallet.address })
 
-    if (reactivated.length > 0) reactivations++
+    if (reactivated.length > 0) {
+      reactivations++
+      walletsToBackfill.push(normalized)
+    }
+  }
+
+  // Backfill historical transfers for new/reactivated wallets
+  for (const addr of walletsToBackfill) {
+    try {
+      await backfillWallet(addr)
+      backfilled++
+    } catch (err) {
+      backfillErrors++
+      console.error(`Sync backfill failed for ${addr}: ${(err as Error).message}`)
+    }
   }
 
   // Only restart if filter membership actually changed
   const filterChanged = newInserts + reactivations
-  if (filterChanged > 0) scheduleRestart()
+  if (filterChanged > 0) {
+    invalidateWalletSetCache()
+    scheduleRestart()
+  }
 
-  return c.json({ ok: true, processed, newInserts, reactivations, skipped })
+  return c.json({
+    ok: true,
+    processed,
+    newInserts,
+    reactivations,
+    backfilled,
+    backfillErrors,
+    skipped,
+  })
 })
 
 // List all registered wallets (phoneHash excluded from response)
-app.get('/wallets', async (c) => {
+app.get('/wallets', requireSecret, async (c) => {
   const results = await db
     .select({
       address: offchainSchema.sippyWallet.address,
@@ -439,12 +493,9 @@ app.get('/wallets', async (c) => {
 // BALANCE + ACCOUNT STATS
 // ══════════════════════════════════════════════════════════════
 
-app.get('/balance/:address', async (c) => {
+app.get('/balance/:address', requireSecret, async (c) => {
   const address = c.req.param('address').toLowerCase() as `0x${string}`
-  const result = await db
-    .select()
-    .from(account)
-    .where(eq(account.address, address))
+  const result = await db.select().from(account).where(eq(account.address, address))
 
   if (result.length === 0) {
     return c.json({ address, balance: '0', totalSent: '0', totalReceived: '0', txCount: 0 })
@@ -460,7 +511,7 @@ app.get('/balance/:address', async (c) => {
     address: a.address,
     isSippyUser: wallet.length > 0,
     balance: a.balance.toString(),
-    balanceFormatted: (Number(a.balance) / 1e6).toFixed(2),
+    balanceFormatted: formatUsdc(a.balance),
     totalSent: a.totalSent.toString(),
     totalReceived: a.totalReceived.toString(),
     txCount: a.txCount,
@@ -472,7 +523,7 @@ app.get('/balance/:address', async (c) => {
 // TRANSFER HISTORY (classification at query time)
 // ══════════════════════════════════════════════════════════════
 
-app.get('/transfers/:address', async (c) => {
+app.get('/transfers/:address', requireSecret, async (c) => {
   const address = c.req.param('address').toLowerCase() as `0x${string}`
   const limit = Math.min(Number(c.req.query('limit') || 50), 200)
   const offset = Number(c.req.query('offset') || 0)
@@ -494,7 +545,7 @@ app.get('/transfers/:address', async (c) => {
       from: t.from,
       to: t.to,
       amount: t.amount.toString(),
-      amountFormatted: (Number(t.amount) / 1e6).toFixed(2),
+      amountFormatted: formatUsdc(t.amount),
       direction: t.from === address ? 'sent' : 'received',
       transferType: classifyTransfer(t.from, t.to, walletSet),
       timestamp: t.timestamp,
@@ -508,24 +559,24 @@ app.get('/transfers/:address', async (c) => {
 // GLOBAL STATS
 // ══════════════════════════════════════════════════════════════
 
-app.get('/stats', async (c) => {
-  const totalAccounts = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(account)
+app.get('/stats', requireSecret, async (c) => {
+  const [totalAccounts, totalTransfers, registeredWallets, walletSet, gasStatus] =
+    await Promise.all([
+      db.select({ count: sql<number>`count(*)` }).from(account),
+      db
+        .select({
+          count: sql<number>`count(*)`,
+          volume: sql<string>`coalesce(sum(amount), 0)`,
+        })
+        .from(transfer),
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(offchainSchema.sippyWallet)
+        .where(eq(offchainSchema.sippyWallet.isActive, true)),
+      loadWalletSet(),
+      db.select().from(gasRefuelStatus).where(eq(gasRefuelStatus.id, 'singleton')),
+    ])
 
-  const totalTransfers = await db
-    .select({
-      count: sql<number>`count(*)`,
-      volume: sql<string>`coalesce(sum(amount), 0)`,
-    })
-    .from(transfer)
-
-  const registeredWallets = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(offchainSchema.sippyWallet)
-    .where(eq(offchainSchema.sippyWallet.isActive, true))
-
-  const walletSet = await loadWalletSet()
   const walletAddresses = Array.from(walletSet) as `0x${string}`[]
 
   let sippyVolume = '0'
@@ -537,34 +588,23 @@ app.get('/stats', async (c) => {
         volume: sql<string>`coalesce(sum(amount), 0)`,
       })
       .from(transfer)
-      .where(
-        or(
-          inArray(transfer.from, walletAddresses),
-          inArray(transfer.to, walletAddresses),
-        ),
-      )
+      .where(or(inArray(transfer.from, walletAddresses), inArray(transfer.to, walletAddresses)))
     sippyVolume = sippyStats[0]?.volume || '0'
     sippyCount = sippyStats[0]?.count || 0
   }
 
-  const gasStatus = await db
-    .select()
-    .from(gasRefuelStatus)
-    .where(eq(gasRefuelStatus.id, 'singleton'))
-
   return c.json({
-    scope: 'sippy_wallets',
     registeredUsers: registeredWallets[0]?.count || 0,
     accounts: totalAccounts[0]?.count || 0,
-    transfers: {
+    allTransfers: {
       count: totalTransfers[0]?.count || 0,
       totalVolume: totalTransfers[0]?.volume || '0',
-      totalVolumeFormatted: (Number(totalTransfers[0]?.volume || 0) / 1e6).toFixed(2),
+      totalVolumeFormatted: formatUsdc(totalTransfers[0]?.volume || '0'),
     },
     sippyTransfers: {
       count: sippyCount,
       totalVolume: sippyVolume,
-      totalVolumeFormatted: (Number(sippyVolume) / 1e6).toFixed(2),
+      totalVolumeFormatted: formatUsdc(sippyVolume),
     },
     gasRefuel: gasStatus[0] || null,
   })
@@ -574,21 +614,17 @@ app.get('/stats', async (c) => {
 // DAILY VOLUME
 // ══════════════════════════════════════════════════════════════
 
-app.get('/stats/daily', async (c) => {
+app.get('/stats/daily', requireSecret, async (c) => {
   const days = Math.min(Number(c.req.query('days') || 30), 90)
 
-  const results = await db
-    .select()
-    .from(dailyVolume)
-    .orderBy(desc(dailyVolume.date))
-    .limit(days)
+  const results = await db.select().from(dailyVolume).orderBy(desc(dailyVolume.date)).limit(days)
 
   return c.json({
     scope: 'sippy_wallets',
     days: results.map((d) => ({
       date: d.date,
       usdcVolume: d.totalUsdcVolume.toString(),
-      usdcVolumeFormatted: (Number(d.totalUsdcVolume) / 1e6).toFixed(2),
+      usdcVolumeFormatted: formatUsdc(d.totalUsdcVolume),
       transfers: d.transferCount,
       gasRefuels: d.gasRefuelCount,
       gasEthSpent: d.gasEthSpent.toString(),
@@ -600,16 +636,13 @@ app.get('/stats/daily', async (c) => {
 // GAS REFUEL
 // ══════════════════════════════════════════════════════════════
 
-app.get('/gas-refuel/status', async (c) => {
-  const status = await db
-    .select()
-    .from(gasRefuelStatus)
-    .where(eq(gasRefuelStatus.id, 'singleton'))
+app.get('/gas-refuel/status', requireSecret, async (c) => {
+  const status = await db.select().from(gasRefuelStatus).where(eq(gasRefuelStatus.id, 'singleton'))
 
   return c.json(status[0] || { totalRefuels: 0, totalEthSpent: '0', isPaused: false })
 })
 
-app.get('/gas-refuel/history/:address', async (c) => {
+app.get('/gas-refuel/history/:address', requireSecret, async (c) => {
   const address = c.req.param('address').toLowerCase() as `0x${string}`
   const limit = Math.min(Number(c.req.query('limit') || 50), 200)
 
@@ -635,18 +668,12 @@ app.get('/gas-refuel/history/:address', async (c) => {
 // SYNC STATUS
 // ══════════════════════════════════════════════════════════════
 
-app.get('/sync-status', async (c) => {
-  const transferCount = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(transfer)
+app.get('/sync-status', requireSecret, async (c) => {
+  const transferCount = await db.select({ count: sql<number>`count(*)` }).from(transfer)
 
-  const refuelCount = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(refuelEvent)
+  const refuelCount = await db.select({ count: sql<number>`count(*)` }).from(refuelEvent)
 
-  const wallets = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(offchainSchema.sippyWallet)
+  const wallets = await db.select({ count: sql<number>`count(*)` }).from(offchainSchema.sippyWallet)
 
   return c.json({
     registeredWallets: wallets[0]?.count || 0,
@@ -656,17 +683,37 @@ app.get('/sync-status', async (c) => {
   })
 })
 
-
 // ══════════════════════════════════════════════════════════════
 // HELPERS
 // ══════════════════════════════════════════════════════════════
 
+let walletSetCache: { set: Set<string>; expiresAt: number } | null = null
+const WALLET_SET_TTL_MS = 30_000
+
+function invalidateWalletSetCache() {
+  walletSetCache = null
+}
+
 async function loadWalletSet(): Promise<Set<string>> {
+  if (walletSetCache && Date.now() < walletSetCache.expiresAt) {
+    return walletSetCache.set
+  }
   const wallets = await db
     .select({ address: offchainSchema.sippyWallet.address })
     .from(offchainSchema.sippyWallet)
     .where(eq(offchainSchema.sippyWallet.isActive, true))
-  return new Set(wallets.map((w) => w.address))
+  const set = new Set(wallets.map((w) => w.address))
+  walletSetCache = { set, expiresAt: Date.now() + WALLET_SET_TTL_MS }
+  return set
+}
+
+function formatUsdc(raw: string | bigint): string {
+  const n = BigInt(raw)
+  const abs = n < 0n ? -n : n
+  const whole = abs / 1_000_000n
+  const frac = abs % 1_000_000n
+  const sign = n < 0n ? '-' : ''
+  return `${sign}${whole}.${frac.toString().padStart(6, '0').slice(0, 2)}`
 }
 
 function classifyTransfer(from: string, to: string, walletSet: Set<string>): string {

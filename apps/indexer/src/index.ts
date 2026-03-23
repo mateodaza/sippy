@@ -1,11 +1,5 @@
 import { ponder } from 'ponder:registry'
-import {
-  account,
-  transfer,
-  refuelEvent,
-  gasRefuelStatus,
-  dailyVolume,
-} from 'ponder:schema'
+import { account, transfer, refuelEvent, gasRefuelStatus, dailyVolume } from 'ponder:schema'
 
 // ── USDC Transfer ──────────────────────────────────────────
 
@@ -13,7 +7,9 @@ import {
 // attribute to the actual user, not the relay wallet.
 const SPENDER_RAW = process.env.SIPPY_SPENDER_ADDRESS
 if (!SPENDER_RAW) {
-  console.warn('SIPPY_SPENDER_ADDRESS not set — spender relay wallet will NOT be excluded from account aggregation')
+  console.warn(
+    'SIPPY_SPENDER_ADDRESS not set — spender relay wallet will NOT be excluded from account aggregation'
+  )
 }
 const SPENDER = (SPENDER_RAW || '').toLowerCase()
 
@@ -25,15 +21,18 @@ ponder.on('USDC:Transfer', async ({ event, context }) => {
   const toLower = to.toLowerCase()
 
   // Insert transfer — gate aggregates on success
-  const inserted = await context.db.insert(transfer).values({
-    id: `${event.transaction.hash}-${event.log.logIndex}`,
-    from,
-    to,
-    amount: value,
-    timestamp,
-    blockNumber: Number(event.block.number),
-    txHash: event.transaction.hash,
-  }).onConflictDoNothing()
+  const inserted = await context.db
+    .insert(transfer)
+    .values({
+      id: `${event.transaction.hash}-${event.log.logIndex}`,
+      from,
+      to,
+      amount: value,
+      timestamp,
+      blockNumber: Number(event.block.number),
+      txHash: event.transaction.hash,
+    })
+    .onConflictDoNothing()
 
   // If transfer already existed (backfill or replay), skip all aggregates
   if (!inserted) return
@@ -102,14 +101,19 @@ ponder.on('GasRefuel:Refueled', async ({ event, context }) => {
   const timestamp = Number(eventTimestamp)
   const day = new Date(timestamp * 1000).toISOString().slice(0, 10)
 
-  await context.db.insert(refuelEvent).values({
-    id: `${event.transaction.hash}-${event.log.logIndex}`,
-    user,
-    amount,
-    timestamp,
-    blockNumber: Number(event.block.number),
-    txHash: event.transaction.hash,
-  })
+  const inserted = await context.db
+    .insert(refuelEvent)
+    .values({
+      id: `${event.transaction.hash}-${event.log.logIndex}`,
+      user,
+      amount,
+      timestamp,
+      blockNumber: Number(event.block.number),
+      txHash: event.transaction.hash,
+    })
+    .onConflictDoNothing()
+
+  if (!inserted) return
 
   await context.db
     .insert(gasRefuelStatus)

@@ -68,6 +68,9 @@ yarn.lock
 .eslintcache
 .stylelintcache
 
+# Legal / corporate docs (sensitive)
+legal/
+
 # Agent tooling
 .nightcrawler/
 .cursor/
