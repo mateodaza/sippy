@@ -1,30 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-//Helper: build a minimal JWT with the given sub (phone)
-function makeJwt(sub: string): string {
-  const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-  const body = btoa(JSON.stringify({ sub, exp: Math.floor(Date.now() / 1000) + 3600 }))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-  return `${header}.${body}.fakesig`
-}
-
-const authMocks = vi.hoisted(() => ({
-  getStoredToken: vi.fn(() => null as string | null),
-}))
-
-vi.mock('./auth', () => ({
-  getStoredToken: authMocks.getStoredToken,
-}))
-
 beforeEach(() => {
   vi.resetModules()
   vi.unstubAllEnvs()
-  authMocks.getStoredToken.mockReturnValue(null)
 })
 
 async function importFresh() {
@@ -58,15 +36,9 @@ describe('auth-mode (Twilio disabled — default)', () => {
     expect(getProviderType('+15550001234')).toBe('native')
   })
 
-  it('getDefaultProviderType returns native (no token)', async () => {
+  it('getDefaultProviderType returns custom (session restoration needs customAuth)', async () => {
     const { getDefaultProviderType } = await importFresh()
-    expect(getDefaultProviderType()).toBe('native')
-  })
-
-  it('getDefaultProviderType returns native even with NANP token', async () => {
-    authMocks.getStoredToken.mockReturnValue(makeJwt('+15550001234'))
-    const { getDefaultProviderType } = await importFresh()
-    expect(getDefaultProviderType()).toBe('native')
+    expect(getDefaultProviderType()).toBe('custom')
   })
 })
 
@@ -97,19 +69,7 @@ describe('auth-mode (Twilio enabled)', () => {
     expect(getProviderType('+15550001234')).toBe('native')
   })
 
-  it('getDefaultProviderType returns custom with non-NANP token', async () => {
-    authMocks.getStoredToken.mockReturnValue(makeJwt('+573001234567'))
-    const { getDefaultProviderType } = await importFresh()
-    expect(getDefaultProviderType()).toBe('custom')
-  })
-
-  it('getDefaultProviderType returns native with NANP token', async () => {
-    authMocks.getStoredToken.mockReturnValue(makeJwt('+15550001234'))
-    const { getDefaultProviderType } = await importFresh()
-    expect(getDefaultProviderType()).toBe('native')
-  })
-
-  it('getDefaultProviderType falls back to custom when no token', async () => {
+  it('getDefaultProviderType returns custom (session restoration needs customAuth)', async () => {
     const { getDefaultProviderType } = await importFresh()
     expect(getDefaultProviderType()).toBe('custom')
   })
