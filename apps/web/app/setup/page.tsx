@@ -7,7 +7,8 @@ import { sendOtp, verifyOtp, storeToken, getStoredToken, clearToken, getFreshTok
 import { Language, getStoredLanguage, storeLanguage, detectLanguageFromPhone, fetchUserLanguage, resolveLanguage, localizeError, t } from '../../lib/i18n';
 import { parseUnits } from 'viem';
 import { SippyPhoneInput } from '../../components/ui/phone-input';
-import { isBlockedPrefix, isNANP } from '@sippy/shared';
+import { isBlockedPrefix } from '@sippy/shared';
+import { getAuthMode, getProviderType, type AuthMode } from '../../lib/auth-mode';
 import { CDPProviderCustomAuth, CDPProviderNative } from '../providers/cdp-provider';
 
 /**
@@ -61,7 +62,7 @@ const USDC_ADDRESS = USDC_ADDRESSES[NETWORK] || USDC_ADDRESSES.arbitrum;
 
 type Step = 'phone' | 'otp' | 'email' | 'tos' | 'permission' | 'done';
 const STEPS: Step[] = ['phone', 'otp', 'email', 'tos', 'permission', 'done'];
-type AuthMode = 'twilio' | 'cdp-sms';
+
 
 const TOS_VERSION = '1.0';
 const TOS_URL = 'https://www.sippy.lat/terms';
@@ -1253,8 +1254,8 @@ function PhoneEntryGate() {
     );
   }
 
-  const authMode: AuthMode = isNANP(submittedPhone) ? 'cdp-sms' : 'twilio';
-  const Provider = isNANP(submittedPhone) ? CDPProviderNative : CDPProviderCustomAuth;
+  const authMode = getAuthMode(submittedPhone);
+  const Provider = getProviderType(submittedPhone) === 'native' ? CDPProviderNative : CDPProviderCustomAuth;
 
   return (
     <Provider>
@@ -1333,8 +1334,8 @@ function SetupPageInner() {
   }
 
   // Phone from URL → mount correct provider immediately
-  const authMode: AuthMode = isNANP(phoneFromUrl) ? 'cdp-sms' : 'twilio';
-  const Provider = isNANP(phoneFromUrl) ? CDPProviderNative : CDPProviderCustomAuth;
+  const authMode = getAuthMode(phoneFromUrl);
+  const Provider = getProviderType(phoneFromUrl) === 'native' ? CDPProviderNative : CDPProviderCustomAuth;
 
   return (
     <Provider>

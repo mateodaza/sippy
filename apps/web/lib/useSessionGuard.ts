@@ -20,7 +20,8 @@ import {
   sendOtp,
   verifyOtp,
 } from './auth'
-import { isBlockedPrefix, isNANP } from '@sippy/shared'
+import { isBlockedPrefix } from '@sippy/shared'
+import { shouldUseTwilio } from './auth-mode'
 
 type ReAuthStep = 'phone' | 'otp'
 
@@ -117,7 +118,8 @@ export function useSessionGuard(): SessionGuardResult {
       setHasCheckedSession(true)
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const addr = (currentUser as any)?.evmSmartAccounts?.[0] || (currentUser as any)?.evmAccounts?.[0]
+      const addr =
+        (currentUser as any)?.evmSmartAccounts?.[0] || (currentUser as any)?.evmAccounts?.[0]
       if (!addr) {
         await signOut()
         setIsCheckingSession(false)
@@ -192,7 +194,7 @@ export function useSessionGuard(): SessionGuardResult {
         return
       }
 
-      if (isNANP(phone)) {
+      if (!shouldUseTwilio(phone)) {
         const result = await signInWithSms({ phoneNumber: phone })
         setReAuthFlowId(result.flowId)
       } else {
@@ -213,7 +215,8 @@ export function useSessionGuard(): SessionGuardResult {
       const phone = reAuthPhone.startsWith('+') ? reAuthPhone : `+${reAuthPhone}`
       let newToken: string
 
-      if (isNANP(phone) && reAuthFlowId) {
+      if (!shouldUseTwilio(phone)) {
+        if (!reAuthFlowId) throw new Error('Missing SMS flow. Please resend the code.')
         await verifySmsOTP({ flowId: reAuthFlowId, otp: reAuthOtp })
         const cdpToken = await getAccessToken()
         if (!cdpToken) {
