@@ -155,7 +155,7 @@ export default class AnalyticsController {
 
     return inertia.render('admin/analytics', {
       totalVolume: String(totalVolumeRow?.total ?? '0'),
-      registeredUsers: Number(registeredUsers?.$extras?.total ?? 0),
+      registeredUsers: Number(registeredUsers?.total ?? 0),
       activeToday: Number(activeTodayRow?.total ?? 0),
       gasStatus: gasStatusData,
       fundFlow: fundFlowData,
