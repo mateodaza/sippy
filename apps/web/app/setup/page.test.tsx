@@ -268,6 +268,9 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', '')
   vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '')
   vi.stubEnv('NEXT_PUBLIC_SIPPY_NETWORK', 'arbitrum')
+  // Enable Twilio so existing tests (which use +57 Colombian number) keep
+  // their Twilio-path behavior. Tests for CDP-SMS-for-all override this.
+  vi.stubEnv('NEXT_PUBLIC_TWILIO_ENABLED', 'true')
 })
 
 afterEach(() => {
@@ -934,6 +937,34 @@ describe('session recovery redirects', () => {
   })
 })
 
+describe('Twilio disabled (CDP SMS for all)', () => {
+  it('non-NANP number uses CDP SMS (signInWithSms) instead of Twilio sendOtp', async () => {
+    vi.stubEnv('NEXT_PUBLIC_TWILIO_ENABLED', '')
+
+    const signInWithSmsMock = vi.fn().mockResolvedValue({ flowId: 'test-flow-id' })
+    vi.doMock('@coinbase/cdp-hooks', () => ({
+      CDPHooksProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+      useAuthenticateWithJWT: () => ({ authenticateWithJWT: mocks.authenticateWithJWT }),
+      useCreateSpendPermission: () => ({ createSpendPermission: mocks.createSpendPermission, status: null }),
+      useCurrentUser: () => ({ currentUser: mocks.state.currentUser }),
+      useIsSignedIn: () => ({ isSignedIn: mocks.state.isSignedIn }),
+      useSignOut: () => ({ signOut: mocks.signOut }),
+      useSignInWithSms: () => ({ signInWithSms: signInWithSmsMock }),
+      useVerifySmsOTP: () => ({ verifySmsOTP: vi.fn() }),
+      useGetAccessToken: () => ({ getAccessToken: vi.fn().mockResolvedValue('cdp-test-token') }),
+    }))
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+
+    // Should have called CDP's signInWithSms, NOT our Twilio sendOtp
+    expect(signInWithSmsMock).toHaveBeenCalledWith({ phoneNumber: '+573001234567' })
+    expect(mocks.sendOtp).not.toHaveBeenCalled()
+    // Should be on OTP step
+    expect(container!.querySelector('input[type="text"]')).not.toBeNull()
+  })
+})
+
 describe('source integrity', () => {
   it('imports CDP SMS hooks for NANP (+1) auth flow', () => {
     const source = readFileSync(join(__dir, 'page.tsx'), 'utf-8')
@@ -942,9 +973,10 @@ describe('source integrity', () => {
     expect(source).toMatch(/useGetAccessToken/)
   })
 
-  it('uses isNANP to choose auth mode', () => {
+  it('uses auth-mode helpers to choose auth mode', () => {
     const source = readFileSync(join(__dir, 'page.tsx'), 'utf-8')
-    expect(source).toMatch(/isNANP/)
+    expect(source).toMatch(/getAuthMode/)
+    expect(source).toMatch(/getProviderType/)
   })
 
   it('imports both CDP provider variants', () => {

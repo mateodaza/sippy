@@ -3,6 +3,7 @@
 import { CDPHooksProvider } from '@coinbase/cdp-hooks';
 import { ReactNode } from 'react';
 import { getFreshToken } from '../../lib/auth';
+import { getDefaultProviderType } from '../../lib/auth-mode';
 
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || '';
 
@@ -48,7 +49,8 @@ export function CDPProviderCustomAuth({ children }: CDPProviderProps) {
 
 /**
  * CDP provider without customAuth (native SMS flow).
- * Used for NANP (+1) numbers during initial setup — CDP sends SMS directly.
+ * Default when Twilio is disabled — CDP sends SMS directly for all numbers.
+ * Also used for NANP (+1) numbers when Twilio is enabled.
  */
 export function CDPProviderNative({ children }: CDPProviderProps) {
   if (!CDP_PROJECT_ID) {
@@ -75,4 +77,16 @@ export function CDPProviderNative({ children }: CDPProviderProps) {
  */
 export function CDPProvider({ children }: CDPProviderProps) {
   return <CDPProviderCustomAuth>{children}</CDPProviderCustomAuth>;
+}
+
+/**
+ * Default provider for returning-user pages (settings, wallet).
+ * Picks CDPProviderNative when Twilio is disabled (default),
+ * CDPProviderCustomAuth when Twilio is enabled.
+ */
+export function CDPProviderDefault({ children }: CDPProviderProps) {
+  const providerType = getDefaultProviderType();
+  return providerType === 'native'
+    ? <CDPProviderNative>{children}</CDPProviderNative>
+    : <CDPProviderCustomAuth>{children}</CDPProviderCustomAuth>;
 }

@@ -20,7 +20,8 @@ import {
   sendOtp,
   verifyOtp,
 } from './auth'
-import { isBlockedPrefix, isNANP } from '@sippy/shared'
+import { isBlockedPrefix } from '@sippy/shared'
+import { shouldUseTwilio } from './auth-mode'
 
 type ReAuthStep = 'phone' | 'otp'
 
@@ -192,7 +193,7 @@ export function useSessionGuard(): SessionGuardResult {
         return
       }
 
-      if (isNANP(phone)) {
+      if (!shouldUseTwilio(phone)) {
         const result = await signInWithSms({ phoneNumber: phone })
         setReAuthFlowId(result.flowId)
       } else {
@@ -213,7 +214,7 @@ export function useSessionGuard(): SessionGuardResult {
       const phone = reAuthPhone.startsWith('+') ? reAuthPhone : `+${reAuthPhone}`
       let newToken: string
 
-      if (isNANP(phone) && reAuthFlowId) {
+      if (!shouldUseTwilio(phone) && reAuthFlowId) {
         await verifySmsOTP({ flowId: reAuthFlowId, otp: reAuthOtp })
         const cdpToken = await getAccessToken()
         if (!cdpToken) {

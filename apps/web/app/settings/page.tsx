@@ -59,7 +59,7 @@ import {
   t,
 } from '../../lib/i18n'
 import { SippyPhoneInput } from '../../components/ui/phone-input'
-import { CDPProviderCustomAuth } from '../providers/cdp-provider'
+import { CDPProviderDefault } from '../providers/cdp-provider'
 
 /**
  * Settings Page for Embedded Wallets
@@ -2100,7 +2100,7 @@ function SettingsContent() {
 
 export default function SettingsPage() {
   return (
-    <CDPProviderCustomAuth>
+    <CDPProviderDefault>
       <Suspense
         fallback={
           <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
@@ -2110,6 +2110,6 @@ export default function SettingsPage() {
       >
         <SettingsContent />
       </Suspense>
-    </CDPProviderCustomAuth>
+    </CDPProviderDefault>
   )
 }
