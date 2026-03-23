@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-// Helper: build a minimal JWT with the given sub (phone)
+//Helper: build a minimal JWT with the given sub (phone)
 function makeJwt(sub: string): string {
   const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
     .replace(/\+/g, '-')
