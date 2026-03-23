@@ -15,10 +15,18 @@ import type { Lang } from '#utils/messages'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const MAX_SENDS = Number(process.env.VELOCITY_MAX_SENDS_PER_10MIN ?? 5)
-const MAX_USD = Number(process.env.VELOCITY_MAX_USD_PER_HOUR ?? 500)
-const MAX_NEW_RECIPIENTS = Number(process.env.VELOCITY_MAX_NEW_RECIPIENTS_PER_HOUR ?? 3)
+const MAX_SENDS = Number(process.env.VELOCITY_MAX_SENDS_PER_10MIN ?? 15)
+const MAX_USD = Number(process.env.VELOCITY_MAX_USD_PER_HOUR ?? 1000)
+const MAX_NEW_RECIPIENTS = Number(process.env.VELOCITY_MAX_NEW_RECIPIENTS_PER_HOUR ?? 10)
 const MAX_MAP_ENTRIES = Number(process.env.MAX_MAP_ENTRIES ?? 100_000)
+
+// Whitelisted phones skip all velocity checks
+const VELOCITY_WHITELIST = new Set(
+  (process.env.VELOCITY_WHITELIST || '')
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+)
 
 const SEND_WINDOW = 10 * 60 * 1000 // 10 minutes
 const USD_WINDOW = 60 * 60 * 1000 // 1 hour
@@ -28,24 +36,26 @@ const CLEANUP_INTERVAL = 5 * 60 * 1000 // 5 minutes
 
 // ── Trilingual limit strings ───────────────────────────────────────────────────
 
-const VELOCITY_MESSAGES: Record<'send_rate' | 'usd_limit' | 'new_recipient', Record<Lang, string>> =
-  {
-    send_rate: {
-      en: 'Too many sends. Please wait a few minutes.',
-      es: 'Demasiados envios. Por favor espera unos minutos.',
-      pt: 'Muitos envios. Por favor aguarde alguns minutos.',
-    },
-    usd_limit: {
-      en: 'Hourly send limit reached. Please try again later.',
-      es: 'Limite de envio por hora alcanzado. Intenta mas tarde.',
-      pt: 'Limite de envio por hora atingido. Tente mais tarde.',
-    },
-    new_recipient: {
-      en: 'Too many new recipients this hour. Please try again later.',
-      es: 'Demasiados destinatarios nuevos esta hora. Intenta mas tarde.',
-      pt: 'Muitos destinatarios novos nesta hora. Tente mais tarde.',
-    },
-  }
+const VELOCITY_MESSAGES: Record<
+  'send_rate' | 'usd_limit' | 'new_recipient',
+  Record<Lang, string>
+> = {
+  send_rate: {
+    en: 'Too many sends. Please wait a few minutes.',
+    es: 'Demasiados envios. Por favor espera unos minutos.',
+    pt: 'Muitos envios. Por favor aguarde alguns minutos.',
+  },
+  usd_limit: {
+    en: 'Hourly send limit reached. Please try again later.',
+    es: 'Limite de envio por hora alcanzado. Intenta mas tarde.',
+    pt: 'Limite de envio por hora atingido. Tente mais tarde.',
+  },
+  new_recipient: {
+    en: 'Too many new recipients this hour. Please try again later.',
+    es: 'Demasiados destinatarios nuevos esta hora. Intenta mas tarde.',
+    pt: 'Muitos destinatarios novos nesta hora. Tente mais tarde.',
+  },
+}
 
 // ── Service ────────────────────────────────────────────────────────────────────
 
@@ -99,12 +109,14 @@ export default class VelocityService {
     amountUsd: number,
     lang: Lang = 'en'
   ): { allowed: boolean; reason?: string } {
+    if (VELOCITY_WHITELIST.has(senderPhone)) {
+      return { allowed: true }
+    }
+
     const now = this.clock()
 
     // Rule 1: Send rate (rolling 10-min window)
-    const sends = (this.sendTimestamps.get(senderPhone) ?? []).filter(
-      (t) => t >= now - SEND_WINDOW
-    )
+    const sends = (this.sendTimestamps.get(senderPhone) ?? []).filter((t) => t >= now - SEND_WINDOW)
     if (sends.length >= MAX_SENDS) {
       return { allowed: false, reason: VELOCITY_MESSAGES.send_rate[lang] }
     }
