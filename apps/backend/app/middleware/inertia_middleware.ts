@@ -22,7 +22,7 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
           const schema = schemaRow.table_schema
           const row = await db
             .connection('indexer')
-            .from(db.raw('??.??', [schema, '_ponder_meta']))
+            .from(`${schema}._ponder_meta`)
             .where('key', 'app')
             .select(db.raw("(value->>'heartbeat_at')::bigint as heartbeat"))
             .first()
