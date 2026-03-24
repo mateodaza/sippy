@@ -61,8 +61,10 @@ import {
   formatInviteAlreadyPending,
   formatInviteDailyLimitReached,
   formatInviteAlreadyOnSippy,
+  formatEmailNudge,
 } from '#utils/messages'
 
+import { DateTime } from 'luxon'
 import UserPreference from '#models/user_preference'
 import { handleStartCommand } from '#commands/start_command'
 import { handleBalanceCommand } from '#commands/balance_command'
@@ -1029,6 +1031,26 @@ export default class WebhookController {
     try {
       await this.handleCommand(from, command, lang, rateCtx, context)
       logger.info('Message %s processed successfully', messageId)
+
+      // Post-command: one-time email nudge for users without verified email.
+      // Only after balance/send/confirm — engaged moments where the ask feels natural.
+      if (['balance', 'send', 'confirm'].includes(command.command)) {
+        try {
+          const pref = await findUserPrefByPhone(from)
+          if (pref && !pref.emailVerified && !pref.emailNudgeSentAt) {
+            await sendTextMessage(from, formatEmailNudge(lang), lang)
+            const prefKey = await resolveUserPrefKey(from)
+            await UserPreference.updateOrCreate(
+              { phoneNumber: prefKey },
+              { emailNudgeSentAt: DateTime.now() }
+            )
+            logger.info('Email nudge sent to %s', maskPhone(from))
+          }
+        } catch (nudgeErr) {
+          // Non-fatal — never let the nudge break the main flow
+          logger.warn('Email nudge failed for %s: %o', maskPhone(from), nudgeErr)
+        }
+      }
     } finally {
       // Always mark as processed to prevent infinite Meta retries.
       // Individual handlers (e.g. send) have their own idempotency guards.

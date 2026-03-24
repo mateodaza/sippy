@@ -1242,3 +1242,16 @@ export function formatInviteAlreadyOnSippy(recipientPhone: string, lang: Lang = 
   }
   return m[lang]()
 }
+
+export function formatEmailNudge(lang: Lang = 'en'): string {
+  const settingsUrl = `${FRONTEND_URL}/settings`
+  const m = {
+    en: () =>
+      `Tip: add a recovery email so you can get back into your wallet if you ever lose your number: ${settingsUrl}`,
+    es: () =>
+      `Tip: agrega un correo de recuperacion para acceder a tu billetera si pierdes tu numero: ${settingsUrl}`,
+    pt: () =>
+      `Dica: adicione um e-mail de recuperacao para acessar sua carteira se perder seu numero: ${settingsUrl}`,
+  }
+  return m[lang]()
+}
