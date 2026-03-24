@@ -1,4 +1,5 @@
-import { Head, Link } from '@adonisjs/inertia/react'
+import { Link } from '@adonisjs/inertia/react'
+import { Head } from '@inertiajs/react'
 import AdminLayout from '../../../layouts/admin_layout.js'
 
 interface OnchainData {
