@@ -115,7 +115,7 @@ function SetupContent({
   const [step, setStep] = useState<Step>('phone')
   const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl)
   const [otp, setOtp] = useState('')
-  const [dailyLimit, setDailyLimit] = useState('10000') // Max — limit step hidden
+  // dailyLimit is derived from emailVerified at permission-creation time (see handleApprovePermission)
   const [error, setError] = useState<string | null>(null)
   const [isSessionExpired, setIsSessionExpired] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -872,9 +872,13 @@ function SetupContent({
         throw new Error('No wallet address. Please restart the process.')
       }
 
+      // we can work on a tier system
+      // Set limit to user's tier max — no UI to change later
+      const tierLimit = emailVerified ? '500' : '50'
+
       // Validate daily limit before creating on-chain permission — invalid values
       // would create a broken or expensive-to-undo permission on-chain
-      const parsedLimit = Number(dailyLimit)
+      const parsedLimit = Number(tierLimit)
       if (!Number.isFinite(parsedLimit) || parsedLimit < 1 || parsedLimit > 10000) {
         setError(
           lang === 'es'
@@ -905,7 +909,7 @@ function SetupContent({
         network: NETWORK as 'arbitrum',
         spender: SIPPY_SPENDER_ADDRESS as `0x${string}`,
         token: USDC_ADDRESS as `0x${string}`,
-        allowance: parseUnits(dailyLimit, 6), // USDC has 6 decimals
+        allowance: parseUnits(tierLimit, 6), // USDC has 6 decimals
         periodInDays: 1, // Daily limit
       })
 
@@ -934,7 +938,7 @@ function SetupContent({
             'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
-            dailyLimit,
+            dailyLimit: tierLimit,
           }),
         })
 
