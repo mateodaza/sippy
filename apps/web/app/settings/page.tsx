@@ -2138,6 +2138,16 @@ function SettingsContent() {
           )}
         </div>
 
+        {/* Support */}
+        <div className="mt-6 pt-6 border-t border-[var(--border-strong)]">
+          <a
+            href="/support"
+            className="block w-full text-center text-sm text-brand-primary hover:text-brand-primary-hover font-semibold py-2"
+          >
+            {t('support.title', lang)}
+          </a>
+        </div>
+
         {/* Navigation + Sign out */}
         <div className="mt-6 pt-6 border-t flex items-center justify-between">
           <a

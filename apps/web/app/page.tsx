@@ -623,6 +623,7 @@ export default async function HomePage() {
                 { labelKey: 'landing.footer.features' as const, href: '#specs' },
                 { labelKey: 'landing.footer.fund' as const, href: 'https://fund.sippy.lat' },
                 { labelKey: 'landing.footer.about' as const, href: '/about' },
+                { labelKey: 'landing.footer.support' as const, href: '/support' },
                 { labelKey: 'landing.footer.contact' as const, href: 'mailto:hello@sippy.lat' },
               ].map((link) => (
                 <a

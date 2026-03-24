@@ -1,6 +1,6 @@
 # Project Status — Sippy
 
-**Last Updated:** March 13, 2026
+**Last Updated:** March 24, 2026
 **Current Milestone:** M1 — Production Ready (deadline Mar 26, 2026)
 **Detailed Plan:** [M1_PLAN.md](./M1_PLAN.md)
 **Task Queue:** [TASK_QUEUE.md](./TASK_QUEUE.md)
@@ -9,18 +9,18 @@
 
 ## M1 Deliverable Progress
 
-| # | Deliverable | Status | Notes |
-|---|------------|--------|-------|
-| 1 | Onramp integration | Blocked | Waiting on Maash API response |
-| 2 | Non-custodial wallet refinements | 100% | CDP Embedded Wallets, sweep-to-EOA, web wallet, dual-wallet UI, custom auth, web send hardened |
-| 3 | Security hardening | 100% | Phone sanitization (SH), tx confirmation + self-send block + concurrent protection (TX), velocity limiter, tiered limits (EL), amount hardening, backend audit (AU), admin block/unblock + global pause (AC), web send guards (self-send, velocity, daily limits) |
-| 4 | Dual currency display (USD + local) | 100% | 26 LATAM currencies, phone prefix mapping, 24h cache, all separators |
-| 5 | Privacy controls + Email Recovery | 100% | Phone visibility toggle (settings + WhatsApp command), profile masking, email recovery |
-| 6 | User settings | 100% | Language auto-detect + selector (LN), tiered limit display (EL), privacy toggle (PV), email management, key export |
-| 7 | Monitoring infrastructure | 100% | Sentry (backend + frontend), health endpoint, PostHog analytics, indexer, admin dashboard |
-| 8 | Legal entity | External | In progress separately |
-| 9 | WhatsApp production number | 100% | Active, approved |
-| 10 | Closed beta: 50 testers | 0% | E2E test matrix done, beta onboarding pending |
+| #   | Deliverable                         | Status   | Notes                                                                                                                                                                                                                                                             |
+| --- | ----------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Onramp integration                  | Blocked  | Waiting on Maash API response                                                                                                                                                                                                                                     |
+| 2   | Non-custodial wallet refinements    | 100%     | CDP Embedded Wallets, sweep-to-EOA, web wallet, dual-wallet UI, custom auth, web send hardened                                                                                                                                                                    |
+| 3   | Security hardening                  | 100%     | Phone sanitization (SH), tx confirmation + self-send block + concurrent protection (TX), velocity limiter, tiered limits (EL), amount hardening, backend audit (AU), admin block/unblock + global pause (AC), web send guards (self-send, velocity, daily limits) |
+| 4   | Dual currency display (USD + local) | 100%     | 26 LATAM currencies, phone prefix mapping, 24h cache, all separators                                                                                                                                                                                              |
+| 5   | Privacy controls + Email Recovery   | 100%     | Phone visibility toggle (settings + WhatsApp command), profile masking, email recovery                                                                                                                                                                            |
+| 6   | User settings                       | 100%     | Language auto-detect + selector (LN), tiered limit display (EL), privacy toggle (PV), email management, key export                                                                                                                                                |
+| 7   | Monitoring infrastructure           | 100%     | Sentry (backend + frontend), health endpoint, PostHog analytics, indexer, admin dashboard                                                                                                                                                                         |
+| 8   | Legal entity                        | External | In progress separately                                                                                                                                                                                                                                            |
+| 9   | WhatsApp production number          | 100%     | Active, approved                                                                                                                                                                                                                                                  |
+| 10  | Closed beta: 50 testers             | 0%       | E2E test matrix done, beta onboarding pending                                                                                                                                                                                                                     |
 
 ---
 
@@ -150,22 +150,23 @@ sippy/                      ← Turborepo + pnpm workspaces
 
 ## Key Metrics
 
-| Metric | Value |
-|--------|-------|
-| Parse latency (regex) | <1ms |
-| Parse latency (LLM) | 500-2000ms |
-| LLM calls per message | ~20% (regex handles 80%+) |
-| LLM cost | $0/month (Groq free tier) |
-| Supported languages | 3 (EN, ES, PT) |
-| User-facing strings | 35+ (all trilingual) |
-| WhatsApp capacity | 2K bot-initiated + unlimited user-initiated |
-| Smart contract | GasRefuel.sol deployed on Arbitrum One |
-| Backend tests | 500+ passing (unit + functional) |
+| Metric                | Value                                       |
+| --------------------- | ------------------------------------------- |
+| Parse latency (regex) | <1ms                                        |
+| Parse latency (LLM)   | 500-2000ms                                  |
+| LLM calls per message | ~20% (regex handles 80%+)                   |
+| LLM cost              | $0/month (Groq free tier)                   |
+| Supported languages   | 3 (EN, ES, PT)                              |
+| User-facing strings   | 35+ (all trilingual)                        |
+| WhatsApp capacity     | 2K bot-initiated + unlimited user-initiated |
+| Smart contract        | GasRefuel.sol deployed on Arbitrum One      |
+| Backend tests         | 500+ passing (unit + functional)            |
 
 ---
 
 ## Recent Changes
 
+**Mar 24** — Zoho Desk support ticketing integration: backend service (`zoho_desk.service.ts`) with OAuth2 refresh-token flow and in-memory token caching, support controller with public (IP-throttled) and authenticated endpoints, `SupportForm` component on landing page and settings page, 19 i18n keys in EN/ES/PT. Zoho Desk free plan (3 agents, 5K API credits/day). Pending: end-to-end testing with live Zoho API.
 **Mar 13** — Merged `develop` into `main`: all SH, TX, EL, LN, PV, AU, MO, AC, WS, BP-001 tasks complete. PostHog migration. Web send hardened (self-send block for phone + address, velocity checks, tiered daily limits, safe error allowlist). Privacy fallback fixed. Moderation uses SH-003-safe `resolveUserPrefKey`. Silent catch blocks now log. Deliverables 2, 3, 5, 6, 7 moved to 100%.
 **Mar 12** — Task queue restructured: completed tasks archived to `COMPLETED_TASK_QUEUES.md`, new TASK_QUEUE.md with SH (phone sanitization), TX (tx security), EL (tiered limits), LN (language detection), PV (phone visibility), AU (audit), MO (monitoring), AC (admin controls), WS (session robustness), BP (beta prep). M1_PLAN timeline updated for weeks 4-5.
 **Mar 12** — Dual-wallet web UI: WhatsApp EOA wallet + smart account shown as selectable cards, auto-selects funded wallet, `POST /api/send` for EOA sends via SpendPermission. CDP Portal configured (JWKS URL + issuer live). Dual currency COMPLETE (26 LATAM currencies, 24h cache). Email recovery infrastructure COMPLETE (collection, verification, gate tokens, Resend integration). Security fixes: email bypass vulnerability patched, email squatting blocked via partial unique index. 437 tests passing.
@@ -179,18 +180,19 @@ sippy/                      ← Turborepo + pnpm workspaces
 
 ## Environment
 
-| Service | Provider | Status |
-|---------|----------|--------|
-| Backend hosting | Railway | Active |
-| Database | Railway PostgreSQL | Active |
-| Blockchain | Arbitrum One | Active |
-| Wallets | Coinbase CDP Embedded | Active |
-| Messaging | WhatsApp Business API | Active (production number) |
-| LLM | Groq (free tier) | Active |
-| Smart contract | GasRefuel.sol | Deployed |
-| Domain | sippy.lat | Active |
-| On-chain indexer | Ponder v0.15 + Railway | Deployed |
-| SMS OTP | Twilio (raw SMS API) | Configured |
-| Email delivery | Resend | Configured |
-| Exchange rates | open.er-api.com (free) | Active |
-| Onramp | Maash | Blocked (waiting on API) |
+| Service           | Provider               | Status                     |
+| ----------------- | ---------------------- | -------------------------- |
+| Backend hosting   | Railway                | Active                     |
+| Database          | Railway PostgreSQL     | Active                     |
+| Blockchain        | Arbitrum One           | Active                     |
+| Wallets           | Coinbase CDP Embedded  | Active                     |
+| Messaging         | WhatsApp Business API  | Active (production number) |
+| LLM               | Groq (free tier)       | Active                     |
+| Smart contract    | GasRefuel.sol          | Deployed                   |
+| Domain            | sippy.lat              | Active                     |
+| On-chain indexer  | Ponder v0.15 + Railway | Deployed                   |
+| SMS OTP           | Twilio (raw SMS API)   | Configured                 |
+| Email delivery    | Resend                 | Configured                 |
+| Exchange rates    | open.er-api.com (free) | Active                     |
+| Onramp            | Maash                  | Blocked (waiting on API)   |
+| Support ticketing | Zoho Desk (free plan)  | Configured — testing       |
