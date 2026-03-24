@@ -21,7 +21,7 @@ import {
   verifyOtp,
 } from './auth'
 import { isBlockedPrefix } from '@sippy/shared'
-import { shouldUseTwilio } from './auth-mode'
+import { shouldUseTwilio, isTwilioActive } from './auth-mode'
 
 type ReAuthStep = 'phone' | 'otp'
 
@@ -94,20 +94,26 @@ export function useSessionGuard(): SessionGuardResult {
       if (isSignedIn && !currentUser) return
 
       if (!isSignedIn) {
-        // CDP hooks may not have settled yet (e.g. navigating from setup).
-        // If we have a valid JWT, re-authenticate with CDP before giving up.
         const storedJwt = getStoredToken()
         if (storedJwt && !isTokenExpired(storedJwt)) {
-          try {
-            await authenticateWithJWT()
-            // authenticateWithJWT will cause isSignedIn to flip true,
-            // triggering this effect again. Don't set hasCheckedSession yet
-            // so the next run can proceed to the token-validation path.
+          if (isTwilioActive()) {
+            // Twilio flow: restore CDP session via JWT
+            try {
+              await authenticateWithJWT()
+              return
+            } catch (err) {
+              console.warn('Session recovery: JWT auth failed, clearing token', err)
+              clearToken()
+            }
+          } else {
+            // CDP SMS flow: Sippy JWT is valid for backend calls.
+            // CDP manages its own session — don't call authenticateWithJWT.
+            // User may need SMS re-auth for wallet operations if CDP session expired.
+            setToken(storedJwt)
+            setIsAuthenticated(true)
+            setHasCheckedSession(true)
+            setIsCheckingSession(false)
             return
-          } catch (err) {
-            // JWT auth failed — clear stale token and fall through
-            console.warn('Session recovery: JWT auth failed, clearing token', err)
-            clearToken()
           }
         }
         setHasCheckedSession(true)
@@ -240,7 +246,9 @@ export function useSessionGuard(): SessionGuardResult {
       }
 
       storeToken(newToken)
-      await authenticateWithJWT()
+      // Only call authenticateWithJWT for Twilio flow — CDP SMS users
+      // are already authenticated via verifySmsOTP.
+      if (isTwilioActive()) await authenticateWithJWT()
       setToken(newToken)
       setIsAuthenticated(true)
       setExpiryWarning(false)

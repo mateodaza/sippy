@@ -32,7 +32,8 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@coinbase/cdp-hooks', () => ({
-  CDPHooksProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  CDPHooksProvider: ({ children }: { children: React.ReactNode }) =>
+    React.createElement(React.Fragment, null, children),
   useAuthenticateWithJWT: () => ({ authenticateWithJWT: mocks.authenticateWithJWT }),
   useCreateSpendPermission: () => ({
     createSpendPermission: mocks.createSpendPermission,
@@ -67,9 +68,14 @@ let _storedToken: string | null = null
 vi.mock('../../lib/auth', () => ({
   sendOtp: (...args: unknown[]) => mocks.sendOtp(...args),
   verifyOtp: (...args: unknown[]) => mocks.verifyOtp(...args),
-  storeToken: (token: string) => { _storedToken = token; mocks.storeToken(token) },
+  storeToken: (token: string) => {
+    _storedToken = token
+    mocks.storeToken(token)
+  },
   getStoredToken: () => _storedToken,
-  clearToken: () => { _storedToken = null },
+  clearToken: () => {
+    _storedToken = null
+  },
   getFreshToken: () => _storedToken,
 }))
 
@@ -79,9 +85,15 @@ vi.mock('viem', () => ({
 
 // Mock react-international-phone so PhoneInput is a simple controlled <input type="tel">
 vi.mock('react-international-phone', () => ({
-  PhoneInput: ({ value, onChange, inputProps }: {
-    value?: string; onChange?: (val: string) => void; inputProps?: Record<string, unknown>;
-    [key: string]: unknown;
+  PhoneInput: ({
+    value,
+    onChange,
+    inputProps,
+  }: {
+    value?: string
+    onChange?: (val: string) => void
+    inputProps?: Record<string, unknown>
+    [key: string]: unknown
   }) => {
     const React = require('react')
     return React.createElement('input', {
@@ -443,7 +455,11 @@ describe('session recovery', () => {
 
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if ((url as string).includes('/api/wallet-status')) {
-        return Promise.resolve({ ok: false, text: async () => 'Server error', json: async () => ({}) })
+        return Promise.resolve({
+          ok: false,
+          text: async () => 'Server error',
+          json: async () => ({}),
+        })
       }
       return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
     })
@@ -478,12 +494,9 @@ describe('ensureGasReady', () => {
 
     await renderPage()
     await goToOtpStep('+573001234567')
+    // ToS now auto-fires handleApprovePermission (which calls ensureGasReady)
     await goToPermissionStep('123456')
-
-    // Click Approve & Continue to trigger ensureGasReady
-    await act(async () => {
-      findButton('Approve')!.click()
-    })
+    await flushAsync()
 
     const ensureGasCall = mockFetch.mock.calls.find(
       (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/ensure-gas')
@@ -518,14 +531,13 @@ describe('handleApprovePermission', () => {
 
     await renderPage()
     await goToOtpStep('+573001234567')
+    // ToS now auto-fires handleApprovePermission
     await goToPermissionStep('123456')
-
-    await act(async () => {
-      findButton('Approve')!.click()
-    })
+    await flushAsync()
 
     const registerPermCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/register-permission')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('/api/register-permission')
     )
     expect(registerPermCall).toBeDefined()
     expect((registerPermCall![1] as RequestInit).headers).toMatchObject({
@@ -568,14 +580,17 @@ describe('handleSendEmailCode', () => {
     })
 
     const sendCodeCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/auth/send-email-code')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('/api/auth/send-email-code')
     )
     expect(sendCodeCall).toBeDefined()
     expect((sendCodeCall![1] as RequestInit).headers).toMatchObject({
-      Authorization: 'Bearer jwt-token-abc',
+      'Authorization': 'Bearer jwt-token-abc',
       'Content-Type': 'application/json',
     })
-    expect((sendCodeCall![1] as RequestInit).body).toBe(JSON.stringify({ email: 'user@example.com' }))
+    expect((sendCodeCall![1] as RequestInit).body).toBe(
+      JSON.stringify({ email: 'user@example.com' })
+    )
     // Code input should now be visible
     expect(container!.textContent).toContain('Code sent to user@example.com')
 
@@ -596,7 +611,11 @@ describe('handleSendEmailCode', () => {
     // send-email-code should fail to exercise the error branch.
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (typeof url === 'string' && url.includes('/api/auth/send-email-code')) {
-        return Promise.resolve({ ok: false, text: async () => 'Invalid email address', json: async () => ({}) })
+        return Promise.resolve({
+          ok: false,
+          text: async () => 'Invalid email address',
+          json: async () => ({}),
+        })
       }
       return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
     })
@@ -650,29 +669,38 @@ describe('handleVerifyEmailCode', () => {
       const input = container!.querySelector('input[type="email"]') as HTMLInputElement
       setInputValue(input, 'user@example.com')
     })
-    await act(async () => { findButton('Send code')!.click() })
+    await act(async () => {
+      findButton('Send code')!.click()
+    })
 
     // Enter verification code
     await act(async () => {
       const input = container!.querySelector('input[type="text"]') as HTMLInputElement
       setInputValue(input, '654321')
     })
-    await act(async () => { findButton('Verify')!.click() })
+    await act(async () => {
+      findButton('Verify')!.click()
+    })
 
     const verifyCall = mockFetch.mock.calls.find(
-      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/auth/verify-email-code')
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('/api/auth/verify-email-code')
     )
     expect(verifyCall).toBeDefined()
     expect((verifyCall![1] as RequestInit).headers).toMatchObject({
-      Authorization: 'Bearer jwt-token-abc',
+      'Authorization': 'Bearer jwt-token-abc',
       'Content-Type': 'application/json',
     })
-    expect((verifyCall![1] as RequestInit).body).toBe(JSON.stringify({ email: 'user@example.com', code: '654321' }))
+    expect((verifyCall![1] as RequestInit).body).toBe(
+      JSON.stringify({ email: 'user@example.com', code: '654321' })
+    )
     // Confirmation shown before auto-advance
     expect(container!.textContent).toContain('Email verified')
 
     // Advance timer to trigger setStep('tos')
-    await act(async () => { vi.advanceTimersByTime(1500) })
+    await act(async () => {
+      vi.advanceTimersByTime(1500)
+    })
     expect(container!.textContent).toContain('Terms of Service')
 
     vi.useRealTimers()
@@ -692,7 +720,11 @@ describe('handleVerifyEmailCode', () => {
     // verify-email-code fails; all other endpoints succeed
     const mockFetch = vi.fn().mockImplementation((url: string) => {
       if (typeof url === 'string' && url.includes('/api/auth/verify-email-code')) {
-        return Promise.resolve({ ok: false, text: async () => 'Invalid code', json: async () => ({}) })
+        return Promise.resolve({
+          ok: false,
+          text: async () => 'Invalid code',
+          json: async () => ({}),
+        })
       }
       return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
     })
@@ -706,13 +738,17 @@ describe('handleVerifyEmailCode', () => {
       const input = container!.querySelector('input[type="email"]') as HTMLInputElement
       setInputValue(input, 'user@example.com')
     })
-    await act(async () => { findButton('Send code')!.click() })
+    await act(async () => {
+      findButton('Send code')!.click()
+    })
 
     await act(async () => {
       const input = container!.querySelector('input[type="text"]') as HTMLInputElement
       setInputValue(input, '000000')
     })
-    await act(async () => { findButton('Verify')!.click() })
+    await act(async () => {
+      findButton('Verify')!.click()
+    })
 
     expect(container!.textContent).toContain('Failed to verify email code')
     // Still on email step (code input still visible)
@@ -738,7 +774,9 @@ describe('handleSkipEmail', () => {
     await goToOtpStep('+573001234567')
     await goToEmailStep('123456')
 
-    await act(async () => { findButton('Skip for now')!.click() })
+    await act(async () => {
+      findButton('Skip for now')!.click()
+    })
 
     expect(container!.textContent).toContain('Terms of Service')
     // No email-related fetch calls should have been made
@@ -760,7 +798,9 @@ describe('handleSkipEmail', () => {
     })
     // Token is set automatically by storeToken() during OTP verify
 
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true, text: async () => '', json: async () => ({}) })
+    const mockFetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, text: async () => '', json: async () => ({}) })
     vi.stubGlobal('fetch', mockFetch)
 
     await renderPage()
@@ -772,10 +812,14 @@ describe('handleSkipEmail', () => {
       const input = container!.querySelector('input[type="email"]') as HTMLInputElement
       setInputValue(input, 'user@example.com')
     })
-    await act(async () => { findButton('Send code')!.click() })
+    await act(async () => {
+      findButton('Send code')!.click()
+    })
 
     // Now skip instead of entering code
-    await act(async () => { findButton('Skip for now')!.click() })
+    await act(async () => {
+      findButton('Skip for now')!.click()
+    })
 
     expect(container!.textContent).toContain('Terms of Service')
 
@@ -832,16 +876,24 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
     await waitForRedirect('/settings')
   })
 
-  it('returning user with tosAccepted but no permission → goes to permission step', async () => {
+  it('returning user with tosAccepted but no permission → auto-creates permission', async () => {
     setupOtpMocksWithBackend()
+    vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '0xspender')
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
     mockFetchByUrl({
       '/api/wallet-status': { hasWallet: true, hasPermission: false, tosAccepted: true },
+      '/api/ensure-gas': { ready: true },
+      '/api/register-permission': { ok: true },
     })
 
     await renderPage()
     await goToOtpStep('+573001234567')
     await goToEmailStep('123456')
-    await waitForContent('Set Spending Limit')
+    // useEffect auto-fires handleApprovePermission
+    await flushAsync()
+    await flushAsync()
+    await flushAsync()
+    expect(mocks.createSpendPermission).toHaveBeenCalled()
   })
 
   it('returning user with verified email but no ToS → skips email, goes to tos step', async () => {
@@ -876,7 +928,11 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
     setupOtpMocksWithBackend()
     const fn = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/api/wallet-status')) {
-        return Promise.resolve({ ok: false, text: async () => 'Server error', json: async () => ({}) })
+        return Promise.resolve({
+          ok: false,
+          text: async () => 'Server error',
+          json: async () => ({}),
+        })
       }
       return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
     })
@@ -917,14 +973,16 @@ describe('session recovery redirects', () => {
     const fn = vi.fn().mockImplementation((url: string, opts?: RequestInit) => {
       if (url.includes('/api/wallet-status')) {
         return Promise.resolve({
-          ok: true, text: async () => '',
+          ok: true,
+          text: async () => '',
           json: async () => ({ hasWallet: true, hasPermission: false, tosAccepted: true }),
         })
       }
       if (url.includes('/api/register-permission') && opts?.method === 'POST') {
         // Simulate finding an existing on-chain permission
         return Promise.resolve({
-          ok: true, text: async () => '',
+          ok: true,
+          text: async () => '',
           json: async () => ({ success: true, permissionHash: '0xhash', dailyLimit: 100 }),
         })
       }
@@ -943,9 +1001,13 @@ describe('Twilio disabled (CDP SMS for all)', () => {
 
     const signInWithSmsMock = vi.fn().mockResolvedValue({ flowId: 'test-flow-id' })
     vi.doMock('@coinbase/cdp-hooks', () => ({
-      CDPHooksProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+      CDPHooksProvider: ({ children }: { children: React.ReactNode }) =>
+        React.createElement(React.Fragment, null, children),
       useAuthenticateWithJWT: () => ({ authenticateWithJWT: mocks.authenticateWithJWT }),
-      useCreateSpendPermission: () => ({ createSpendPermission: mocks.createSpendPermission, status: null }),
+      useCreateSpendPermission: () => ({
+        createSpendPermission: mocks.createSpendPermission,
+        status: null,
+      }),
       useCurrentUser: () => ({ currentUser: mocks.state.currentUser }),
       useIsSignedIn: () => ({ isSignedIn: mocks.state.isSignedIn }),
       useSignOut: () => ({ signOut: mocks.signOut }),

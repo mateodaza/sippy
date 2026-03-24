@@ -22,9 +22,9 @@ async function main() {
   console.log('  minBalance:', ethers.formatEther(curMin), 'ETH')
   console.log('  refuelAmount:', ethers.formatEther(curRefuel), 'ETH')
 
-  // New values: 0.0005 ETH min, 0.001 ETH refuel (covers ~2 UserOps)
+  // 0.0005 ETH min + refuel — just covers one CDP UserOp (~0.000462 ETH)
   const newMinBalance = ethers.parseEther('0.0005')
-  const newRefuelAmount = ethers.parseEther('0.001')
+  const newRefuelAmount = ethers.parseEther('0.0005')
 
   console.log('\nNew values:')
   console.log('  minBalance:', ethers.formatEther(newMinBalance), 'ETH')

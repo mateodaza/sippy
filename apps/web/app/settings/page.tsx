@@ -581,7 +581,15 @@ function SettingsContent() {
       if (BACKEND_URL) {
         const accessToken = getStoredToken()
         if (accessToken) {
-          await ensureGasReady(BACKEND_URL, accessToken, 2, smartAccountAddress ?? undefined)
+          const gasOk = await ensureGasReady(
+            BACKEND_URL,
+            accessToken,
+            2,
+            smartAccountAddress ?? undefined
+          )
+          if (!gasOk) {
+            throw new Error(t('setup.errInsufficientEth', lang))
+          }
         }
       }
 
@@ -642,7 +650,13 @@ function SettingsContent() {
             ? String((err as Record<string, unknown>).message)
             : String(err)
       const lower = rawMsg.toLowerCase()
-      if (lower.includes('insufficient') || lower.includes('gas') || lower.includes('funds')) {
+      if (lower.includes('daily limit') || lower.includes('cooldown')) {
+        setError(t('setup.errRefuelLimit', lang))
+      } else if (
+        lower.includes('insufficient') ||
+        lower.includes('gas') ||
+        lower.includes('funds')
+      ) {
         setError(t('setup.errInsufficientEth', lang))
       } else {
         setError(localizeError(err, 'enable-permission', lang))
@@ -1241,88 +1255,7 @@ function SettingsContent() {
           )}
         </div>
 
-        {/* Change limit */}
-        {walletStatus?.hasPermission && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium mb-2 text-[var(--text-secondary)]">
-              {t('settings.changeLimitLabel', lang)}
-            </label>
-            <div className="space-y-3 mb-4">
-              {limitOptions.map((amount) => (
-                <button
-                  key={amount}
-                  onClick={() => setNewLimit(amount)}
-                  className={`w-full p-3 rounded-lg border-2 text-left ${
-                    newLimit === amount
-                      ? 'border-brand-crypto bg-brand-crypto/10'
-                      : 'border-brand-primary/20 hover:border-brand-primary/30'
-                  }`}
-                >
-                  <span className="font-bold text-[var(--text-primary)]">
-                    ${amount}
-                    {t('settings.perDay', lang)}
-                  </span>
-                  {amount === '100' && (
-                    <span className="ml-2 text-sm text-brand-crypto">
-                      {t('settings.recommended', lang)}
-                    </span>
-                  )}
-                </button>
-              ))}
-
-              <div className="flex items-center gap-2 p-3 border-2 border-brand-primary/20 rounded-lg">
-                <span className="text-[var(--text-secondary)]">
-                  {t('settings.customPrefix', lang)}
-                </span>
-                <input
-                  type="number"
-                  value={newLimit}
-                  onChange={(e) => {
-                    const raw = e.target.value
-                    if (raw === '') {
-                      setNewLimit('')
-                      return
-                    }
-                    const num = Number(raw)
-                    if (num > tierMax) {
-                      setNewLimit(tierMax.toString())
-                      return
-                    }
-                    if (num < 0) {
-                      setNewLimit('1')
-                      return
-                    }
-                    setNewLimit(raw)
-                  }}
-                  onBlur={() => {
-                    const clamped = Math.min(Math.max(1, Number(newLimit) || 0), tierMax)
-                    setNewLimit(clamped.toString())
-                  }}
-                  min={1}
-                  max={tierMax}
-                  className="w-24 p-2 border rounded text-[var(--text-primary)]"
-                />
-                <span className="text-[var(--text-secondary)]">{t('settings.perDay', lang)}</span>
-              </div>
-              <p className="text-xs text-[var(--text-muted)]">
-                {t('settings.maxLimit', lang)}: ${tierMax}
-                {t('settings.perDay', lang)}
-              </p>
-            </div>
-
-            <button
-              onClick={() => handleChangeLimit()}
-              disabled={
-                permissionStatus === 'loading' || newLimit === walletStatus.dailyLimit?.toString()
-              }
-              className="w-full px-4 py-3 bg-brand-crypto text-white rounded-lg font-semibold hover:bg-brand-crypto/90 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {permissionStatus === 'loading'
-                ? t('settings.updating', lang)
-                : t('settings.updateLimit', lang)}
-            </button>
-          </div>
-        )}
+        {/* Limit is set once at onboarding — no UI to change it */}
 
         {/* Revoke permission */}
         {walletStatus?.hasPermission && (

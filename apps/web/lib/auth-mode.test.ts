@@ -36,9 +36,14 @@ describe('auth-mode (Twilio disabled — default)', () => {
     expect(getProviderType('+15550001234')).toBe('native')
   })
 
-  it('getDefaultProviderType returns custom (session restoration needs customAuth)', async () => {
+  it('getDefaultProviderType returns native', async () => {
     const { getDefaultProviderType } = await importFresh()
-    expect(getDefaultProviderType()).toBe('custom')
+    expect(getDefaultProviderType()).toBe('native')
+  })
+
+  it('isTwilioActive returns false', async () => {
+    const { isTwilioActive } = await importFresh()
+    expect(isTwilioActive()).toBe(false)
   })
 })
 
@@ -69,8 +74,13 @@ describe('auth-mode (Twilio enabled)', () => {
     expect(getProviderType('+15550001234')).toBe('native')
   })
 
-  it('getDefaultProviderType returns custom (session restoration needs customAuth)', async () => {
+  it('getDefaultProviderType returns custom', async () => {
     const { getDefaultProviderType } = await importFresh()
     expect(getDefaultProviderType()).toBe('custom')
+  })
+
+  it('isTwilioActive returns true', async () => {
+    const { isTwilioActive } = await importFresh()
+    expect(isTwilioActive()).toBe(true)
   })
 })

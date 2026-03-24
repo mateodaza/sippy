@@ -88,7 +88,8 @@ const USDC_ADDRESSES: Record<string, string> = {
 const USDC_ADDRESS = USDC_ADDRESSES[NETWORK] || USDC_ADDRESSES.arbitrum
 
 type Step = 'phone' | 'otp' | 'email' | 'tos' | 'permission' | 'done'
-const STEPS: Step[] = ['phone', 'otp', 'email', 'tos', 'permission', 'done']
+// 'permission' is hidden — auto-created with max limit after ToS
+const STEPS: Step[] = ['phone', 'otp', 'email', 'tos', 'done']
 
 const TOS_VERSION = '1.0'
 const TOS_URL = 'https://www.sippy.lat/terms'
@@ -114,7 +115,7 @@ function SetupContent({
   const [step, setStep] = useState<Step>('phone')
   const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl)
   const [otp, setOtp] = useState('')
-  const [dailyLimit, setDailyLimit] = useState('100') // Default $100/day
+  const [dailyLimit, setDailyLimit] = useState('10000') // Max — limit step hidden
   const [error, setError] = useState<string | null>(null)
   const [isSessionExpired, setIsSessionExpired] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -245,6 +246,15 @@ function SetupContent({
         })
     }
   }, [phoneFromUrl]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Permission step is hidden — auto-create when we land on it
+  const permissionFired = useRef(false)
+  useEffect(() => {
+    if (step === 'permission' && !permissionFired.current) {
+      permissionFired.current = true
+      handleApprovePermission()
+    }
+  }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Recovery: Check for existing session on mount (only once)
   useEffect(() => {
@@ -843,11 +853,11 @@ function SetupContent({
         }
       }
 
-      setStep('permission')
+      // Permission step is hidden — auto-create with max limit
+      await handleApprovePermission()
     } catch (err) {
       console.error('ToS acceptance failed:', err)
       setError(err instanceof Error ? err.message : 'Failed to accept Terms of Service')
-    } finally {
       setIsLoading(false)
     }
   }
@@ -954,7 +964,13 @@ function SetupContent({
       })()
       const lower = rawMsg.toLowerCase()
 
-      if (lower.includes('insufficient') || lower.includes('gas') || lower.includes('funds')) {
+      if (lower.includes('daily limit') || lower.includes('cooldown')) {
+        setError(t('setup.errRefuelLimit', lang))
+      } else if (
+        lower.includes('insufficient') ||
+        lower.includes('gas') ||
+        lower.includes('funds')
+      ) {
         setError(t('setup.errInsufficientEth', lang))
         // Trigger a re-registration to attempt refuel again
         if (BACKEND_URL && walletAddress) {
@@ -1222,80 +1238,12 @@ function SetupContent({
           </div>
         )}
 
-        {/* Step 5: Spend Permission */}
+        {/* Permission auto-creation (hidden step) */}
         {step === 'permission' && (
-          <div>
-            <h1 className="font-display text-2xl font-bold uppercase mb-4 text-[var(--text-primary)]">
-              {t('setup.spendTitle', lang)}
-            </h1>
-            <p className="text-[var(--text-secondary)] mb-6">{t('setup.spendSubtitle', lang)}</p>
-
-            <div className="space-y-3 mb-6">
-              {['50', '100', '250', '500'].map((amount) => (
-                <button
-                  key={amount}
-                  onClick={() => setDailyLimit(amount)}
-                  className={`w-full p-4 rounded-lg border-2 text-left ${
-                    dailyLimit === amount
-                      ? 'border-brand-primary bg-brand-primary-light'
-                      : 'border-brand-primary/20 hover:border-[var(--border-strong)]'
-                  }`}
-                >
-                  <span className="font-bold text-[var(--text-primary)]">
-                    ${amount}
-                    {t('setup.perDay', lang)}
-                  </span>
-                  {amount === '100' && (
-                    <span className="ml-2 text-sm text-brand-primary">
-                      {t('setup.recommended', lang)}
-                    </span>
-                  )}
-                </button>
-              ))}
-
-              <div className="flex items-center gap-2 p-4 border-2 border-brand-primary/20 rounded-lg">
-                <span className="text-[var(--text-secondary)]">
-                  {t('setup.customPrefix', lang)}
-                </span>
-                <input
-                  type="number"
-                  value={dailyLimit}
-                  onChange={(e) => setDailyLimit(e.target.value)}
-                  min={1}
-                  max={10000}
-                  className="w-24 p-2 border rounded text-[var(--text-primary)]"
-                />
-                <span className="text-[var(--text-secondary)]">{t('setup.perDay', lang)}</span>
-              </div>
-            </div>
-
-            <div className="bg-[var(--fill-info-light)] p-4 rounded-lg mb-6 text-sm">
-              <p className="font-semibold text-blue-900">{t('setup.whatThisMeans', lang)}</p>
-              <ul className="mt-2 space-y-1 text-blue-800">
-                <li>{t('setup.spendExplain', lang).replace('{n}', dailyLimit)}</li>
-                <li>{t('setup.limitResets', lang)}</li>
-                <li>{t('setup.youOwnWallet', lang)}</li>
-                <li>{t('setup.revokable', lang)}</li>
-              </ul>
-            </div>
-
-            <button
-              onClick={handleApprovePermission}
-              disabled={isLoading || isPreparingWallet}
-              className="w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isPreparingWallet
-                ? t('setup.preparingWallet', lang)
-                : isLoading
-                  ? t('setup.approving', lang)
-                  : t('setup.approve', lang)}
-            </button>
-
-            {isPreparingWallet && (
-              <p className="mt-2 text-sm text-[var(--text-secondary)] text-center animate-pulse">
-                {t('setup.fundingGas', lang)}
-              </p>
-            )}
+          <div className="text-center py-8">
+            <p className="text-[var(--text-secondary)] animate-pulse">
+              {t('setup.preparingWallet', lang)}
+            </p>
           </div>
         )}
 

@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   isTokenExpired: vi.fn(() => false),
   getTokenSecondsRemaining: vi.fn(() => 3600),
   authenticateWithJWT: vi.fn(),
+  signInWithSms: vi.fn(() => Promise.resolve({ flowId: 'test-flow-id' })),
+  verifySmsOTP: vi.fn(() => Promise.resolve()),
+  getAccessToken: vi.fn(() => Promise.resolve('cdp-test-token')),
   createSpendPermission: vi.fn(),
   revokeSpendPermission: vi.fn(),
   refetchPermissions: vi.fn(),
@@ -48,17 +51,32 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@coinbase/cdp-hooks', () => ({
-  CDPHooksProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  CDPHooksProvider: ({ children }: { children: React.ReactNode }) =>
+    React.createElement(React.Fragment, null, children),
   useAuthenticateWithJWT: () => ({ authenticateWithJWT: mocks.authenticateWithJWT }),
-  useCreateSpendPermission: () => ({ createSpendPermission: mocks.createSpendPermission, status: null }),
+  useCreateSpendPermission: () => ({
+    createSpendPermission: mocks.createSpendPermission,
+    status: null,
+  }),
   useRevokeSpendPermission: () => ({ revokeSpendPermission: mocks.revokeSpendPermission }),
-  useListSpendPermissions: () => ({ refetch: mocks.refetchPermissions, data: mocks.permissionsData }),
+  useListSpendPermissions: () => ({
+    refetch: mocks.refetchPermissions,
+    data: mocks.permissionsData,
+  }),
   useCurrentUser: () => ({ currentUser: mocks.state.currentUser }),
   useIsSignedIn: () => ({ isSignedIn: mocks.state.isSignedIn }),
   useSignOut: () => ({ signOut: mocks.signOut }),
+  useSignInWithSms: () => ({ signInWithSms: mocks.signInWithSms }),
+  useVerifySmsOTP: () => ({ verifySmsOTP: mocks.verifySmsOTP }),
+  useGetAccessToken: () => ({ getAccessToken: mocks.getAccessToken }),
   useEvmAccounts: () => ({ evmAccounts: mocks.state.evmAccounts }),
   useExportEvmAccount: () => ({ exportEvmAccount: mocks.exportEvmAccount }),
-  useSendUserOperation: () => ({ sendUserOperation: mocks.sendUserOperation, status: null, data: null, error: null }),
+  useSendUserOperation: () => ({
+    sendUserOperation: mocks.sendUserOperation,
+    status: null,
+    data: null,
+    error: null,
+  }),
 }))
 
 vi.mock('../../lib/i18n', async () => {
@@ -100,13 +118,30 @@ vi.mock('../../lib/usdc-transfer', () => ({
 
 vi.mock('viem', () => ({
   parseUnits: vi.fn(() => BigInt(0)),
+  formatEther: vi.fn(() => '0.01'),
+  formatUnits: vi.fn(() => '10.5'),
+}))
+
+vi.mock('@wagmi/core', () => ({
+  getBalance: vi.fn(async () => ({ value: BigInt(10000000000000000) })),
+  readContract: vi.fn(async () => BigInt(10500000)),
+}))
+
+vi.mock('../providers/Web3Provider', () => ({
+  wagmiConfig: {},
 }))
 
 // Mock react-international-phone so SippyPhoneInput is a simple controlled <input type="tel">
 vi.mock('react-international-phone', () => ({
-  PhoneInput: ({ value, onChange, inputProps }: {
-    value?: string; onChange?: (val: string) => void; inputProps?: Record<string, unknown>;
-    [key: string]: unknown;
+  PhoneInput: ({
+    value,
+    onChange,
+    inputProps,
+  }: {
+    value?: string
+    onChange?: (val: string) => void
+    inputProps?: Record<string, unknown>
+    [key: string]: unknown
   }) => {
     const React = require('react')
     return React.createElement('input', {
@@ -218,30 +253,30 @@ afterEach(() => {
 // --- Tests ---
 
 describe('handleSendOtp', () => {
-  it('happy path: advances to otp step and calls sendOtp with E.164 phone', async () => {
-    mocks.sendOtp.mockResolvedValue(undefined)
+  it('happy path: advances to otp step and calls signInWithSms with E.164 phone', async () => {
     await renderPage()
 
     await goToOtpStep('+573001234567')
 
-    expect(mocks.sendOtp).toHaveBeenCalledWith('+573001234567')
+    // CDP SMS path (default when Twilio disabled)
+    expect(mocks.signInWithSms).toHaveBeenCalledWith({ phoneNumber: '+573001234567' })
+    expect(mocks.sendOtp).not.toHaveBeenCalled()
     expect(container!.querySelector('input[type="text"]')).not.toBeNull()
     expect(container!.textContent).toContain('+573001234567')
   })
 
-  it('sends phone as-is without + prefix normalization', async () => {
-    mocks.sendOtp.mockResolvedValue(undefined)
+  it('normalizes phone with + prefix before calling signInWithSms', async () => {
     await renderPage()
 
     await goToOtpStep('573001234567')
 
-    // Hook sends reAuthPhone as-is (no normalization)
-    expect(mocks.sendOtp).toHaveBeenCalledWith('573001234567')
+    // useSessionGuard normalizes: phone.startsWith('+') ? phone : `+${phone}`
+    expect(mocks.signInWithSms).toHaveBeenCalledWith({ phoneNumber: '+573001234567' })
     expect(container!.textContent).toContain('573001234567')
   })
 
-  it('shows error and stays on phone step when sendOtp throws', async () => {
-    mocks.sendOtp.mockRejectedValue(new Error('Rate limit exceeded'))
+  it('shows error and stays on phone step when signInWithSms throws', async () => {
+    mocks.signInWithSms.mockRejectedValueOnce(new Error('Rate limit exceeded'))
     await renderPage()
 
     await goToOtpStep('+573001234567')
@@ -254,78 +289,73 @@ describe('handleSendOtp', () => {
 })
 
 describe('handleVerifyOtp', () => {
-  it('happy path: verifies OTP, stores token, authenticates, shows Wallet Security', async () => {
-    // Setup: use default beforeEach (no BACKEND_URL, no fetch stub)
-    // walletStatus stays null since fetchWalletStatus is a no-op without BACKEND_URL
+  it('happy path: verifies OTP via CDP SMS, exchanges token, shows Wallet Security', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.state.evmAccounts = [{ address: '0xEOA123' }]
     mocks.state.currentUser = {
       evmSmartAccounts: ['0xSMART456'],
       evmSmartAccountObjects: [{ address: '0xSMART456' }],
       evmAccounts: ['0xEOA123'],
     }
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: {
-        evmSmartAccounts: ['0xSMART456'],
-        evmSmartAccountObjects: [{ address: '0xSMART456' }],
-        evmAccounts: ['0xEOA123'],
-      },
+    const mockFetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/auth/exchange-cdp-token')) {
+        return { ok: true, json: async () => ({ token: 'jwt-token' }) }
+      }
+      return { ok: true, json: async () => ({ hasPermission: false }) }
     })
+    vi.stubGlobal('fetch', mockFetch)
     await renderPage()
 
     await goToOtpStep()
     await goToVerifyStep()
 
+    expect(mocks.verifySmsOTP).toHaveBeenCalled()
+    expect(mocks.getAccessToken).toHaveBeenCalled()
     expect(mocks.storeToken).toHaveBeenCalledWith('jwt-token')
-    expect(mocks.authenticateWithJWT).toHaveBeenCalled()
-    // OTP input no longer present (transitioned out of 'otp' step)
+    // authenticateWithJWT NOT called for CDP SMS path
+    expect(mocks.authenticateWithJWT).not.toHaveBeenCalled()
     expect(container!.querySelector('input[type="text"]')).toBeNull()
-    // "Wallet Security" heading always rendered in authenticated view (regardless of walletStatus)
     expect(container!.textContent).toContain('Wallet Security')
-    // "No permission" rendered because walletStatus is null (ternary is false)
-    expect(container!.textContent).toContain('No permission')
   })
 
-  it('shows error and stays on otp step when verifyOtp throws', async () => {
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockRejectedValue(new Error('Invalid OTP'))
+  it('shows error and stays on otp step when verifySmsOTP throws', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.verifySmsOTP.mockRejectedValueOnce(new Error('Invalid OTP'))
     await renderPage()
 
     await goToOtpStep()
     await goToVerifyStep()
 
-    // Hook sets reAuthError to err.message directly
     expect(container!.textContent).toContain('Invalid OTP')
-    // Still on OTP step (text input for OTP visible)
     expect(container!.querySelector('input[type="text"]')).not.toBeNull()
   })
 
-  it('shows error when authenticateWithJWT throws', async () => {
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token')
-    mocks.authenticateWithJWT.mockRejectedValue(new Error('Auth failed'))
+  it('shows error when exchange-cdp-token fails', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500 })
+    vi.stubGlobal('fetch', mockFetch)
     await renderPage()
 
     await goToOtpStep()
     await goToVerifyStep()
 
-    // Hook sets reAuthError to err.message directly
-    expect(container!.textContent).toContain('Auth failed')
+    expect(container!.textContent).toContain('Failed to exchange CDP token')
   })
 
   it('authenticates even when user has no EVM accounts (no-wallet check removed from hook)', async () => {
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: { evmSmartAccounts: [], evmSmartAccountObjects: [], evmAccounts: [] },
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    const mockFetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/auth/exchange-cdp-token')) {
+        return { ok: true, json: async () => ({ token: 'jwt-token' }) }
+      }
+      return { ok: true, json: async () => ({ hasPermission: false }) }
     })
+    vi.stubGlobal('fetch', mockFetch)
     await renderPage()
 
     await goToOtpStep()
     await goToVerifyStep()
 
-    // Hook does not check wallet presence — sets isAuthenticated = true
     expect(mocks.storeToken).toHaveBeenCalledWith('jwt-token')
     expect(container!.textContent).toContain('Wallet Security')
   })
@@ -346,7 +376,8 @@ describe('session recovery', () => {
     await renderPage()
 
     const walletStatusCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/wallet-status')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/wallet-status')
     )
     expect(walletStatusCall).toBeDefined()
     expect(fetchInit(walletStatusCall!).headers).toMatchObject({
@@ -354,7 +385,8 @@ describe('session recovery', () => {
     })
 
     const registerWalletCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/register-wallet')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/register-wallet')
     )
     expect(registerWalletCall).toBeUndefined()
   })
@@ -375,7 +407,8 @@ describe('backend API calls use getStoredToken', () => {
     await renderPage()
 
     const walletStatusCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/wallet-status')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/wallet-status')
     )
     expect(walletStatusCall).toBeDefined()
     expect(fetchInit(walletStatusCall!).headers).toMatchObject({
@@ -391,11 +424,13 @@ describe('backend API calls use getStoredToken', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     // permissionsData must contain an active permission matching SIPPY_SPENDER_ADDRESS
     mocks.permissionsData = {
-      spendPermissions: [{
-        permission: { spender: '0xSIPPY' },
-        permissionHash: '0xHASH',
-        revoked: false,
-      }],
+      spendPermissions: [
+        {
+          permission: { spender: '0xSIPPY' },
+          permissionHash: '0xHASH',
+          revoked: false,
+        },
+      ],
     }
     // wallet-status returns hasPermission: true so the Revoke button renders
     const mockFetch = vi.fn().mockResolvedValue({
@@ -415,10 +450,13 @@ describe('backend API calls use getStoredToken', () => {
       findButton('Continue Anyway')!.click()
     })
     // wait for handleRevoke (includes 100ms setTimeout for permissionsDataRef settle)
-    await act(async () => { await new Promise(r => setTimeout(r, 200)) })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 200))
+    })
 
     const revokeCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/revoke-permission')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/revoke-permission')
     )
     expect(revokeCall).toBeDefined()
     expect(fetchInit(revokeCall!).headers).toMatchObject({
@@ -447,7 +485,8 @@ describe('backend API calls use getStoredToken', () => {
     })
 
     const registerCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/register-permission')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/register-permission')
     )
     expect(registerCall).toBeDefined()
     expect(fetchInit(registerCall!).headers).toMatchObject({
@@ -482,7 +521,8 @@ describe('backend API calls use getStoredToken', () => {
     await act(async () => {})
 
     const logCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/log-export-event')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/log-export-event')
     )
     expect(logCall).toBeDefined()
     expect(fetchInit(logCall!).headers).toMatchObject({
@@ -504,31 +544,52 @@ describe('sweep and export flow', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     mocks.getBalances.mockResolvedValue({ usdc: '10.5' }) // non-trivial → sweep_offer shown
     // session recovery fetch: wallet-status returns authenticated state
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ hasPermission: true, dailyLimit: 100 }),
-    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ hasPermission: true, dailyLimit: 100 }),
+      })
+    )
   })
 
   it('handleSweep happy path: calls ensureGasReady, buildUsdcTransferCall, sendUserOperation', async () => {
     await renderPage()
 
-    await act(async () => { findButton('Export Private Key')!.click() })
+    await act(async () => {
+      findButton('Export Private Key')!.click()
+    })
     // No verified email → warning_no_email gate; dismiss to proceed to export flow
-    await act(async () => { findButton('Continue Anyway')!.click() })
-    await act(async () => { findButton('I understand, continue')!.click() })
-    await act(async () => {}) // wait for getBalances and sweep_offer render
+    await act(async () => {
+      findButton('Continue Anyway')!.click()
+    })
+    await act(async () => {
+      findButton('I understand, continue')!.click()
+    })
+    // Flush async getBalancesRpcSettings + state update for sweep_offer render
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
 
     await act(async () => {
       findButton('Transfer to Web Wallet')!.click()
     })
-    await act(async () => {}) // wait for handleSweep
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
 
-    expect(mocks.ensureGasReady).toHaveBeenCalledWith('http://localhost:3001', 'mock-token')
+    expect(mocks.ensureGasReady).toHaveBeenCalledWith(
+      'http://localhost:3001',
+      'mock-token',
+      2,
+      '0xSMART456'
+    )
     expect(mocks.buildUsdcTransferCall).toHaveBeenCalledWith('0xEOA123', expect.any(String))
-    expect(mocks.sendUserOperation).toHaveBeenCalledWith(expect.objectContaining({
-      evmSmartAccount: '0xSMART456',
-    }))
+    expect(mocks.sendUserOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evmSmartAccount: '0xSMART456',
+      })
+    )
   })
 
   it('handleSweep null token error: shows "Session expired" and does not call sendUserOperation', async () => {
@@ -536,8 +597,8 @@ describe('sweep and export flow', () => {
     // so emailSectionStep transitions out of 'loading' and the export button becomes clickable.
     // Then return null for logExportEventFn and handleSweep — handleSweep shows "Session expired".
     mocks.state.isSignedIn = false // Use OTP flow
-    // useSessionGuard now calls getStoredToken() in mount effect for JWT re-auth;
-    // return expired so it skips authenticateWithJWT and proceeds to OTP flow
+    // useSessionGuard now checks getStoredToken() + isTokenExpired() on mount;
+    // return expired so it falls through to OTP flow
     mocks.isTokenExpired.mockReturnValueOnce(true)
     mocks.getStoredToken
       .mockReturnValueOnce('setup-token') // useSessionGuard hook useState lazy init
@@ -545,26 +606,38 @@ describe('sweep and export flow', () => {
       .mockReturnValueOnce('setup-token') // language mount useEffect (getStoredToken call)
       .mockReturnValueOnce('setup-token') // fetchWalletStatus after OTP
       .mockReturnValueOnce('setup-token') // fetchEmailStatus after OTP
-      .mockReturnValue(null)              // fetchPrivacyStatus (early return) + export flow null tokens
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: {
-        evmSmartAccounts: ['0xSMART456'],
-        evmSmartAccountObjects: [{ address: '0xSMART456' }],
-        evmAccounts: ['0xEOA123'],
-      },
+      .mockReturnValue(null) // fetchPrivacyStatus (early return) + export flow null tokens
+
+    // CDP SMS verify + token exchange
+    const mockFetch = vi.fn(async (url: string) => {
+      if (typeof url === 'string' && url.includes('/api/auth/exchange-cdp-token')) {
+        return { ok: true, json: async () => ({ token: 'jwt-token' }) }
+      }
+      if (typeof url === 'string' && url.includes('/api/auth/email-status')) {
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }),
+        }
+      }
+      return { ok: true, json: async () => ({ hasPermission: true, dailyLimit: 100 }) }
     })
+    vi.stubGlobal('fetch', mockFetch)
 
     await renderPage()
 
     await goToOtpStep()
     await goToVerifyStep()
 
-    await act(async () => { findButton('Export Private Key')!.click() })
+    await act(async () => {
+      findButton('Export Private Key')!.click()
+    })
     // No verified email → warning_no_email gate; dismiss to proceed to export flow
-    await act(async () => { findButton('Continue Anyway')!.click() })
-    await act(async () => { findButton('I understand, continue')!.click() })
+    await act(async () => {
+      findButton('Continue Anyway')!.click()
+    })
+    await act(async () => {
+      findButton('I understand, continue')!.click()
+    })
     await act(async () => {}) // wait for getBalances and sweep_offer render
 
     await act(async () => {
@@ -577,32 +650,46 @@ describe('sweep and export flow', () => {
   })
 
   it('handleExportContinue happy path: private key displayed', async () => {
-    // Use low balance so handleWarningContinue auto-proceeds to handleExportContinue
-    mocks.getBalances.mockResolvedValue({ usdc: '0.001' })
+    // Low USDC balance so handleWarningContinue auto-skips sweep → export
+    const { formatUnits } = await import('viem')
+    ;(formatUnits as ReturnType<typeof vi.fn>).mockReturnValueOnce('0.001')
     mocks.exportEvmAccount.mockResolvedValue({ privateKey: '0xPRIVKEY' })
 
     await renderPage()
 
-    await act(async () => { findButton('Export Private Key')!.click() })
+    await act(async () => {
+      findButton('Export Private Key')!.click()
+    })
     // No verified email → warning_no_email gate; dismiss to proceed to export flow
-    await act(async () => { findButton('Continue Anyway')!.click() })
-    await act(async () => { findButton('I understand, continue')!.click() })
+    await act(async () => {
+      findButton('Continue Anyway')!.click()
+    })
+    await act(async () => {
+      findButton('I understand, continue')!.click()
+    })
     await act(async () => {}) // wait for auto-export
 
     expect(container!.textContent).toContain('0xPRIVKEY')
   })
 
   it('handleExportContinue error path: shows export error, key not shown', async () => {
-    // Use low balance so handleWarningContinue auto-proceeds to handleExportContinue
-    mocks.getBalances.mockResolvedValue({ usdc: '0.001' })
+    // Low USDC balance so handleWarningContinue auto-skips sweep → export
+    const { formatUnits } = await import('viem')
+    ;(formatUnits as ReturnType<typeof vi.fn>).mockReturnValueOnce('0.001')
     mocks.exportEvmAccount.mockRejectedValue(new Error('Export failed'))
 
     await renderPage()
 
-    await act(async () => { findButton('Export Private Key')!.click() })
+    await act(async () => {
+      findButton('Export Private Key')!.click()
+    })
     // No verified email → warning_no_email gate; dismiss to proceed to export flow
-    await act(async () => { findButton('Continue Anyway')!.click() })
-    await act(async () => { findButton('I understand, continue')!.click() })
+    await act(async () => {
+      findButton('Continue Anyway')!.click()
+    })
+    await act(async () => {
+      findButton('I understand, continue')!.click()
+    })
     await act(async () => {}) // wait for error
 
     expect(container!.textContent).toContain('Export failed')
@@ -617,19 +704,24 @@ async function renderWithEmailStatus(emailStatusPayload: object) {
   mocks.state.isSignedIn = true
   mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
   mocks.getStoredToken.mockReturnValue('mock-token')
-  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-    if (url.includes('/api/auth/email-status')) {
-      return { ok: true, json: async () => emailStatusPayload }
-    }
-    return { ok: true, json: async () => ({ hasPermission: false }) }
-  }))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url.includes('/api/auth/email-status')) {
+        return { ok: true, json: async () => emailStatusPayload }
+      }
+      return { ok: true, json: async () => ({ hasPermission: false }) }
+    })
+  )
   await renderPage()
 }
 
 describe('email management', () => {
   it('banner shown when no email', async () => {
     await renderWithEmailStatus({ hasEmail: false, verified: false, maskedEmail: null })
-    expect(container!.textContent).toContain('Add a recovery email to unlock higher spending limits')
+    expect(container!.textContent).toContain(
+      'Add a recovery email to unlock higher spending limits'
+    )
   })
 
   it('banner dismissed on ✕ click', async () => {
@@ -637,7 +729,9 @@ describe('email management', () => {
     await act(async () => {
       findButton('✕')!.click()
     })
-    expect(container!.textContent).not.toContain('Add a recovery email to unlock higher spending limits')
+    expect(container!.textContent).not.toContain(
+      'Add a recovery email to unlock higher spending limits'
+    )
   })
 
   it('no email — shows email input directly without extra click', async () => {
@@ -652,7 +746,10 @@ describe('email management', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }),
+        }
       }
       if (url.includes('/api/auth/send-email-code')) {
         return { ok: true, json: async () => ({ success: true }) }
@@ -664,7 +761,10 @@ describe('email management', () => {
 
     await act(async () => {
       const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(emailInput, 'test@example.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
@@ -673,7 +773,8 @@ describe('email management', () => {
     })
 
     const sendCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
     )
     expect(sendCall).toBeDefined()
     expect(fetchInit(sendCall!).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
@@ -685,21 +786,32 @@ describe('email management', () => {
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
     mocks.getStoredToken.mockReturnValue('mock-token')
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
-      }
-      return { ok: true, json: async () => ({ success: true }) }
-    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/api/auth/email-status')) {
+          return {
+            ok: true,
+            json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }),
+          }
+        }
+        return { ok: true, json: async () => ({ success: true }) }
+      })
+    )
     await renderPage()
 
     await act(async () => {
       const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(emailInput, 'test@example.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Add Email')!.click() })
+    await act(async () => {
+      findButton('Add Email')!.click()
+    })
 
     expect(container!.querySelector('input[placeholder="Enter 6-digit code"]')).not.toBeNull()
     expect(container!.textContent).toContain('Code sent to test@example.com')
@@ -712,7 +824,10 @@ describe('email management', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }),
+        }
       }
       return { ok: true, json: async () => ({ success: true }) }
     })
@@ -722,26 +837,42 @@ describe('email management', () => {
     // Enter email and send code
     await act(async () => {
       const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(emailInput, 'test@example.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Add Email')!.click() })
+    await act(async () => {
+      findButton('Add Email')!.click()
+    })
 
     // Enter code and verify
     await act(async () => {
-      const codeInput = container!.querySelector('input[placeholder="Enter 6-digit code"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      const codeInput = container!.querySelector(
+        'input[placeholder="Enter 6-digit code"]'
+      ) as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(codeInput, '123456')
       codeInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Verify')!.click() })
+    await act(async () => {
+      findButton('Verify')!.click()
+    })
 
     const verifyCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCall).toBeDefined()
-    expect(JSON.parse(fetchInit(verifyCall!).body as string)).toEqual({ email: 'test@example.com', code: '123456' })
+    expect(JSON.parse(fetchInit(verifyCall!).body as string)).toEqual({
+      email: 'test@example.com',
+      code: '123456',
+    })
   })
 
   it('error displayed on failed verify', async () => {
@@ -749,34 +880,52 @@ describe('email management', () => {
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
     mocks.getStoredToken.mockReturnValue('mock-token')
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
-      }
-      if (url.includes('/api/auth/send-email-code')) {
-        return { ok: true, json: async () => ({ success: true }) }
-      }
-      if (url.includes('/api/auth/verify-email-code')) {
-        return { ok: false, json: async () => ({ error: 'invalid_or_expired_code' }) }
-      }
-      return { ok: true, json: async () => ({}) }
-    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/api/auth/email-status')) {
+          return {
+            ok: true,
+            json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }),
+          }
+        }
+        if (url.includes('/api/auth/send-email-code')) {
+          return { ok: true, json: async () => ({ success: true }) }
+        }
+        if (url.includes('/api/auth/verify-email-code')) {
+          return { ok: false, json: async () => ({ error: 'invalid_or_expired_code' }) }
+        }
+        return { ok: true, json: async () => ({}) }
+      })
+    )
     await renderPage()
 
     await act(async () => {
       const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(emailInput, 'test@example.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Add Email')!.click() })
     await act(async () => {
-      const codeInput = container!.querySelector('input[placeholder="Enter 6-digit code"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      findButton('Add Email')!.click()
+    })
+    await act(async () => {
+      const codeInput = container!.querySelector(
+        'input[placeholder="Enter 6-digit code"]'
+      ) as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(codeInput, '123456')
       codeInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Verify')!.click() })
+    await act(async () => {
+      findButton('Verify')!.click()
+    })
 
     expect(container!.textContent).toContain('Invalid or expired code.')
   })
@@ -788,7 +937,10 @@ describe('email management', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }),
+        }
       }
       return { ok: true, json: async () => ({ success: true }) }
     })
@@ -797,16 +949,24 @@ describe('email management', () => {
 
     await act(async () => {
       const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(emailInput, 'test@example.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Add Email')!.click() })
+    await act(async () => {
+      findButton('Add Email')!.click()
+    })
     mockFetch.mockClear()
-    await act(async () => { findButton('Resend code')!.click() })
+    await act(async () => {
+      findButton('Resend code')!.click()
+    })
 
     const resendCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
     )
     expect(resendCall).toBeDefined()
     expect(JSON.parse(fetchInit(resendCall!).body as string)).toEqual({ email: 'test@example.com' })
@@ -832,7 +992,10 @@ describe('email management', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }),
+        }
       }
       return { ok: true, json: async () => ({ hasPermission: false }) }
     })
@@ -840,12 +1003,15 @@ describe('email management', () => {
     await renderPage()
 
     mockFetch.mockClear()
-    await act(async () => { findButton('Verify')!.click() })
+    await act(async () => {
+      findButton('Verify')!.click()
+    })
 
     expect(container!.querySelector('input[type="email"]')).not.toBeNull()
     expect(container!.querySelector('input[placeholder="Enter 6-digit code"]')).not.toBeNull()
     const verifyCalls = mockFetch.mock.calls.filter(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCalls).toHaveLength(0)
   })
@@ -857,7 +1023,10 @@ describe('email management', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }),
+        }
       }
       return { ok: true, json: async () => ({ hasPermission: false }) }
     })
@@ -865,11 +1034,14 @@ describe('email management', () => {
     await renderPage()
 
     mockFetch.mockClear()
-    await act(async () => { findButton('Resend code')!.click() })
+    await act(async () => {
+      findButton('Resend code')!.click()
+    })
 
     expect(container!.querySelector('input[type="email"]')).not.toBeNull()
     const sendCalls = mockFetch.mock.calls.filter(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
     )
     expect(sendCalls).toHaveLength(0)
   })
@@ -881,33 +1053,52 @@ describe('email management', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }),
+        }
       }
       return { ok: true, json: async () => ({ success: true }) }
     })
     vi.stubGlobal('fetch', mockFetch)
     await renderPage()
 
-    await act(async () => { findButton('Verify')!.click() }) // → verify_entry
+    await act(async () => {
+      findButton('Verify')!.click()
+    }) // → verify_entry
     await act(async () => {
       const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(emailInput, 'user@gmail.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
     await act(async () => {
-      const codeInput = container!.querySelector('input[placeholder="Enter 6-digit code"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      const codeInput = container!.querySelector(
+        'input[placeholder="Enter 6-digit code"]'
+      ) as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(codeInput, '123456')
       codeInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Verify')!.click() })
+    await act(async () => {
+      findButton('Verify')!.click()
+    })
 
     const verifyCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCall).toBeDefined()
-    expect(JSON.parse(fetchInit(verifyCall!).body as string)).toEqual({ email: 'user@gmail.com', code: '123456' })
+    expect(JSON.parse(fetchInit(verifyCall!).body as string)).toEqual({
+      email: 'user@gmail.com',
+      code: '123456',
+    })
   })
 
   it('verify submit from verify_entry — blocked when email empty', async () => {
@@ -917,18 +1108,28 @@ describe('email management', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }),
+        }
       }
       return { ok: true, json: async () => ({ success: true }) }
     })
     vi.stubGlobal('fetch', mockFetch)
     await renderPage()
 
-    await act(async () => { findButton('Verify')!.click() }) // → verify_entry
+    await act(async () => {
+      findButton('Verify')!.click()
+    }) // → verify_entry
     // leave email empty, fill code
     await act(async () => {
-      const codeInput = container!.querySelector('input[placeholder="Enter 6-digit code"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      const codeInput = container!.querySelector(
+        'input[placeholder="Enter 6-digit code"]'
+      ) as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(codeInput, '123456')
       codeInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
@@ -938,7 +1139,8 @@ describe('email management', () => {
     expect(verifyBtn.disabled).toBe(true)
 
     const verifyCalls = mockFetch.mock.calls.filter(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCalls).toHaveLength(0)
   })
@@ -950,25 +1152,36 @@ describe('email management', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: true, verified: false, maskedEmail: 'u***@gmail.com' }),
+        }
       }
       return { ok: true, json: async () => ({ success: true }) }
     })
     vi.stubGlobal('fetch', mockFetch)
     await renderPage()
 
-    await act(async () => { findButton('Resend code')!.click() }) // → verify_entry
+    await act(async () => {
+      findButton('Resend code')!.click()
+    }) // → verify_entry
     await act(async () => {
       const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(emailInput, 'user@gmail.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
     mockFetch.mockClear()
-    await act(async () => { findButton('Resend code')!.click() })
+    await act(async () => {
+      findButton('Resend code')!.click()
+    })
 
     const sendCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/send-email-code')
     )
     expect(sendCall).toBeDefined()
     expect(JSON.parse(fetchInit(sendCall!).body as string)).toEqual({ email: 'user@gmail.com' })
@@ -981,7 +1194,10 @@ describe('email management', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: true, verified: true, maskedEmail: 'm***@gmail.com' }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: true, verified: true, maskedEmail: 'm***@gmail.com' }),
+        }
       }
       return { ok: true, json: async () => ({ hasPermission: false }) }
     })
@@ -989,11 +1205,14 @@ describe('email management', () => {
     await renderPage()
 
     mockFetch.mockClear()
-    await act(async () => { findButton('Change')!.click() })
+    await act(async () => {
+      findButton('Change')!.click()
+    })
 
     expect(container!.querySelector('input[type="email"]')).not.toBeNull()
     const verifyCalls = mockFetch.mock.calls.filter(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCalls).toHaveLength(0)
   })
@@ -1005,34 +1224,55 @@ describe('email management', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: true, verified: true, maskedEmail: 'm***@gmail.com' }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: true, verified: true, maskedEmail: 'm***@gmail.com' }),
+        }
       }
       return { ok: true, json: async () => ({ success: true }) }
     })
     vi.stubGlobal('fetch', mockFetch)
     await renderPage()
 
-    await act(async () => { findButton('Change')!.click() }) // → change_entry
+    await act(async () => {
+      findButton('Change')!.click()
+    }) // → change_entry
     await act(async () => {
       const emailInput = container!.querySelector('input[type="email"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(emailInput, 'new@example.com')
       emailInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Send Code')!.click() }) // → change_sent
     await act(async () => {
-      const codeInput = container!.querySelector('input[placeholder="Enter 6-digit code"]') as HTMLInputElement
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+      findButton('Send Code')!.click()
+    }) // → change_sent
+    await act(async () => {
+      const codeInput = container!.querySelector(
+        'input[placeholder="Enter 6-digit code"]'
+      ) as HTMLInputElement
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value'
+      )!.set!
       setter.call(codeInput, '123456')
       codeInput.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { findButton('Verify')!.click() })
+    await act(async () => {
+      findButton('Verify')!.click()
+    })
 
     const verifyCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/verify-email-code')
     )
     expect(verifyCall).toBeDefined()
-    expect(JSON.parse(fetchInit(verifyCall!).body as string)).toEqual({ email: 'new@example.com', code: '123456' })
+    expect(JSON.parse(fetchInit(verifyCall!).body as string)).toEqual({
+      email: 'new@example.com',
+      code: '123456',
+    })
   })
 
   it('fetchEmailStatus called on session restore', async () => {
@@ -1042,7 +1282,10 @@ describe('email management', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }),
+        }
       }
       return { ok: true, json: async () => ({ hasPermission: false }) }
     })
@@ -1050,10 +1293,13 @@ describe('email management', () => {
     await renderPage()
 
     const emailStatusCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/email-status')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/email-status')
     )
     expect(emailStatusCall).toBeDefined()
-    expect(fetchInit(emailStatusCall!).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
+    expect(fetchInit(emailStatusCall!).headers).toMatchObject({
+      Authorization: 'Bearer mock-token',
+    })
   })
 
   it('fetchEmailStatus called after OTP verify', async () => {
@@ -1061,22 +1307,19 @@ describe('email management', () => {
     mocks.state.isSignedIn = false
     mocks.state.currentUser = null
     mocks.state.evmAccounts = [{ address: '0xEOA123' }]
-    // useSessionGuard now calls getStoredToken() + isTokenExpired() on mount for JWT re-auth;
-    // return expired so it skips authenticateWithJWT and proceeds to OTP flow
+    // useSessionGuard now checks getStoredToken() + isTokenExpired() on mount;
+    // return expired so it falls through to OTP flow
     mocks.isTokenExpired.mockReturnValueOnce(true)
     mocks.getStoredToken.mockReturnValue('mock-token')
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: {
-        evmSmartAccounts: ['0xSMART456'],
-        evmSmartAccountObjects: [{ address: '0xSMART456' }],
-        evmAccounts: ['0xEOA123'],
-      },
-    })
     const mockFetch = vi.fn(async (url: string) => {
-      if (url.includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+      if (typeof url === 'string' && url.includes('/api/auth/exchange-cdp-token')) {
+        return { ok: true, json: async () => ({ token: 'jwt-token' }) }
+      }
+      if (typeof url === 'string' && url.includes('/api/auth/email-status')) {
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }),
+        }
       }
       return { ok: true, json: async () => ({ hasPermission: false }) }
     })
@@ -1087,7 +1330,8 @@ describe('email management', () => {
     await goToVerifyStep()
 
     const emailStatusCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/email-status')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/auth/email-status')
     )
     expect(emailStatusCall).toBeDefined()
   })
@@ -1111,11 +1355,13 @@ describe('source integrity', () => {
 })
 
 // Helper: render the page in authenticated state with verifiedPhone set
-async function renderAuthenticated(opts: {
-  backendUrl?: string
-  phoneNumber?: string
-  walletStatusExtra?: Record<string, unknown>
-} = {}) {
+async function renderAuthenticated(
+  opts: {
+    backendUrl?: string
+    phoneNumber?: string
+    walletStatusExtra?: Record<string, unknown>
+  } = {}
+) {
   const backendUrl = opts.backendUrl ?? 'http://localhost:3001'
   const phoneNumber = opts.phoneNumber ?? '+5511999990000'
   vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', backendUrl)
@@ -1129,7 +1375,10 @@ async function renderAuthenticated(opts: {
   mocks.getStoredToken.mockReturnValue('mock-token')
   const mockFetch = vi.fn(async (url: string) => {
     if ((url as string).includes('/api/auth/email-status')) {
-      return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+      return {
+        ok: true,
+        json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }),
+      }
     }
     if ((url as string).includes('/api/set-language')) {
       return { ok: true, json: async () => ({ ok: true }) }
@@ -1168,7 +1417,8 @@ describe('handleSetLanguage', () => {
     })
 
     const setLangCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
     )
     expect(setLangCall).toBeDefined()
     expect(JSON.parse(fetchInit(setLangCall!).body as string)).toEqual({ language: 'es' })
@@ -1183,7 +1433,8 @@ describe('handleSetLanguage', () => {
     })
 
     const setLangCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
     )
     expect(setLangCall).toBeDefined()
     expect(JSON.parse(fetchInit(setLangCall!).body as string)).toEqual({ language: 'pt' })
@@ -1200,12 +1451,17 @@ describe('handleSetLanguage', () => {
     })
 
     const setLangCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/set-language')
     )
     expect(setLangCall).toBeDefined()
     expect(JSON.parse(fetchInit(setLangCall!).body as string)).toEqual({ language: null })
     expect(mocks.clearLanguage).toHaveBeenCalled()
-    expect(mocks.resolveLanguage).toHaveBeenCalledWith('+5511999990000', expect.anything(), expect.anything())
+    expect(mocks.resolveLanguage).toHaveBeenCalledWith(
+      '+5511999990000',
+      expect.anything(),
+      expect.anything()
+    )
   })
 
   it('TC-LN-003-F05: POST fails → error message shown', async () => {
@@ -1220,7 +1476,10 @@ describe('handleSetLanguage', () => {
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
       if ((url as string).includes('/api/auth/email-status')) {
-        return { ok: true, json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }) }
+        return {
+          ok: true,
+          json: async () => ({ hasEmail: false, verified: false, maskedEmail: null }),
+        }
       }
       if ((url as string).includes('/api/set-language')) {
         return { ok: false, json: async () => ({ error: 'internal_error' }) }
@@ -1248,16 +1507,20 @@ describe('privacy toggle', () => {
     mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
-      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
-      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
-      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: true }) }
+      if (url.includes('/api/wallet-status'))
+        return { ok: true, json: async () => ({ hasPermission: false }) }
+      if (url.includes('/api/auth/email-status'))
+        return { ok: true, json: async () => ({ verified: false }) }
+      if (url.includes('/api/privacy-status'))
+        return { ok: true, json: async () => ({ phoneVisible: true }) }
       return { ok: true, json: async () => ({}) }
     })
     vi.stubGlobal('fetch', mockFetch)
     await renderPage()
 
     const privacyCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/privacy-status')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/privacy-status')
     )
     expect(privacyCall).toBeDefined()
     expect(fetchInit(privacyCall!).headers).toMatchObject({ Authorization: 'Bearer mock-token' })
@@ -1268,12 +1531,18 @@ describe('privacy toggle', () => {
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
     mocks.getStoredToken.mockReturnValue('mock-token')
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
-      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
-      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: true }) }
-      return { ok: true, json: async () => ({}) }
-    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/api/wallet-status'))
+          return { ok: true, json: async () => ({ hasPermission: false }) }
+        if (url.includes('/api/auth/email-status'))
+          return { ok: true, json: async () => ({ verified: false }) }
+        if (url.includes('/api/privacy-status'))
+          return { ok: true, json: async () => ({ phoneVisible: true }) }
+        return { ok: true, json: async () => ({}) }
+      })
+    )
     await renderPage()
 
     const checkbox = container!.querySelector('input[role="switch"]') as HTMLInputElement
@@ -1286,12 +1555,18 @@ describe('privacy toggle', () => {
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
     mocks.getStoredToken.mockReturnValue('mock-token')
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
-      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
-      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: false }) }
-      return { ok: true, json: async () => ({}) }
-    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/api/wallet-status'))
+          return { ok: true, json: async () => ({ hasPermission: false }) }
+        if (url.includes('/api/auth/email-status'))
+          return { ok: true, json: async () => ({ verified: false }) }
+        if (url.includes('/api/privacy-status'))
+          return { ok: true, json: async () => ({ phoneVisible: false }) }
+        return { ok: true, json: async () => ({}) }
+      })
+    )
     await renderPage()
 
     const checkbox = container!.querySelector('input[role="switch"]') as HTMLInputElement
@@ -1305,9 +1580,12 @@ describe('privacy toggle', () => {
     mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
-      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
-      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
-      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: true }) }
+      if (url.includes('/api/wallet-status'))
+        return { ok: true, json: async () => ({ hasPermission: false }) }
+      if (url.includes('/api/auth/email-status'))
+        return { ok: true, json: async () => ({ verified: false }) }
+      if (url.includes('/api/privacy-status'))
+        return { ok: true, json: async () => ({ phoneVisible: true }) }
       if (url.includes('/api/set-privacy')) return { ok: true, json: async () => ({}) }
       return { ok: true, json: async () => ({}) }
     })
@@ -1320,7 +1598,8 @@ describe('privacy toggle', () => {
     })
 
     const setPrivacyCall = mockFetch.mock.calls.find(
-      (call: any[]) => typeof call[0] === 'string' && (call[0] as string).includes('/api/set-privacy')
+      (call: any[]) =>
+        typeof call[0] === 'string' && (call[0] as string).includes('/api/set-privacy')
     )
     expect(setPrivacyCall).toBeDefined()
     expect(JSON.parse(fetchInit(setPrivacyCall!).body as string)).toEqual({ phoneVisible: false })
@@ -1333,17 +1612,25 @@ describe('privacy toggle', () => {
     mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
     mocks.getStoredToken.mockReturnValue('mock-token')
     let resolveSetPrivacy!: () => void
-    const setPrivacyPromise = new Promise<void>((resolve) => { resolveSetPrivacy = resolve })
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
-      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
-      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: true }) }
-      if (url.includes('/api/set-privacy')) {
-        await setPrivacyPromise
+    const setPrivacyPromise = new Promise<void>((resolve) => {
+      resolveSetPrivacy = resolve
+    })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/api/wallet-status'))
+          return { ok: true, json: async () => ({ hasPermission: false }) }
+        if (url.includes('/api/auth/email-status'))
+          return { ok: true, json: async () => ({ verified: false }) }
+        if (url.includes('/api/privacy-status'))
+          return { ok: true, json: async () => ({ phoneVisible: true }) }
+        if (url.includes('/api/set-privacy')) {
+          await setPrivacyPromise
+          return { ok: true, json: async () => ({}) }
+        }
         return { ok: true, json: async () => ({}) }
-      }
-      return { ok: true, json: async () => ({}) }
-    }))
+      })
+    )
     await renderPage()
 
     const checkbox = container!.querySelector('input[role="switch"]') as HTMLInputElement
@@ -1356,7 +1643,9 @@ describe('privacy toggle', () => {
     expect(checkbox.disabled).toBe(true)
 
     // Cleanup: resolve the promise
-    await act(async () => { resolveSetPrivacy() })
+    await act(async () => {
+      resolveSetPrivacy()
+    })
   })
 
   it('TC-PV-003-W-06: error from POST /api/set-privacy shows error text', async () => {
@@ -1364,13 +1653,19 @@ describe('privacy toggle', () => {
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
     mocks.getStoredToken.mockReturnValue('mock-token')
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
-      if (url.includes('/api/wallet-status')) return { ok: true, json: async () => ({ hasPermission: false }) }
-      if (url.includes('/api/auth/email-status')) return { ok: true, json: async () => ({ verified: false }) }
-      if (url.includes('/api/privacy-status')) return { ok: true, json: async () => ({ phoneVisible: true }) }
-      if (url.includes('/api/set-privacy')) return { ok: false, json: async () => ({}) }
-      return { ok: true, json: async () => ({}) }
-    }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/api/wallet-status'))
+          return { ok: true, json: async () => ({ hasPermission: false }) }
+        if (url.includes('/api/auth/email-status'))
+          return { ok: true, json: async () => ({ verified: false }) }
+        if (url.includes('/api/privacy-status'))
+          return { ok: true, json: async () => ({ phoneVisible: true }) }
+        if (url.includes('/api/set-privacy')) return { ok: false, json: async () => ({}) }
+        return { ok: true, json: async () => ({}) }
+      })
+    )
     await renderPage()
 
     const checkbox = container!.querySelector('input[role="switch"]') as HTMLInputElement

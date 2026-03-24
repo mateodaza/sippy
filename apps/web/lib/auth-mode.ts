@@ -26,10 +26,14 @@ export function getProviderType(phone: string): 'native' | 'custom' {
 
 /**
  * For returning-user pages (settings, wallet) that don't have a phone
- * at mount time. Always returns 'custom' because useSessionGuard needs
- * customAuth.getJwt to restore sessions via authenticateWithJWT(),
- * regardless of how the user originally signed in (native SMS or Twilio).
+ * at mount time. Returns 'native' when Twilio is off (CDP handles its
+ * own session via SMS), 'custom' when Twilio is on (needs customAuth.getJwt).
  */
 export function getDefaultProviderType(): 'native' | 'custom' {
-  return 'custom'
+  return isTwilioEnabled() ? 'custom' : 'native'
+}
+
+/** Whether Twilio is currently enabled (exposed for session guard logic). */
+export function isTwilioActive(): boolean {
+  return isTwilioEnabled()
 }

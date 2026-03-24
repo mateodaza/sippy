@@ -91,6 +91,8 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.errRegisterPermission': 'Failed to register permission. Please try again.',
     'setup.errInsufficientEth':
       "Insufficient ETH for gas fees. Please wait a moment and try again - we're sending you some ETH.",
+    'setup.errRefuelLimit':
+      'You have changed your limit too many times today. Please try again tomorrow.',
     'setup.errCreatePermission': 'Failed to create permission',
     'setup.errRegisterWallet': 'Failed to register wallet',
     'setup.errSendEmailCode': 'Failed to send email code',
@@ -779,6 +781,7 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.errRegisterPermission': 'No se pudo registrar el permiso. Intenta de nuevo.',
     'setup.errInsufficientEth':
       'ETH insuficiente para comisiones de gas. Espera un momento e intenta de nuevo.',
+    'setup.errRefuelLimit': 'Cambiaste tu límite demasiadas veces hoy. Intenta de nuevo mañana.',
     'setup.errCreatePermission': 'No se pudo crear el permiso',
     'setup.errRegisterWallet': 'No se pudo registrar la billetera',
     'setup.errSendEmailCode': 'No se pudo enviar el código de correo',
@@ -1197,6 +1200,7 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.errRegisterPermission': 'Falha ao registrar permissão. Tente novamente.',
     'setup.errInsufficientEth':
       'ETH insuficiente para taxas de gas. Aguarde um momento e tente novamente.',
+    'setup.errRefuelLimit': 'Você alterou seu limite muitas vezes hoje. Tente novamente amanhã.',
     'setup.errCreatePermission': 'Falha ao criar permissão',
     'setup.errRegisterWallet': 'Falha ao registrar carteira',
     'setup.errSendEmailCode': 'Falha ao enviar código de e-mail',
