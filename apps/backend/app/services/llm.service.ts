@@ -1,13 +1,13 @@
 /**
- * LLM Service — Model Router with Groq
+ * LLM Service — Model Router with Groq + OpenAI fallback
  *
  * Config-driven model selection with automatic fallback.
- * Default: llama-3.3-70b-versatile (most reliable json_object on Groq free).
- * Fallback: llama-3.1-8b-instant (14.4K RPD, handles overflow).
+ * Primary: Llama 4 Scout on Groq.
+ * Secondary: Qwen3-32b on Groq (when LLM_TIERING=true).
+ * Tertiary: gpt-4o-mini on OpenAI (when OPENAI_API_KEY is set).
  *
- * Tiering can be enabled via LLM_TIERING=true. When disabled (default for M1),
- * only the primary model is used. When enabled, the router automatically falls
- * back to the secondary model on rate limit or error.
+ * The OpenAI tier only fires when both Groq models are unavailable (rate-limited
+ * or erroring). If OpenAI also fails, callers fall through to static responses.
  *
  * SCALABILITY NOTE: Rate limiters are in-memory per-process. If you scale
  * horizontally (multiple instances), move counters to shared storage (DB/Redis)
@@ -17,6 +17,7 @@
 import env from '#start/env'
 import logger from '@adonisjs/core/services/logger'
 import Groq from 'groq-sdk'
+import OpenAI from 'openai'
 import { type ParsedCommand } from '#types/index'
 import { llmResultSchema } from '#types/schemas'
 import { type ContextMessage } from '#services/db'
@@ -82,6 +83,14 @@ const MODEL_CATALOG: Record<string, ModelConfig> = {
     rpm: 30,
     rpd: 1000,
     timeout: 5000,
+    maxTokens: 200,
+  },
+  // OpenAI tertiary fallback — only used when Groq is fully down
+  'gpt-4o-mini': {
+    id: 'gpt-4o-mini',
+    rpm: 500,
+    rpd: 10000,
+    timeout: 6000,
     maxTokens: 200,
   },
 }
@@ -194,6 +203,32 @@ export function getGroqClient(): Groq | null {
   }
 
   return groqClient
+}
+
+// ============================================================================
+// OpenAI Client (tertiary fallback — gated on OPENAI_API_KEY)
+// ============================================================================
+
+const OPENAI_MODEL = 'gpt-4o-mini'
+
+let openaiClient: OpenAI | null = null
+
+export function getOpenAIClient(): OpenAI | null {
+  if (!isLLMEnabled()) return null
+
+  if (!openaiClient) {
+    const apiKey = env.get('OPENAI_API_KEY', '')
+    if (!apiKey) return null
+
+    try {
+      openaiClient = new OpenAI({ apiKey })
+    } catch (error) {
+      logger.error('Failed to initialize OpenAI client: %o', error)
+      return null
+    }
+  }
+
+  return openaiClient
 }
 
 // ============================================================================
@@ -358,6 +393,93 @@ async function callModel(
 }
 
 // ============================================================================
+// Core LLM Call (OpenAI — tertiary fallback)
+// ============================================================================
+
+async function callOpenAIModel(
+  client: OpenAI,
+  modelId: string,
+  systemPrompt: string,
+  text: string,
+  context: ContextMessage[] = []
+): Promise<LLMCallResult> {
+  const config = getModelConfig(modelId)
+  const limiter = getLimiter(modelId)
+
+  if (!limiter.canMakeRequest()) {
+    logger.warn('OpenAI rate limit reached for model %s, skipping call', modelId)
+    return { parsed: null, model: modelId }
+  }
+
+  limiter.recordRequest()
+
+  const completion = await Promise.race([
+    client.chat.completions.create({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...context.map((m) => ({ role: m.role as 'user', content: m.content })),
+        { role: 'user', content: text },
+      ],
+      model: config.id,
+      temperature: 0.3,
+      max_tokens: config.maxTokens,
+      response_format: { type: 'json_object' },
+    }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout')), config.timeout)
+    ),
+  ])
+
+  const content = completion.choices[0]?.message?.content
+  if (!content) {
+    logger.warn(
+      'OpenAI returned empty content (%s), finish_reason: %s',
+      modelId,
+      completion.choices[0]?.finish_reason
+    )
+    return { parsed: null, model: modelId }
+  }
+
+  let raw: unknown
+  try {
+    raw = JSON.parse(content.trim())
+  } catch {
+    logger.warn('OpenAI returned invalid JSON (%s): %s', modelId, content.slice(0, 200))
+    return { parsed: null, model: modelId }
+  }
+
+  const zodResult = llmResultSchema.safeParse(raw)
+  if (!zodResult.success) {
+    logger.warn(`OpenAI output failed Zod validation (${modelId}): %o`, zodResult.error.issues)
+    return { parsed: null, model: modelId }
+  }
+
+  const result = zodResult.data
+
+  if (result.command === 'unknown' && result.confidence < 0.7) {
+    if (!result.helpfulMessage || result.helpfulMessage.length < 10) {
+      return { parsed: null, model: modelId }
+    }
+  }
+  if (result.command !== 'unknown' && result.confidence < 0.7) {
+    return { parsed: null, model: modelId }
+  }
+
+  return {
+    parsed: {
+      command: result.command,
+      amount: result.amount ?? undefined,
+      recipient: result.recipient ?? undefined,
+      helpfulMessage: result.helpfulMessage ?? undefined,
+      detectedLanguage: result.detectedLanguage,
+    },
+    model: modelId,
+    promptTokens: completion.usage?.prompt_tokens,
+    completionTokens: completion.usage?.completion_tokens,
+  }
+}
+
+// ============================================================================
 // Public API: parseMessageWithLLM (with automatic fallback)
 // ============================================================================
 
@@ -408,31 +530,71 @@ export async function parseMessageWithLLM(
   }
 
   // Fallback model (only when tiering is enabled)
-  if (!TIERING_ENABLED) return null
+  if (!TIERING_ENABLED) return tryOpenAIFallback(text, context)
 
-  if (FALLBACK_MODEL === PRIMARY_MODEL) return null
+  if (FALLBACK_MODEL !== PRIMARY_MODEL) {
+    const fallbackLimiter = getLimiter(FALLBACK_MODEL)
+    if (fallbackLimiter.canMakeRequest()) {
+      try {
+        logger.info(`Falling back to ${FALLBACK_MODEL}`)
+        const result = await callModel(client, FALLBACK_MODEL, text, context)
+        if (result.parsed) {
+          return {
+            parsed: result.parsed,
+            meta: {
+              model: result.model,
+              promptTokens: result.promptTokens,
+              completionTokens: result.completionTokens,
+            },
+          }
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Timeout') {
+          logger.warn(`LLM timeout on fallback ${FALLBACK_MODEL}`)
+        } else {
+          logger.error(`LLM fallback error on ${FALLBACK_MODEL}: %o`, error)
+        }
+        // Fall through to OpenAI
+      }
+    }
+  }
 
-  const fallbackLimiter = getLimiter(FALLBACK_MODEL)
-  if (!fallbackLimiter.canMakeRequest()) return null
+  // Tertiary: OpenAI (only when Groq is fully exhausted)
+  return tryOpenAIFallback(text, context)
+}
+
+/**
+ * OpenAI tertiary fallback for parseMessageWithLLM.
+ * Returns null if OpenAI is not configured or fails — callers use static response.
+ */
+async function tryOpenAIFallback(
+  text: string,
+  context: ContextMessage[]
+): Promise<LLMParseResult | null> {
+  const oaiClient = getOpenAIClient()
+  if (!oaiClient) return null
 
   try {
-    logger.info(`Falling back to ${FALLBACK_MODEL}`)
-    const result = await callModel(client, FALLBACK_MODEL, text, context)
-    return {
-      parsed: result.parsed,
-      meta: {
-        model: result.model,
-        promptTokens: result.promptTokens,
-        completionTokens: result.completionTokens,
-      },
+    logger.info('Falling back to OpenAI %s', OPENAI_MODEL)
+    const result = await callOpenAIModel(oaiClient, OPENAI_MODEL, SYSTEM_PROMPT, text, context)
+    if (result.parsed) {
+      return {
+        parsed: result.parsed,
+        meta: {
+          model: result.model,
+          promptTokens: result.promptTokens,
+          completionTokens: result.completionTokens,
+        },
+      }
     }
+    return null
   } catch (error) {
     if (error instanceof Error && error.message === 'Timeout') {
-      logger.warn(`LLM timeout on fallback ${FALLBACK_MODEL}`)
+      logger.warn('OpenAI timeout on %s', OPENAI_MODEL)
     } else {
-      logger.error(`LLM fallback error on ${FALLBACK_MODEL}: %o`, error)
+      logger.error('OpenAI error on %s: %o', OPENAI_MODEL, error)
     }
-    throw error
+    return null
   }
 }
 
@@ -474,19 +636,6 @@ export async function generateResponse(
   setupStatus?: import('#services/embedded_wallet.service').SetupStatus,
   dialectInstruction?: string | null
 ): Promise<string | null> {
-  const client = getGroqClient()
-  if (!client) return null
-
-  const modelId = 'llama-3.1-8b-instant'
-  const limiter = getLimiter(modelId) // shared limiter — same quota as classification fallback
-
-  if (!limiter.canMakeRequest()) {
-    logger.warn('generateResponse: rate limit reached for %s', modelId)
-    return null
-  }
-
-  limiter.recordRequest()
-
   let systemContent =
     lang === 'es' || lang === 'pt'
       ? `${RESPONSE_SYSTEM_PROMPT}\nRespond in ${lang === 'es' ? 'Spanish' : 'Portuguese'}.`
@@ -502,27 +651,74 @@ export async function generateResponse(
     systemContent += `\nThis user started setting up but didn't finish. Encourage them to complete their wallet setup.`
   }
 
+  const messages: Array<{ role: 'system' | 'user'; content: string }> = [
+    { role: 'system', content: systemContent },
+    ...context.map((m) => ({ role: m.role as 'user', content: m.content })),
+    { role: 'user', content: text },
+  ]
+
+  // Try Groq first
+  const client = getGroqClient()
+  if (client) {
+    const modelId = 'llama-3.1-8b-instant'
+    const limiter = getLimiter(modelId)
+
+    if (limiter.canMakeRequest()) {
+      limiter.recordRequest()
+      try {
+        const completion = await Promise.race([
+          client.chat.completions.create({
+            messages,
+            model: modelId,
+            temperature: 0.5,
+            max_tokens: 80,
+          }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000)),
+        ])
+
+        const result = completion.choices[0]?.message?.content?.trim()
+        if (result) return result
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Timeout') {
+          logger.warn('generateResponse: timeout on %s', modelId)
+        } else {
+          logger.error('generateResponse: error on %s: %o', modelId, error)
+        }
+      }
+    } else {
+      logger.warn('generateResponse: rate limit reached for %s', modelId)
+    }
+  }
+
+  // OpenAI fallback
+  const oaiClient = getOpenAIClient()
+  if (!oaiClient) return null
+
   try {
+    logger.info('generateResponse: falling back to OpenAI %s', OPENAI_MODEL)
+    const config = getModelConfig(OPENAI_MODEL)
+    const limiter = getLimiter(OPENAI_MODEL)
+    if (!limiter.canMakeRequest()) return null
+
+    limiter.recordRequest()
     const completion = await Promise.race([
-      client.chat.completions.create({
-        messages: [
-          { role: 'system', content: systemContent },
-          ...context.map((m) => ({ role: m.role as 'user', content: m.content })),
-          { role: 'user', content: text },
-        ],
-        model: modelId,
+      oaiClient.chat.completions.create({
+        messages,
+        model: OPENAI_MODEL,
         temperature: 0.5,
         max_tokens: 80,
       }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000)),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout')), config.timeout)
+      ),
     ])
 
     return completion.choices[0]?.message?.content?.trim() || null
   } catch (error) {
     if (error instanceof Error && error.message === 'Timeout') {
-      logger.warn('generateResponse: timeout on %s', modelId)
+      logger.warn('generateResponse: OpenAI timeout on %s', OPENAI_MODEL)
     } else {
-      logger.error('generateResponse: error on %s: %o', modelId, error)
+      logger.error('generateResponse: OpenAI error on %s: %o', OPENAI_MODEL, error)
     }
     return null
   }
@@ -565,43 +761,82 @@ Examples:
  * Uses llama-3.1-8b-instant (fast, cheap, 14.4K RPD) since the task is simple extraction.
  */
 export async function normalizeSendCommand(text: string): Promise<string | null> {
+  const messages: Array<{ role: 'system' | 'user'; content: string }> = [
+    { role: 'system', content: NORMALIZER_PROMPT },
+    { role: 'user', content: text },
+  ]
+
+  // Try Groq first
   const client = getGroqClient()
-  if (!client) return null
+  if (client) {
+    const modelId = 'llama-3.1-8b-instant'
+    const limiter = getLimiter(modelId)
 
-  const modelId = 'llama-3.1-8b-instant'
-  const limiter = getLimiter(modelId)
+    if (limiter.canMakeRequest()) {
+      limiter.recordRequest()
+      try {
+        const completion = await Promise.race([
+          client.chat.completions.create({
+            messages,
+            model: modelId,
+            temperature: 0.1,
+            max_tokens: 60,
+          }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000)),
+        ])
 
-  if (!limiter.canMakeRequest()) {
-    logger.warn('normalizeSendCommand: rate limit reached for %s', modelId)
-    return null
+        const result = completion.choices[0]?.message?.content?.trim()
+        if (result && result !== 'UNCLEAR' && result.length <= 100) {
+          logger.info('normalizeSendCommand: "%s" → "%s"', text, result)
+          return result
+        }
+        // Empty / UNCLEAR — don't fall to OpenAI, this is a quality issue not availability
+        return null
+      } catch (error) {
+        if (error instanceof Error && error.message === 'Timeout') {
+          logger.warn('normalizeSendCommand: timeout')
+        } else {
+          logger.error('normalizeSendCommand: error: %o', error)
+        }
+      }
+    } else {
+      logger.warn('normalizeSendCommand: rate limit reached for %s', modelId)
+    }
   }
 
-  limiter.recordRequest()
+  // OpenAI fallback
+  const oaiClient = getOpenAIClient()
+  if (!oaiClient) return null
 
   try {
+    logger.info('normalizeSendCommand: falling back to OpenAI %s', OPENAI_MODEL)
+    const config = getModelConfig(OPENAI_MODEL)
+    const limiter = getLimiter(OPENAI_MODEL)
+    if (!limiter.canMakeRequest()) return null
+
+    limiter.recordRequest()
     const completion = await Promise.race([
-      client.chat.completions.create({
-        messages: [
-          { role: 'system', content: NORMALIZER_PROMPT },
-          { role: 'user', content: text },
-        ],
-        model: modelId,
+      oaiClient.chat.completions.create({
+        messages,
+        model: OPENAI_MODEL,
         temperature: 0.1,
         max_tokens: 60,
       }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 2000)),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout')), config.timeout)
+      ),
     ])
 
     const result = completion.choices[0]?.message?.content?.trim()
     if (!result || result === 'UNCLEAR' || result.length > 100) return null
 
-    logger.info('normalizeSendCommand: "%s" → "%s"', text, result)
+    logger.info('normalizeSendCommand (OpenAI): "%s" → "%s"', text, result)
     return result
   } catch (error) {
     if (error instanceof Error && error.message === 'Timeout') {
-      logger.warn('normalizeSendCommand: timeout')
+      logger.warn('normalizeSendCommand: OpenAI timeout')
     } else {
-      logger.error('normalizeSendCommand: error: %o', error)
+      logger.error('normalizeSendCommand: OpenAI error: %o', error)
     }
     return null
   }
@@ -618,7 +853,13 @@ export function isRateLimited(): boolean {
   // If tiering is enabled, check fallback too
   if (TIERING_ENABLED && FALLBACK_MODEL !== PRIMARY_MODEL) {
     const fallbackLimiter = getLimiter(FALLBACK_MODEL)
-    return !fallbackLimiter.canMakeRequest()
+    if (fallbackLimiter.canMakeRequest()) return false
+  }
+
+  // Check OpenAI availability
+  if (getOpenAIClient()) {
+    const oaiLimiter = getLimiter(OPENAI_MODEL)
+    if (oaiLimiter.canMakeRequest()) return false
   }
 
   return true
@@ -654,7 +895,9 @@ export function getRateLimitStats() {
   return {
     primary: getLimiter(PRIMARY_MODEL).getStats(),
     ...(TIERING_ENABLED ? { fallback: getLimiter(FALLBACK_MODEL).getStats() } : {}),
+    ...(getOpenAIClient() ? { openai: getLimiter(OPENAI_MODEL).getStats() } : {}),
     tieringEnabled: TIERING_ENABLED,
+    openaiAvailable: !!getOpenAIClient(),
   }
 }
 
@@ -663,5 +906,6 @@ export function getModelConfig_public() {
     primary: PRIMARY_MODEL,
     fallback: FALLBACK_MODEL,
     tieringEnabled: TIERING_ENABLED,
+    openaiAvailable: !!getOpenAIClient(),
   }
 }

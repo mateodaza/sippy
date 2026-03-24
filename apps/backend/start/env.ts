@@ -42,6 +42,7 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // LLM
   GROQ_API_KEY: Env.schema.string(),
+  OPENAI_API_KEY: Env.schema.string.optional(),
   USE_LLM: Env.schema.string.optional(),
   LLM_TIERING: Env.schema.string.optional(),
   LLM_VALIDATOR: Env.schema.string.optional(),

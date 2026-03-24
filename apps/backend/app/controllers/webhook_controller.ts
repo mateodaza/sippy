@@ -31,7 +31,6 @@ import {
   formatInvalidSendFormat,
   formatHistoryMessage,
   formatSettingsMessage,
-  formatRateLimitedMessage,
   formatUnknownCommandMessage,
   formatLanguageSetMessage,
   formatCommandErrorMessage,
@@ -62,6 +61,7 @@ import {
   formatInviteDailyLimitReached,
   formatInviteAlreadyOnSippy,
   formatEmailNudge,
+  formatInsufficientBalanceMessage,
 } from '#utils/messages'
 
 import { DateTime } from 'luxon'
@@ -76,6 +76,7 @@ import {
   type SetupStatus,
   getSetupStatus,
   getEmbeddedWallet,
+  getEmbeddedBalance,
 } from '#services/embedded_wallet.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
 import { canonicalizePhone, maskPhone } from '#utils/phone'
@@ -283,7 +284,18 @@ export async function routeCommand(
           await sendMessageFn(phoneNumber, formatHelpNewUser(phoneNumber, lang), lang)
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatHelpIncomplete(phoneNumber, lang), lang)
+        } else if (command.helpfulMessage) {
+          // LLM-classified help (e.g. "quiero mandarle plata a alguien") — use conversational reply
+          const validated = await validateAndFallback(
+            command.helpfulMessage,
+            command.originalText ?? '',
+            context,
+            s,
+            dialectHint(dialect)
+          )
+          await sendMessageFn(phoneNumber, validated || formatHelpMessage(lang), lang)
         } else {
+          // Explicit "ayuda"/"help" from regex — show the full menu
           await sendMessageFn(phoneNumber, formatHelpMessage(lang), lang)
         }
         break
@@ -366,8 +378,31 @@ export async function routeCommand(
               activeSendsSet.delete(phoneNumber)
             }
           } else {
-            // Above threshold — store pending, ask for confirmation
-            // New send overwrites any existing pending tx (one per user)
+            // Above threshold — check balance before asking for confirmation
+            try {
+              const balance = await getEmbeddedBalance(phoneNumber)
+              if (balance < command.amount) {
+                await sendMessageFn(
+                  phoneNumber,
+                  formatInsufficientBalanceMessage(
+                    {
+                      balance,
+                      needed: command.amount,
+                      localRate: rateCtx.senderRate,
+                      localCurrency: rateCtx.senderCurrency,
+                    },
+                    lang
+                  ),
+                  lang
+                )
+                return
+              }
+            } catch {
+              // Balance check failed — proceed to confirmation anyway.
+              // sendHandler will re-check balance before executing.
+            }
+
+            // Store pending, ask for confirmation
             pendingTxs.set(phoneNumber, {
               amount: command.amount,
               recipient: command.recipient,
@@ -636,14 +671,22 @@ export async function routeCommand(
             lang
           )
         } else {
-          const rateLimitNote =
-            command.llmStatus === 'rate-limited' ? `\n${formatRateLimitedMessage(lang)}\n\n` : ''
-          await sendMessageFn(
-            phoneNumber,
-            formatUnknownCommandMessage(command.originalText || '', lang, dialect) +
-              (rateLimitNote ? `\n${rateLimitNote}` : ''),
-            lang
-          )
+          // No helpfulMessage — try generating a conversational reply via LLM
+          // before falling back to the static unknown message
+          const text = command.originalText ?? ''
+          const raw = text
+            ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
+            : null
+          const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
+          if (reply) {
+            await sendMessageFn(phoneNumber, reply, lang)
+          } else {
+            await sendMessageFn(
+              phoneNumber,
+              formatUnknownCommandMessage(command.originalText || '', lang, dialect),
+              lang
+            )
+          }
         }
         break
       }

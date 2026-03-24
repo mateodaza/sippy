@@ -4,8 +4,9 @@
  * Validates LLM-generated outgoing messages before they're sent to users.
  * Checks for: scope violations, forbidden terms, tone, safety, language match.
  *
- * Primary: GPT-OSS-Safeguard-20B (purpose-built for safety classification, 1K RPD).
- * Fallback: llama-3.1-8b-instant (14.4K RPD) when primary is rate-limited.
+ * Primary: GPT-OSS-Safeguard-20B on Groq (purpose-built for safety classification, 1K RPD).
+ * Fallback: llama-3.1-8b-instant on Groq (14.4K RPD) when primary is rate-limited.
+ * Tertiary: gpt-4o-mini on OpenAI when both Groq models are rate-limited.
  *
  * Feature-gated via LLM_VALIDATOR env var (exact === 'true' check).
  * On any failure (rate limit, timeout, parse error): passes through silently.
@@ -13,7 +14,7 @@
 
 import env from '#start/env'
 import logger from '@adonisjs/core/services/logger'
-import { getGroqClient, getLimiter } from '#services/llm.service'
+import { getGroqClient, getOpenAIClient, getLimiter } from '#services/llm.service'
 import type { ContextMessage } from '#services/db'
 import type { SetupStatus } from '#services/embedded_wallet.service'
 
@@ -35,6 +36,7 @@ const PASS_THROUGH: ValidationResult = { passed: true, correctedText: null, reas
 
 const PRIMARY_MODEL = 'openai/gpt-oss-safeguard-20b'
 const FALLBACK_MODEL = 'llama-3.1-8b-instant'
+const OPENAI_MODEL = 'gpt-4o-mini'
 
 // ============================================================================
 // Validator System Prompt
@@ -72,26 +74,6 @@ export async function validateLLMResponse(
   // Feature flag — disabled only when explicitly set to 'false'
   if (env.get('LLM_VALIDATOR') === 'false') return PASS_THROUGH
 
-  const client = getGroqClient()
-  if (!client) return PASS_THROUGH
-
-  // Pick model: primary (Safeguard) if available, fallback (8B) if rate-limited
-  const primaryLimiter = getLimiter(PRIMARY_MODEL)
-  const fallbackLimiter = getLimiter(FALLBACK_MODEL)
-
-  let modelId: string
-  if (primaryLimiter.canMakeRequest()) {
-    modelId = PRIMARY_MODEL
-    primaryLimiter.recordRequest()
-  } else if (fallbackLimiter.canMakeRequest()) {
-    modelId = FALLBACK_MODEL
-    fallbackLimiter.recordRequest()
-    logger.debug('validator: primary rate-limited, using fallback %s', FALLBACK_MODEL)
-  } else {
-    logger.debug('validator: all models rate-limited, pass-through')
-    return PASS_THROUGH
-  }
-
   // Build system prompt with context signals
   let systemContent = VALIDATOR_PROMPT
   systemContent += `\n\nExpected language: ${lang === 'es' ? 'Spanish' : lang === 'pt' ? 'Portuguese' : 'English'}`
@@ -106,22 +88,66 @@ export async function validateLLMResponse(
     systemContent += `\nThe reply may use regional dialect: ${dialectHint}. This is intentional and should NOT be flagged.`
   }
 
+  const chatMessages: Array<{ role: 'system' | 'user'; content: string }> = [
+    { role: 'system', content: systemContent },
+    {
+      role: 'user',
+      content: `User message: "${userMessage}"\n\nProposed reply: "${proposedMessage}"`,
+    },
+  ]
+
+  // Pick model: primary (Safeguard) → fallback (8B) → OpenAI (gpt-4o-mini)
+  const client = getGroqClient()
+  const primaryLimiter = getLimiter(PRIMARY_MODEL)
+  const fallbackLimiter = getLimiter(FALLBACK_MODEL)
+
+  let modelId: string | null = null
+  let useOpenAI = false
+
+  if (client && primaryLimiter.canMakeRequest()) {
+    modelId = PRIMARY_MODEL
+    primaryLimiter.recordRequest()
+  } else if (client && fallbackLimiter.canMakeRequest()) {
+    modelId = FALLBACK_MODEL
+    fallbackLimiter.recordRequest()
+    logger.debug('validator: primary rate-limited, using fallback %s', FALLBACK_MODEL)
+  } else {
+    // Both Groq models exhausted — try OpenAI
+    const oaiClient = getOpenAIClient()
+    if (oaiClient) {
+      const oaiLimiter = getLimiter(OPENAI_MODEL)
+      if (oaiLimiter.canMakeRequest()) {
+        modelId = OPENAI_MODEL
+        oaiLimiter.recordRequest()
+        useOpenAI = true
+        logger.debug('validator: Groq rate-limited, using OpenAI %s', OPENAI_MODEL)
+      }
+    }
+  }
+
+  if (!modelId) {
+    logger.debug('validator: all models rate-limited, pass-through')
+    return PASS_THROUGH
+  }
+
+  const createParams = {
+    messages: chatMessages,
+    model: modelId,
+    temperature: 0.1,
+    max_tokens: 120,
+    response_format: { type: 'json_object' as const },
+  }
+
   try {
+    const completionPromise = useOpenAI
+      ? getOpenAIClient()!.chat.completions.create(createParams)
+      : client!.chat.completions.create(createParams)
+
     const completion = await Promise.race([
-      client.chat.completions.create({
-        messages: [
-          { role: 'system', content: systemContent },
-          {
-            role: 'user',
-            content: `User message: "${userMessage}"\n\nProposed reply: "${proposedMessage}"`,
-          },
-        ],
-        model: modelId,
-        temperature: 0.1,
-        max_tokens: 120,
-        response_format: { type: 'json_object' },
-      }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1500)),
+      completionPromise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout')), useOpenAI ? 3000 : 1500)
+      ),
     ])
 
     const raw = completion.choices?.[0]?.message?.content?.trim()

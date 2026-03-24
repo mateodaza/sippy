@@ -33,6 +33,12 @@ const RAW_JSON = /^\s*[\[{][\s\S]*["'][\w]+["']\s*:/
 const FORBIDDEN_TERMS =
   /\b(crypto(?:currency|currencies)?|blockchain|web3|defi|decentralized finance|smart contract|private key|seed phrase|mnemonic)\b/i
 
+// Off-scope claims — things Sippy cannot do (case-insensitive, no `g`)
+// Blocks LLM hallucinations that promise features we don't have
+// Covers EN, ES, and PT variants
+const OFF_SCOPE_CLAIMS =
+  /\b(pagar? (?:facturas?|servicios?|cuentas?|contas?|boletos?)|compras? (?:en l[ií]nea|online)|tarjetas? (?:de (?:cr[eé]dito|d[eé]bito))?|cart[aã]o (?:de (?:cr[eé]dito|d[eé]bito))?|pr[eé]stamos?|empr[eé]stimos?|ahorros?|poupan[cç]a|inversiones?|investimentos?|interest|savings? account|credit card|debit card|loan|bill pay|online (?:shop|purchas|buy))/i
+
 // Internal error stack traces
 const STACK_TRACE = /(?:at\s+\w+\s+\(|Error:\s+\w+Error|node_modules\/)/
 
@@ -114,6 +120,11 @@ export function sanitizeOutboundMessage(text: string, lang: string = 'en'): Sani
 
   if (FORBIDDEN_TERMS.test(cleaned)) {
     violations.push('forbidden-terms')
+    return { text: fallback, modified: true, blocked: true, violations }
+  }
+
+  if (OFF_SCOPE_CLAIMS.test(cleaned)) {
+    violations.push('off-scope-claim')
     return { text: fallback, modified: true, blocked: true, violations }
   }
 

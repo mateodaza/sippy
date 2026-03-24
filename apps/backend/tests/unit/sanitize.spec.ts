@@ -79,6 +79,99 @@ test.group('sanitizeOutboundMessage | Blocking patterns', () => {
   })
 })
 
+test.group('sanitizeOutboundMessage | Off-scope claims', () => {
+  test('blocks ES: pagar facturas', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Puedes pagar facturas o realizar compras en línea.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks ES: tarjeta de crédito', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Puedes usar tu tarjeta de crédito para pagar.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks ES: préstamos', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Ofrecemos préstamos personales.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks ES: ahorros', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Puedes abrir una cuenta de ahorros.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks ES: inversiones', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Haz inversiones desde tu celular.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks PT: pagar contas', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Voce pode pagar contas pelo app.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks PT: cartão de crédito', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Use seu cartão de crédito.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks PT: empréstimo', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Solicite um empréstimo agora.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks PT: poupança', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Abra sua poupança digital.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks PT: investimentos', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Faça investimentos com facilidade.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks EN: credit card', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Pay with your credit card.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks EN: savings account', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Open a savings account today.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('blocks EN: online shopping', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Go online shopping with Sippy.')
+    assert.isTrue(result.blocked)
+    assert.include(result.violations, 'off-scope-claim')
+  })
+
+  test('does not block legitimate Sippy messages', ({ assert }) => {
+    const legitimate = [
+      'Tu saldo es $50.00',
+      'Transferencia completada.',
+      'I can check your balance or send money — just tell me.',
+      'Enviamos un convite para +573001234567.',
+    ]
+    for (const msg of legitimate) {
+      const result = sanitizeOutboundMessage(msg)
+      assert.isFalse(result.blocked, `Should not block: "${msg}"`)
+    }
+  })
+})
+
 test.group('sanitizeOutboundMessage | Cleaning', () => {
   test('strips thinking tags', ({ assert }) => {
     const result = sanitizeOutboundMessage('<think>internal reasoning</think>Hello user')
