@@ -104,6 +104,13 @@ export default await Env.create(new URL('../', import.meta.url), {
   POSTHOG_API_KEY: Env.schema.string.optional(),
   POSTHOG_HOST: Env.schema.string.optional(),
 
+  // Zoho Desk
+  ZOHO_DESK_CLIENT_ID: Env.schema.string.optional(),
+  ZOHO_DESK_CLIENT_SECRET: Env.schema.string.optional(),
+  ZOHO_DESK_REFRESH_TOKEN: Env.schema.string.optional(),
+  ZOHO_DESK_ORG_ID: Env.schema.string.optional(),
+  ZOHO_DESK_DEPARTMENT_ID: Env.schema.string.optional(),
+
   // Infrastructure
   TRUST_PROXY: Env.schema.string.optional(),
   RAILWAY_ENVIRONMENT: Env.schema.string.optional(),

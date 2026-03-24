@@ -19,6 +19,7 @@ const NotifyController = () => import('#controllers/notify_controller')
 const DebugController = () => import('#controllers/debug_controller')
 const EmbeddedWalletController = () => import('#controllers/embedded_wallet_controller')
 const AuthApiController = () => import('#controllers/auth_api_controller')
+const SupportController = () => import('#controllers/support_controller')
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
@@ -36,6 +37,11 @@ router.get('/api/profile', [EmbeddedWalletController, 'getProfile']).use(middlew
 
 // ── Notifications (require shared secret) ───────────────────────────────────
 router.post('/notify-fund', [NotifyController, 'fund'])
+
+// ── Public support (IP-throttled) ────────────────────────────────────────────
+router
+  .post('/api/support/public-ticket', [SupportController, 'createPublic'])
+  .use(middleware.ipThrottle())
 
 // ── Debug (disabled in production) ──────────────────────────────────────────
 if (app.inDev || app.inTest) {
@@ -78,6 +84,7 @@ router
     router.get('/privacy-status', [EmbeddedWalletController, 'privacyStatus'])
     router.post('/accept-tos', [EmbeddedWalletController, 'acceptTos'])
     router.get('/tos-status', [EmbeddedWalletController, 'tosStatus'])
+    router.post('/support/tickets', [SupportController, 'create'])
   })
   .prefix('/api')
   .use(middleware.jwtAuth())
