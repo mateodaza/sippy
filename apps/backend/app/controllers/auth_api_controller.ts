@@ -7,6 +7,7 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
+import app from '@adonisjs/core/services/app'
 import '#types/container'
 import { otpService } from '#services/otp_service'
 import { jwtService } from '#services/jwt_service'
@@ -446,6 +447,122 @@ export default class AuthApiController {
     } catch (error) {
       logger.error('setLanguage error: %o', error)
       return response.status(500).json({ error: 'Internal server error' })
+    }
+  }
+
+  /**
+   * POST /api/auth/send-email-login
+   *
+   * Public endpoint (no JWT). Sends an OTP to a verified email for emergency login.
+   * Always returns the same 200 response regardless of outcome (enumeration resistance).
+   */
+  async sendEmailLogin({ request, response }: HttpContext) {
+    const GENERIC_RESPONSE = { message: 'If this email is registered, you will receive a code' }
+    try {
+      // Rate limit by IP inside the controller (not via middleware) to preserve
+      // the generic 200 contract — middleware would leak a 429.
+      const rateLimitService = await app.container.make('rateLimitService')
+      const ip = request.ip()
+      if (!rateLimitService.checkIpResolveThrottle(ip).allowed) {
+        logger.warn('sendEmailLogin: IP rate limited %s', ip)
+        return response.status(200).json(GENERIC_RESPONSE)
+      }
+
+      const email = request.body()?.email
+      if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return response.status(200).json(GENERIC_RESPONSE)
+      }
+
+      const normalized = normalizeEmail(email)
+      const hash = hashEmail(normalized)
+
+      const pref = await UserPreference.query()
+        .where('emailHash', hash)
+        .where('emailVerified', true)
+        .first()
+
+      if (!pref) {
+        logger.info('sendEmailLogin: no verified email match for hash %s', hash.slice(0, 8))
+        return response.status(200).json(GENERIC_RESPONSE)
+      }
+
+      const lang = pref.preferredLanguage ?? undefined
+      const result = await emailService.sendEmailCode(normalized, lang)
+
+      if ('error' in result) {
+        logger.warn(
+          'sendEmailLogin: email send failed for %s — %s',
+          maskEmail(normalized),
+          result.error
+        )
+        return response.status(200).json(GENERIC_RESPONSE)
+      }
+
+      logger.info('sendEmailLogin: OTP sent to %s', maskEmail(normalized))
+      return response.status(200).json(GENERIC_RESPONSE)
+    } catch (error) {
+      logger.error('sendEmailLogin error: %o', error)
+      return response.status(200).json(GENERIC_RESPONSE)
+    }
+  }
+
+  /**
+   * POST /api/auth/verify-email-login
+   *
+   * Public endpoint (no JWT). Verifies an email OTP and issues a JWT.
+   * Returns the same 401 shape for all failure modes (enumeration resistance).
+   */
+  async verifyEmailLogin({ request, response }: HttpContext) {
+    const GENERIC_ERROR = { error: 'Invalid or expired code' }
+    try {
+      // Rate limit by IP inside the controller (not via middleware) to preserve
+      // the generic 401 contract — middleware would leak a 429.
+      const rateLimitService = await app.container.make('rateLimitService')
+      const ip = request.ip()
+      if (!rateLimitService.checkIpResolveThrottle(ip).allowed) {
+        logger.warn('verifyEmailLogin: IP rate limited %s', ip)
+        return response.status(401).json(GENERIC_ERROR)
+      }
+
+      const body = request.body() ?? {}
+      const email = body.email
+      const code = body.code
+
+      if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return response.status(401).json(GENERIC_ERROR)
+      }
+      if (typeof code !== 'string' || !/^\d{6}$/.test(code)) {
+        return response.status(401).json(GENERIC_ERROR)
+      }
+
+      const normalized = normalizeEmail(email)
+      const result = await emailService.verifyEmailCode(normalized, code)
+
+      if (!result.valid) {
+        logger.warn('verifyEmailLogin: invalid code for %s', maskEmail(normalized))
+        return response.status(401).json(GENERIC_ERROR)
+      }
+
+      const hash = hashEmail(normalized)
+      const pref = await UserPreference.query()
+        .where('emailHash', hash)
+        .where('emailVerified', true)
+        .first()
+
+      if (!pref) {
+        logger.error(
+          'verifyEmailLogin: code valid but no verified pref for hash %s',
+          hash.slice(0, 8)
+        )
+        return response.status(401).json(GENERIC_ERROR)
+      }
+
+      const token = await jwtService.signToken(pref.phoneNumber)
+      logger.info('verifyEmailLogin: JWT issued for %s via email', maskPhone(pref.phoneNumber))
+      return response.status(200).json({ token, expiresIn: 3600 })
+    } catch (error) {
+      logger.error('verifyEmailLogin error: %o', error)
+      return response.status(401).json(GENERIC_ERROR)
     }
   }
 

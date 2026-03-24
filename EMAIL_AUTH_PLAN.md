@@ -56,7 +56,7 @@ Server logic:
 - Same status, same body, same shape for: not found, unverified, rate-limited, Resend failure, and success
 - Log the real outcome server-side only
 - No 429 surfaced to the client on this endpoint
-- Rate limited via `ipThrottle` middleware (prevents volume abuse from a single IP)
+- Rate limited via `rateLimitService.checkIpResolveThrottle()` inside the controller (not route-level middleware, which would leak a 429)
 
 ### POST /api/auth/verify-email-login
 
@@ -75,7 +75,7 @@ Server logic:
 
 - Invalid email, invalid code, expired code, locked out all return: `401 { error: "Invalid or expired code" }`
 - No variation in response shape or status across failure modes
-- Rate limited via `ipThrottle` middleware
+- Rate limited via `rateLimitService.checkIpResolveThrottle()` inside the controller (not route-level middleware, which would leak a 429)
 
 **Privacy note:** The response does NOT include the phone number. Leaking the phone associated with an email is unnecessary. After receiving the JWT, the frontend calls `/api/wallet-status` to hydrate user state (same as phone OTP flow).
 

@@ -13,6 +13,8 @@ const __dir = dirname(__filename)
 const mocks = vi.hoisted(() => ({
   sendOtp: vi.fn(),
   verifyOtp: vi.fn(),
+  sendEmailLogin: vi.fn(),
+  verifyEmailLogin: vi.fn(),
   storeToken: vi.fn(),
   getStoredToken: vi.fn(() => null as string | null),
   authenticateWithJWT: vi.fn(),
@@ -66,6 +68,8 @@ let _storedToken: string | null = null
 vi.mock('../../lib/auth', () => ({
   sendOtp: (...args: unknown[]) => mocks.sendOtp(...args),
   verifyOtp: (...args: unknown[]) => mocks.verifyOtp(...args),
+  sendEmailLogin: (...args: unknown[]) => mocks.sendEmailLogin(...args),
+  verifyEmailLogin: (...args: unknown[]) => mocks.verifyEmailLogin(...args),
   storeToken: (token: string) => {
     _storedToken = token
     mocks.storeToken(token)
@@ -256,19 +260,37 @@ async function goToEmailStep(otpCode = '123456') {
   await flushAsync()
 }
 
-async function goToPermissionStepViaSkip() {
-  // Skip email -> goes to ToS
+async function goThroughEmailStep() {
+  // Enter email
   await act(async () => {
-    findButton('Skip for now')!.click()
+    const input = container!.querySelector('input[type="email"]') as HTMLInputElement
+    setInputValue(input, 'test@example.com')
   })
-  // Accept ToS -> goes to permission
-  await goThroughTosStep()
+  // Send code
+  await act(async () => {
+    findButton('Send code')!.click()
+  })
+  await flushAsync()
+  // Enter verification code
+  await act(async () => {
+    const input = container!.querySelector('input[type="text"]') as HTMLInputElement
+    setInputValue(input, '123456')
+  })
+  // Verify
+  await act(async () => {
+    findButton('Verify')!.click()
+  })
+  await flushAsync()
+  // Email verified -> auto-advances to ToS after 1500ms timer
+  // Wait for the timer to fire naturally
+  await waitForContent('Terms of Service', 5000)
 }
 
-// Advance to permission step (skip email, accept ToS)
+// Advance to permission step (verify email, accept ToS)
 async function goToPermissionStep(otpCode = '123456') {
   await goToEmailStep(otpCode)
-  await goToPermissionStepViaSkip()
+  await goThroughEmailStep()
+  await goThroughTosStep()
 }
 
 // --- Setup / Teardown ---
@@ -762,56 +784,93 @@ describe('handleVerifyEmailCode', () => {
   })
 })
 
-describe('handleSkipEmail', () => {
-  it('skip before sending code: advances directly to tos step with no API call', async () => {
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
-      isNewUser: false,
-    })
-
-    const mockFetch = vi.fn()
-    vi.stubGlobal('fetch', mockFetch)
-
-    await renderPage()
-    await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-
-    await act(async () => {
-      findButton('Skip for now')!.click()
-    })
-
-    expect(container!.textContent).toContain('Terms of Service')
-    // No email-related fetch calls should have been made
-    const emailCalls = mockFetch.mock.calls.filter(
-      (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/auth/')
-    )
-    expect(emailCalls).toHaveLength(0)
-
+describe('email login flow', () => {
+  afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('skip after sending code: "Skip for now" still visible and advances to tos', async () => {
+  it('shows "Log in with email" link on phone step', async () => {
+    await renderPage()
+    expect(container!.textContent).toContain('Log in with email')
+  })
+
+  it('clicking link navigates to email-login step', async () => {
+    await renderPage()
+    await act(async () => {
+      findButton('Log in with email')!.click()
+    })
+    expect(container!.textContent).toContain('Log In With Email')
+    expect(container!.querySelector('input[type="email"]')).not.toBeNull()
+  })
+
+  it('back button returns to phone step', async () => {
+    await renderPage()
+    await act(async () => {
+      findButton('Log in with email')!.click()
+    })
+    await act(async () => {
+      findButton('Back to phone login')!.click()
+    })
+    expect(container!.querySelector('input[type="tel"]')).not.toBeNull()
+  })
+
+  it('happy path: send code → verify → authenticateWithJWT → advanceToCorrectStep', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
+    mocks.sendEmailLogin.mockResolvedValue(undefined)
+    mocks.verifyEmailLogin.mockResolvedValue('email-jwt-token')
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
       isNewUser: false,
     })
-    // Token is set automatically by storeToken() during OTP verify
-
-    const mockFetch = vi
-      .fn()
-      .mockResolvedValue({ ok: true, text: async () => '', json: async () => ({}) })
-    vi.stubGlobal('fetch', mockFetch)
+    mockFetchByUrl({
+      '/api/wallet-status': { hasWallet: true, hasPermission: true, tosAccepted: true },
+    })
 
     await renderPage()
-    await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    // Go to email login
+    await act(async () => {
+      findButton('Log in with email')!.click()
+    })
+    // Enter email
+    await act(async () => {
+      const input = container!.querySelector('input[type="email"]') as HTMLInputElement
+      setInputValue(input, 'user@example.com')
+    })
+    // Send code
+    await act(async () => {
+      findButton('Send code')!.click()
+    })
+    await flushAsync()
 
-    // Send code first
+    expect(mocks.sendEmailLogin).toHaveBeenCalledWith('user@example.com')
+    // Should be on OTP step
+    expect(container!.textContent).toContain('If this email is registered')
+
+    // Enter code
+    await act(async () => {
+      const input = container!.querySelector('input[type="text"]') as HTMLInputElement
+      setInputValue(input, '123456')
+    })
+    // Verify
+    await act(async () => {
+      findButton('Verify')!.click()
+    })
+    await flushAsync()
+
+    expect(mocks.verifyEmailLogin).toHaveBeenCalledWith('user@example.com', '123456')
+    expect(mocks.storeToken).toHaveBeenCalledWith('email-jwt-token')
+    expect(mocks.authenticateWithJWT).toHaveBeenCalled()
+    await waitForRedirect('/settings')
+  })
+
+  it('shows error on invalid code', async () => {
+    mocks.sendEmailLogin.mockResolvedValue(undefined)
+    mocks.verifyEmailLogin.mockRejectedValue(new Error('Invalid or expired code'))
+
+    await renderPage()
+    await act(async () => {
+      findButton('Log in with email')!.click()
+    })
     await act(async () => {
       const input = container!.querySelector('input[type="email"]') as HTMLInputElement
       setInputValue(input, 'user@example.com')
@@ -819,15 +878,18 @@ describe('handleSkipEmail', () => {
     await act(async () => {
       findButton('Send code')!.click()
     })
+    await flushAsync()
 
-    // Now skip instead of entering code
     await act(async () => {
-      findButton('Skip for now')!.click()
+      const input = container!.querySelector('input[type="text"]') as HTMLInputElement
+      setInputValue(input, '000000')
     })
+    await act(async () => {
+      findButton('Verify')!.click()
+    })
+    await flushAsync()
 
-    expect(container!.textContent).toContain('Terms of Service')
-
-    vi.unstubAllGlobals()
+    expect(container!.textContent).toContain('Invalid or expired code')
   })
 })
 

@@ -8,6 +8,8 @@
 import { test } from '@japa/runner'
 import AuthApiController from '#controllers/auth_api_controller'
 import { emailService } from '#services/email_service'
+import { jwtService } from '#services/jwt_service'
+import app from '@adonisjs/core/services/app'
 import UserPreference from '#models/user_preference'
 
 // ── Test env setup ─────────────────────────────────────────────────────────────
@@ -117,6 +119,8 @@ function makeUpdateOrCreateSpy() {
 
 const origSendEmailCode = emailService.sendEmailCode.bind(emailService)
 const origVerifyEmailCode = emailService.verifyEmailCode.bind(emailService)
+const origSignToken = jwtService.signToken.bind(jwtService)
+const origContainerMake = app.container.make.bind(app.container)
 const origFindBy = UserPreference.findBy.bind(UserPreference)
 const origUpdateOrCreate = (UserPreference as any).updateOrCreate
 const origQuery = UserPreference.query.bind(UserPreference)
@@ -124,9 +128,52 @@ const origQuery = UserPreference.query.bind(UserPreference)
 function restoreAll() {
   ;(emailService as any).sendEmailCode = origSendEmailCode
   ;(emailService as any).verifyEmailCode = origVerifyEmailCode
+  ;(jwtService as any).signToken = origSignToken
+  ;(app.container as any).make = origContainerMake
   ;(UserPreference as any).findBy = origFindBy
   ;(UserPreference as any).updateOrCreate = origUpdateOrCreate
   ;(UserPreference as any).query = origQuery
+}
+
+// Mock rate limit service — always allowed by default
+const mockRateLimitAllowed = { checkIpResolveThrottle: () => ({ allowed: true }) }
+const mockRateLimitBlocked = { checkIpResolveThrottle: () => ({ allowed: false, retryAfter: 30 }) }
+
+function mockContainer(rls: unknown = mockRateLimitAllowed) {
+  ;(app.container as any).make = async (name: string) => {
+    if (name === 'rateLimitService') return rls
+    return origContainerMake(name)
+  }
+}
+
+/** Build a mock HttpContext for public endpoints (no cdpUser, has ip()) */
+function buildPublicCtx(opts: { body?: Record<string, unknown>; ip?: string } = {}) {
+  let lastStatus: number | undefined
+  let lastBody: unknown
+
+  const ctx = {
+    request: {
+      body: () => opts.body ?? {},
+      ip: () => opts.ip ?? '127.0.0.1',
+    },
+    response: {
+      status(code: number) {
+        lastStatus = code
+        return {
+          json(body: unknown) {
+            lastBody = body
+            return body
+          },
+        }
+      },
+    },
+  }
+
+  return {
+    ctx,
+    getStatus: () => lastStatus,
+    getBody: () => lastBody,
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -525,5 +572,232 @@ test.group('emailStatus', (group) => {
 
     assert.equal(getStatus(), 200)
     assert.deepEqual(getBody(), { hasEmail: true, verified: true, maskedEmail: null })
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// sendEmailLogin tests (public, no JWT)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const GENERIC_SEND_RESPONSE = { message: 'If this email is registered, you will receive a code' }
+
+test.group('sendEmailLogin | enumeration resistance', (group) => {
+  group.each.teardown(restoreAll)
+
+  test('valid email with verified account → 200 generic (success)', async ({ assert }) => {
+    mockContainer()
+    const { hashEmail, normalizeEmail } = await import('#utils/email_crypto')
+    const hash = hashEmail(normalizeEmail(VALID_EMAIL))
+    ;(UserPreference as any).query = () =>
+      makeQueryMock(makePrefMock({ emailHash: hash, emailVerified: true }))
+    ;(emailService as any).sendEmailCode = async () => ({ success: true })
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({ body: { email: VALID_EMAIL } })
+    await controller.sendEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 200)
+    assert.deepEqual(getBody(), GENERIC_SEND_RESPONSE)
+  })
+
+  test('email not found → 200 generic (same as success)', async ({ assert }) => {
+    mockContainer()
+    ;(UserPreference as any).query = () => makeQueryMock(null)
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({ body: { email: 'unknown@example.com' } })
+    await controller.sendEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 200)
+    assert.deepEqual(getBody(), GENERIC_SEND_RESPONSE)
+  })
+
+  test('invalid email format → 200 generic (same as success)', async ({ assert }) => {
+    mockContainer()
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({ body: { email: 'notanemail' } })
+    await controller.sendEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 200)
+    assert.deepEqual(getBody(), GENERIC_SEND_RESPONSE)
+  })
+
+  test('missing email → 200 generic (same as success)', async ({ assert }) => {
+    mockContainer()
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({ body: {} })
+    await controller.sendEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 200)
+    assert.deepEqual(getBody(), GENERIC_SEND_RESPONSE)
+  })
+
+  test('IP rate limited → 200 generic (no 429 leaked)', async ({ assert }) => {
+    mockContainer(mockRateLimitBlocked)
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({ body: { email: VALID_EMAIL } })
+    await controller.sendEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 200)
+    assert.deepEqual(getBody(), GENERIC_SEND_RESPONSE)
+  })
+
+  test('emailService send failure → 200 generic (no 500 leaked)', async ({ assert }) => {
+    mockContainer()
+    const { hashEmail, normalizeEmail } = await import('#utils/email_crypto')
+    const hash = hashEmail(normalizeEmail(VALID_EMAIL))
+    ;(UserPreference as any).query = () =>
+      makeQueryMock(makePrefMock({ emailHash: hash, emailVerified: true }))
+    ;(emailService as any).sendEmailCode = async () => ({ error: 'Connection refused' })
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({ body: { email: VALID_EMAIL } })
+    await controller.sendEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 200)
+    assert.deepEqual(getBody(), GENERIC_SEND_RESPONSE)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// verifyEmailLogin tests (public, no JWT)
+// ══════════════════════════════════════════════════════════════════════════════
+
+const GENERIC_VERIFY_ERROR = { error: 'Invalid or expired code' }
+
+test.group('verifyEmailLogin | success', (group) => {
+  group.each.teardown(restoreAll)
+
+  test('valid code + verified email → 200 with JWT', async ({ assert }) => {
+    mockContainer()
+    const { hashEmail, normalizeEmail } = await import('#utils/email_crypto')
+    const hash = hashEmail(normalizeEmail(VALID_EMAIL))
+    ;(emailService as any).verifyEmailCode = async () => ({ valid: true })
+    ;(UserPreference as any).query = () =>
+      makeQueryMock(makePrefMock({ phoneNumber: PHONE, emailHash: hash, emailVerified: true }))
+    ;(jwtService as any).signToken = async () => 'mock-jwt-token'
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({
+      body: { email: VALID_EMAIL, code: '123456' },
+    })
+    await controller.verifyEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 200)
+    const body = getBody() as { token: string; expiresIn: number }
+    assert.equal(body.token, 'mock-jwt-token')
+    assert.equal(body.expiresIn, 3600)
+  })
+
+  test('JWT sub is phone from UserPreference (not email)', async ({ assert }) => {
+    mockContainer()
+    const { hashEmail, normalizeEmail } = await import('#utils/email_crypto')
+    const hash = hashEmail(normalizeEmail(VALID_EMAIL))
+    ;(emailService as any).verifyEmailCode = async () => ({ valid: true })
+    ;(UserPreference as any).query = () =>
+      makeQueryMock(makePrefMock({ phoneNumber: PHONE, emailHash: hash, emailVerified: true }))
+
+    let signedPhone: string | undefined
+    ;(jwtService as any).signToken = async (phone: string) => {
+      signedPhone = phone
+      return 'jwt'
+    }
+
+    const controller = new AuthApiController()
+    const { ctx } = buildPublicCtx({ body: { email: VALID_EMAIL, code: '123456' } })
+    await controller.verifyEmailLogin(ctx as any)
+
+    assert.equal(signedPhone, PHONE)
+  })
+
+  test('response does NOT contain phone (privacy)', async ({ assert }) => {
+    mockContainer()
+    const { hashEmail, normalizeEmail } = await import('#utils/email_crypto')
+    const hash = hashEmail(normalizeEmail(VALID_EMAIL))
+    ;(emailService as any).verifyEmailCode = async () => ({ valid: true })
+    ;(UserPreference as any).query = () =>
+      makeQueryMock(makePrefMock({ phoneNumber: PHONE, emailHash: hash, emailVerified: true }))
+    ;(jwtService as any).signToken = async () => 'jwt'
+
+    const controller = new AuthApiController()
+    const { ctx, getBody } = buildPublicCtx({ body: { email: VALID_EMAIL, code: '123456' } })
+    await controller.verifyEmailLogin(ctx as any)
+
+    const body = getBody() as Record<string, unknown>
+    assert.notProperty(body, 'phone')
+    assert.notProperty(body, 'phoneNumber')
+  })
+})
+
+test.group('verifyEmailLogin | enumeration resistance', (group) => {
+  group.each.teardown(restoreAll)
+
+  test('invalid code → 401 generic', async ({ assert }) => {
+    mockContainer()
+    ;(emailService as any).verifyEmailCode = async () => ({ valid: false })
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({
+      body: { email: VALID_EMAIL, code: '000000' },
+    })
+    await controller.verifyEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 401)
+    assert.deepEqual(getBody(), GENERIC_VERIFY_ERROR)
+  })
+
+  test('invalid email format → 401 generic (same as bad code)', async ({ assert }) => {
+    mockContainer()
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({
+      body: { email: 'notanemail', code: '123456' },
+    })
+    await controller.verifyEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 401)
+    assert.deepEqual(getBody(), GENERIC_VERIFY_ERROR)
+  })
+
+  test('missing code → 401 generic (same as bad code)', async ({ assert }) => {
+    mockContainer()
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({ body: { email: VALID_EMAIL } })
+    await controller.verifyEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 401)
+    assert.deepEqual(getBody(), GENERIC_VERIFY_ERROR)
+  })
+
+  test('code valid but no verified pref → 401 generic (same as bad code)', async ({ assert }) => {
+    mockContainer()
+    ;(emailService as any).verifyEmailCode = async () => ({ valid: true })
+    ;(UserPreference as any).query = () => makeQueryMock(null)
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({
+      body: { email: VALID_EMAIL, code: '123456' },
+    })
+    await controller.verifyEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 401)
+    assert.deepEqual(getBody(), GENERIC_VERIFY_ERROR)
+  })
+
+  test('IP rate limited → 401 generic (no 429 leaked)', async ({ assert }) => {
+    mockContainer(mockRateLimitBlocked)
+
+    const controller = new AuthApiController()
+    const { ctx, getStatus, getBody } = buildPublicCtx({
+      body: { email: VALID_EMAIL, code: '123456' },
+    })
+    await controller.verifyEmailLogin(ctx as any)
+
+    assert.equal(getStatus(), 401)
+    assert.deepEqual(getBody(), GENERIC_VERIFY_ERROR)
   })
 })

@@ -1052,7 +1052,7 @@ function SettingsContent() {
                 disabled={!reAuthPhone || !isCdpConfigured}
                 lang={lang}
                 onSend={handleReAuthSendOtp}
-                brandColor="crypto"
+                brandColor="primary"
               />
             </>
           )}
@@ -1153,7 +1153,7 @@ function SettingsContent() {
                   disabled={!reAuthPhone}
                   lang={lang}
                   onSend={handleReAuthSendOtp}
-                  brandColor="crypto"
+                  brandColor="primary"
                 />
               </>
             )}

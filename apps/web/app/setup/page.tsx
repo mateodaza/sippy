@@ -13,6 +13,8 @@ import {
 import {
   sendOtp,
   verifyOtp,
+  sendEmailLogin,
+  verifyEmailLogin,
   storeToken,
   getStoredToken,
   clearToken,
@@ -87,7 +89,15 @@ const USDC_ADDRESSES: Record<string, string> = {
 }
 const USDC_ADDRESS = USDC_ADDRESSES[NETWORK] || USDC_ADDRESSES.arbitrum
 
-type Step = 'phone' | 'otp' | 'email' | 'tos' | 'permission' | 'done'
+type Step =
+  | 'phone'
+  | 'otp'
+  | 'email'
+  | 'tos'
+  | 'permission'
+  | 'done'
+  | 'email-login'
+  | 'email-login-otp'
 // 'permission' is hidden — auto-created with max limit after ToS
 const STEPS: Step[] = ['phone', 'otp', 'email', 'tos', 'done']
 
@@ -123,6 +133,9 @@ function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string
   const [emailCode, setEmailCode] = useState('')
   const [emailSent, setEmailSent] = useState(false)
   const [emailVerified, setEmailVerified] = useState(false)
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginEmailCode, setLoginEmailCode] = useState('')
+  const [loginEmailSent, setLoginEmailSent] = useState(false)
   const [tosChecked, setTosChecked] = useState(false)
   const [lang, setLang] = useState<Language>('en')
   const emailTimerRef = useRef<number | null>(null)
@@ -748,9 +761,42 @@ function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string
     }
   }
 
-  // Step 3c: Skip email
-  const handleSkipEmail = () => {
-    setStep('tos')
+  // Email login: send code
+  const handleSendEmailLogin = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      await sendEmailLogin(loginEmail)
+      setLoginEmailSent(true)
+      setStep('email-login-otp')
+    } catch {
+      // Endpoint always returns 200, so this only fires on network errors
+      setError(t('setup.errEmailLogin', lang))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Email login: verify code and authenticate
+  const handleVerifyEmailLogin = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const token = await verifyEmailLogin(loginEmail, loginEmailCode)
+      storeToken(token)
+
+      const { user } = await authenticateWithJWT()
+      const smartAccountAddress = user?.evmSmartAccounts?.[0] || user?.evmAccounts?.[0]
+      if (smartAccountAddress) {
+        setWalletAddress(smartAccountAddress)
+      }
+
+      await advanceToCorrectStep(token)
+    } catch {
+      setError(t('setup.errEmailLogin', lang))
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   // Step 4a: Accept ToS
@@ -809,9 +855,8 @@ function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string
         throw new Error('No wallet address. Please restart the process.')
       }
 
-      // we can work on a tier system
-      // Set limit to user's tier max — no UI to change later
-      const tierLimit = emailVerified ? '500' : '50'
+      // Email is mandatory before ToS — all new users get the verified tier
+      const tierLimit = '500'
 
       // Validate daily limit before creating on-chain permission — invalid values
       // would create a broken or expensive-to-undo permission on-chain
@@ -1023,6 +1068,100 @@ function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string
               lang={lang}
               onSend={handleSendOtp}
             />
+            <div className="mt-6 text-center">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="flex-1 h-px bg-[var(--text-secondary)]/20" />
+                <span className="text-xs text-[var(--text-secondary)]">
+                  {lang === 'es' ? 'o' : lang === 'pt' ? 'ou' : 'or'}
+                </span>
+                <div className="flex-1 h-px bg-[var(--text-secondary)]/20" />
+              </div>
+              <button
+                onClick={() => {
+                  setError(null)
+                  setLoginEmail('')
+                  setLoginEmailCode('')
+                  setLoginEmailSent(false)
+                  setStep('email-login')
+                }}
+                className="text-sm text-brand-primary hover:underline"
+              >
+                {t('setup.emailLoginLink', lang)} &rarr;
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Email Login: enter email */}
+        {step === 'email-login' && (
+          <div>
+            <h1 className="font-display text-2xl font-bold uppercase mb-4 text-[var(--text-primary)]">
+              {t('setup.emailLoginTitle', lang)}
+            </h1>
+            <p className="text-[var(--text-secondary)] mb-6">
+              {t('setup.emailLoginSubtitle', lang)}
+            </p>
+            <input
+              type="email"
+              value={loginEmail}
+              onChange={(e) => setLoginEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="w-full p-3 border rounded-lg mb-4 text-[var(--text-primary)]"
+            />
+            <button
+              onClick={handleSendEmailLogin}
+              disabled={isLoading || !loginEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail)}
+              className="w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? t('setup.emailLoginSending', lang) : t('setup.emailLoginSendCode', lang)}
+            </button>
+            <button
+              onClick={() => {
+                setError(null)
+                setStep('phone')
+              }}
+              className="w-full mt-2 text-[var(--text-secondary)] py-2 text-sm"
+            >
+              {t('setup.emailLoginBack', lang)}
+            </button>
+          </div>
+        )}
+
+        {/* Email Login: enter OTP */}
+        {step === 'email-login-otp' && (
+          <div>
+            <h1 className="font-display text-2xl font-bold uppercase mb-4 text-[var(--text-primary)]">
+              {t('setup.emailLoginTitle', lang)}
+            </h1>
+            <p className="text-[var(--text-secondary)] mb-6">
+              {t('setup.emailLoginCodeSent', lang)}
+            </p>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={loginEmailCode}
+              onChange={(e) => setLoginEmailCode(e.target.value.replace(/\D/g, ''))}
+              placeholder={t('setup.codePlaceholder', lang)}
+              maxLength={6}
+              className="w-full p-3 border rounded-lg mb-4 text-center text-2xl tracking-widest text-[var(--text-primary)]"
+            />
+            <button
+              onClick={handleVerifyEmailLogin}
+              disabled={isLoading || loginEmailCode.length !== 6}
+              className="w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? t('setup.emailLoginVerifying', lang) : t('setup.emailLoginVerify', lang)}
+            </button>
+            <button
+              onClick={() => {
+                setError(null)
+                setLoginEmailCode('')
+                setStep('email-login')
+              }}
+              className="w-full mt-2 text-[var(--text-secondary)] py-2 text-sm"
+            >
+              {t('setup.back', lang)}
+            </button>
           </div>
         )}
 
@@ -1133,15 +1272,6 @@ function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string
                   {t('setup.continuingSetup', lang)}
                 </p>
               </div>
-            )}
-
-            {!emailVerified && (
-              <button
-                onClick={handleSkipEmail}
-                className="w-full mt-4 text-[var(--text-secondary)] py-2 text-sm"
-              >
-                {t('setup.skipEmail', lang)}
-              </button>
             )}
           </div>
         )}

@@ -76,6 +76,34 @@ export function getFreshToken(): string | null {
   return token
 }
 
+export async function sendEmailLogin(email: string): Promise<void> {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+  const response = await fetch(`${BACKEND_URL}/api/auth/send-email-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  if (!response.ok) {
+    const message = await extractErrorMessage(response)
+    throw new Error(message)
+  }
+}
+
+export async function verifyEmailLogin(email: string, code: string): Promise<string> {
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
+  const response = await fetch(`${BACKEND_URL}/api/auth/verify-email-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, code }),
+  })
+  if (!response.ok) {
+    const message = await extractErrorMessage(response)
+    throw new Error(message)
+  }
+  const body = await response.json()
+  return body.token
+}
+
 export function getTokenSecondsRemaining(token: string): number {
   try {
     const parts = token.split('.')

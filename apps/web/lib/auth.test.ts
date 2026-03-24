@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import {
   sendOtp,
   verifyOtp,
+  sendEmailLogin,
+  verifyEmailLogin,
   storeToken,
   getStoredToken,
   clearToken,
@@ -12,9 +14,13 @@ import {
 // Helper: build a minimal JWT with the given payload
 function makeJwt(payload: Record<string, unknown>): string {
   const header = btoa(JSON.stringify({ alg: 'RS256', typ: 'JWT' }))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
   const body = btoa(JSON.stringify(payload))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
   return `${header}.${body}.fakesig`
 }
 
@@ -22,7 +28,14 @@ function makeFetchResponse(status: number, body: unknown): Response {
   return {
     ok: status >= 200 && status < 300,
     status,
-    statusText: status === 429 ? 'Too Many Requests' : status === 401 ? 'Unauthorized' : status === 422 ? 'Unprocessable Entity' : 'OK',
+    statusText:
+      status === 429
+        ? 'Too Many Requests'
+        : status === 401
+          ? 'Unauthorized'
+          : status === 422
+            ? 'Unprocessable Entity'
+            : 'OK',
     json: () => Promise.resolve(body),
     text: () => Promise.resolve(JSON.stringify(body)),
   } as unknown as Response
@@ -39,7 +52,10 @@ describe('sendOtp', () => {
   })
 
   it('throws with backend error message on 429', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(makeFetchResponse(429, { error: 'Rate limit exceeded' })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(makeFetchResponse(429, { error: 'Rate limit exceeded' }))
+    )
     await expect(sendOtp('+15550001234')).rejects.toThrow('Rate limit exceeded')
   })
 
@@ -66,12 +82,18 @@ describe('verifyOtp', () => {
 
   it('returns JWT string on 200', async () => {
     const token = makeJwt({ exp: Math.floor(Date.now() / 1000) + 3600 })
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(makeFetchResponse(200, { token, expiresIn: 3600 })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(makeFetchResponse(200, { token, expiresIn: 3600 }))
+    )
     await expect(verifyOtp('+15550001234', '123456')).resolves.toBe(token)
   })
 
   it('throws on 401 with error message', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(makeFetchResponse(401, { error: 'Invalid OTP' })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(makeFetchResponse(401, { error: 'Invalid OTP' }))
+    )
     await expect(verifyOtp('+15550001234', '000000')).rejects.toThrow('Invalid OTP')
   })
 
@@ -87,6 +109,75 @@ describe('verifyOtp', () => {
     await verifyOtp('+15550001234', '123456')
     expect(mockFetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/auth/verify-otp'),
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+})
+
+describe('sendEmailLogin', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('resolves on 200 success', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        makeFetchResponse(200, {
+          message: 'If this email is registered, you will receive a code',
+        })
+      )
+    )
+    await expect(sendEmailLogin('user@example.com')).resolves.toBeUndefined()
+  })
+
+  it('posts to send-email-login endpoint', async () => {
+    const mockFetch = vi.fn().mockResolvedValue(makeFetchResponse(200, { message: 'ok' }))
+    vi.stubGlobal('fetch', mockFetch)
+    await sendEmailLogin('user@example.com')
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/auth/send-email-login'),
+      expect.objectContaining({ method: 'POST' })
+    )
+  })
+
+  it('throws on network failure', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Network error')))
+    await expect(sendEmailLogin('user@example.com')).rejects.toThrow('Network error')
+  })
+})
+
+describe('verifyEmailLogin', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns JWT string on 200', async () => {
+    const token = makeJwt({ exp: Math.floor(Date.now() / 1000) + 3600 })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(makeFetchResponse(200, { token, expiresIn: 3600 }))
+    )
+    await expect(verifyEmailLogin('user@example.com', '123456')).resolves.toBe(token)
+  })
+
+  it('throws on 401 with error message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(makeFetchResponse(401, { error: 'Invalid or expired code' }))
+    )
+    await expect(verifyEmailLogin('user@example.com', '000000')).rejects.toThrow(
+      'Invalid or expired code'
+    )
+  })
+
+  it('posts to verify-email-login endpoint', async () => {
+    const token = makeJwt({ exp: Math.floor(Date.now() / 1000) + 3600 })
+    const mockFetch = vi.fn().mockResolvedValue(makeFetchResponse(200, { token }))
+    vi.stubGlobal('fetch', mockFetch)
+    await verifyEmailLogin('user@example.com', '123456')
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/auth/verify-email-login'),
       expect.objectContaining({ method: 'POST' })
     )
   })
