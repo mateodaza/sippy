@@ -1,8 +1,10 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import logger from '@adonisjs/core/services/logger'
-import { createTicket } from '#services/zoho_desk.service'
+import { zohoDesk } from '#services/zoho_desk.service'
 import { findUserPrefByPhone } from '#utils/user_pref_lookup'
 import { decryptEmail } from '#utils/email_crypto'
+
+const ALLOWED_CATEGORIES = ['general', 'payments', 'account', 'other'] as const
 
 /**
  * Shared validation for ticket fields.
@@ -53,7 +55,7 @@ export default class SupportController {
    *
    * If the user has a verified email on file, that email is used for the ticket
    * regardless of what was submitted — prevents impersonation.
-   * If no verified email exists, falls back to user-supplied email.
+   * If no verified email exists, the request is rejected with 403.
    */
   async create(ctx: HttpContext) {
     const { request, response } = ctx
@@ -62,6 +64,10 @@ export default class SupportController {
 
     if (!phone) {
       return response.status(401).json({ error: 'Unauthorized' })
+    }
+
+    if (category && !ALLOWED_CATEGORIES.includes(category)) {
+      return response.status(400).json({ error: 'Invalid category' })
     }
 
     const verifiedEmail = await resolveVerifiedEmail(phone)
@@ -79,7 +85,7 @@ export default class SupportController {
     if (error) return response.status(400).json({ error })
 
     try {
-      const ticket = await createTicket({
+      const ticket = await zohoDesk.createTicket({
         subject: subject.trim(),
         description: `[User: ${phone}]\n\n${description.trim()}`,
         email: verifiedEmail,
@@ -105,11 +111,15 @@ export default class SupportController {
   async createPublic({ request, response }: HttpContext) {
     const { subject, description, email, category } = request.body()
 
+    if (category && !ALLOWED_CATEGORIES.includes(category)) {
+      return response.status(400).json({ error: 'Invalid category' })
+    }
+
     const error = validateTicketFields({ subject, description, email })
     if (error) return response.status(400).json({ error })
 
     try {
-      const ticket = await createTicket({
+      const ticket = await zohoDesk.createTicket({
         subject: subject.trim(),
         description: description.trim(),
         email: email.trim().toLowerCase(),

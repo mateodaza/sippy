@@ -20,16 +20,13 @@ const DEPARTMENT_ID = env.get('ZOHO_DESK_DEPARTMENT_ID', '')
 // In-memory token cache
 let cachedAccessToken: string | null = null
 let tokenExpiresAt = 0
+let refreshPromise: Promise<string> | null = null
 
 function isConfigured(): boolean {
   return !!(CLIENT_ID && CLIENT_SECRET && REFRESH_TOKEN && ORG_ID && DEPARTMENT_ID)
 }
 
-async function getAccessToken(): Promise<string> {
-  if (cachedAccessToken && Date.now() < tokenExpiresAt) {
-    return cachedAccessToken
-  }
-
+async function doTokenRefresh(): Promise<string> {
   const response = await fetch(`${ZOHO_ACCOUNTS_URL}/oauth/v2/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -52,6 +49,19 @@ async function getAccessToken(): Promise<string> {
   // Refresh 5 minutes before expiry
   tokenExpiresAt = Date.now() + (data.expires_in - 300) * 1000
   return cachedAccessToken
+}
+
+async function getAccessToken(): Promise<string> {
+  if (cachedAccessToken && Date.now() < tokenExpiresAt) {
+    return cachedAccessToken
+  }
+
+  if (!refreshPromise) {
+    refreshPromise = doTokenRefresh().finally(() => {
+      refreshPromise = null
+    })
+  }
+  return refreshPromise
 }
 
 function deskHeaders(accessToken: string): Record<string, string> {
@@ -106,11 +116,11 @@ async function findOrCreateContact(email: string, accessToken: string): Promise<
   }
 
   const contact = (await createRes.json()) as { id: string }
-  logger.info(`Zoho contact created: ${contact.id} for ${email}`)
+  logger.info(`Zoho contact created: ${contact.id}`)
   return contact.id
 }
 
-export async function createTicket(input: CreateTicketInput): Promise<ZohoTicket> {
+async function createTicket(input: CreateTicketInput): Promise<ZohoTicket> {
   if (!isConfigured()) {
     throw new Error('Zoho Desk is not configured')
   }
@@ -128,7 +138,7 @@ export async function createTicket(input: CreateTicketInput): Promise<ZohoTicket
   if (input.category) body.category = input.category
   if (input.priority) body.priority = input.priority
 
-  logger.info(`Creating Zoho Desk ticket: "${input.subject}" for ${input.email}`)
+  logger.info(`Creating Zoho Desk ticket: "${input.subject}"`)
 
   const response = await fetch(`${ZOHO_DESK_API_URL}/tickets`, {
     method: 'POST',
@@ -146,3 +156,5 @@ export async function createTicket(input: CreateTicketInput): Promise<ZohoTicket
   logger.info(`Zoho ticket created: #${ticket.ticketNumber} (${ticket.id})`)
   return ticket
 }
+
+export const zohoDesk = { createTicket }
