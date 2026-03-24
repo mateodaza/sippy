@@ -11,17 +11,14 @@ const __dir = dirname(__filename)
 
 // --- Hoisted mock state ---
 const mocks = vi.hoisted(() => ({
-  sendOtp: vi.fn(),
-  verifyOtp: vi.fn(),
+  sendOtp: vi.fn(() => Promise.resolve()),
+  verifyOtp: vi.fn(() => Promise.resolve('jwt-token')),
   storeToken: vi.fn(),
   getStoredToken: vi.fn(() => null as string | null),
   clearToken: vi.fn(),
   isTokenExpired: vi.fn(() => false),
   getTokenSecondsRemaining: vi.fn(() => 3600),
-  authenticateWithJWT: vi.fn(),
-  signInWithSms: vi.fn(() => Promise.resolve({ flowId: 'test-flow-id' })),
-  verifySmsOTP: vi.fn(() => Promise.resolve()),
-  getAccessToken: vi.fn(() => Promise.resolve('cdp-test-token')),
+  authenticateWithJWT: vi.fn(() => Promise.resolve({ user: {} })),
   createSpendPermission: vi.fn(),
   revokeSpendPermission: vi.fn(),
   refetchPermissions: vi.fn(),
@@ -66,9 +63,6 @@ vi.mock('@coinbase/cdp-hooks', () => ({
   useCurrentUser: () => ({ currentUser: mocks.state.currentUser }),
   useIsSignedIn: () => ({ isSignedIn: mocks.state.isSignedIn }),
   useSignOut: () => ({ signOut: mocks.signOut }),
-  useSignInWithSms: () => ({ signInWithSms: mocks.signInWithSms }),
-  useVerifySmsOTP: () => ({ verifySmsOTP: mocks.verifySmsOTP }),
-  useGetAccessToken: () => ({ getAccessToken: mocks.getAccessToken }),
   useEvmAccounts: () => ({ evmAccounts: mocks.state.evmAccounts }),
   useExportEvmAccount: () => ({ exportEvmAccount: mocks.exportEvmAccount }),
   useSendUserOperation: () => ({
@@ -253,43 +247,38 @@ afterEach(() => {
 // --- Tests ---
 
 describe('handleSendOtp', () => {
-  it('happy path: advances to otp step and calls signInWithSms with E.164 phone', async () => {
+  it('happy path: advances to otp step and calls sendOtp with SMS for non-+1', async () => {
     await renderPage()
 
     await goToOtpStep('+573001234567')
 
-    // CDP SMS path (default when Twilio disabled)
-    expect(mocks.signInWithSms).toHaveBeenCalledWith({ phoneNumber: '+573001234567' })
-    expect(mocks.sendOtp).not.toHaveBeenCalled()
+    expect(mocks.sendOtp).toHaveBeenCalledWith('+573001234567', 'sms')
     expect(container!.querySelector('input[type="text"]')).not.toBeNull()
     expect(container!.textContent).toContain('+573001234567')
   })
 
-  it('normalizes phone with + prefix before calling signInWithSms', async () => {
+  it('normalizes phone with + prefix before calling sendOtp', async () => {
     await renderPage()
 
     await goToOtpStep('573001234567')
 
-    // useSessionGuard normalizes: phone.startsWith('+') ? phone : `+${phone}`
-    expect(mocks.signInWithSms).toHaveBeenCalledWith({ phoneNumber: '+573001234567' })
+    expect(mocks.sendOtp).toHaveBeenCalledWith('+573001234567', 'sms')
     expect(container!.textContent).toContain('573001234567')
   })
 
-  it('shows error and stays on phone step when signInWithSms throws', async () => {
-    mocks.signInWithSms.mockRejectedValueOnce(new Error('Rate limit exceeded'))
+  it('shows error and stays on phone step when sendOtp throws', async () => {
+    mocks.sendOtp.mockRejectedValueOnce(new Error('Rate limit exceeded'))
     await renderPage()
 
     await goToOtpStep('+573001234567')
 
-    // Hook sets reAuthError to err.message directly
     expect(container!.textContent).toContain('Rate limit exceeded')
-    // Still on phone step (tel input visible)
     expect(container!.querySelector('input[type="tel"]')).not.toBeNull()
   })
 })
 
 describe('handleVerifyOtp', () => {
-  it('happy path: verifies OTP via CDP SMS, exchanges token, shows Wallet Security', async () => {
+  it('happy path: verifies OTP via Sippy backend, calls authenticateWithJWT, shows Wallet Security', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.state.evmAccounts = [{ address: '0xEOA123' }]
     mocks.state.currentUser = {
@@ -297,10 +286,8 @@ describe('handleVerifyOtp', () => {
       evmSmartAccountObjects: [{ address: '0xSMART456' }],
       evmAccounts: ['0xEOA123'],
     }
-    const mockFetch = vi.fn(async (url: string) => {
-      if (typeof url === 'string' && url.includes('/api/auth/exchange-cdp-token')) {
-        return { ok: true, json: async () => ({ token: 'jwt-token' }) }
-      }
+    mocks.verifyOtp.mockResolvedValue('jwt-token')
+    const mockFetch = vi.fn(async () => {
       return { ok: true, json: async () => ({ hasPermission: false }) }
     })
     vi.stubGlobal('fetch', mockFetch)
@@ -309,18 +296,16 @@ describe('handleVerifyOtp', () => {
     await goToOtpStep()
     await goToVerifyStep()
 
-    expect(mocks.verifySmsOTP).toHaveBeenCalled()
-    expect(mocks.getAccessToken).toHaveBeenCalled()
+    expect(mocks.verifyOtp).toHaveBeenCalledWith('+573001234567', '123456')
     expect(mocks.storeToken).toHaveBeenCalledWith('jwt-token')
-    // authenticateWithJWT NOT called for CDP SMS path
-    expect(mocks.authenticateWithJWT).not.toHaveBeenCalled()
+    expect(mocks.authenticateWithJWT).toHaveBeenCalled()
     expect(container!.querySelector('input[type="text"]')).toBeNull()
     expect(container!.textContent).toContain('Wallet Security')
   })
 
-  it('shows error and stays on otp step when verifySmsOTP throws', async () => {
+  it('shows error and stays on otp step when verifyOtp throws', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    mocks.verifySmsOTP.mockRejectedValueOnce(new Error('Invalid OTP'))
+    mocks.verifyOtp.mockRejectedValueOnce(new Error('Invalid OTP'))
     await renderPage()
 
     await goToOtpStep()
@@ -330,24 +315,10 @@ describe('handleVerifyOtp', () => {
     expect(container!.querySelector('input[type="text"]')).not.toBeNull()
   })
 
-  it('shows error when exchange-cdp-token fails', async () => {
+  it('authenticates even when user has no EVM accounts', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    const mockFetch = vi.fn().mockResolvedValue({ ok: false, status: 500 })
-    vi.stubGlobal('fetch', mockFetch)
-    await renderPage()
-
-    await goToOtpStep()
-    await goToVerifyStep()
-
-    expect(container!.textContent).toContain('Failed to exchange CDP token')
-  })
-
-  it('authenticates even when user has no EVM accounts (no-wallet check removed from hook)', async () => {
-    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    const mockFetch = vi.fn(async (url: string) => {
-      if (typeof url === 'string' && url.includes('/api/auth/exchange-cdp-token')) {
-        return { ok: true, json: async () => ({ token: 'jwt-token' }) }
-      }
+    mocks.verifyOtp.mockResolvedValue('jwt-token')
+    const mockFetch = vi.fn(async () => {
       return { ok: true, json: async () => ({ hasPermission: false }) }
     })
     vi.stubGlobal('fetch', mockFetch)
@@ -357,6 +328,7 @@ describe('handleVerifyOtp', () => {
     await goToVerifyStep()
 
     expect(mocks.storeToken).toHaveBeenCalledWith('jwt-token')
+    expect(mocks.authenticateWithJWT).toHaveBeenCalled()
     expect(container!.textContent).toContain('Wallet Security')
   })
 })
@@ -608,11 +580,7 @@ describe('sweep and export flow', () => {
       .mockReturnValueOnce('setup-token') // fetchEmailStatus after OTP
       .mockReturnValue(null) // fetchPrivacyStatus (early return) + export flow null tokens
 
-    // CDP SMS verify + token exchange
     const mockFetch = vi.fn(async (url: string) => {
-      if (typeof url === 'string' && url.includes('/api/auth/exchange-cdp-token')) {
-        return { ok: true, json: async () => ({ token: 'jwt-token' }) }
-      }
       if (typeof url === 'string' && url.includes('/api/auth/email-status')) {
         return {
           ok: true,
@@ -1312,9 +1280,6 @@ describe('email management', () => {
     mocks.isTokenExpired.mockReturnValueOnce(true)
     mocks.getStoredToken.mockReturnValue('mock-token')
     const mockFetch = vi.fn(async (url: string) => {
-      if (typeof url === 'string' && url.includes('/api/auth/exchange-cdp-token')) {
-        return { ok: true, json: async () => ({ token: 'jwt-token' }) }
-      }
       if (typeof url === 'string' && url.includes('/api/auth/email-status')) {
         return {
           ok: true,

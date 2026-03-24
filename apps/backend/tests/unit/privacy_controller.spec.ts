@@ -13,7 +13,6 @@
 import { test } from '@japa/runner'
 import UserPreference from '#models/user_preference'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let ControllerClass: new () => any
 
 async function ensureController() {
@@ -149,7 +148,9 @@ test.group('EmbeddedWalletController | privacyStatus', (group) => {
     restoreUserPreference()
   })
 
-  test('TC-PV-001-U-PS01: no existing pref row → 200 { phoneVisible: true }', async ({ assert }) => {
+  test('TC-PV-001-U-PS01: no existing pref row → 200 { phoneVisible: true }', async ({
+    assert,
+  }) => {
     stubFindBy(null)
     const controller = new ControllerClass()
     const ctx = buildCtx('+15551234567', {})
@@ -160,7 +161,9 @@ test.group('EmbeddedWalletController | privacyStatus', (group) => {
     assert.deepEqual(ctx._res.body, { phoneVisible: true })
   })
 
-  test('TC-PV-001-U-PS02: pref row with phoneVisible: false → 200 { phoneVisible: false }', async ({ assert }) => {
+  test('TC-PV-001-U-PS02: pref row with phoneVisible: false → 200 { phoneVisible: false }', async ({
+    assert,
+  }) => {
     stubFindBy({ phoneVisible: false })
     const controller = new ControllerClass()
     const ctx = buildCtx('+15551234567', {})
@@ -171,7 +174,9 @@ test.group('EmbeddedWalletController | privacyStatus', (group) => {
     assert.deepEqual(ctx._res.body, { phoneVisible: false })
   })
 
-  test('TC-PV-001-U-PS03: pref row with phoneVisible: true → 200 { phoneVisible: true }', async ({ assert }) => {
+  test('TC-PV-001-U-PS03: pref row with phoneVisible: true → 200 { phoneVisible: true }', async ({
+    assert,
+  }) => {
     stubFindBy({ phoneVisible: true })
     const controller = new ControllerClass()
     const ctx = buildCtx('+15551234567', {})

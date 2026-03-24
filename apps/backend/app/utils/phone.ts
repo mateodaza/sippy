@@ -197,8 +197,8 @@ export function verifySendAgreement(
  * prefix it would shadow (same convention as exchange_rate_service.ts).
  */
 export const PHONE_LANGUAGE_PREFIX_MAP: readonly [string, 'en' | 'es' | 'pt'][] = [
-  ['+55', 'pt'],  // Brazil
-  ['+1',  'en'],  // USA / Canada (NANP catch-all)
+  ['+55', 'pt'], // Brazil
+  ['+1', 'en'], // USA / Canada (NANP catch-all)
 ]
 
 /**

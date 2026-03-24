@@ -55,7 +55,11 @@ function redactPII(props: Record<string, unknown>): Record<string, unknown> {
       redacted[key] = value
       continue
     }
-    if (key.toLowerCase().includes('phone') || key.toLowerCase().includes('from') || key.toLowerCase().includes('to')) {
+    if (
+      key.toLowerCase().includes('phone') ||
+      key.toLowerCase().includes('from') ||
+      key.toLowerCase().includes('to')
+    ) {
       redacted[key] = value.match(/^\+?\d{7,}$/) ? maskPhone(value) : value
     } else if (key.toLowerCase().includes('wallet') || key.toLowerCase().includes('address')) {
       redacted[key] = value.startsWith('0x') ? maskWallet(value) : value
@@ -91,7 +95,9 @@ export function captureException(
   if (!ph) return
 
   const id = distinctId
-    ? distinctId.match(/^\+?\d{7,}$/) ? maskPhone(distinctId) : distinctId
+    ? distinctId.match(/^\+?\d{7,}$/)
+      ? maskPhone(distinctId)
+      : distinctId
     : 'system'
 
   const errorMessage = error instanceof Error ? error.message : String(error)

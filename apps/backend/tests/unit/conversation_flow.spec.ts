@@ -29,7 +29,14 @@ import {
 // ============================================================================
 
 test.group('Conversation | Personality — No Robotic Language', () => {
-  const roboticWords = ['command', 'Command', 'COMMAND', 'recognized', 'invalid format', 'Error processing']
+  const roboticWords = [
+    'command',
+    'Command',
+    'COMMAND',
+    'recognized',
+    'invalid format',
+    'Error processing',
+  ]
 
   function assertNotRobotic(text: string, label: string) {
     for (const word of roboticWords) {
@@ -81,7 +88,10 @@ test.group('Conversation | Personality — No Robotic Language', () => {
     test(`rate-limited message (${lang}) sounds natural`, ({ assert }) => {
       const msg = formatRateLimitedMessage(lang)
       assertNotRobotic(msg, `rateLimited(${lang})`)
-      assert.isFalse(msg.toLowerCase().includes('natural language'), `should not say "natural language"`)
+      assert.isFalse(
+        msg.toLowerCase().includes('natural language'),
+        `should not say "natural language"`
+      )
     })
 
     test(`error message (${lang}) sounds natural`, () => {
@@ -142,11 +152,7 @@ test.group('Conversation | Slang Send Detection (isAttemptedSend)', () => {
   }
 
   // These should NOT be detected as sends
-  const notSends = [
-    'hola como estas',
-    'cuanto tengo',
-    'dame ayuda',
-  ]
+  const notSends = ['hola como estas', 'cuanto tengo', 'dame ayuda']
 
   for (const input of notSends) {
     test(`"${input}" → NOT a send attempt`, async ({ assert }) => {
@@ -260,10 +266,7 @@ test.group('Conversation | Anti-Injection (Regex Layer)', () => {
 
   test('phone too short rejected', ({ assert }) => {
     const result = parseMessageWithRegex('send 10 to +1234')
-    assert.isTrue(
-      result.recipient === undefined,
-      'phone with <7 digits should be rejected'
-    )
+    assert.isTrue(result.recipient === undefined, 'phone with <7 digits should be rejected')
   })
 })
 
@@ -525,7 +528,9 @@ test.group('Conversation | Send with Greeting Prefix', () => {
     assert.approximately(result.amount!, 0.1, 0.01)
   })
 
-  test('"Hola enviar dinero a +573001234567" (greeting + partial) → partial send', async ({ assert }) => {
+  test('"Hola enviar dinero a +573001234567" (greeting + partial) → partial send', async ({
+    assert,
+  }) => {
     const result = await parseMessage('Hola enviar dinero a +573001234567')
     assert.equal(result.command, 'send')
     assert.isOk(result.recipient)
@@ -535,9 +540,23 @@ test.group('Conversation | Send with Greeting Prefix', () => {
 
 test.group('Conversation | Social Acknowledgments (Loop Prevention)', () => {
   const socialPhrases = [
-    'ya', 'ya vi', 'entendido', 'enterado', 'arre', 'sale', 'joya',
-    'de una', 'todo bien', 'a la orden', 'noted', 'understood', 'sounds good',
-    'beleza', 'firmeza', 'falou', 'blz',
+    'ya',
+    'ya vi',
+    'entendido',
+    'enterado',
+    'arre',
+    'sale',
+    'joya',
+    'de una',
+    'todo bien',
+    'a la orden',
+    'noted',
+    'understood',
+    'sounds good',
+    'beleza',
+    'firmeza',
+    'falou',
+    'blz',
   ]
   for (const phrase of socialPhrases) {
     test(`"${phrase}" → social (not unknown)`, async ({ assert }) => {

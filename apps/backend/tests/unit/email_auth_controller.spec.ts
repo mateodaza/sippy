@@ -97,7 +97,10 @@ function makePrefMock(fields: Record<string, unknown> = {}): PrefMock {
 
 // ── Spy helpers ────────────────────────────────────────────────────────────────
 
-type UpdateOrCreateCall = { searchPayload: Record<string, unknown>; updatePayload: Record<string, unknown> }
+type UpdateOrCreateCall = {
+  searchPayload: Record<string, unknown>
+  updatePayload: Record<string, unknown>
+}
 
 function makeUpdateOrCreateSpy() {
   const calls: UpdateOrCreateCall[] = []
@@ -185,8 +188,13 @@ test.group('sendEmailCode | validation errors', (group) => {
   }) => {
     let sendCalled = false
     let updateCalled = false
-    ;(emailService as any).sendEmailCode = async () => { sendCalled = true; return { success: true } }
-    ;(UserPreference as any).updateOrCreate = async () => { updateCalled = true }
+    ;(emailService as any).sendEmailCode = async () => {
+      sendCalled = true
+      return { success: true }
+    }
+    ;(UserPreference as any).updateOrCreate = async () => {
+      updateCalled = true
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ body: {} })
@@ -202,7 +210,10 @@ test.group('sendEmailCode | validation errors', (group) => {
     assert,
   }) => {
     let sendCalled = false
-    ;(emailService as any).sendEmailCode = async () => { sendCalled = true; return { success: true } }
+    ;(emailService as any).sendEmailCode = async () => {
+      sendCalled = true
+      return { success: true }
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus } = buildCtx({ body: { email: 123 } })
@@ -217,8 +228,13 @@ test.group('sendEmailCode | validation errors', (group) => {
   }) => {
     let sendCalled = false
     let updateCalled = false
-    ;(emailService as any).sendEmailCode = async () => { sendCalled = true; return { success: true } }
-    ;(UserPreference as any).updateOrCreate = async () => { updateCalled = true }
+    ;(emailService as any).sendEmailCode = async () => {
+      sendCalled = true
+      return { success: true }
+    }
+    ;(UserPreference as any).updateOrCreate = async () => {
+      updateCalled = true
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ body: { email: 'notanemail' } })
@@ -240,8 +256,13 @@ test.group('sendEmailCode | duplicate check', (group) => {
     ;(UserPreference as any).query = () => makeQueryMock({ phoneNumber: OTHER_PHONE })
     let sendCalled = false
     let updateCalled = false
-    ;(emailService as any).sendEmailCode = async () => { sendCalled = true; return { success: true } }
-    ;(UserPreference as any).updateOrCreate = async () => { updateCalled = true }
+    ;(emailService as any).sendEmailCode = async () => {
+      sendCalled = true
+      return { success: true }
+    }
+    ;(UserPreference as any).updateOrCreate = async () => {
+      updateCalled = true
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ body: { email: VALID_EMAIL } })
@@ -261,7 +282,9 @@ test.group('sendEmailCode | send failures', (group) => {
     ;(UserPreference as any).query = () => makeQueryMock(null)
     ;(UserPreference as any).findBy = async () => null
     let updateCalled = false
-    ;(UserPreference as any).updateOrCreate = async () => { updateCalled = true }
+    ;(UserPreference as any).updateOrCreate = async () => {
+      updateCalled = true
+    }
     ;(emailService as any).sendEmailCode = async () => ({ error: 'rate_limited' })
 
     const controller = new AuthApiController()
@@ -277,7 +300,9 @@ test.group('sendEmailCode | send failures', (group) => {
     ;(UserPreference as any).query = () => makeQueryMock(null)
     ;(UserPreference as any).findBy = async () => null
     let updateCalled = false
-    ;(UserPreference as any).updateOrCreate = async () => { updateCalled = true }
+    ;(UserPreference as any).updateOrCreate = async () => {
+      updateCalled = true
+    }
     ;(emailService as any).sendEmailCode = async () => ({ error: 'Connection refused' })
 
     const controller = new AuthApiController()
@@ -387,7 +412,10 @@ test.group('verifyEmailCode | ownership check', (group) => {
   }) => {
     ;(UserPreference as any).findBy = async () => null
     let verifyCalled = false
-    ;(emailService as any).verifyEmailCode = async () => { verifyCalled = true; return { valid: true } }
+    ;(emailService as any).verifyEmailCode = async () => {
+      verifyCalled = true
+      return { valid: true }
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({
@@ -405,7 +433,10 @@ test.group('verifyEmailCode | ownership check', (group) => {
   }) => {
     ;(UserPreference as any).findBy = async () => makePrefMock({ emailHash: 'differenthash' })
     let verifyCalled = false
-    ;(emailService as any).verifyEmailCode = async () => { verifyCalled = true; return { valid: true } }
+    ;(emailService as any).verifyEmailCode = async () => {
+      verifyCalled = true
+      return { valid: true }
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({
@@ -455,7 +486,9 @@ test.group('emailStatus', (group) => {
     assert.deepEqual(getBody(), { hasEmail: false, verified: false, maskedEmail: null })
   })
 
-  test('row exists, emailHash is null → { hasEmail: false, verified: false }', async ({ assert }) => {
+  test('row exists, emailHash is null → { hasEmail: false, verified: false }', async ({
+    assert,
+  }) => {
     ;(UserPreference as any).findBy = async () => makePrefMock({ emailHash: null })
 
     const controller = new AuthApiController()

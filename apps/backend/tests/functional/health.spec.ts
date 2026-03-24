@@ -52,7 +52,10 @@ test.group('Health | GET /health', () => {
   })
 
   test('db is ok in test env', async ({ client, assert }) => {
-    if (!(await isDbAvailable())) { assert.plan(0); return } // skip without DB
+    if (!(await isDbAvailable())) {
+      assert.plan(0)
+      return
+    } // skip without DB
     const response = await client.get('/health')
     const body = response.body()
     assert.equal(body.db, 'ok')

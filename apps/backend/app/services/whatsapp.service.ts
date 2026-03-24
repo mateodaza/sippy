@@ -156,7 +156,9 @@ export async function sendButtonMessage(
   // Normalize: accept E.164 with or without '+'; always send bare international digits to Meta
   const normalizedTo = to.startsWith('+') ? to.slice(1) : to
   if (sanitized.violations.length > 0) {
-    logger.warn(`Sanitizer [button] to ${maskPhone(`+${normalizedTo}`)}: ${sanitized.violations.join(', ')}`)
+    logger.warn(
+      `Sanitizer [button] to ${maskPhone(`+${normalizedTo}`)}: ${sanitized.violations.join(', ')}`
+    )
   }
   const cleanBody = sanitized.text
 
@@ -233,7 +235,9 @@ export async function sendTemplateMessage(
 ): Promise<WhatsAppAPIResponse | null> {
   const normalizedTo = to.startsWith('+') ? to.slice(1) : to
 
-  logger.info(`Sending template "${templateName}" (${languageCode}) to ${maskPhone(`+${normalizedTo}`)}`)
+  logger.info(
+    `Sending template "${templateName}" (${languageCode}) to ${maskPhone(`+${normalizedTo}`)}`
+  )
 
   try {
     const response = await fetch(`${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`, {

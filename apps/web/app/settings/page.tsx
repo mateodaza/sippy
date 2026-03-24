@@ -145,6 +145,8 @@ function SettingsContent() {
     handleReAuthVerifyOtp,
     requireReauth,
     dismissReAuth,
+    reAuthChannel,
+    reAuthCanSwitchChannel,
   } = useSessionGuard()
 
   const isPhoneLocked = !!phoneFromUrl
@@ -1044,7 +1046,7 @@ function SettingsContent() {
                 </p>
               )}
               <button
-                onClick={handleReAuthSendOtp}
+                onClick={() => handleReAuthSendOtp()}
                 disabled={reAuthLoading || !reAuthPhone || !isCdpConfigured}
                 className="w-full bg-brand-crypto text-white py-3 rounded-lg font-semibold hover:bg-brand-crypto/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -1056,7 +1058,13 @@ function SettingsContent() {
           {reAuthStep === 'otp' && (
             <>
               <p className="text-[var(--text-secondary)] mb-4">
-                {t('settings.codeSentTo', lang)} {reAuthPhone}
+                {reAuthChannel === 'whatsapp'
+                  ? lang === 'es'
+                    ? `Enviamos un codigo a tu WhatsApp (${reAuthPhone})`
+                    : lang === 'pt'
+                      ? `Enviamos um codigo para seu WhatsApp (${reAuthPhone})`
+                      : `We sent a code to your WhatsApp (${reAuthPhone})`
+                  : `${t('settings.codeSentTo', lang)} ${reAuthPhone}`}
               </p>
               <input
                 type="text"
@@ -1073,6 +1081,25 @@ function SettingsContent() {
               >
                 {reAuthLoading ? t('settings.verifying', lang) : t('settings.verify', lang)}
               </button>
+              {reAuthCanSwitchChannel && (
+                <button
+                  onClick={() => handleReAuthSendOtp(reAuthChannel === 'sms' ? 'whatsapp' : 'sms')}
+                  disabled={reAuthLoading}
+                  className="w-full mt-3 text-sm text-brand-primary hover:text-brand-primary-hover py-2"
+                >
+                  {reAuthChannel === 'sms'
+                    ? lang === 'es'
+                      ? 'No llego? Enviar por WhatsApp'
+                      : lang === 'pt'
+                        ? 'Nao chegou? Enviar por WhatsApp'
+                        : "Didn't get it? Send via WhatsApp"
+                    : lang === 'es'
+                      ? 'Enviar por SMS'
+                      : lang === 'pt'
+                        ? 'Enviar por SMS'
+                        : 'Send via SMS instead'}
+                </button>
+              )}
               <button
                 onClick={() => setReAuthOtp('')}
                 className="w-full mt-2 text-[var(--text-secondary)] py-2"
@@ -1132,7 +1159,7 @@ function SettingsContent() {
                   <SippyPhoneInput value={reAuthPhone} onChange={setReAuthPhone} />
                 </div>
                 <button
-                  onClick={handleReAuthSendOtp}
+                  onClick={() => handleReAuthSendOtp()}
                   disabled={reAuthLoading || !reAuthPhone}
                   className="w-full bg-brand-crypto text-white py-3 rounded-lg font-semibold hover:bg-brand-crypto/90 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -1143,7 +1170,13 @@ function SettingsContent() {
             {reAuthStep === 'otp' && (
               <>
                 <p className="text-[var(--text-secondary)] mb-3 text-sm">
-                  {t('settings.codeSentTo', lang)} {reAuthPhone}
+                  {reAuthChannel === 'whatsapp'
+                    ? lang === 'es'
+                      ? `Codigo enviado a tu WhatsApp (${reAuthPhone})`
+                      : lang === 'pt'
+                        ? `Codigo enviado para seu WhatsApp (${reAuthPhone})`
+                        : `Code sent to your WhatsApp (${reAuthPhone})`
+                    : `${t('settings.codeSentTo', lang)} ${reAuthPhone}`}
                 </p>
                 <input
                   type="text"
@@ -1160,6 +1193,27 @@ function SettingsContent() {
                 >
                   {reAuthLoading ? t('settings.verifying', lang) : t('settings.verify', lang)}
                 </button>
+                {reAuthCanSwitchChannel && (
+                  <button
+                    onClick={() =>
+                      handleReAuthSendOtp(reAuthChannel === 'sms' ? 'whatsapp' : 'sms')
+                    }
+                    disabled={reAuthLoading}
+                    className="w-full mt-2 text-xs text-brand-primary hover:text-brand-primary-hover py-1"
+                  >
+                    {reAuthChannel === 'sms'
+                      ? lang === 'es'
+                        ? 'Enviar por WhatsApp'
+                        : lang === 'pt'
+                          ? 'Enviar por WhatsApp'
+                          : 'Send via WhatsApp instead'
+                      : lang === 'es'
+                        ? 'Enviar por SMS'
+                        : lang === 'pt'
+                          ? 'Enviar por SMS'
+                          : 'Send via SMS instead'}
+                  </button>
+                )}
               </>
             )}
           </div>

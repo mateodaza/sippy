@@ -20,7 +20,9 @@ const EXPORT_AUDIT_SECRET = env.get('EXPORT_AUDIT_SECRET', '')
 
 function isAvailable(): boolean {
   if (INDEXER_URL && !INDEXER_API_SECRET) {
-    logger.error('INDEXER_URL is set but INDEXER_API_SECRET is empty — indexer calls will fail auth')
+    logger.error(
+      'INDEXER_URL is set but INDEXER_API_SECRET is empty — indexer calls will fail auth'
+    )
     return false
   }
   return !!INDEXER_URL
@@ -89,8 +91,15 @@ async function doSyncAttempt(): Promise<boolean> {
 
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`)
 
-  const data = (await res.json()) as { processed?: number; newInserts?: number; reactivations?: number; skipped?: string[] }
-  logger.info(`Indexer sync: ${data.processed ?? 0} processed, ${data.newInserts ?? 0} new, ${data.reactivations ?? 0} reactivated`)
+  const data = (await res.json()) as {
+    processed?: number
+    newInserts?: number
+    reactivations?: number
+    skipped?: string[]
+  }
+  logger.info(
+    `Indexer sync: ${data.processed ?? 0} processed, ${data.newInserts ?? 0} new, ${data.reactivations ?? 0} reactivated`
+  )
   return true
 }
 
@@ -114,7 +123,10 @@ export async function syncAllWalletsWithIndexer(): Promise<void> {
       if (await doSyncAttempt()) return
     } catch (error) {
       const delay = BASE_DELAY_MS * Math.pow(2, attempt)
-      logger.warn(`Indexer sync attempt ${attempt + 1}/${MAX_RETRIES} failed, retry in ${delay / 1000}s: %o`, error)
+      logger.warn(
+        `Indexer sync attempt ${attempt + 1}/${MAX_RETRIES} failed, retry in ${delay / 1000}s: %o`,
+        error
+      )
       if (attempt < MAX_RETRIES - 1) {
         await new Promise((resolve) => setTimeout(resolve, delay))
       }

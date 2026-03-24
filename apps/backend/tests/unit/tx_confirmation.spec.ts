@@ -34,7 +34,9 @@ const NO_OP_RATE_CTX: RateContext = {
   recipientCurrency: null,
 }
 
-function makePendingMap(entries: [string, PendingTransaction][] = []): Map<string, PendingTransaction> {
+function makePendingMap(
+  entries: [string, PendingTransaction][] = []
+): Map<string, PendingTransaction> {
   return new Map(entries)
 }
 
@@ -147,61 +149,137 @@ test.group('Group B | Phone masking in formatConfirmationPrompt', () => {
 // ── Group C — routeCommand: send with confirmation threshold ──────────────
 
 test.group('Group C | routeCommand send threshold', () => {
-  test('C-01: send $10 above default $5 → pending stored, confirmation prompt sent, sendHandler NOT called', async ({ assert }) => {
+  test('C-01: send $10 above default $5 → pending stored, confirmation prompt sent, sendHandler NOT called', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     let sendHandlerCalled = false
     const capturedMessages: string[] = []
 
-    const fakeSend = async (..._args: any[]) => { sendHandlerCalled = true; return true }
-    const fakeMsg = async (_phone: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
+    const fakeSend = async (..._args: any[]) => {
+      sendHandlerCalled = true
+      return true
+    }
+    const fakeMsg = async (_phone: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
 
     const cmd: ParsedCommand = { command: 'send', amount: 10, recipient: '+573001234567' }
-    await routeCommand('+1555000001', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      '+1555000001',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
     assert.isFalse(sendHandlerCalled)
     assert.equal(pendingTxs.size, 1)
-    assert.isTrue(capturedMessages.some(m => m.includes('***')))
+    assert.isTrue(capturedMessages.some((m) => m.includes('***')))
   })
 
-  test('C-02: send $3 below threshold → sendHandler called immediately, map empty', async ({ assert }) => {
+  test('C-02: send $3 below threshold → sendHandler called immediately, map empty', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     let sendHandlerCalled = false
 
-    const fakeSend = async (..._args: any[]) => { sendHandlerCalled = true; return true }
+    const fakeSend = async (..._args: any[]) => {
+      sendHandlerCalled = true
+      return true
+    }
     const fakeMsg = async (..._args: any[]) => {}
 
     const cmd: ParsedCommand = { command: 'send', amount: 3, recipient: '+573001234567' }
-    await routeCommand('+1555000002', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      '+1555000002',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
     assert.isTrue(sendHandlerCalled)
     assert.equal(pendingTxs.size, 0)
   })
 
-  test('C-03: send $5 exactly at threshold → sendHandler called immediately (≤ threshold)', async ({ assert }) => {
+  test('C-03: send $5 exactly at threshold → sendHandler called immediately (≤ threshold)', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     let sendHandlerCalled = false
 
-    const fakeSend = async (..._args: any[]) => { sendHandlerCalled = true; return true }
+    const fakeSend = async (..._args: any[]) => {
+      sendHandlerCalled = true
+      return true
+    }
     const fakeMsg = async (..._args: any[]) => {}
 
     const cmd: ParsedCommand = { command: 'send', amount: 5, recipient: '+573001234567' }
-    await routeCommand('+1555000003', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      '+1555000003',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
     assert.isTrue(sendHandlerCalled)
     assert.equal(pendingTxs.size, 0)
   })
 
-  test('C-04: second send while first pending → map contains only new pending tx', async ({ assert }) => {
+  test('C-04: second send while first pending → map contains only new pending tx', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     const fakeMsg = async (..._args: any[]) => {}
-    const fakeSend = async (..._args: any[]) => { return true }
+    const fakeSend = async (..._args: any[]) => {
+      return true
+    }
 
     const phone = '+1555000004'
     const cmd1: ParsedCommand = { command: 'send', amount: 10, recipient: '+573001111111' }
     const cmd2: ParsedCommand = { command: 'send', amount: 20, recipient: '+573002222222' }
 
-    await routeCommand(phone, cmd1, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
-    await routeCommand(phone, cmd2, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      phone,
+      cmd1,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
+    await routeCommand(
+      phone,
+      cmd2,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
     assert.equal(pendingTxs.size, 1)
     assert.equal(pendingTxs.get(phone)?.recipient, '+573002222222')
@@ -212,7 +290,9 @@ test.group('Group C | routeCommand send threshold', () => {
 // ── Group D — routeCommand: confirm handler ───────────────────────────────
 
 test.group('Group D | routeCommand confirm handler', () => {
-  test('C-05: confirm with valid pending tx → sendHandler called, map empty after success', async ({ assert }) => {
+  test('C-05: confirm with valid pending tx → sendHandler called, map empty after success', async ({
+    assert,
+  }) => {
     const phone = '+1555000005'
     const pending: PendingTransaction = {
       amount: 10,
@@ -232,14 +312,27 @@ test.group('Group D | routeCommand confirm handler', () => {
     const fakeMsg = async (..._args: any[]) => {}
 
     const cmd: ParsedCommand = { command: 'confirm' }
-    await routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      phone,
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
     assert.isTrue(sendHandlerCalled)
     assert.equal(capturedAmount, 10)
     assert.equal(pendingTxs.size, 0)
   })
 
-  test('C-05b: confirm with pending where sendHandler throws → routeCommand resolves, error message sent, pending NOT re-inserted', async ({ assert }) => {
+  test('C-05b: confirm with pending where sendHandler throws → routeCommand resolves, error message sent, pending NOT re-inserted', async ({
+    assert,
+  }) => {
     const phone = '+1555000005b'
     const pending: PendingTransaction = {
       amount: 10,
@@ -250,21 +343,38 @@ test.group('Group D | routeCommand confirm handler', () => {
     const pendingTxs = makePendingMap([[phone, pending]])
     const capturedMessages: string[] = []
 
-    const fakeSend = async (..._args: any[]) => { throw new Error('transfer failed') }
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
+    const fakeSend = async (..._args: any[]) => {
+      throw new Error('transfer failed')
+    }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
 
     const cmd: ParsedCommand = { command: 'confirm' }
     // Should resolve (not reject) — outer try/catch swallows
-    await routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      phone,
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
     // Error message sent
     const expectedError = formatCommandErrorMessage('en')
-    assert.isTrue(capturedMessages.some(m => m === expectedError))
+    assert.isTrue(capturedMessages.some((m) => m === expectedError))
     // No rollback — pending tx stays consumed to prevent double-payment
     assert.equal(pendingTxs.size, 0)
   })
 
-  test('C-05d: confirm where sendHandler returns false (handles error internally) → routeCommand resolves, pending NOT re-inserted', async ({ assert }) => {
+  test('C-05d: confirm where sendHandler returns false (handles error internally) → routeCommand resolves, pending NOT re-inserted', async ({
+    assert,
+  }) => {
     const phone = '+1555000005d'
     const pending: PendingTransaction = {
       amount: 10,
@@ -276,21 +386,38 @@ test.group('Group D | routeCommand confirm handler', () => {
     const capturedMessages: string[] = []
 
     // Simulates the real handleSendCommand: handles error internally, returns false, does NOT throw
-    const fakeSend = async (..._args: any[]) => { return false }
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
+    const fakeSend = async (..._args: any[]) => {
+      return false
+    }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
 
     const cmd: ParsedCommand = { command: 'confirm' }
     // Should resolve (not reject)
-    await routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      phone,
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
     // No rollback — pending tx stays consumed to prevent double-payment
     assert.equal(pendingTxs.size, 0)
     // No generic error message sent — sendHandler already messaged the user
     const errorMsg = formatCommandErrorMessage('en')
-    assert.isFalse(capturedMessages.some(m => m === errorMsg))
+    assert.isFalse(capturedMessages.some((m) => m === errorMsg))
   })
 
-  test('C-05c: two concurrent confirms → sendHandler called exactly once, second gets "No pending transfer."', async ({ assert }) => {
+  test('C-05c: two concurrent confirms → sendHandler called exactly once, second gets "No pending transfer."', async ({
+    assert,
+  }) => {
     const phone = '+1555000005c'
     const pending: PendingTransaction = {
       amount: 10,
@@ -302,38 +429,93 @@ test.group('Group D | routeCommand confirm handler', () => {
     let sendHandlerCallCount = 0
     const capturedMessages: string[] = []
 
-    const fakeSend = async (..._args: any[]) => { sendHandlerCallCount++; return true }
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
+    const fakeSend = async (..._args: any[]) => {
+      sendHandlerCallCount++
+      return true
+    }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
 
     const cmd: ParsedCommand = { command: 'confirm' }
     // Start both without awaiting between — simulates concurrent messages
-    const p1 = routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs, new Set(), 30_000, 'onboarded')
-    const p2 = routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs, new Set(), 30_000, 'onboarded')
+    const p1 = routeCommand(
+      phone,
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs,
+      new Set(),
+      30_000,
+      'onboarded'
+    )
+    const p2 = routeCommand(
+      phone,
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs,
+      new Set(),
+      30_000,
+      'onboarded'
+    )
     await Promise.all([p1, p2])
 
     assert.equal(sendHandlerCallCount, 1)
     // Second confirm with no pending tx → social acknowledgment (not "no pending transfer")
     assert.isTrue(capturedMessages.length > 0)
-    assert.isFalse(capturedMessages.some(m => m.includes('undefined')))
+    assert.isFalse(capturedMessages.some((m) => m.includes('undefined')))
   })
 
-  test('C-06: confirm with no pending tx → social reply sent, sendHandler NOT called', async ({ assert }) => {
+  test('C-06: confirm with no pending tx → social reply sent, sendHandler NOT called', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     let sendHandlerCalled = false
     const capturedMessages: string[] = []
 
-    const fakeSend = async (..._args: any[]) => { sendHandlerCalled = true }
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
+    const fakeSend = async (..._args: any[]) => {
+      sendHandlerCalled = true
+    }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
 
     const cmd: ParsedCommand = { command: 'confirm' }
-    await routeCommand('+1555000006', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs, new Set(), 30_000, 'onboarded')
+    await routeCommand(
+      '+1555000006',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs,
+      new Set(),
+      30_000,
+      'onboarded'
+    )
 
     assert.isFalse(sendHandlerCalled)
     // Now returns social reply instead of "No pending transfer"
     assert.isTrue(capturedMessages.length > 0)
   })
 
-  test('C-07: confirm with expired pending tx → social reply sent, entry deleted', async ({ assert }) => {
+  test('C-07: confirm with expired pending tx → social reply sent, entry deleted', async ({
+    assert,
+  }) => {
     const phone = '+1555000007'
     const expired: PendingTransaction = {
       amount: 10,
@@ -345,11 +527,29 @@ test.group('Group D | routeCommand confirm handler', () => {
     let sendHandlerCalled = false
     const capturedMessages: string[] = []
 
-    const fakeSend = async (..._args: any[]) => { sendHandlerCalled = true }
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
+    const fakeSend = async (..._args: any[]) => {
+      sendHandlerCalled = true
+    }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
 
     const cmd: ParsedCommand = { command: 'confirm' }
-    await routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs, new Set(), 30_000, 'onboarded')
+    await routeCommand(
+      phone,
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs,
+      new Set(),
+      30_000,
+      'onboarded'
+    )
 
     assert.isFalse(sendHandlerCalled)
     assert.isTrue(capturedMessages.length > 0)
@@ -360,7 +560,9 @@ test.group('Group D | routeCommand confirm handler', () => {
 // ── Group E — routeCommand: cancel handler ────────────────────────────────
 
 test.group('Group E | routeCommand cancel handler', () => {
-  test('C-08: cancel with pending tx → map cleared, "Transfer cancelled." sent', async ({ assert }) => {
+  test('C-08: cancel with pending tx → map cleared, "Transfer cancelled." sent', async ({
+    assert,
+  }) => {
     const phone = '+1555000008'
     const pending: PendingTransaction = {
       amount: 10,
@@ -371,26 +573,54 @@ test.group('Group E | routeCommand cancel handler', () => {
     const pendingTxs = makePendingMap([[phone, pending]])
     const capturedMessages: string[] = []
 
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
 
     const cmd: ParsedCommand = { command: 'cancel' }
-    await routeCommand(phone, cmd, 'en', NO_OP_RATE_CTX, [], undefined, undefined as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      phone,
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      undefined as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
     assert.equal(pendingTxs.size, 0)
-    assert.isTrue(capturedMessages.some(m => m === formatTransferCancelled('en')))
+    assert.isTrue(capturedMessages.some((m) => m === formatTransferCancelled('en')))
   })
 
-  test('C-09: cancel with no pending tx → map stays empty, "Transfer cancelled." sent (graceful no-op)', async ({ assert }) => {
+  test('C-09: cancel with no pending tx → map stays empty, "Transfer cancelled." sent (graceful no-op)', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     const capturedMessages: string[] = []
 
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
 
     const cmd: ParsedCommand = { command: 'cancel' }
-    await routeCommand('+1555000009', cmd, 'en', NO_OP_RATE_CTX, [], undefined, undefined as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      '+1555000009',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      undefined as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
     assert.equal(pendingTxs.size, 0)
-    assert.isTrue(capturedMessages.some(m => m === formatTransferCancelled('en')))
+    assert.isTrue(capturedMessages.some((m) => m === formatTransferCancelled('en')))
   })
 })
 
@@ -434,6 +664,9 @@ test.group('Group G | formatConfirmationPrompt trilingual', () => {
 
   test('P-03: pt — correct confirmation message', ({ assert }) => {
     const msg = formatConfirmationPrompt(10, recipient, 'pt')
-    assert.equal(msg, 'Enviar $10.00 para +57***4567? Responda SIM para confirmar ou NAO para cancelar.')
+    assert.equal(
+      msg,
+      'Enviar $10.00 para +57***4567? Responda SIM para confirmar ou NAO para cancelar.'
+    )
   })
 })

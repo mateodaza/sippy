@@ -3,10 +3,11 @@ import crypto from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import UserPreference from '#models/user_preference'
 import { maskPhone } from '#utils/phone'
+import { sendTemplateMessage } from '#services/whatsapp.service'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const OTP_TTL = 5 * 60 * 1000 // 5 min in ms
+const OTP_TTL = 10 * 60 * 1000 // 10 min in ms
 const SEND_RATE_LIMIT = 3 // max sends per phone per minute
 const SEND_RATE_WINDOW = 60 * 1000 // 1 minute
 const MAX_VERIFY_ATTEMPTS = 5
@@ -26,7 +27,16 @@ interface SendBucket {
   resetAt: number
 }
 
+export type OtpChannel = 'sms' | 'whatsapp'
+
 type SmsSender = (to: string, body: string) => Promise<void>
+type WhatsAppOtpSender = (to: string, code: string, lang: 'es' | 'en' | 'pt') => Promise<void>
+
+const TEMPLATE_LANG_MAP: Record<string, string> = {
+  en: 'en',
+  es: 'es',
+  pt: 'pt_BR',
+}
 
 // ── SMS Templates ─────────────────────────────────────────────────────────────
 
@@ -40,19 +50,22 @@ const SMS_TEMPLATES = {
 
 class OtpService {
   private smsSender: SmsSender
+  private whatsAppOtpSender: WhatsAppOtpSender
   private otpStore: Map<string, OtpEntry> = new Map()
   private sendRateLimitMap: Map<string, SendBucket> = new Map()
   private cleanupTimer: ReturnType<typeof setInterval> | null = null
 
-  constructor(smsSender?: SmsSender) {
+  constructor(smsSender?: SmsSender, whatsAppOtpSender?: WhatsAppOtpSender) {
     this.smsSender = smsSender ?? this.defaultSmsSender.bind(this)
+    this.whatsAppOtpSender = whatsAppOtpSender ?? this.defaultWhatsAppOtpSender.bind(this)
   }
 
   // ── Public: sendOtp ─────────────────────────────────────────────────────────
 
   async sendOtp(
     phone: string,
-    lang?: string
+    lang?: string,
+    channel: OtpChannel = 'sms'
   ): Promise<{ success: true } | { error: 'rate_limited'; retryAfter: number }> {
     const rateCheck = this.checkSendRateLimit(phone)
     if (!rateCheck.allowed) {
@@ -71,11 +84,15 @@ class OtpService {
     }
 
     const resolvedLang = await this.resolveLanguage(phone, lang)
-    const body = SMS_TEMPLATES[resolvedLang](code)
 
-    // Write to store only after the SMS send succeeds. If smsSender throws,
+    // Write to store only after the send succeeds. If sender throws,
     // no OTP entry is left behind and the rate-limit slot is the only cost.
-    await this.smsSender(phone, body)
+    if (channel === 'whatsapp') {
+      await this.whatsAppOtpSender(phone, code, resolvedLang)
+    } else {
+      const body = SMS_TEMPLATES[resolvedLang](code)
+      await this.smsSender(phone, body)
+    }
     this.otpStore.set(phone, { code, expiresAt: Date.now() + OTP_TTL, attempts: 0 })
 
     return { success: true }
@@ -206,8 +223,37 @@ class OtpService {
       })
     } catch (err: any) {
       const twilioError = err?.response?.data
-      logger.error('sendOtp Twilio error:', { to: maskPhone(to), status: err?.response?.status, twilioError })
+      logger.error('sendOtp Twilio error:', {
+        to: maskPhone(to),
+        status: err?.response?.status,
+        twilioError,
+      })
       throw err
+    }
+  }
+
+  // ── Internal: WhatsApp OTP sender ───────────────────────────────────────────
+
+  private async defaultWhatsAppOtpSender(
+    to: string,
+    code: string,
+    lang: 'es' | 'en' | 'pt'
+  ): Promise<void> {
+    const templateLang = TEMPLATE_LANG_MAP[lang] || 'en'
+    const result = await sendTemplateMessage(to, 'otp_code', templateLang, [
+      {
+        type: 'body',
+        parameters: [{ type: 'text', text: code }],
+      },
+      {
+        type: 'button',
+        sub_type: 'url',
+        index: 0,
+        parameters: [{ type: 'text', text: code }],
+      },
+    ])
+    if (!result) {
+      throw new Error('WhatsApp OTP template send failed')
     }
   }
 

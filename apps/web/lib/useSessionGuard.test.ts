@@ -46,20 +46,11 @@ vi.mock('./auth', () => ({
   verifyOtp: mocks.verifyOtp,
 }))
 
-const cdpSmsMocks = vi.hoisted(() => ({
-  signInWithSms: vi.fn(() => Promise.resolve({ flowId: 'test-flow-id' })),
-  verifySmsOTP: vi.fn(() => Promise.resolve()),
-  getAccessToken: vi.fn(() => Promise.resolve('cdp-test-token')),
-}))
-
 vi.mock('@coinbase/cdp-hooks', () => ({
   useAuthenticateWithJWT: () => ({ authenticateWithJWT: mocks.authenticateWithJWT }),
   useIsSignedIn: () => ({ isSignedIn: mocks.state.isSignedIn }),
   useCurrentUser: () => ({ currentUser: mocks.state.currentUser }),
   useSignOut: () => ({ signOut: mocks.signOut }),
-  useSignInWithSms: () => ({ signInWithSms: cdpSmsMocks.signInWithSms }),
-  useVerifySmsOTP: () => ({ verifySmsOTP: cdpSmsMocks.verifySmsOTP }),
-  useGetAccessToken: () => ({ getAccessToken: cdpSmsMocks.getAccessToken }),
 }))
 
 // --- getTokenSecondsRemaining unit tests (real implementation) ---
@@ -123,9 +114,6 @@ async function cleanupHook() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // Pin Twilio off so CDP SMS is the default path.
-  // Tests that need Twilio override this explicitly (see test 9b).
-  vi.stubEnv('NEXT_PUBLIC_TWILIO_ENABLED', '')
   mocks.state.isSignedIn = false
   mocks.state.currentUser = null
   mocks.getStoredToken.mockReturnValue(null)
@@ -200,8 +188,9 @@ it('8 — requireReauth() sets reAuthVisible: true and reAuthStep: phone', async
   expect(hookResult!.reAuthStep).toBe('phone')
 })
 
-it('9 — handleReAuthSendOtp (CDP SMS, default) → calls signInWithSms, step: otp', async () => {
+it('9 — handleReAuthSendOtp (non-+1) → calls sendOtp with sms, step: otp', async () => {
   mocks.state.isSignedIn = false
+  mocks.sendOtp.mockResolvedValue(undefined)
 
   await renderHook()
 
@@ -213,49 +202,68 @@ it('9 — handleReAuthSendOtp (CDP SMS, default) → calls signInWithSms, step: 
     await hookResult!.handleReAuthSendOtp()
   })
 
-  expect(cdpSmsMocks.signInWithSms).toHaveBeenCalledWith({ phoneNumber: '+573001234567' })
-  expect(mocks.sendOtp).not.toHaveBeenCalled()
+  expect(mocks.sendOtp).toHaveBeenCalledWith('+573001234567', 'sms')
   expect(hookResult!.reAuthStep).toBe('otp')
+  expect(hookResult!.reAuthChannel).toBe('sms')
   expect(hookResult!.reAuthError).toBeNull()
 })
 
-it('9b — handleReAuthSendOtp (Twilio enabled, non-NANP) → calls sendOtp', async () => {
-  vi.stubEnv('NEXT_PUBLIC_TWILIO_ENABLED', 'true')
+it('9b — handleReAuthSendOtp (+1) → calls sendOtp with whatsapp', async () => {
   mocks.state.isSignedIn = false
   mocks.sendOtp.mockResolvedValue(undefined)
 
-  // Need fresh module to pick up env change
-  vi.resetModules()
-  const { useSessionGuard: useSessionGuardFresh } = await import('./useSessionGuard')
-
-  // Re-render with fresh hook
-  function FreshWrapper() {
-    hookResult = useSessionGuardFresh()
-    return null
-  }
-  container = document.createElement('div')
-  document.body.appendChild(container)
-  await act(async () => {
-    root = createRoot(container!)
-    root.render(React.createElement(FreshWrapper))
-  })
+  await renderHook()
 
   await act(async () => {
-    hookResult!.setReAuthPhone('+573001234567')
+    hookResult!.setReAuthPhone('+15550001234')
   })
 
   await act(async () => {
     await hookResult!.handleReAuthSendOtp()
   })
 
-  expect(mocks.sendOtp).toHaveBeenCalled()
+  expect(mocks.sendOtp).toHaveBeenCalledWith('+15550001234', 'whatsapp')
   expect(hookResult!.reAuthStep).toBe('otp')
-  vi.unstubAllEnvs()
+  expect(hookResult!.reAuthChannel).toBe('whatsapp')
+})
+
+it('9c — handleReAuthSendOtp with channel override → uses override', async () => {
+  mocks.state.isSignedIn = false
+  mocks.sendOtp.mockResolvedValue(undefined)
+
+  await renderHook()
+
+  await act(async () => {
+    hookResult!.setReAuthPhone('+573001234567')
+  })
+
+  await act(async () => {
+    await hookResult!.handleReAuthSendOtp('whatsapp')
+  })
+
+  expect(mocks.sendOtp).toHaveBeenCalledWith('+573001234567', 'whatsapp')
+  expect(hookResult!.reAuthChannel).toBe('whatsapp')
+})
+
+it('9d — reAuthCanSwitchChannel is false for +1, true for non-+1', async () => {
+  mocks.state.isSignedIn = false
+
+  await renderHook()
+
+  await act(async () => {
+    hookResult!.setReAuthPhone('+15550001234')
+  })
+  expect(hookResult!.reAuthCanSwitchChannel).toBe(false)
+
+  await act(async () => {
+    hookResult!.setReAuthPhone('+573001234567')
+  })
+  expect(hookResult!.reAuthCanSwitchChannel).toBe(true)
 })
 
 it('10 — handleReAuthSendOtp error → reAuthError set', async () => {
   mocks.state.isSignedIn = false
-  cdpSmsMocks.signInWithSms.mockRejectedValueOnce(new Error('Rate limit exceeded'))
+  mocks.sendOtp.mockRejectedValueOnce(new Error('Rate limit exceeded'))
 
   await renderHook()
 
@@ -271,33 +279,15 @@ it('10 — handleReAuthSendOtp error → reAuthError set', async () => {
   expect(hookResult!.reAuthError).toBe('Rate limit exceeded')
 })
 
-it('11 — handleReAuthVerifyOtp (CDP SMS) success → exchanges token, isAuthenticated: true', async () => {
+it('11 — handleReAuthVerifyOtp success → verifyOtp + authenticateWithJWT, isAuthenticated: true', async () => {
   mocks.state.isSignedIn = false
   const newToken = makeJwt({ exp: Math.floor(Date.now() / 1000) + 3600 })
+  mocks.sendOtp.mockResolvedValue(undefined)
+  mocks.verifyOtp.mockResolvedValue(newToken)
 
-  // Mock the exchange-cdp-token fetch
-  const mockFetch = vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ token: newToken }),
-  })
-  vi.stubGlobal('fetch', mockFetch)
-  vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+  await renderHook()
 
-  vi.resetModules()
-  const { useSessionGuard: useSessionGuardFresh } = await import('./useSessionGuard')
-
-  function FreshWrapper() {
-    hookResult = useSessionGuardFresh()
-    return null
-  }
-  container = document.createElement('div')
-  document.body.appendChild(container)
-  await act(async () => {
-    root = createRoot(container!)
-    root.render(React.createElement(FreshWrapper))
-  })
-
-  // First: send OTP to get flowId
+  // Send OTP
   await act(async () => {
     hookResult!.setReAuthPhone('+573001234567')
   })
@@ -305,7 +295,7 @@ it('11 — handleReAuthVerifyOtp (CDP SMS) success → exchanges token, isAuthen
     await hookResult!.handleReAuthSendOtp()
   })
 
-  // Then: verify OTP
+  // Verify OTP
   await act(async () => {
     hookResult!.setReAuthOtp('123456')
   })
@@ -313,22 +303,21 @@ it('11 — handleReAuthVerifyOtp (CDP SMS) success → exchanges token, isAuthen
     await hookResult!.handleReAuthVerifyOtp()
   })
 
-  expect(cdpSmsMocks.verifySmsOTP).toHaveBeenCalled()
+  expect(mocks.verifyOtp).toHaveBeenCalledWith('+573001234567', '123456')
+  expect(mocks.storeToken).toHaveBeenCalledWith(newToken)
+  expect(mocks.authenticateWithJWT).toHaveBeenCalled()
   expect(hookResult!.isAuthenticated).toBe(true)
   expect(hookResult!.reAuthVisible).toBe(false)
-  expect(mocks.storeToken).toHaveBeenCalledWith(newToken)
-
-  vi.unstubAllGlobals()
-  vi.unstubAllEnvs()
 })
 
 it('12 — handleReAuthVerifyOtp error → reAuthError set, isAuthenticated unchanged', async () => {
   mocks.state.isSignedIn = false
-  cdpSmsMocks.verifySmsOTP.mockRejectedValueOnce(new Error('Invalid OTP'))
+  mocks.sendOtp.mockResolvedValue(undefined)
+  mocks.verifyOtp.mockRejectedValueOnce(new Error('Invalid OTP'))
 
   await renderHook()
 
-  // Send OTP first
+  // Send OTP
   await act(async () => {
     hookResult!.setReAuthPhone('+15550001234')
   })

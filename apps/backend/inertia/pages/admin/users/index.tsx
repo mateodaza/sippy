@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react'
+import { Head, Link } from '@adonisjs/inertia/react'
 import AdminLayout from '../../../layouts/admin_layout.js'
 
 interface OnchainData {
@@ -29,7 +29,12 @@ interface PaginatedUsers {
 
 function formatUSDC(raw: string): string {
   const num = Number(raw) / 1_000_000
-  return num.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return num.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }
 
 export default function UsersIndex({ users }: { users: PaginatedUsers }) {
@@ -52,12 +57,24 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50/50">
-              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Phone</th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Wallet</th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Total Sent</th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Total Received</th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Txs</th>
-              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Last Seen</th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Phone
+              </th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Wallet
+              </th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Total Sent
+              </th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Total Received
+              </th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Txs
+              </th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Last Seen
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -72,23 +89,39 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
                   </Link>
                 </td>
                 <td className="px-5 py-4 font-mono text-xs text-gray-500">
-                  {user.wallet_address
-                    ? `${user.wallet_address.slice(0, 6)}...${user.wallet_address.slice(-4)}`
-                    : <span className="text-gray-300">---</span>}
+                  {user.wallet_address ? (
+                    `${user.wallet_address.slice(0, 6)}...${user.wallet_address.slice(-4)}`
+                  ) : (
+                    <span className="text-gray-300">---</span>
+                  )}
                 </td>
                 <td className="px-5 py-4 font-medium text-slate-700">
-                  {user.onchain ? formatUSDC(user.onchain.totalSent) : <span className="text-gray-300">---</span>}
+                  {user.onchain ? (
+                    formatUSDC(user.onchain.totalSent)
+                  ) : (
+                    <span className="text-gray-300">---</span>
+                  )}
                 </td>
                 <td className="px-5 py-4 font-medium text-slate-700">
-                  {user.onchain ? formatUSDC(user.onchain.totalReceived) : <span className="text-gray-300">---</span>}
+                  {user.onchain ? (
+                    formatUSDC(user.onchain.totalReceived)
+                  ) : (
+                    <span className="text-gray-300">---</span>
+                  )}
                 </td>
                 <td className="px-5 py-4 text-gray-500">
                   {user.onchain ? user.onchain.txCount : <span className="text-gray-300">0</span>}
                 </td>
                 <td className="px-5 py-4 text-gray-400">
-                  {user.onchain?.lastActivity
-                    ? <span title="On-chain activity">{new Date(user.onchain.lastActivity * 1000).toLocaleDateString()}</span>
-                    : <span className="text-gray-300" title="Last WhatsApp message">{new Date(Number(user.last_activity)).toLocaleDateString()}</span>}
+                  {user.onchain?.lastActivity ? (
+                    <span title="On-chain activity">
+                      {new Date(user.onchain.lastActivity * 1000).toLocaleDateString()}
+                    </span>
+                  ) : (
+                    <span className="text-gray-300" title="Last WhatsApp message">
+                      {new Date(Number(user.last_activity)).toLocaleDateString()}
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

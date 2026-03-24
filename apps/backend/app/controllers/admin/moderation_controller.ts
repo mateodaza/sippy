@@ -11,7 +11,9 @@ import { resolveUserPrefKey } from '#utils/user_pref_lookup'
 let isPaused = false
 
 /** Exported getter so other modules can read the pause state. */
-export function getIsPaused(): boolean { return isPaused }
+export function getIsPaused(): boolean {
+  return isPaused
+}
 
 /** Exported setter so tests can reset state between runs. */
 export function setIsPaused(value: boolean) {
@@ -37,10 +39,7 @@ export default class ModerationController {
 
     try {
       const prefKey = await resolveUserPrefKey(canonical)
-      await UserPreference.updateOrCreate(
-        { phoneNumber: prefKey },
-        { blocked: true }
-      )
+      await UserPreference.updateOrCreate({ phoneNumber: prefKey }, { blocked: true })
     } catch (error) {
       logger.error('Failed to block user %s: %o', canonical, error)
       return response.status(500).json({ error: 'Failed to block user' })
@@ -68,10 +67,7 @@ export default class ModerationController {
 
     try {
       const prefKey = await resolveUserPrefKey(canonical)
-      await UserPreference.updateOrCreate(
-        { phoneNumber: prefKey },
-        { blocked: false }
-      )
+      await UserPreference.updateOrCreate({ phoneNumber: prefKey }, { blocked: false })
     } catch (error) {
       logger.error('Failed to unblock user %s: %o', canonical, error)
       return response.status(500).json({ error: 'Failed to unblock user' })

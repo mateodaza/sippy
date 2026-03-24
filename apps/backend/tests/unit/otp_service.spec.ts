@@ -5,12 +5,28 @@ import axios from 'axios'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function makeMockSender(): { calls: Array<{ to: string; body: string }>; sender: (to: string, body: string) => Promise<void> } {
+function makeMockSender(): {
+  calls: Array<{ to: string; body: string }>
+  sender: (to: string, body: string) => Promise<void>
+} {
   const calls: Array<{ to: string; body: string }> = []
   return {
     calls,
     sender: async (to: string, body: string) => {
       calls.push({ to, body })
+    },
+  }
+}
+
+function makeMockWhatsAppSender(): {
+  calls: Array<{ to: string; code: string; lang: string }>
+  sender: (to: string, code: string, lang: string) => Promise<void>
+} {
+  const calls: Array<{ to: string; code: string; lang: string }> = []
+  return {
+    calls,
+    sender: async (to: string, code: string, lang: string) => {
+      calls.push({ to, code, lang })
     },
   }
 }
@@ -29,7 +45,10 @@ test.group('OtpService | sendOtp — code generation', () => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
     await svc.sendOtp('+573001234567')
-    const store = (svc as any).otpStore as Map<string, { code: string; expiresAt: number; attempts: number }>
+    const store = (svc as any).otpStore as Map<
+      string,
+      { code: string; expiresAt: number; attempts: number }
+    >
     const entry = store.get('+573001234567')
     assert.isString(entry?.code)
     assert.match(entry!.code, /^\d{6}$/)
@@ -52,14 +71,14 @@ test.group('OtpService | sendOtp — code generation', () => {
     assert.match(code2, /^\d{6}$/)
   })
 
-  test('TTL is approximately 5 minutes', async ({ assert }) => {
+  test('TTL is approximately 10 minutes', async ({ assert }) => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
     const before = Date.now()
     await svc.sendOtp('+573001234567')
     const store = (svc as any).otpStore as Map<string, { expiresAt: number }>
     const entry = store.get('+573001234567')!
-    const expectedExpiry = before + 5 * 60 * 1000
+    const expectedExpiry = before + 10 * 60 * 1000
     // within 1 second of expected
     assert.isAbove(entry.expiresAt, expectedExpiry - 1000)
     assert.isBelow(entry.expiresAt, expectedExpiry + 1000)
@@ -99,7 +118,7 @@ test.group('OtpService | sendOtp — rate limiting', () => {
     await svc.sendOtp(phone)
     await svc.sendOtp(phone)
     await svc.sendOtp(phone)
-    const result = await svc.sendOtp(phone) as { error: 'rate_limited'; retryAfter: number }
+    const result = (await svc.sendOtp(phone)) as { error: 'rate_limited'; retryAfter: number }
     assert.isNumber(result.retryAfter)
     assert.isAbove(result.retryAfter, 0)
     assert.isAtMost(result.retryAfter, 60)
@@ -123,7 +142,9 @@ test.group('OtpService | sendOtp — rate limiting', () => {
 // ── sendOtp — Twilio SMS sender ───────────────────────────────────────────────
 
 test.group('OtpService | sendOtp — Twilio SMS sender', () => {
-  test('calls injected smsSender with phone number and body containing the code', async ({ assert }) => {
+  test('calls injected smsSender with phone number and body containing the code', async ({
+    assert,
+  }) => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
     await svc.sendOtp('+573001234567')
@@ -312,7 +333,10 @@ test.group('OtpService | verifyOtp — expiry', () => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
     await svc.sendOtp('+573001444001')
-    const store = (svc as any).otpStore as Map<string, { code: string; expiresAt: number; attempts: number }>
+    const store = (svc as any).otpStore as Map<
+      string,
+      { code: string; expiresAt: number; attempts: number }
+    >
     const entry = store.get('+573001444001')!
     // Force expiry
     entry.expiresAt = Date.now() - 1
@@ -324,7 +348,10 @@ test.group('OtpService | verifyOtp — expiry', () => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
     await svc.sendOtp('+573001444002')
-    const store = (svc as any).otpStore as Map<string, { code: string; expiresAt: number; attempts: number }>
+    const store = (svc as any).otpStore as Map<
+      string,
+      { code: string; expiresAt: number; attempts: number }
+    >
     const entry = store.get('+573001444002')!
     entry.expiresAt = Date.now() - 1
     await svc.verifyOtp('+573001444002', entry.code)
@@ -372,7 +399,9 @@ test.group('OtpService | sendOtp — UserPreference language lookup', (group) =>
     UserPreference.find = originalFind
   })
 
-  test('preferredLanguage: en in DB overrides prefix fallback → English body', async ({ assert }) => {
+  test('preferredLanguage: en in DB overrides prefix fallback → English body', async ({
+    assert,
+  }) => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
     UserPreference.find = async (_phone: string) => ({ preferredLanguage: 'en' }) as any
@@ -380,7 +409,9 @@ test.group('OtpService | sendOtp — UserPreference language lookup', (group) =>
     assert.include(mock.calls[0].body, 'Your code is')
   })
 
-  test('preferredLanguage: pt in DB overrides prefix fallback → Portuguese body', async ({ assert }) => {
+  test('preferredLanguage: pt in DB overrides prefix fallback → Portuguese body', async ({
+    assert,
+  }) => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
     UserPreference.find = async (_phone: string) => ({ preferredLanguage: 'pt' }) as any
@@ -388,7 +419,9 @@ test.group('OtpService | sendOtp — UserPreference language lookup', (group) =>
     assert.include(mock.calls[0].body, 'Seu código é')
   })
 
-  test('preferredLanguage: es in DB overrides prefix fallback → Spanish body', async ({ assert }) => {
+  test('preferredLanguage: es in DB overrides prefix fallback → Spanish body', async ({
+    assert,
+  }) => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
     UserPreference.find = async (_phone: string) => ({ preferredLanguage: 'es' }) as any
@@ -456,10 +489,7 @@ test.group('OtpService | defaultSmsSender', (group) => {
     delete process.env.TWILIO_AUTH_TOKEN
     delete process.env.TWILIO_FROM_NUMBER
     const svc = new OtpService()
-    await assert.rejects(
-      () => svc.sendOtp('+573001234567'),
-      /Twilio env vars not configured/
-    )
+    await assert.rejects(() => svc.sendOtp('+573001234567'), /Twilio env vars not configured/)
   })
 
   test('axios.post called with correct Twilio Messages URL', async ({ assert }) => {
@@ -491,7 +521,9 @@ test.group('OtpService | defaultSmsSender', (group) => {
     assert.equal(capturedConfig.auth.password, 'token456')
   })
 
-  test('axios.post called with Content-Type: application/x-www-form-urlencoded', async ({ assert }) => {
+  test('axios.post called with Content-Type: application/x-www-form-urlencoded', async ({
+    assert,
+  }) => {
     process.env.TWILIO_ACCOUNT_SID = 'ACtest123'
     process.env.TWILIO_AUTH_TOKEN = 'token456'
     process.env.TWILIO_FROM_NUMBER = '+15005550006'
@@ -505,7 +537,9 @@ test.group('OtpService | defaultSmsSender', (group) => {
     assert.equal(capturedConfig.headers['Content-Type'], 'application/x-www-form-urlencoded')
   })
 
-  test('axios.post body is URLSearchParams-encoded with correct To / From / Body', async ({ assert }) => {
+  test('axios.post body is URLSearchParams-encoded with correct To / From / Body', async ({
+    assert,
+  }) => {
     process.env.TWILIO_ACCOUNT_SID = 'ACtest123'
     process.env.TWILIO_AUTH_TOKEN = 'token456'
     process.env.TWILIO_FROM_NUMBER = '+15005550006'
@@ -526,26 +560,44 @@ test.group('OtpService | defaultSmsSender', (group) => {
 // ── otpStore capacity cap ─────────────────────────────────────────────────────
 
 test.group('OtpService | otpStore capacity cap', () => {
-  test('insert when all 100,000 entries are unexpired — size stays ≤ 100,000', async ({ assert }) => {
+  test('insert when all 100,000 entries are unexpired — size stays ≤ 100,000', async ({
+    assert,
+  }) => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
-    const store = (svc as any).otpStore as Map<string, { code: string; expiresAt: number; attempts: number }>
+    const store = (svc as any).otpStore as Map<
+      string,
+      { code: string; expiresAt: number; attempts: number }
+    >
     const future = Date.now() + 999_999
     for (let i = 0; i < 100_000; i++) {
-      store.set(`+1${String(i).padStart(10, '0')}`, { code: '123456', expiresAt: future, attempts: 0 })
+      store.set(`+1${String(i).padStart(10, '0')}`, {
+        code: '123456',
+        expiresAt: future,
+        attempts: 0,
+      })
     }
     await svc.sendOtp('+573001234567')
     assert.isAtMost(store.size, 100_000)
     assert.isTrue(store.has('+573001234567'))
   })
 
-  test('insert when all 100,000 entries are expired — expired purged, size is 1', async ({ assert }) => {
+  test('insert when all 100,000 entries are expired — expired purged, size is 1', async ({
+    assert,
+  }) => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
-    const store = (svc as any).otpStore as Map<string, { code: string; expiresAt: number; attempts: number }>
+    const store = (svc as any).otpStore as Map<
+      string,
+      { code: string; expiresAt: number; attempts: number }
+    >
     const past = Date.now() - 1
     for (let i = 0; i < 100_000; i++) {
-      store.set(`+1${String(i).padStart(10, '0')}`, { code: '123456', expiresAt: past, attempts: 0 })
+      store.set(`+1${String(i).padStart(10, '0')}`, {
+        code: '123456',
+        expiresAt: past,
+        attempts: 0,
+      })
     }
     await svc.sendOtp('+573001234567')
     assert.equal(store.size, 1)
@@ -560,14 +612,23 @@ test.group('OtpService | otpStore capacity cap', () => {
     assert.equal(store.size, 1)
   })
 
-  test('resend for existing phone at capacity — no eviction of unrelated entries', async ({ assert }) => {
+  test('resend for existing phone at capacity — no eviction of unrelated entries', async ({
+    assert,
+  }) => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
-    const store = (svc as any).otpStore as Map<string, { code: string; expiresAt: number; attempts: number }>
+    const store = (svc as any).otpStore as Map<
+      string,
+      { code: string; expiresAt: number; attempts: number }
+    >
     const future = Date.now() + 999_999
     // Pre-fill 99,999 unexpired entries
     for (let i = 0; i < 99_999; i++) {
-      store.set(`+1${String(i).padStart(10, '0')}`, { code: '123456', expiresAt: future, attempts: 0 })
+      store.set(`+1${String(i).padStart(10, '0')}`, {
+        code: '123456',
+        expiresAt: future,
+        attempts: 0,
+      })
     }
     // First send creates the entry — store is now at 100,000
     await svc.sendOtp('+573001234567')
@@ -597,7 +658,9 @@ test.group('OtpService | sendRateLimitMap capacity cap', () => {
     assert.isTrue(rlMap.has('+573001234567'))
   })
 
-  test('insert when all 100,000 buckets are expired — expired purged, size is 1', async ({ assert }) => {
+  test('insert when all 100,000 buckets are expired — expired purged, size is 1', async ({
+    assert,
+  }) => {
     const mock = makeMockSender()
     const svc = new OtpService(mock.sender)
     const rlMap = (svc as any).sendRateLimitMap as Map<string, { count: number; resetAt: number }>
@@ -624,5 +687,90 @@ test.group('OtpService | sendRateLimitMap capacity cap', () => {
     // Second call increments existing bucket — no new insertion
     await svc.sendOtp('+573001234567')
     assert.isAtMost(rlMap.size, 100_000)
+  })
+})
+
+// ── WhatsApp channel delivery ────────────────────────────────────────────────
+
+test.group('OtpService | sendOtp — WhatsApp channel', () => {
+  test('channel=whatsapp calls whatsAppOtpSender, not smsSender', async ({ assert }) => {
+    const sms = makeMockSender()
+    const wa = makeMockWhatsAppSender()
+    const svc = new OtpService(sms.sender, wa.sender)
+    await svc.sendOtp('+573001234567', 'es', 'whatsapp')
+    assert.lengthOf(sms.calls, 0)
+    assert.lengthOf(wa.calls, 1)
+    assert.equal(wa.calls[0].to, '+573001234567')
+    assert.match(wa.calls[0].code, /^\d{6}$/)
+    assert.equal(wa.calls[0].lang, 'es')
+  })
+
+  test('channel=sms calls smsSender, not whatsAppOtpSender', async ({ assert }) => {
+    const sms = makeMockSender()
+    const wa = makeMockWhatsAppSender()
+    const svc = new OtpService(sms.sender, wa.sender)
+    await svc.sendOtp('+573001234567', 'es', 'sms')
+    assert.lengthOf(sms.calls, 1)
+    assert.lengthOf(wa.calls, 0)
+  })
+
+  test('default channel is sms when omitted', async ({ assert }) => {
+    const sms = makeMockSender()
+    const wa = makeMockWhatsAppSender()
+    const svc = new OtpService(sms.sender, wa.sender)
+    await svc.sendOtp('+573001234567', 'es')
+    assert.lengthOf(sms.calls, 1)
+    assert.lengthOf(wa.calls, 0)
+  })
+
+  test('WhatsApp send stores OTP that can be verified', async ({ assert }) => {
+    const sms = makeMockSender()
+    const wa = makeMockWhatsAppSender()
+    const svc = new OtpService(sms.sender, wa.sender)
+    await svc.sendOtp('+573001234567', 'es', 'whatsapp')
+    const code = wa.calls[0].code
+    const result = await svc.verifyOtp('+573001234567', code)
+    assert.deepEqual(result, { valid: true })
+  })
+
+  test('failed WhatsApp send leaves no OTP behind', async ({ assert }) => {
+    const sms = makeMockSender()
+    const failingWa = async () => {
+      throw new Error('template send failed')
+    }
+    const svc = new OtpService(sms.sender, failingWa)
+    await assert.rejects(
+      () => svc.sendOtp('+573001234567', 'es', 'whatsapp'),
+      /template send failed/
+    )
+    const store = (svc as any).otpStore as Map<string, any>
+    assert.isFalse(store.has('+573001234567'))
+  })
+
+  test('rate limit is shared across SMS and WhatsApp for the same phone', async ({ assert }) => {
+    const sms = makeMockSender()
+    const wa = makeMockWhatsAppSender()
+    const svc = new OtpService(sms.sender, wa.sender)
+    const phone = '+573009999010'
+    await svc.sendOtp(phone, 'es', 'sms')
+    await svc.sendOtp(phone, 'es', 'whatsapp')
+    await svc.sendOtp(phone, 'es', 'sms')
+    // 4th send should be rate limited regardless of channel
+    const result = await svc.sendOtp(phone, 'es', 'whatsapp')
+    assert.equal((result as any).error, 'rate_limited')
+  })
+
+  test('WhatsApp sender receives correct language for en', async ({ assert }) => {
+    const wa = makeMockWhatsAppSender()
+    const svc = new OtpService(makeMockSender().sender, wa.sender)
+    await svc.sendOtp('+573001234567', 'en', 'whatsapp')
+    assert.equal(wa.calls[0].lang, 'en')
+  })
+
+  test('WhatsApp sender receives correct language for pt', async ({ assert }) => {
+    const wa = makeMockWhatsAppSender()
+    const svc = new OtpService(makeMockSender().sender, wa.sender)
+    await svc.sendOtp('+573001234567', 'pt', 'whatsapp')
+    assert.equal(wa.calls[0].lang, 'pt')
   })
 })

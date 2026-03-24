@@ -13,7 +13,9 @@ test.group('Set Privacy | JWT middleware on /api/set-privacy', () => {
     response.assertStatus(401)
   })
 
-  test('TC-PV-001-F-RT02: POST /api/set-privacy with invalid Bearer token returns 401', async ({ client }) => {
+  test('TC-PV-001-F-RT02: POST /api/set-privacy with invalid Bearer token returns 401', async ({
+    client,
+  }) => {
     const response = await client
       .post('/api/set-privacy')
       .header('Authorization', 'Bearer invalid_xyz')

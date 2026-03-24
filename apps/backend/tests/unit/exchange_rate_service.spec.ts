@@ -22,8 +22,7 @@ async function createService(): Promise<{
   originalFetch: typeof globalThis.fetch
 }> {
   const originalFetch = globalThis.fetch
-  globalThis.fetch = async () =>
-    ({ ok: true, json: async () => ({ rates: {} }) }) as Response
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ rates: {} }) }) as Response
 
   const svc = new ExchangeRateService()
   svc.stopRefreshTimer()
@@ -203,7 +202,9 @@ test.group('fetchRates | caches rates from API response', (group) => {
 
   test('keeps stale cache on fetch error', async ({ assert }) => {
     ;(svc as any).ratesCache.set('COP', 9999)
-    globalThis.fetch = async () => { throw new Error('network failure') }
+    globalThis.fetch = async () => {
+      throw new Error('network failure')
+    }
     await svc.fetchRates()
     globalThis.fetch = originalFetch
 

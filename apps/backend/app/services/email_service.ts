@@ -6,19 +6,19 @@ const DEFAULT_FROM = 'noreply@sippy.lat'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const EMAIL_TTL = 10 * 60 * 1000       // 10 min in ms
-const SEND_RATE_LIMIT = 3               // max sends per email per 60s
-const SEND_RATE_WINDOW = 60 * 1000     // 1 minute
-const MAX_VERIFY_ATTEMPTS = 3          // delete entry after 3 wrong guesses
-const CLEANUP_INTERVAL = 60 * 1000    // 60s
+const EMAIL_TTL = 10 * 60 * 1000 // 10 min in ms
+const SEND_RATE_LIMIT = 3 // max sends per email per 60s
+const SEND_RATE_WINDOW = 60 * 1000 // 1 minute
+const MAX_VERIFY_ATTEMPTS = 3 // delete entry after 3 wrong guesses
+const CLEANUP_INTERVAL = 60 * 1000 // 60s
 const MAX_MAP_ENTRIES = 50_000
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface EmailCodeEntry {
-  code: string          // 6-digit string
-  expiresAt: number     // Date.now() + EMAIL_TTL
-  attempts: number      // wrong guess counter
+  code: string // 6-digit string
+  expiresAt: number // Date.now() + EMAIL_TTL
+  attempts: number // wrong guess counter
 }
 
 interface SendBucket {
@@ -122,7 +122,12 @@ class EmailService {
 
     try {
       const html = buildEmailHtml(code, resolvedLang)
-      await this.emailSender(email, EMAIL_SUBJECTS[resolvedLang], EMAIL_BODIES[resolvedLang](code), html)
+      await this.emailSender(
+        email,
+        EMAIL_SUBJECTS[resolvedLang],
+        EMAIL_BODIES[resolvedLang](code),
+        html
+      )
     } catch (err: unknown) {
       return { error: err instanceof Error ? err.message : String(err) }
     }
@@ -256,7 +261,12 @@ class EmailService {
 
   // ── Internal: Resend email sender ───────────────────────────────────────────
 
-  private async defaultEmailSender(to: string, subject: string, text: string, html: string): Promise<void> {
+  private async defaultEmailSender(
+    to: string,
+    subject: string,
+    text: string,
+    html: string
+  ): Promise<void> {
     const apiKey = process.env.RESEND_API_KEY
     if (!apiKey) throw new Error('RESEND_API_KEY env var not configured')
 

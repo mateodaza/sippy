@@ -23,40 +23,25 @@ test.group('AC-001 | formatAccountSuspendedMessage', () => {
   })
 
   test('ES', ({ assert }) => {
-    assert.equal(
-      formatAccountSuspendedMessage('es'),
-      'Tu cuenta ha sido suspendida temporalmente.'
-    )
+    assert.equal(formatAccountSuspendedMessage('es'), 'Tu cuenta ha sido suspendida temporalmente.')
   })
 
   test('PT', ({ assert }) => {
-    assert.equal(
-      formatAccountSuspendedMessage('pt'),
-      'Sua conta foi suspensa temporariamente.'
-    )
+    assert.equal(formatAccountSuspendedMessage('pt'), 'Sua conta foi suspensa temporariamente.')
   })
 })
 
 test.group('AC-001 | formatMaintenanceMessage', () => {
   test('EN', ({ assert }) => {
-    assert.equal(
-      formatMaintenanceMessage('en'),
-      'Sippy is undergoing maintenance.'
-    )
+    assert.equal(formatMaintenanceMessage('en'), 'Sippy is undergoing maintenance.')
   })
 
   test('ES', ({ assert }) => {
-    assert.equal(
-      formatMaintenanceMessage('es'),
-      'Sippy esta en mantenimiento.'
-    )
+    assert.equal(formatMaintenanceMessage('es'), 'Sippy esta en mantenimiento.')
   })
 
   test('PT', ({ assert }) => {
-    assert.equal(
-      formatMaintenanceMessage('pt'),
-      'Sippy esta em manutencao.'
-    )
+    assert.equal(formatMaintenanceMessage('pt'), 'Sippy esta em manutencao.')
   })
 })
 
@@ -87,7 +72,6 @@ test.group('AC-001 | isPaused flag', (group) => {
 
 import UserPreference from '#models/user_preference'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let ControllerClass: new () => any
 
 async function ensureController() {
@@ -150,8 +134,12 @@ test.group('AC-001 | ModerationController.blockUser', (group) => {
   group.each.setup(async (t) => {
     if (!(await isDbAvailable())) t.skip(true, 'No local DB')
   })
-  group.setup(async () => { await ensureController() })
-  group.each.teardown(() => { restoreUserPreference() })
+  group.setup(async () => {
+    await ensureController()
+  })
+  group.each.teardown(() => {
+    restoreUserPreference()
+  })
 
   test('blocks user with valid phone', async ({ assert }) => {
     stubUpdateOrCreate()
@@ -180,8 +168,12 @@ test.group('AC-001 | ModerationController.unblockUser', (group) => {
   group.each.setup(async (t) => {
     if (!(await isDbAvailable())) t.skip(true, 'No local DB')
   })
-  group.setup(async () => { await ensureController() })
-  group.each.teardown(() => { restoreUserPreference() })
+  group.setup(async () => {
+    await ensureController()
+  })
+  group.each.teardown(() => {
+    restoreUserPreference()
+  })
 
   test('unblocks user with valid phone', async ({ assert }) => {
     stubUpdateOrCreate()
@@ -207,8 +199,12 @@ test.group('AC-001 | ModerationController.unblockUser', (group) => {
 })
 
 test.group('AC-001 | ModerationController.pause/resume', (group) => {
-  group.setup(async () => { await ensureController() })
-  group.each.teardown(() => { setIsPaused(false) })
+  group.setup(async () => {
+    await ensureController()
+  })
+  group.each.teardown(() => {
+    setIsPaused(false)
+  })
 
   test('pause sets isPaused to true', async ({ assert }) => {
     const controller = new ControllerClass()

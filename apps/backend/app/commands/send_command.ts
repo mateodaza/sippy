@@ -14,10 +14,7 @@ import {
   getEmbeddedBalance,
   sendToPhoneNumber,
 } from '#services/embedded_wallet.service'
-import {
-  sendTextMessage,
-  sendButtonMessage,
-} from '#services/whatsapp.service'
+import { sendTextMessage, sendButtonMessage } from '#services/whatsapp.service'
 import { getRefuelService } from '#services/refuel.service'
 import {
   type Lang,
@@ -62,11 +59,13 @@ export async function handleSendCommand(
   recipientRate: number | null,
   recipientCurrency: string | null
 ): Promise<boolean> {
-  logger.info(`SEND command: ${maskPhone(fromPhoneNumber)} -> ${maskPhone(toPhoneNumber)} (${amount} USD)`)
+  logger.info(
+    `SEND command: ${maskPhone(fromPhoneNumber)} -> ${maskPhone(toPhoneNumber)} (${amount} USD)`
+  )
 
   let transferCompleted = false
   try {
-    if (amount <= 0 || isNaN(amount)) {
+    if (amount <= 0 || Number.isNaN(amount)) {
       await sendTextMessage(fromPhoneNumber, formatInvalidAmountMessage(lang), lang)
       return false
     }
@@ -75,7 +74,17 @@ export async function handleSendCommand(
     const embeddedWallet = await getEmbeddedWallet(fromPhoneNumber)
 
     if (embeddedWallet) {
-      return await handleEmbeddedSend(fromPhoneNumber, toPhoneNumber, amount, embeddedWallet, lang, senderRate, senderCurrency, recipientRate, recipientCurrency)
+      return await handleEmbeddedSend(
+        fromPhoneNumber,
+        toPhoneNumber,
+        amount,
+        embeddedWallet,
+        lang,
+        senderRate,
+        senderCurrency,
+        recipientRate,
+        recipientCurrency
+      )
     }
 
     // Fall back to legacy server wallet flow
@@ -101,7 +110,12 @@ export async function handleSendCommand(
       await sendTextMessage(
         fromPhoneNumber,
         formatInsufficientBalanceMessage(
-          { balance: senderBalance, needed: amount, localRate: senderRate, localCurrency: senderCurrency },
+          {
+            balance: senderBalance,
+            needed: amount,
+            localRate: senderRate,
+            localCurrency: senderCurrency,
+          },
           lang
         ),
         lang
@@ -112,7 +126,9 @@ export async function handleSendCommand(
     // Check security limits
     const limitsCheck = await checkSecurityLimits(fromPhoneNumber, amount)
     if (!limitsCheck.allowed) {
-      const effectiveLimit = limitsCheck.emailVerified ? DAILY_LIMIT_VERIFIED : DAILY_LIMIT_UNVERIFIED
+      const effectiveLimit = limitsCheck.emailVerified
+        ? DAILY_LIMIT_VERIFIED
+        : DAILY_LIMIT_UNVERIFIED
       const blockedMsg =
         limitsCheck.limitType === 'daily'
           ? formatTieredDailyLimitExceededMessage(
@@ -139,14 +155,30 @@ export async function handleSendCommand(
         if (inviteResult.dailyLimitReached) {
           await sendTextMessage(fromPhoneNumber, formatInviteDailyLimitReached(lang), lang)
         } else if (inviteResult.alreadyInvited) {
-          await sendTextMessage(fromPhoneNumber, formatInviteAlreadyPending(toPhoneNumber, lang), lang)
+          await sendTextMessage(
+            fromPhoneNumber,
+            formatInviteAlreadyPending(toPhoneNumber, lang),
+            lang
+          )
         } else if (inviteResult.delivered) {
-          await sendTextMessage(fromPhoneNumber, formatInviteSentToSender(toPhoneNumber, lang), lang)
+          await sendTextMessage(
+            fromPhoneNumber,
+            formatInviteSentToSender(toPhoneNumber, lang),
+            lang
+          )
         } else {
-          await sendTextMessage(fromPhoneNumber, formatInviteDeliveryFailed(toPhoneNumber, lang), lang)
+          await sendTextMessage(
+            fromPhoneNumber,
+            formatInviteDeliveryFailed(toPhoneNumber, lang),
+            lang
+          )
         }
       } catch {
-        await sendTextMessage(fromPhoneNumber, formatRecipientNotFoundMessage(toPhoneNumber, lang), lang)
+        await sendTextMessage(
+          fromPhoneNumber,
+          formatRecipientNotFoundMessage(toPhoneNumber, lang),
+          lang
+        )
       }
       return false
     }
@@ -189,7 +221,7 @@ export async function handleSendCommand(
 
     logger.info('Executing transfer...')
     const result = await sendUSDCToUser(fromPhoneNumber, toPhoneNumber, amount)
-    transferCompleted = true  // Transfer on-chain; notification failures must not return false
+    transferCompleted = true // Transfer on-chain; notification failures must not return false
     velocityService.recordSend(fromPhoneNumber, toPhoneNumber, amount)
 
     const successMessage = formatSendSuccessMessage(
@@ -250,11 +282,7 @@ export async function handleSendCommand(
     logger.error('Failed to send USDC: %o', error)
 
     const errorMessage = toUserErrorMessage(error, lang)
-    await sendTextMessage(
-      fromPhoneNumber,
-      formatTransferFailedMessage(errorMessage, lang),
-      lang
-    )
+    await sendTextMessage(fromPhoneNumber, formatTransferFailedMessage(errorMessage, lang), lang)
     return false
   }
 }
@@ -276,11 +304,7 @@ async function handleEmbeddedSend(
   _recipientCurrency: string | null
 ): Promise<boolean> {
   if (!senderWallet.spendPermissionHash) {
-    await sendTextMessage(
-      fromPhoneNumber,
-      formatSetupRequiredMessage(fromPhoneNumber, lang),
-      lang
-    )
+    await sendTextMessage(fromPhoneNumber, formatSetupRequiredMessage(fromPhoneNumber, lang), lang)
     return false
   }
 
@@ -296,7 +320,12 @@ async function handleEmbeddedSend(
     await sendTextMessage(
       fromPhoneNumber,
       formatInsufficientBalanceMessage(
-        { balance: senderBalance, needed: amount, localRate: senderRate, localCurrency: senderCurrency },
+        {
+          balance: senderBalance,
+          needed: amount,
+          localRate: senderRate,
+          localCurrency: senderCurrency,
+        },
         lang
       ),
       lang
@@ -327,14 +356,26 @@ async function handleEmbeddedSend(
       if (inviteResult.dailyLimitReached) {
         await sendTextMessage(fromPhoneNumber, formatInviteDailyLimitReached(lang), lang)
       } else if (inviteResult.alreadyInvited) {
-        await sendTextMessage(fromPhoneNumber, formatInviteAlreadyPending(toPhoneNumber, lang), lang)
+        await sendTextMessage(
+          fromPhoneNumber,
+          formatInviteAlreadyPending(toPhoneNumber, lang),
+          lang
+        )
       } else if (inviteResult.delivered) {
         await sendTextMessage(fromPhoneNumber, formatInviteSentToSender(toPhoneNumber, lang), lang)
       } else {
-        await sendTextMessage(fromPhoneNumber, formatInviteDeliveryFailed(toPhoneNumber, lang), lang)
+        await sendTextMessage(
+          fromPhoneNumber,
+          formatInviteDeliveryFailed(toPhoneNumber, lang),
+          lang
+        )
       }
     } catch {
-      await sendTextMessage(fromPhoneNumber, formatRecipientNotFoundMessage(toPhoneNumber, lang), lang)
+      await sendTextMessage(
+        fromPhoneNumber,
+        formatRecipientNotFoundMessage(toPhoneNumber, lang),
+        lang
+      )
     }
     return false
   }
@@ -374,9 +415,7 @@ async function handleEmbeddedSend(
       const remaining = result.remainingAllowance.toFixed(2)
       let resetInfo = ''
       if (result.periodEndsAt) {
-        const daysUntilReset = Math.ceil(
-          (result.periodEndsAt - Date.now()) / (1000 * 60 * 60 * 24)
-        )
+        const daysUntilReset = Math.ceil((result.periodEndsAt - Date.now()) / (1000 * 60 * 60 * 24))
         if (daysUntilReset <= 1) {
           resetInfo =
             lang === 'en'
@@ -429,7 +468,10 @@ async function handleEmbeddedSend(
       logger.error('Failed to send button message: %o', notifyError)
     }
   } catch (postTransferError) {
-    logger.error('Post-transfer operation failed (transfer already completed): %o', postTransferError)
+    logger.error(
+      'Post-transfer operation failed (transfer already completed): %o',
+      postTransferError
+    )
   }
 
   return true

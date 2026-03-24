@@ -33,7 +33,8 @@ async function signToken(
 ): Promise<string> {
   let signingKey: CryptoKey
   if (opts.differentKey) {
-    signingKey = (await generateKeyPair('RS256')).privateKey
+    const keyPair = await generateKeyPair('RS256')
+    signingKey = keyPair.privateKey
   } else {
     signingKey = testPrivateKey
   }
@@ -271,282 +272,293 @@ test.group('JwtAuthMiddleware | registered user — other routes', (group) => {
   })
 })
 
-test.group('JwtAuthMiddleware | register-wallet — returning user (DB record found, Tier 1)', (group) => {
-  const PHONE_E164 = '+573001234567'
-  const DB_WALLET = '0xAbCdEf1234567890AbCdEf1234567890AbCdEf12'
-  const BODY_WALLET = '0x1234567890AbCdEf1234567890AbCdEf12345678'
+test.group(
+  'JwtAuthMiddleware | register-wallet — returning user (DB record found, Tier 1)',
+  (group) => {
+    const PHONE_E164 = '+573001234567'
+    const DB_WALLET = '0xAbCdEf1234567890AbCdEf1234567890AbCdEf12'
+    const BODY_WALLET = '0x1234567890AbCdEf1234567890AbCdEf12345678'
 
-  group.setup(async () => {
-    await ensureTestKeys()
-  })
-
-  group.each.teardown(() => {
-    restoreFindBy()
-  })
-
-  test('TC-A: no body, phone in registry → DB address used, next called', async ({ assert }) => {
-    mockFindBy({ walletAddress: DB_WALLET })
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next, wasNextCalled } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: {},
+    group.setup(async () => {
+      await ensureTestKeys()
     })
 
-    await middleware.handle(ctx as any, next)
-
-    assert.isTrue(wasNextCalled())
-    assert.isFalse(ctx.response.unauthorizedCalled)
-    assert.equal(ctx.cdpUser?.walletAddress, DB_WALLET)
-    assert.equal(ctx.cdpUser?.phoneNumber, PHONE_E164)
-  })
-
-  test('TC-B: body has valid address different from DB → DB wins, body ignored, next called', async ({
-    assert,
-  }) => {
-    mockFindBy({ walletAddress: DB_WALLET })
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next, wasNextCalled } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: { walletAddress: BODY_WALLET },
+    group.each.teardown(() => {
+      restoreFindBy()
     })
 
-    await middleware.handle(ctx as any, next)
+    test('TC-A: no body, phone in registry → DB address used, next called', async ({ assert }) => {
+      mockFindBy({ walletAddress: DB_WALLET })
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next, wasNextCalled } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: {},
+      })
 
-    assert.isTrue(wasNextCalled())
-    assert.isFalse(ctx.response.unauthorizedCalled)
-    assert.equal(ctx.cdpUser?.walletAddress, DB_WALLET)
-    assert.notEqual(ctx.cdpUser?.walletAddress, BODY_WALLET)
-  })
+      await middleware.handle(ctx as any, next)
 
-  test('TC-C: body has invalid address, phone in registry → DB wins, next called', async ({
-    assert,
-  }) => {
-    mockFindBy({ walletAddress: DB_WALLET })
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next, wasNextCalled } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: { walletAddress: 'not-an-eth-address' },
+      assert.isTrue(wasNextCalled())
+      assert.isFalse(ctx.response.unauthorizedCalled)
+      assert.equal(ctx.cdpUser?.walletAddress, DB_WALLET)
+      assert.equal(ctx.cdpUser?.phoneNumber, PHONE_E164)
     })
 
-    await middleware.handle(ctx as any, next)
+    test('TC-B: body has valid address different from DB → DB wins, body ignored, next called', async ({
+      assert,
+    }) => {
+      mockFindBy({ walletAddress: DB_WALLET })
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next, wasNextCalled } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: { walletAddress: BODY_WALLET },
+      })
 
-    assert.isTrue(wasNextCalled())
-    assert.isFalse(ctx.response.unauthorizedCalled)
-    assert.equal(ctx.cdpUser?.walletAddress, DB_WALLET)
-  })
+      await middleware.handle(ctx as any, next)
 
-  test('TC-D: body has empty string walletAddress, phone in registry → DB wins, next called', async ({
-    assert,
-  }) => {
-    mockFindBy({ walletAddress: DB_WALLET })
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next, wasNextCalled } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: { walletAddress: '' },
+      assert.isTrue(wasNextCalled())
+      assert.isFalse(ctx.response.unauthorizedCalled)
+      assert.equal(ctx.cdpUser?.walletAddress, DB_WALLET)
+      assert.notEqual(ctx.cdpUser?.walletAddress, BODY_WALLET)
     })
 
-    await middleware.handle(ctx as any, next)
+    test('TC-C: body has invalid address, phone in registry → DB wins, next called', async ({
+      assert,
+    }) => {
+      mockFindBy({ walletAddress: DB_WALLET })
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next, wasNextCalled } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: { walletAddress: 'not-an-eth-address' },
+      })
 
-    assert.isTrue(wasNextCalled())
-    assert.equal(ctx.cdpUser?.walletAddress, DB_WALLET)
-  })
+      await middleware.handle(ctx as any, next)
 
-  test('TC-D2: DB lookup called exactly once for returning user (DB-first confirmed)', async ({
-    assert,
-  }) => {
-    mockFindBy({ walletAddress: DB_WALLET })
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: { walletAddress: BODY_WALLET },
+      assert.isTrue(wasNextCalled())
+      assert.isFalse(ctx.response.unauthorizedCalled)
+      assert.equal(ctx.cdpUser?.walletAddress, DB_WALLET)
     })
 
-    await middleware.handle(ctx as any, next)
+    test('TC-D: body has empty string walletAddress, phone in registry → DB wins, next called', async ({
+      assert,
+    }) => {
+      mockFindBy({ walletAddress: DB_WALLET })
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next, wasNextCalled } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: { walletAddress: '' },
+      })
 
-    assert.lengthOf(findByCalls, 1)
-  })
-})
+      await middleware.handle(ctx as any, next)
 
-test.group('JwtAuthMiddleware | register-wallet — first-time user, valid body address (Tier 2)', (group) => {
-  const PHONE_E164 = '+573001234567'
-  const VALID_WALLET = '0x1234567890AbCdEf1234567890AbCdEf12345678'
-
-  group.setup(async () => {
-    await ensureTestKeys()
-  })
-
-  group.each.teardown(() => {
-    restoreFindBy()
-    restoreCdpClient()
-  })
-
-  test('TC-E: no DB record, body has valid address + CDP token → cdpUser uses body address, next called', async ({
-    assert,
-  }) => {
-    mockFindBy(null)
-    mockCdpClient([VALID_WALLET])
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next, wasNextCalled } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: { walletAddress: VALID_WALLET, cdpAccessToken: 'mock-cdp-token' },
+      assert.isTrue(wasNextCalled())
+      assert.equal(ctx.cdpUser?.walletAddress, DB_WALLET)
     })
 
-    await middleware.handle(ctx as any, next)
+    test('TC-D2: DB lookup called exactly once for returning user (DB-first confirmed)', async ({
+      assert,
+    }) => {
+      mockFindBy({ walletAddress: DB_WALLET })
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: { walletAddress: BODY_WALLET },
+      })
 
-    assert.isTrue(wasNextCalled())
-    assert.isFalse(ctx.response.unauthorizedCalled)
-    assert.deepEqual(ctx.cdpUser, { phoneNumber: PHONE_E164, walletAddress: VALID_WALLET })
-  })
+      await middleware.handle(ctx as any, next)
 
-  test('TC-F: DB lookup called before body used (canonical + bare-digit compat fallback)', async ({ assert }) => {
-    mockFindBy(null)
-    mockCdpClient([VALID_WALLET])
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: { walletAddress: VALID_WALLET, cdpAccessToken: 'mock-cdp-token' },
+      assert.lengthOf(findByCalls, 1)
+    })
+  }
+)
+
+test.group(
+  'JwtAuthMiddleware | register-wallet — first-time user, valid body address (Tier 2)',
+  (group) => {
+    const PHONE_E164 = '+573001234567'
+    const VALID_WALLET = '0x1234567890AbCdEf1234567890AbCdEf12345678'
+
+    group.setup(async () => {
+      await ensureTestKeys()
     })
 
-    await middleware.handle(ctx as any, next)
-
-    // Two calls: canonical phone first, then bare-digit compat fallback
-    assert.lengthOf(findByCalls, 2)
-  })
-
-  test('TC-G: no DB record, mixed-case valid address + CDP token → cdpUser uses body address, next called', async ({
-    assert,
-  }) => {
-    const MIXED_WALLET = '0xAbCd1234567890aBcD1234567890AbCd12345678'
-    mockFindBy(null)
-    mockCdpClient([MIXED_WALLET])
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next, wasNextCalled } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: { walletAddress: MIXED_WALLET, cdpAccessToken: 'mock-cdp-token' },
+    group.each.teardown(() => {
+      restoreFindBy()
+      restoreCdpClient()
     })
 
-    await middleware.handle(ctx as any, next)
+    test('TC-E: no DB record, body has valid address + CDP token → cdpUser uses body address, next called', async ({
+      assert,
+    }) => {
+      mockFindBy(null)
+      mockCdpClient([VALID_WALLET])
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next, wasNextCalled } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: { walletAddress: VALID_WALLET, cdpAccessToken: 'mock-cdp-token' },
+      })
 
-    assert.isTrue(wasNextCalled())
-    assert.equal(ctx.cdpUser?.walletAddress, MIXED_WALLET)
-  })
-})
+      await middleware.handle(ctx as any, next)
 
-test.group('JwtAuthMiddleware | register-wallet — first-time user, no/invalid body → 401 (Tier 3)', (group) => {
-  const PHONE_E164 = '+573001234567'
-
-  group.setup(async () => {
-    await ensureTestKeys()
-  })
-
-  group.each.teardown(() => {
-    restoreFindBy()
-  })
-
-  test('TC-H: no DB record, no body → 401, next not called', async ({ assert }) => {
-    mockFindBy(null)
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next, wasNextCalled } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: {},
+      assert.isTrue(wasNextCalled())
+      assert.isFalse(ctx.response.unauthorizedCalled)
+      assert.deepEqual(ctx.cdpUser, { phoneNumber: PHONE_E164, walletAddress: VALID_WALLET })
     })
 
-    await middleware.handle(ctx as any, next)
+    test('TC-F: DB lookup called before body used (canonical + bare-digit compat fallback)', async ({
+      assert,
+    }) => {
+      mockFindBy(null)
+      mockCdpClient([VALID_WALLET])
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: { walletAddress: VALID_WALLET, cdpAccessToken: 'mock-cdp-token' },
+      })
 
-    assert.isTrue(ctx.response.unauthorizedCalled)
-    assert.isFalse(wasNextCalled())
-  })
+      await middleware.handle(ctx as any, next)
 
-  test('TC-I: no DB record, body walletAddress empty string → 401, next not called', async ({
-    assert,
-  }) => {
-    mockFindBy(null)
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next, wasNextCalled } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: { walletAddress: '' },
+      // Two calls: canonical phone first, then bare-digit compat fallback
+      assert.lengthOf(findByCalls, 2)
     })
 
-    await middleware.handle(ctx as any, next)
+    test('TC-G: no DB record, mixed-case valid address + CDP token → cdpUser uses body address, next called', async ({
+      assert,
+    }) => {
+      const MIXED_WALLET = '0xAbCd1234567890aBcD1234567890AbCd12345678'
+      mockFindBy(null)
+      mockCdpClient([MIXED_WALLET])
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next, wasNextCalled } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: { walletAddress: MIXED_WALLET, cdpAccessToken: 'mock-cdp-token' },
+      })
 
-    assert.isTrue(ctx.response.unauthorizedCalled)
-    assert.isFalse(wasNextCalled())
-  })
+      await middleware.handle(ctx as any, next)
 
-  test('TC-J: no DB record, body walletAddress invalid format → 401, next not called', async ({
-    assert,
-  }) => {
-    mockFindBy(null)
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next, wasNextCalled } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: { walletAddress: 'not-an-eth-address' },
+      assert.isTrue(wasNextCalled())
+      assert.equal(ctx.cdpUser?.walletAddress, MIXED_WALLET)
+    })
+  }
+)
+
+test.group(
+  'JwtAuthMiddleware | register-wallet — first-time user, no/invalid body → 401 (Tier 3)',
+  (group) => {
+    const PHONE_E164 = '+573001234567'
+
+    group.setup(async () => {
+      await ensureTestKeys()
     })
 
-    await middleware.handle(ctx as any, next)
-
-    assert.isTrue(ctx.response.unauthorizedCalled)
-    assert.isFalse(wasNextCalled())
-  })
-
-  test('TC-K: no DB record, body walletAddress too short → 401, next not called', async ({
-    assert,
-  }) => {
-    mockFindBy(null)
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next, wasNextCalled } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: { walletAddress: '0xTOOSHORT' },
+    group.each.teardown(() => {
+      restoreFindBy()
     })
 
-    await middleware.handle(ctx as any, next)
+    test('TC-H: no DB record, no body → 401, next not called', async ({ assert }) => {
+      mockFindBy(null)
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next, wasNextCalled } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: {},
+      })
 
-    assert.isTrue(ctx.response.unauthorizedCalled)
-    assert.isFalse(wasNextCalled())
-  })
+      await middleware.handle(ctx as any, next)
 
-  test('TC-L: DB lookup tries canonical then bare-digit before body checked (DB-first for Tier 3)', async ({
-    assert,
-  }) => {
-    mockFindBy(null)
-    const middleware = new JwtAuthMiddleware()
-    const token = await signToken(PHONE_E164)
-    const { ctx, next } = buildCtx({
-      token,
-      url: '/api/register-wallet',
-      body: {},
+      assert.isTrue(ctx.response.unauthorizedCalled)
+      assert.isFalse(wasNextCalled())
     })
 
-    await middleware.handle(ctx as any, next)
+    test('TC-I: no DB record, body walletAddress empty string → 401, next not called', async ({
+      assert,
+    }) => {
+      mockFindBy(null)
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next, wasNextCalled } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: { walletAddress: '' },
+      })
 
-    // Two calls: canonical phone first, then bare-digit compat fallback
-    assert.lengthOf(findByCalls, 2)
-  })
-})
+      await middleware.handle(ctx as any, next)
+
+      assert.isTrue(ctx.response.unauthorizedCalled)
+      assert.isFalse(wasNextCalled())
+    })
+
+    test('TC-J: no DB record, body walletAddress invalid format → 401, next not called', async ({
+      assert,
+    }) => {
+      mockFindBy(null)
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next, wasNextCalled } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: { walletAddress: 'not-an-eth-address' },
+      })
+
+      await middleware.handle(ctx as any, next)
+
+      assert.isTrue(ctx.response.unauthorizedCalled)
+      assert.isFalse(wasNextCalled())
+    })
+
+    test('TC-K: no DB record, body walletAddress too short → 401, next not called', async ({
+      assert,
+    }) => {
+      mockFindBy(null)
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next, wasNextCalled } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: { walletAddress: '0xTOOSHORT' },
+      })
+
+      await middleware.handle(ctx as any, next)
+
+      assert.isTrue(ctx.response.unauthorizedCalled)
+      assert.isFalse(wasNextCalled())
+    })
+
+    test('TC-L: DB lookup tries canonical then bare-digit before body checked (DB-first for Tier 3)', async ({
+      assert,
+    }) => {
+      mockFindBy(null)
+      const middleware = new JwtAuthMiddleware()
+      const token = await signToken(PHONE_E164)
+      const { ctx, next } = buildCtx({
+        token,
+        url: '/api/register-wallet',
+        body: {},
+      })
+
+      await middleware.handle(ctx as any, next)
+
+      // Two calls: canonical phone first, then bare-digit compat fallback
+      assert.lengthOf(findByCalls, 2)
+    })
+  }
+)
 
 test.group('JwtAuthMiddleware | DB error', (group) => {
   const PHONE_E164 = '+573001234567'

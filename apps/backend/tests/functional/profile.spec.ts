@@ -134,13 +134,17 @@ test.group('PV-002 | GET /api/profile | phone_visible = false (private)', (group
     rls.resetIpThrottle()
   })
 
-  test('TC-PV-002-F06: phone_visible=false → response contains phoneVisible:false', async ({ client }) => {
+  test('TC-PV-002-F06: phone_visible=false → response contains phoneVisible:false', async ({
+    client,
+  }) => {
     const response = await client.get('/api/profile').qs({ phone: '+15550050002' })
     response.assertStatus(200)
     response.assertBodyContains({ phoneVisible: false })
   })
 
-  test('TC-PV-002-F07: address is present in response even when phone is private', async ({ client }) => {
+  test('TC-PV-002-F07: address is present in response even when phone is private', async ({
+    client,
+  }) => {
     const response = await client.get('/api/profile').qs({ phone: '+15550050002' })
     response.assertStatus(200)
     response.assertBodyContains({ address: '0x0000000000000000000000000000000000000012' })

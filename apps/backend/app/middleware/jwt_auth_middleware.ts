@@ -67,12 +67,18 @@ export default class JwtAuthMiddleware {
 
         if (record) {
           // Tier 1: DB record exists (returning user) — DB wins unconditionally
-          logger.info('JWT auth: register-wallet — returning user %s (DB record found)', maskPhone(phoneNumber))
+          logger.info(
+            'JWT auth: register-wallet — returning user %s (DB record found)',
+            maskPhone(phoneNumber)
+          )
           ctx.cdpUser = { phoneNumber, walletAddress: record.walletAddress }
           return await next()
         }
 
-        logger.info('JWT auth: register-wallet — NEW user %s (no DB record)', maskPhone(phoneNumber))
+        logger.info(
+          'JWT auth: register-wallet — NEW user %s (no DB record)',
+          maskPhone(phoneNumber)
+        )
 
         // No DB record — first-time registration requires CDP token proof
         const { walletAddress: bodyWalletAddress, cdpAccessToken } = ctx.request.body() as Record<

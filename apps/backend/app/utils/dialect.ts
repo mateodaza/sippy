@@ -10,10 +10,10 @@ export type Dialect = 'co' | 'mx' | 'ar' | 've' | 'neutral'
 
 // Ordered longest-prefix-first (same convention as exchange_rate_service.ts)
 const PREFIX_TO_DIALECT: [string, Dialect][] = [
-  ['+57', 'co'],  // Colombia
-  ['+52', 'mx'],  // Mexico
-  ['+54', 'ar'],  // Argentina
-  ['+58', 've'],  // Venezuela
+  ['+57', 'co'], // Colombia
+  ['+52', 'mx'], // Mexico
+  ['+54', 'ar'], // Argentina
+  ['+58', 've'], // Venezuela
 ]
 
 /**
@@ -33,10 +33,15 @@ export function getDialect(phone: string): Dialect {
  */
 export function dialectHint(dialect: Dialect): string | null {
   switch (dialect) {
-    case 'co': return 'Reply in natural Colombian Spanish. Keep it casual but don\'t force slang.'
-    case 'mx': return 'Reply in natural Mexican Spanish. Keep it casual but don\'t force slang.'
-    case 'ar': return 'Reply in natural Argentine Spanish. Use voseo ("vos" instead of "tu"). Keep it casual but don\'t force slang.'
-    case 've': return 'Reply in natural Venezuelan Spanish. Keep it casual but don\'t force slang.'
-    case 'neutral': return null
+    case 'co':
+      return "Reply in natural Colombian Spanish. Keep it casual but don't force slang."
+    case 'mx':
+      return "Reply in natural Mexican Spanish. Keep it casual but don't force slang."
+    case 'ar':
+      return 'Reply in natural Argentine Spanish. Use voseo ("vos" instead of "tu"). Keep it casual but don\'t force slang.'
+    case 've':
+      return "Reply in natural Venezuelan Spanish. Keep it casual but don't force slang."
+    case 'neutral':
+      return null
   }
 }

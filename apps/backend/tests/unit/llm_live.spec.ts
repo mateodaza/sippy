@@ -16,8 +16,8 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import Groq from 'groq-sdk'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const envPath = resolve(__dirname, '../../.env')
+const testDir = dirname(fileURLToPath(import.meta.url))
+const envPath = resolve(testDir, '../../.env')
 
 // Read GROQ_API_KEY from .env (production key, not test key)
 function loadApiKey(): string {
@@ -268,11 +268,20 @@ async function run() {
     // Also handle incomplete think blocks (no closing tag)
     raw = raw.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim()
     // Strip ```json blocks
-    raw = raw.replace(/```json\s*/g, '').replace(/```/g, '').trim()
+    raw = raw
+      .replace(/```json\s*/g, '')
+      .replace(/```/g, '')
+      .trim()
     const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    assert(jsonMatch !== null, `No JSON found in Qwen response (after stripping think): ${raw.slice(0, 200)}`)
+    assert(
+      jsonMatch !== null,
+      `No JSON found in Qwen response (after stripping think): ${raw.slice(0, 200)}`
+    )
     const parsed = JSON.parse(jsonMatch![0])
-    assert(parsed.command === 'balance', `Expected "balance" but Qwen returned "${parsed.command}"\n${raw.slice(0, 200)}`)
+    assert(
+      parsed.command === 'balance',
+      `Expected "balance" but Qwen returned "${parsed.command}"\n${raw.slice(0, 200)}`
+    )
   })
 
   // ------------------------------------------------------------------

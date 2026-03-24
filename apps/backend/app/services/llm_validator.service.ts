@@ -111,7 +111,10 @@ export async function validateLLMResponse(
       client.chat.completions.create({
         messages: [
           { role: 'system', content: systemContent },
-          { role: 'user', content: `User message: "${userMessage}"\n\nProposed reply: "${proposedMessage}"` },
+          {
+            role: 'user',
+            content: `User message: "${userMessage}"\n\nProposed reply: "${proposedMessage}"`,
+          },
         ],
         model: modelId,
         temperature: 0.1,
@@ -141,9 +144,8 @@ export async function validateLLMResponse(
 
     if (parsed.pass) return PASS_THROUGH
 
-    const corrected = typeof parsed.corrected === 'string' && parsed.corrected.length > 0
-      ? parsed.corrected
-      : null
+    const corrected =
+      typeof parsed.corrected === 'string' && parsed.corrected.length > 0 ? parsed.corrected : null
 
     return {
       passed: false,

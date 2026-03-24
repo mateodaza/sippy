@@ -59,7 +59,9 @@ test.group('userLanguage | DB preference wins', (group) => {
     findByResult = null
   })
 
-  test('TC-LN-002-U01: preferredLanguage = es → { language: es, source: preference }', async ({ assert }) => {
+  test('TC-LN-002-U01: preferredLanguage = es → { language: es, source: preference }', async ({
+    assert,
+  }) => {
     findByResult = { preferredLanguage: 'es' } as any
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ phoneNumber: '+573001234567' })
@@ -69,7 +71,9 @@ test.group('userLanguage | DB preference wins', (group) => {
     assert.deepEqual(getBody(), { language: 'es', source: 'preference' })
   })
 
-  test('TC-LN-002-U02: preferredLanguage = pt → { language: pt, source: preference }', async ({ assert }) => {
+  test('TC-LN-002-U02: preferredLanguage = pt → { language: pt, source: preference }', async ({
+    assert,
+  }) => {
     findByResult = { preferredLanguage: 'pt' } as any
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ phoneNumber: '+5511999' })
@@ -79,7 +83,9 @@ test.group('userLanguage | DB preference wins', (group) => {
     assert.deepEqual(getBody(), { language: 'pt', source: 'preference' })
   })
 
-  test('TC-LN-002-U03: preferredLanguage = en → { language: en, source: preference }', async ({ assert }) => {
+  test('TC-LN-002-U03: preferredLanguage = en → { language: en, source: preference }', async ({
+    assert,
+  }) => {
     findByResult = { preferredLanguage: 'en' } as any
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ phoneNumber: '+15551234567' })
@@ -99,7 +105,9 @@ test.group('userLanguage | phone fallback', (group) => {
     findByResult = null
   })
 
-  test('TC-LN-002-U04: no DB row, Brazilian phone → { language: pt, source: phone }', async ({ assert }) => {
+  test('TC-LN-002-U04: no DB row, Brazilian phone → { language: pt, source: phone }', async ({
+    assert,
+  }) => {
     findByResult = null
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ phoneNumber: '+5511999' })
@@ -109,7 +117,9 @@ test.group('userLanguage | phone fallback', (group) => {
     assert.deepEqual(getBody(), { language: 'pt', source: 'phone' })
   })
 
-  test('TC-LN-002-U05: row exists, preferredLanguage null, US phone → { language: en, source: phone }', async ({ assert }) => {
+  test('TC-LN-002-U05: row exists, preferredLanguage null, US phone → { language: en, source: phone }', async ({
+    assert,
+  }) => {
     findByResult = { preferredLanguage: null } as any
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ phoneNumber: '+15551234567' })
@@ -119,7 +129,9 @@ test.group('userLanguage | phone fallback', (group) => {
     assert.deepEqual(getBody(), { language: 'en', source: 'phone' })
   })
 
-  test('TC-LN-002-U06: preferredLanguage = fr (unknown), Colombian phone → { language: es, source: phone }', async ({ assert }) => {
+  test('TC-LN-002-U06: preferredLanguage = fr (unknown), Colombian phone → { language: es, source: phone }', async ({
+    assert,
+  }) => {
     findByResult = { preferredLanguage: 'fr' } as any
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ phoneNumber: '+573001234567' })
@@ -137,7 +149,9 @@ test.group('userLanguage | error handling', (group) => {
   })
 
   test('TC-LN-002-U07: DB throws → 500', async ({ assert }) => {
-    ;(UserPreference as any).findBy = async () => { throw new Error('DB error') }
+    ;(UserPreference as any).findBy = async () => {
+      throw new Error('DB error')
+    }
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ phoneNumber: '+573001234567' })
     await controller.userLanguage(ctx as any)

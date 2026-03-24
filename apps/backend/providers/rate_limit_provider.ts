@@ -25,13 +25,17 @@ export default class RateLimitProvider {
 
     // Warn on missing security secrets that gate critical functionality
     if (env.get('INDEXER_URL') && !env.get('INDEXER_API_SECRET')) {
-      console.warn('[warn] INDEXER_URL is set but INDEXER_API_SECRET is empty — indexer calls will fail auth')
+      console.warn(
+        '[warn] INDEXER_URL is set but INDEXER_API_SECRET is empty — indexer calls will fail auth'
+      )
     }
     if (!env.get('NOTIFY_SECRET')) {
       console.warn('[warn] NOTIFY_SECRET not set — /notify-fund endpoint will reject all requests')
     }
     if (!env.get('EXPORT_AUDIT_SECRET')) {
-      console.warn('[warn] EXPORT_AUDIT_SECRET not set — phone hashes will be null in indexer registrations')
+      console.warn(
+        '[warn] EXPORT_AUDIT_SECRET not set — phone hashes will be null in indexer registrations'
+      )
     }
   }
 

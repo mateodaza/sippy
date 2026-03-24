@@ -64,8 +64,8 @@ test.group('AC1 dispatchCommand | rate threaded from cache to balance handler', 
   test('Colombian sender: senderRate=4000, senderCurrency=COP reach handler', async ({
     assert,
   }) => {
-    let capturedRate: number | null | undefined = undefined
-    let capturedCurrency: string | null | undefined = undefined
+    let capturedRate: number | null | undefined
+    let capturedCurrency: string | null | undefined
 
     const fakeBalance = async (
       _phone: string,
@@ -89,8 +89,8 @@ test.group('AC1 dispatchCommand | rate threaded from cache to balance handler', 
   })
 
   test('Mexican sender: senderRate=17, senderCurrency=MXN reach handler', async ({ assert }) => {
-    let capturedRate: number | null | undefined = undefined
-    let capturedCurrency: string | null | undefined = undefined
+    let capturedRate: number | null | undefined
+    let capturedCurrency: string | null | undefined
 
     const fakeBalance = async (
       _phone: string,
@@ -110,8 +110,8 @@ test.group('AC1 dispatchCommand | rate threaded from cache to balance handler', 
   })
 
   test('USD sender (+1): null rate, null currency reach handler', async ({ assert }) => {
-    let capturedRate: number | null | undefined = undefined
-    let capturedCurrency: string | null | undefined = undefined
+    let capturedRate: number | null | undefined
+    let capturedCurrency: string | null | undefined
 
     const fakeBalance = async (
       _phone: string,
@@ -143,10 +143,10 @@ test.group('AC1 dispatchCommand | rate threaded from cache to send handler', (gr
   test('COP sender + BRL recipient: all four rate fields reach handler from cache', async ({
     assert,
   }) => {
-    let capturedSenderRate: number | null | undefined = undefined
-    let capturedSenderCurrency: string | null | undefined = undefined
-    let capturedRecipientRate: number | null | undefined = undefined
-    let capturedRecipientCurrency: string | null | undefined = undefined
+    let capturedSenderRate: number | null | undefined
+    let capturedSenderCurrency: string | null | undefined
+    let capturedRecipientRate: number | null | undefined
+    let capturedRecipientCurrency: string | null | undefined
 
     const fakeSend = async (
       _from: string,
@@ -262,8 +262,8 @@ test.group('fetchRateContext | recipient resolution', (group) => {
 
 test.group('AC2 routeCommand | rate values threaded to balance handler', () => {
   test('balance command: senderRate + senderCurrency reach the handler', async ({ assert }) => {
-    let capturedRate: number | null | undefined = undefined
-    let capturedCurrency: string | null | undefined = undefined
+    let capturedRate: number | null | undefined
+    let capturedCurrency: string | null | undefined
 
     const fakeBalance = async (
       _phone: string,
@@ -292,8 +292,8 @@ test.group('AC2 routeCommand | rate values threaded to balance handler', () => {
   test('balance command with null rates: null values reach the handler (USD path)', async ({
     assert,
   }) => {
-    let capturedRate: number | null | undefined = undefined
-    let capturedCurrency: string | null | undefined = undefined
+    let capturedRate: number | null | undefined
+    let capturedCurrency: string | null | undefined
 
     const fakeBalance = async (
       _phone: string,
@@ -322,10 +322,10 @@ test.group('AC2 routeCommand | rate values threaded to balance handler', () => {
 
 test.group('AC2 routeCommand | rate values threaded to send handler', () => {
   test('send command: all four rate fields reach the handler', async ({ assert }) => {
-    let capturedSenderRate: number | null | undefined = undefined
-    let capturedSenderCurrency: string | null | undefined = undefined
-    let capturedRecipientRate: number | null | undefined = undefined
-    let capturedRecipientCurrency: string | null | undefined = undefined
+    let capturedSenderRate: number | null | undefined
+    let capturedSenderCurrency: string | null | undefined
+    let capturedRecipientRate: number | null | undefined
+    let capturedRecipientCurrency: string | null | undefined
 
     const fakeSend = async (
       _from: string,
@@ -370,7 +370,7 @@ test.group('AC2 routeCommand | rate values threaded to send handler', () => {
 
 test.group('AC2b routeCommand | context forwarded to generateResponse', () => {
   test('greeting command: non-empty context array reaches generateResponse', async ({ assert }) => {
-    let capturedContext: unknown = undefined
+    let capturedContext: unknown
 
     const fakeGenerateResponse = async (
       _text: string,
@@ -415,7 +415,7 @@ test.group('AC2b routeCommand | context forwarded to generateResponse', () => {
   })
 
   test('social command: non-empty context array reaches generateResponse', async ({ assert }) => {
-    let capturedContext: unknown = undefined
+    let capturedContext: unknown
 
     const fakeGenerateResponse = async (
       _text: string,

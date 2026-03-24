@@ -54,13 +54,17 @@ test.group('computeSecurityLimits | unverified user ($50 limit)', () => {
 })
 
 test.group('computeSecurityLimits | transaction limit ($100, checked first)', () => {
-  test('TC-EL-06: verified, $0 spent, $150 → transaction limit (checked before daily)', ({ assert }) => {
+  test('TC-EL-06: verified, $0 spent, $150 → transaction limit (checked before daily)', ({
+    assert,
+  }) => {
     const result = computeSecurityLimits(true, 0, 150)
     assert.isFalse(result.allowed)
     assert.equal(result.limitType, 'transaction')
   })
 
-  test('TC-EL-07: unverified, $0 spent, $150 → transaction limit takes priority over daily', ({ assert }) => {
+  test('TC-EL-07: unverified, $0 spent, $150 → transaction limit takes priority over daily', ({
+    assert,
+  }) => {
     const result = computeSecurityLimits(false, 0, 150)
     assert.isFalse(result.allowed)
     assert.equal(result.limitType, 'transaction')

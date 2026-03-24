@@ -29,7 +29,7 @@ const USER_RESOLVE_WINDOW = 60 * 60 * 1000 // 1 hour
 const LOGIN_LIMIT = 5 // attempts per window
 const LOGIN_WINDOW = 15 * 60 * 1000 // 15 minutes
 
-const CDP_EXCHANGE_LIMIT = 5  // exchanges per window
+const CDP_EXCHANGE_LIMIT = 5 // exchanges per window
 const CDP_EXCHANGE_WINDOW = 15 * 60 * 1000 // 15 minutes
 
 const MAX_MAP_ENTRIES = 100_000 // hard cap to prevent unbounded memory growth
@@ -115,7 +115,10 @@ export default class RateLimitService {
    */
   markProcessed(messageId: string): void {
     if (this.processedMessages.size >= MAX_MAP_ENTRIES) {
-      this.logger?.warn('processedMessages at capacity (%d), forcing cleanup', this.processedMessages.size)
+      this.logger?.warn(
+        'processedMessages at capacity (%d), forcing cleanup',
+        this.processedMessages.size
+      )
       this.cleanExpiredMessages()
     }
     this.processedMessages.set(messageId, Date.now())

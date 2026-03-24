@@ -13,7 +13,9 @@ test.group('Set Language | JWT middleware on /api/set-language', () => {
     response.assertStatus(401)
   })
 
-  test('TC-LN-003-F-RT02: POST /api/set-language with invalid Bearer token returns 401', async ({ client }) => {
+  test('TC-LN-003-F-RT02: POST /api/set-language with invalid Bearer token returns 401', async ({
+    client,
+  }) => {
     const response = await client
       .post('/api/set-language')
       .header('Authorization', 'Bearer invalid_xyz')

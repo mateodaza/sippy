@@ -59,8 +59,8 @@ function getCDPClient(): CdpClient {
   return cdpClient
 }
 
-export const DAILY_LIMIT_UNVERIFIED = 50   // $50 USD
-export const DAILY_LIMIT_VERIFIED   = 500  // $500 USD
+export const DAILY_LIMIT_UNVERIFIED = 50 // $50 USD
+export const DAILY_LIMIT_VERIFIED = 500 // $500 USD
 
 // Security limits for MVP
 const SECURITY_LIMITS: SecurityLimits = {
@@ -127,7 +127,9 @@ export async function createUserWallet(phoneNumber: string): Promise<UserWallet>
     logger.info(`User wallet registered in database for ${maskPhone(phoneNumber)}`)
 
     // Register with indexer (fire-and-forget — never blocks wallet creation)
-    registerWalletWithIndexer(walletAddress, phoneNumber).catch((err) => logger.warn('Indexer registration failed (non-blocking): %o', err))
+    registerWalletWithIndexer(walletAddress, phoneNumber).catch((err) =>
+      logger.warn('Indexer registration failed (non-blocking): %o', err)
+    )
 
     return userWallet
   } catch (error) {
@@ -237,7 +239,12 @@ export function computeSecurityLimits(
   emailVerified: boolean,
   dailySpent: number,
   amount: number
-): { allowed: boolean; reason?: string; emailVerified?: boolean; limitType?: 'transaction' | 'daily' } {
+): {
+  allowed: boolean
+  reason?: string
+  emailVerified?: boolean
+  limitType?: 'transaction' | 'daily'
+} {
   const effectiveLimit = emailVerified ? DAILY_LIMIT_VERIFIED : DAILY_LIMIT_UNVERIFIED
 
   if (amount > SECURITY_LIMITS.transactionLimit) {
@@ -267,7 +274,12 @@ export function computeSecurityLimits(
 export async function checkSecurityLimits(
   phoneNumber: string,
   amount: number
-): Promise<{ allowed: boolean; reason?: string; emailVerified?: boolean; limitType?: 'transaction' | 'daily' }> {
+): Promise<{
+  allowed: boolean
+  reason?: string
+  emailVerified?: boolean
+  limitType?: 'transaction' | 'daily'
+}> {
   const userWallet = await getUserWallet(phoneNumber)
   if (!userWallet) {
     return { allowed: false, reason: 'User wallet not found' }
@@ -347,7 +359,10 @@ export async function sendUSDC(
 
     // Get account by name
     const accountName = userWallet.cdpWalletId
-    const account = await withTimeout(cdp.evm.getOrCreateAccount({ name: accountName }), 'getOrCreateAccount')
+    const account = await withTimeout(
+      cdp.evm.getOrCreateAccount({ name: accountName }),
+      'getOrCreateAccount'
+    )
 
     logger.info(`Account loaded: ${account.address}`)
 
@@ -365,14 +380,17 @@ export async function sendUSDC(
     logger.info(`   Sending transaction...`)
 
     // Send transaction via CDP v2
-    const result = await withTimeout(cdp.evm.sendTransaction({
-      address: account.address,
-      transaction: {
-        to: USDC_CONTRACT as `0x${string}`,
-        data: callData,
-      },
-      network: 'arbitrum' as any,
-    }), 'sendTransaction')
+    const result = await withTimeout(
+      cdp.evm.sendTransaction({
+        address: account.address,
+        transaction: {
+          to: USDC_CONTRACT as `0x${string}`,
+          data: callData,
+        },
+        network: 'arbitrum' as any,
+      }),
+      'sendTransaction'
+    )
 
     logger.info(`Transfer successful! Hash: ${result.transactionHash}`)
 
@@ -390,11 +408,17 @@ export async function sendUSDC(
       )
       if ((fallbackResult.rowCount ?? 0) === 0) {
         const maskedPhone = maskPhone(fromPhoneNumber)
-        logger.error({ alert: 'spend-tracking-failure', phone: maskedPhone, amount }, 'Daily spend update failed after successful transfer — spend limits may not advance')
+        logger.error(
+          { alert: 'spend-tracking-failure', phone: maskedPhone, amount },
+          'Daily spend update failed after successful transfer — spend limits may not advance'
+        )
       }
     } else if ((updateResult.rowCount ?? 0) === 0) {
       const maskedPhone = maskPhone(fromPhoneNumber)
-      logger.error({ alert: 'spend-tracking-failure', phone: maskedPhone, amount }, 'Daily spend update failed after successful transfer — spend limits may not advance')
+      logger.error(
+        { alert: 'spend-tracking-failure', phone: maskedPhone, amount },
+        'Daily spend update failed after successful transfer — spend limits may not advance'
+      )
     }
 
     return {

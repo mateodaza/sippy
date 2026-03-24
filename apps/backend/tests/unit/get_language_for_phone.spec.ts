@@ -50,7 +50,9 @@ test.group('getLanguageForPhone | Spanish fallback (everything else)', () => {
 // ── Structural: prefix map ordering invariant ──────────────────────────────────
 
 test.group('PHONE_LANGUAGE_PREFIX_MAP | ordering invariant', () => {
-  test('TC-LO1: map is sorted longest-prefix-first (no shorter prefix before a longer one it shadows)', ({ assert }) => {
+  test('TC-LO1: map is sorted longest-prefix-first (no shorter prefix before a longer one it shadows)', ({
+    assert,
+  }) => {
     for (let i = 0; i < PHONE_LANGUAGE_PREFIX_MAP.length - 1; i++) {
       const current = PHONE_LANGUAGE_PREFIX_MAP[i][0]
       const next = PHONE_LANGUAGE_PREFIX_MAP[i + 1][0]
@@ -58,7 +60,7 @@ test.group('PHONE_LANGUAGE_PREFIX_MAP | ordering invariant', () => {
       assert.isTrue(
         current.length >= next.length,
         `Prefix "${current}" at index ${i} is shorter than "${next}" at index ${i + 1}. ` +
-        `Fix: move "${current}" after "${next}" (longer prefixes must come first).`
+          `Fix: move "${current}" after "${next}" (longer prefixes must come first).`
       )
     }
   })
@@ -67,14 +69,16 @@ test.group('PHONE_LANGUAGE_PREFIX_MAP | ordering invariant', () => {
 // ── Algorithmic: prove longest-prefix-match works with overlapping prefixes ────
 
 test.group('getLanguageForPhone | longest-prefix algorithm correctness', () => {
-  test('TC-LO2: algorithm returns longest-matching prefix, not first shorter match', ({ assert }) => {
+  test('TC-LO2: algorithm returns longest-matching prefix, not first shorter match', ({
+    assert,
+  }) => {
     // Construct a local overlapping map to prove the for-loop algorithm is correct.
     // This simulates a future scenario where Dominican Republic (+1809) maps to 'es'
     // while the general NANP prefix (+1) maps to 'en'.
     // With correct longest-first ordering, +1809... must return 'es', not 'en'.
     const overlappingMap: readonly [string, 'en' | 'es' | 'pt'][] = [
-      ['+1809', 'es'],  // longer prefix first — Dominican Republic (Spanish)
-      ['+1',    'en'],  // shorter catch-all after
+      ['+1809', 'es'], // longer prefix first — Dominican Republic (Spanish)
+      ['+1', 'en'], // shorter catch-all after
     ]
     const lookup = (phone: string): 'en' | 'es' | 'pt' => {
       for (const [prefix, lang] of overlappingMap) {
@@ -90,7 +94,7 @@ test.group('getLanguageForPhone | longest-prefix algorithm correctness', () => {
 
     // Anti-regression: prove that reversing order (bug) produces wrong result for +1809:
     const buggyMap: readonly [string, 'en' | 'es' | 'pt'][] = [
-      ['+1',    'en'],  // BUG: shorter prefix before longer one
+      ['+1', 'en'], // BUG: shorter prefix before longer one
       ['+1809', 'es'],
     ]
     const buggyLookup = (phone: string): 'en' | 'es' | 'pt' => {
@@ -100,6 +104,10 @@ test.group('getLanguageForPhone | longest-prefix algorithm correctness', () => {
       return 'es'
     }
     // This proves why ordering matters: wrong order makes +1809 return 'en' instead of 'es'
-    assert.equal(buggyLookup('+18095551234'), 'en', 'Buggy (shortest-first) map incorrectly returns en for +1809 number')
+    assert.equal(
+      buggyLookup('+18095551234'),
+      'en',
+      'Buggy (shortest-first) map incorrectly returns en for +1809 number'
+    )
   })
 })

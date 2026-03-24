@@ -82,7 +82,13 @@ test.group('formatSendSuccessMessage | no rate', () => {
 test.group('formatSendSuccessMessage | with rate', () => {
   test('en: shows dual amount', ({ assert }) => {
     const msg = formatSendSuccessMessage(
-      { amount: 10, toPhone: '+573001234567', txHash: '0xabc123', localRate: 4000, localCurrency: 'COP' },
+      {
+        amount: 10,
+        toPhone: '+573001234567',
+        txHash: '0xabc123',
+        localRate: 4000,
+        localCurrency: 'COP',
+      },
       'en'
     )
     assert.include(msg, '$10.00')
@@ -91,7 +97,13 @@ test.group('formatSendSuccessMessage | with rate', () => {
 
   test('es: shows dual amount', ({ assert }) => {
     const msg = formatSendSuccessMessage(
-      { amount: 5, toPhone: '+573001234567', txHash: '0xabc123', localRate: 4000, localCurrency: 'COP' },
+      {
+        amount: 5,
+        toPhone: '+573001234567',
+        txHash: '0xabc123',
+        localRate: 4000,
+        localCurrency: 'COP',
+      },
       'es'
     )
     assert.include(msg, '$5.00')
@@ -104,7 +116,14 @@ test.group('formatSendSuccessMessage | with rate', () => {
       'en'
     )
     const withRate = formatSendSuccessMessage(
-      { amount: 10, toPhone: '+573001234567', txHash: '0xabc123', gasCovered: false, localRate: 4000, localCurrency: 'COP' },
+      {
+        amount: 10,
+        toPhone: '+573001234567',
+        txHash: '0xabc123',
+        gasCovered: false,
+        localRate: 4000,
+        localCurrency: 'COP',
+      },
       'en'
     )
     // gasCovered=false means no gas line in either case
@@ -129,7 +148,13 @@ test.group('formatSendRecipientMessage | no rate', () => {
 test.group('formatSendRecipientMessage | with rate (recipient currency)', () => {
   test('en: shows BRL dual amount for recipient', ({ assert }) => {
     const msg = formatSendRecipientMessage(
-      { amount: 10, fromPhone: '+13105551234', txHash: '0xabc123', localRate: 5, localCurrency: 'BRL' },
+      {
+        amount: 10,
+        fromPhone: '+13105551234',
+        txHash: '0xabc123',
+        localRate: 5,
+        localCurrency: 'BRL',
+      },
       'en'
     )
     assert.include(msg, '$10.00')
@@ -138,7 +163,13 @@ test.group('formatSendRecipientMessage | with rate (recipient currency)', () => 
 
   test('pt: shows BRL dual amount for recipient', ({ assert }) => {
     const msg = formatSendRecipientMessage(
-      { amount: 20, fromPhone: '+13105551234', txHash: '0xabc123', localRate: 5, localCurrency: 'BRL' },
+      {
+        amount: 20,
+        fromPhone: '+13105551234',
+        txHash: '0xabc123',
+        localRate: 5,
+        localCurrency: 'BRL',
+      },
       'pt'
     )
     assert.include(msg, '$20.00')
@@ -207,7 +238,9 @@ test.group('Backward compatibility | no new params', () => {
     assert.notInclude(msg, '~')
   })
 
-  test('formatInsufficientBalanceMessage without new params contains USD-only amounts', ({ assert }) => {
+  test('formatInsufficientBalanceMessage without new params contains USD-only amounts', ({
+    assert,
+  }) => {
     const msg = formatInsufficientBalanceMessage({ balance: 3, needed: 10 }, 'en')
     assert.include(msg, '$3.00')
     assert.include(msg, '$10.00')

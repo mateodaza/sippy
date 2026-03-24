@@ -42,7 +42,12 @@ interface Props {
 
 function formatUSDC(raw: string): string {
   const num = Number(raw) / 1_000_000
-  return num.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 2 })
+  return num.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
 }
 
 function formatETH(raw: string): string {
@@ -58,11 +63,12 @@ function truncateAddress(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`
 }
 
-const FLOW_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: string }> = {
-  inbound: { label: 'Inbound', color: 'bg-sippy', bgColor: 'bg-sippy-lightest', icon: '↓' },
-  outbound: { label: 'Outbound', color: 'bg-red-500', bgColor: 'bg-red-50', icon: '↑' },
-  internal: { label: 'Internal', color: 'bg-blue-500', bgColor: 'bg-blue-50', icon: '↔' },
-}
+const FLOW_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: string }> =
+  {
+    inbound: { label: 'Inbound', color: 'bg-sippy', bgColor: 'bg-sippy-lightest', icon: '↓' },
+    outbound: { label: 'Outbound', color: 'bg-red-500', bgColor: 'bg-red-50', icon: '↑' },
+    internal: { label: 'Internal', color: 'bg-blue-500', bgColor: 'bg-blue-50', icon: '↔' },
+  }
 
 export default function Analytics({
   totalVolume,
@@ -77,8 +83,12 @@ export default function Analytics({
   const totalFlowVolume = fundFlow.reduce((s, r) => s + Number(r.volume), 0)
 
   // KPI progress
-  const contractBalanceNum = gasStatus?.contractBalance ? Number.parseFloat(gasStatus.contractBalance) : 0
-  const spenderBalanceNum = gasStatus?.spenderBalance ? Number.parseFloat(gasStatus.spenderBalance) : 0
+  const contractBalanceNum = gasStatus?.contractBalance
+    ? Number.parseFloat(gasStatus.contractBalance)
+    : 0
+  const spenderBalanceNum = gasStatus?.spenderBalance
+    ? Number.parseFloat(gasStatus.spenderBalance)
+    : 0
   const LOW_BALANCE_THRESHOLD = 0.005
   const SPENDER_LOW_THRESHOLD = 0.0001
   const isLowBalance = contractBalanceNum < LOW_BALANCE_THRESHOLD && contractBalanceNum > 0
@@ -119,6 +129,12 @@ export default function Analytics({
                 ? 'Users cannot receive gas sponsorship. Send ETH to the contract immediately.'
                 : `Balance: ${contractBalanceNum.toFixed(4)} ETH (threshold: ${LOW_BALANCE_THRESHOLD} ETH). Refuel soon to avoid disruptions.`}
             </p>
+            <p className="mt-1 font-mono text-xs opacity-70">
+              Contract: 0xE4e5474E97E89d990082505fC5708A6a11849936
+            </p>
+            {gasStatus?.spenderAddress && (
+              <p className="font-mono text-xs opacity-70">Payer: {gasStatus.spenderAddress}</p>
+            )}
           </div>
           <span
             className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
@@ -136,10 +152,10 @@ export default function Analytics({
             <p className="text-sm font-semibold">Sippy Spender needs gas</p>
             <p className="mt-0.5 text-xs opacity-80">
               Balance: {spenderBalanceNum.toFixed(6)} ETH. WhatsApp sends will fail without gas.
-              {gasStatus?.spenderAddress && (
-                <span className="ml-1">Send ETH to {gasStatus.spenderAddress.slice(0, 6)}...{gasStatus.spenderAddress.slice(-4)}</span>
-              )}
             </p>
+            {gasStatus?.spenderAddress && (
+              <p className="mt-1 font-mono text-xs opacity-70">Payer: {gasStatus.spenderAddress}</p>
+            )}
           </div>
           <span className="shrink-0 rounded-full bg-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-900">
             Warning
@@ -153,7 +169,15 @@ export default function Analytics({
         <div className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] transition-all duration-300 hover:border-gray-200 hover:shadow-[0_12px_48px_-8px_rgba(0,0,0,0.12)]">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-sippy-lightest text-sippy shadow-inner">
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                className="h-6 w-6"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <line x1="12" y1="1" x2="12" y2="23" />
                 <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
               </svg>
@@ -162,7 +186,9 @@ export default function Analytics({
               {volumePct}%
             </span>
           </div>
-          <div className="text-3xl font-bold tracking-[-0.025em] text-slate-900">{formatUSDC(totalVolume)}</div>
+          <div className="text-3xl font-bold tracking-[-0.025em] text-slate-900">
+            {formatUSDC(totalVolume)}
+          </div>
           <div className="mt-1 text-sm font-medium text-gray-500">Total USDC Volume</div>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
             <div
@@ -170,14 +196,24 @@ export default function Analytics({
               style={{ width: `${volumePct}%` }}
             />
           </div>
-          <div className="mt-1.5 text-xs text-gray-400">Target: ${volumeTarget.toLocaleString()}</div>
+          <div className="mt-1.5 text-xs text-gray-400">
+            Target: ${volumeTarget.toLocaleString()}
+          </div>
         </div>
 
         {/* Registered Users */}
         <div className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] transition-all duration-300 hover:border-gray-200 hover:shadow-[0_12px_48px_-8px_rgba(0,0,0,0.12)]">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#dbeafe] text-[#2563eb] shadow-inner">
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                className="h-6 w-6"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
                 <circle cx="9" cy="7" r="4" />
                 <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
@@ -188,7 +224,9 @@ export default function Analytics({
               {usersPct}%
             </span>
           </div>
-          <div className="text-3xl font-bold tracking-[-0.025em] text-slate-900">{registeredUsers}</div>
+          <div className="text-3xl font-bold tracking-[-0.025em] text-slate-900">
+            {registeredUsers}
+          </div>
           <div className="mt-1 text-sm font-medium text-gray-500">Registered Users</div>
           <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
             <div
@@ -203,7 +241,15 @@ export default function Analytics({
         <div className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] transition-all duration-300 hover:border-gray-200 hover:shadow-[0_12px_48px_-8px_rgba(0,0,0,0.12)]">
           <div className="mb-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#f3e8ff] text-[#9333ea] shadow-inner">
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                className="h-6 w-6"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
               </svg>
             </div>
@@ -217,7 +263,15 @@ export default function Analytics({
         <div className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] transition-all duration-300 hover:border-gray-200 hover:shadow-[0_12px_48px_-8px_rgba(0,0,0,0.12)]">
           <div className="mb-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#fff7ed] text-[#ea580c] shadow-inner">
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                className="h-6 w-6"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
                 <path d="M12 18v-6" />
@@ -239,12 +293,30 @@ export default function Analytics({
               )}
             </div>
             <div>
-              Contract: {contractBalanceNum.toFixed(4)} ETH
+              <a
+                href="https://arbiscan.io/address/0xE4e5474E97E89d990082505fC5708A6a11849936"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline decoration-dotted hover:text-orange-700"
+              >
+                Contract: {contractBalanceNum.toFixed(4)} ETH
+              </a>
               {isLowBalance && <span className="ml-1 text-amber-600">low</span>}
               {isEmpty && <span className="ml-1 text-red-600">empty</span>}
             </div>
             <div>
-              Spender: {spenderBalanceNum.toFixed(6)} ETH
+              {gasStatus?.spenderAddress ? (
+                <a
+                  href={`https://arbiscan.io/address/${gasStatus.spenderAddress}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-dotted hover:text-orange-700"
+                >
+                  Spender: {spenderBalanceNum.toFixed(6)} ETH
+                </a>
+              ) : (
+                <>Spender: {spenderBalanceNum.toFixed(6)} ETH</>
+              )}
               {isSpenderLow && <span className="ml-1 text-amber-600">low</span>}
             </div>
           </div>
@@ -255,7 +327,9 @@ export default function Analytics({
       <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
         {/* Fund Flow Breakdown */}
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)]">
-          <h2 className="mb-5 text-sm font-semibold uppercase tracking-wider text-gray-500">Fund Flow</h2>
+          <h2 className="mb-5 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Fund Flow
+          </h2>
           <div className="space-y-4">
             {fundFlow.length > 0 ? (
               fundFlow.map((row) => {
@@ -266,7 +340,9 @@ export default function Analytics({
                   <div key={row.flowType}>
                     <div className="mb-2 flex items-center justify-between">
                       <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                        <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${config.bgColor} text-xs font-bold`}>
+                        <span
+                          className={`flex h-7 w-7 items-center justify-center rounded-lg ${config.bgColor} text-xs font-bold`}
+                        >
                           {config.icon}
                         </span>
                         {config.label}
@@ -294,7 +370,9 @@ export default function Analytics({
               <div className="mt-2 border-t border-gray-100 pt-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="font-medium text-gray-500">Total Volume</span>
-                  <span className="font-bold text-slate-900">{formatUSDC(String(totalFlowVolume))}</span>
+                  <span className="font-bold text-slate-900">
+                    {formatUSDC(String(totalFlowVolume))}
+                  </span>
                 </div>
               </div>
             )}
@@ -303,7 +381,9 @@ export default function Analytics({
 
         {/* Top Users by Volume */}
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)]">
-          <h2 className="mb-5 text-sm font-semibold uppercase tracking-wider text-gray-500">Top Users by Volume</h2>
+          <h2 className="mb-5 text-sm font-semibold uppercase tracking-wider text-gray-500">
+            Top Users by Volume
+          </h2>
           <div className="space-y-2.5">
             {topUsers.length > 0 ? (
               topUsers.map((user, i) => (
@@ -344,7 +424,11 @@ export default function Analytics({
               const pct = (Number(row.totalUsdcVolume) / maxVolume) * 100
               const barHeight = Math.max(Math.round((pct / 100) * 180), 8)
               return (
-                <div key={row.date} className="group flex flex-1 flex-col items-center gap-1" style={{ minWidth: 40, maxWidth: 80 }}>
+                <div
+                  key={row.date}
+                  className="group flex flex-1 flex-col items-center gap-1"
+                  style={{ minWidth: 40, maxWidth: 80 }}
+                >
                   <span className="text-xs font-semibold text-slate-700 opacity-0 transition-opacity group-hover:opacity-100">
                     {formatUSDC(row.totalUsdcVolume)}
                   </span>
@@ -353,7 +437,10 @@ export default function Analytics({
                     style={{ height: barHeight }}
                   />
                   <span className="mt-1 text-[10px] text-gray-400">
-                    {new Date(row.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    {new Date(row.date + 'T00:00:00').toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
                   </span>
                 </div>
               )

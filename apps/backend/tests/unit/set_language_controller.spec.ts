@@ -65,12 +65,17 @@ test.group('setLanguage | valid language codes', (group) => {
     ;(UserPreference as any).findBy = origFindBy
   })
 
-  test('TC-LN-003-U01: language: es → 200 { ok: true }, updateOrCreate called with preferredLanguage: es', async ({ assert }) => {
+  test('TC-LN-003-U01: language: es → 200 { ok: true }, updateOrCreate called with preferredLanguage: es', async ({
+    assert,
+  }) => {
     let captured: Record<string, unknown> = {}
     ;(UserPreference as any).updateOrCreate = async (
       _key: Record<string, unknown>,
       attrs: Record<string, unknown>
-    ) => { captured = attrs; return updateOrCreateResult }
+    ) => {
+      captured = attrs
+      return updateOrCreateResult
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ body: { language: 'es' } })
@@ -81,12 +86,17 @@ test.group('setLanguage | valid language codes', (group) => {
     assert.equal(captured.preferredLanguage, 'es')
   })
 
-  test('TC-LN-003-U02: language: pt → 200 { ok: true }, updateOrCreate called with preferredLanguage: pt', async ({ assert }) => {
+  test('TC-LN-003-U02: language: pt → 200 { ok: true }, updateOrCreate called with preferredLanguage: pt', async ({
+    assert,
+  }) => {
     let captured: Record<string, unknown> = {}
     ;(UserPreference as any).updateOrCreate = async (
       _key: Record<string, unknown>,
       attrs: Record<string, unknown>
-    ) => { captured = attrs; return updateOrCreateResult }
+    ) => {
+      captured = attrs
+      return updateOrCreateResult
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ body: { language: 'pt' } })
@@ -97,12 +107,17 @@ test.group('setLanguage | valid language codes', (group) => {
     assert.equal(captured.preferredLanguage, 'pt')
   })
 
-  test('TC-LN-003-U03: language: en → 200 { ok: true }, updateOrCreate called with preferredLanguage: en', async ({ assert }) => {
+  test('TC-LN-003-U03: language: en → 200 { ok: true }, updateOrCreate called with preferredLanguage: en', async ({
+    assert,
+  }) => {
     let captured: Record<string, unknown> = {}
     ;(UserPreference as any).updateOrCreate = async (
       _key: Record<string, unknown>,
       attrs: Record<string, unknown>
-    ) => { captured = attrs; return updateOrCreateResult }
+    ) => {
+      captured = attrs
+      return updateOrCreateResult
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ body: { language: 'en' } })
@@ -113,12 +128,17 @@ test.group('setLanguage | valid language codes', (group) => {
     assert.equal(captured.preferredLanguage, 'en')
   })
 
-  test('TC-LN-003-U04: language: null → 200 { ok: true }, updateOrCreate called with preferredLanguage: null', async ({ assert }) => {
+  test('TC-LN-003-U04: language: null → 200 { ok: true }, updateOrCreate called with preferredLanguage: null', async ({
+    assert,
+  }) => {
     let captured: Record<string, unknown> = {}
     ;(UserPreference as any).updateOrCreate = async (
       _key: Record<string, unknown>,
       attrs: Record<string, unknown>
-    ) => { captured = attrs; return updateOrCreateResult }
+    ) => {
+      captured = attrs
+      return updateOrCreateResult
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ body: { language: null } })
@@ -140,7 +160,9 @@ test.group('setLanguage | invalid language codes', (group) => {
     ;(UserPreference as any).findBy = origFindBy
   })
 
-  test('TC-LN-003-U05: language: fr (invalid) → 400 { error: invalid_language }', async ({ assert }) => {
+  test('TC-LN-003-U05: language: fr (invalid) → 400 { error: invalid_language }', async ({
+    assert,
+  }) => {
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ body: { language: 'fr' } })
     await controller.setLanguage(ctx as any)
@@ -149,7 +171,9 @@ test.group('setLanguage | invalid language codes', (group) => {
     assert.deepEqual(getBody(), { error: 'invalid_language' })
   })
 
-  test('TC-LN-003-U06: body field missing entirely → 400 { error: invalid_language }', async ({ assert }) => {
+  test('TC-LN-003-U06: body field missing entirely → 400 { error: invalid_language }', async ({
+    assert,
+  }) => {
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ body: {} })
     await controller.setLanguage(ctx as any)
@@ -167,7 +191,9 @@ test.group('setLanguage | error handling', (group) => {
 
   test('TC-LN-003-U07: DB throws → 500', async ({ assert }) => {
     ;(UserPreference as any).findBy = async (_field: string, _val: string) => null
-    ;(UserPreference as any).updateOrCreate = async () => { throw new Error('DB error') }
+    ;(UserPreference as any).updateOrCreate = async () => {
+      throw new Error('DB error')
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx({ body: { language: 'en' } })

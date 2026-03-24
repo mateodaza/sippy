@@ -76,7 +76,9 @@ function makePrefMock(fields: Record<string, unknown> = {}): PrefMock {
     emailVerified: false,
     emailVerifiedAt: null,
     saveCalls: 0,
-    save: async () => { pref.saveCalls++ },
+    save: async () => {
+      pref.saveCalls++
+    },
     ...fields,
   }
   return pref
@@ -141,7 +143,9 @@ test.group('EmailService gate tokens', () => {
 test.group('sendGateCode', (group) => {
   group.each.teardown(restoreAll)
 
-  test('user with verified email → sends code, returns 200, emailVerified unchanged', async ({ assert }) => {
+  test('user with verified email → sends code, returns 200, emailVerified unchanged', async ({
+    assert,
+  }) => {
     const { encryptEmail, normalizeEmail, hashEmail } = await import('#utils/email_crypto')
     const normalized = normalizeEmail('user@example.com')
     const hash = hashEmail(normalized)
@@ -166,7 +170,10 @@ test.group('sendGateCode', (group) => {
   test('user with no email → returns 409 no_verified_email', async ({ assert }) => {
     ;(UserPreference as any).findBy = async () => null
     let sendCalled = false
-    ;(emailService as any).sendEmailCode = async () => { sendCalled = true; return { success: true } }
+    ;(emailService as any).sendEmailCode = async () => {
+      sendCalled = true
+      return { success: true }
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx()
@@ -178,10 +185,17 @@ test.group('sendGateCode', (group) => {
   })
 
   test('user with unverified email → returns 409 no_verified_email', async ({ assert }) => {
-    const pref = makePrefMock({ emailHash: 'somehash', emailEncrypted: 'iv:enc', emailVerified: false })
+    const pref = makePrefMock({
+      emailHash: 'somehash',
+      emailEncrypted: 'iv:enc',
+      emailVerified: false,
+    })
     ;(UserPreference as any).findBy = async () => pref
     let sendCalled = false
-    ;(emailService as any).sendEmailCode = async () => { sendCalled = true; return { success: true } }
+    ;(emailService as any).sendEmailCode = async () => {
+      sendCalled = true
+      return { success: true }
+    }
 
     const controller = new AuthApiController()
     const { ctx, getStatus, getBody } = buildCtx()
@@ -200,7 +214,9 @@ test.group('sendGateCode', (group) => {
 test.group('verifyGateCode', (group) => {
   group.each.teardown(restoreAll)
 
-  test('valid code → returns { success: true, gateToken: string }, emailVerified stays true', async ({ assert }) => {
+  test('valid code → returns { success: true, gateToken: string }, emailVerified stays true', async ({
+    assert,
+  }) => {
     const { encryptEmail, normalizeEmail, hashEmail } = await import('#utils/email_crypto')
     const normalized = normalizeEmail('user@example.com')
     const hash = hashEmail(normalized)
@@ -275,7 +291,6 @@ function restoreGateToken() {
 }
 
 test.group('revokePermission gate enforcement', (group) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let EmbeddedWalletController: any
 
   group.setup(async () => {
@@ -292,7 +307,9 @@ test.group('revokePermission gate enforcement', (group) => {
     restoreGateToken()
   })
 
-  test('user with verified email, valid gateToken → consumeGateToken called, gate passes (no 403)', async ({ assert }) => {
+  test('user with verified email, valid gateToken → consumeGateToken called, gate passes (no 403)', async ({
+    assert,
+  }) => {
     const pref = makePrefMock({ emailVerified: true })
     ;(UserPreference as any).findBy = async () => pref
     let consumeCalled = false
@@ -317,7 +334,9 @@ test.group('revokePermission gate enforcement', (group) => {
     assert.notEqual(getStatus(), 403)
   })
 
-  test('user with verified email, expired gateToken → returns 403 gate_required', async ({ assert }) => {
+  test('user with verified email, expired gateToken → returns 403 gate_required', async ({
+    assert,
+  }) => {
     const pref = makePrefMock({ emailVerified: true })
     ;(UserPreference as any).findBy = async () => pref
     ;(emailService as any).consumeGateToken = () => false
@@ -342,7 +361,9 @@ test.group('revokePermission gate enforcement', (group) => {
     assert.deepEqual(getBody(), { error: 'gate_required' })
   })
 
-  test('user with verified email, wrong gateToken → returns 403 gate_required', async ({ assert }) => {
+  test('user with verified email, wrong gateToken → returns 403 gate_required', async ({
+    assert,
+  }) => {
     const pref = makePrefMock({ emailVerified: true })
     ;(UserPreference as any).findBy = async () => pref
     ;(emailService as any).consumeGateToken = () => false
@@ -355,10 +376,15 @@ test.group('revokePermission gate enforcement', (group) => {
     assert.deepEqual(getBody(), { error: 'gate_required' })
   })
 
-  test('user with no verified email, no gateToken → gate not triggered (no 403)', async ({ assert }) => {
+  test('user with no verified email, no gateToken → gate not triggered (no 403)', async ({
+    assert,
+  }) => {
     ;(UserPreference as any).findBy = async () => null
     let consumeCalled = false
-    ;(emailService as any).consumeGateToken = () => { consumeCalled = true; return false }
+    ;(emailService as any).consumeGateToken = () => {
+      consumeCalled = true
+      return false
+    }
 
     const controller = new EmbeddedWalletController()
     const { ctx, getStatus } = buildCtx({ body: {} })
@@ -370,11 +396,20 @@ test.group('revokePermission gate enforcement', (group) => {
     assert.notEqual(getStatus(), 403)
   })
 
-  test('user with unverified email (emailVerified=false), no gateToken → gate not triggered (no 403)', async ({ assert }) => {
-    const pref = makePrefMock({ emailHash: 'somehash', emailEncrypted: 'iv:enc', emailVerified: false })
+  test('user with unverified email (emailVerified=false), no gateToken → gate not triggered (no 403)', async ({
+    assert,
+  }) => {
+    const pref = makePrefMock({
+      emailHash: 'somehash',
+      emailEncrypted: 'iv:enc',
+      emailVerified: false,
+    })
     ;(UserPreference as any).findBy = async () => pref
     let consumeCalled = false
-    ;(emailService as any).consumeGateToken = () => { consumeCalled = true; return false }
+    ;(emailService as any).consumeGateToken = () => {
+      consumeCalled = true
+      return false
+    }
 
     const controller = new EmbeddedWalletController()
     const { ctx, getStatus } = buildCtx({ body: {} })
@@ -396,7 +431,9 @@ test.group('sendEmailCode | code generation', (group) => {
 
   test('returns { success: true } on first send', async ({ assert }) => {
     const calls: { to: string; subject: string; text: string }[] = []
-    const svc = new EmailService(async (to, subject, text) => { calls.push({ to, subject, text }) })
+    const svc = new EmailService(async (to, subject, text) => {
+      calls.push({ to, subject, text })
+    })
     const result = await svc.sendEmailCode('user@example.com')
     assert.deepEqual(result, { success: true })
   })
@@ -429,36 +466,48 @@ test.group('sendEmailCode | code generation', (group) => {
 
   test('sender called with correct to and body containing 6-digit code', async ({ assert }) => {
     const calls: { to: string; subject: string; text: string }[] = []
-    const svc = new EmailService(async (to, subject, text) => { calls.push({ to, subject, text }) })
+    const svc = new EmailService(async (to, subject, text) => {
+      calls.push({ to, subject, text })
+    })
     await svc.sendEmailCode('user@example.com')
     assert.equal(calls.length, 1)
     assert.equal(calls[0].to, 'user@example.com')
     assert.match(calls[0].text, /\d{6}/)
   })
 
-  test('default lang (undefined) resolves to es — subject contains Tu código', async ({ assert }) => {
+  test('default lang (undefined) resolves to es — subject contains Tu código', async ({
+    assert,
+  }) => {
     const calls: { to: string; subject: string; text: string }[] = []
-    const svc = new EmailService(async (to, subject, text) => { calls.push({ to, subject, text }) })
+    const svc = new EmailService(async (to, subject, text) => {
+      calls.push({ to, subject, text })
+    })
     await svc.sendEmailCode('user@example.com', undefined)
     assert.equal(calls[0].subject, 'Sippy: Tu código de verificación')
   })
 
   test('lang=en subject is English', async ({ assert }) => {
     const calls: { to: string; subject: string; text: string }[] = []
-    const svc = new EmailService(async (to, subject, text) => { calls.push({ to, subject, text }) })
+    const svc = new EmailService(async (to, subject, text) => {
+      calls.push({ to, subject, text })
+    })
     await svc.sendEmailCode('user@example.com', 'en')
     assert.equal(calls[0].subject, 'Sippy: Your verification code')
   })
 
   test('lang=pt subject is Portuguese', async ({ assert }) => {
     const calls: { to: string; subject: string; text: string }[] = []
-    const svc = new EmailService(async (to, subject, text) => { calls.push({ to, subject, text }) })
+    const svc = new EmailService(async (to, subject, text) => {
+      calls.push({ to, subject, text })
+    })
     await svc.sendEmailCode('user@example.com', 'pt')
     assert.equal(calls[0].subject, 'Sippy: Seu código de verificação')
   })
 
   test('sender throws → returns { error: message }, codeStore NOT updated', async ({ assert }) => {
-    const svc = new EmailService(async () => { throw new Error('network failure') })
+    const svc = new EmailService(async () => {
+      throw new Error('network failure')
+    })
     const result = await svc.sendEmailCode('fail@example.com')
     assert.isTrue('error' in result)
     assert.equal((result as any).error, 'network failure')
@@ -506,7 +555,9 @@ test.group('sendEmailCode | rate limiting', () => {
 
   test('sender NOT called on 4th (rate check fires before send)', async ({ assert }) => {
     const calls: number[] = []
-    const svc = new EmailService(async () => { calls.push(1) })
+    const svc = new EmailService(async () => {
+      calls.push(1)
+    })
     await svc.sendEmailCode('c@example.com')
     await svc.sendEmailCode('c@example.com')
     await svc.sendEmailCode('c@example.com')
@@ -521,7 +572,11 @@ test.group('sendEmailCode | rate limiting', () => {
     await svc.sendEmailCode('emailA@example.com')
     await svc.sendEmailCode('emailA@example.com')
     const resultA4 = await svc.sendEmailCode('emailA@example.com') // 4th for A — must be rate limited
-    assert.equal((resultA4 as { error: string }).error, 'rate_limited', 'emailA must be rate limited on 4th send')
+    assert.equal(
+      (resultA4 as { error: string }).error,
+      'rate_limited',
+      'emailA must be rate limited on 4th send'
+    )
     // emailB is on first send — should still succeed independently
     const resultB = await svc.sendEmailCode('emailB@example.com')
     assert.deepEqual(resultB, { success: true })
@@ -678,11 +733,16 @@ test.group('codeStore capacity cap', () => {
 
   test('at 50,000 all unexpired → oldest evicted, new entry added', async ({ assert }) => {
     const svc = new EmailService(async () => {})
-    const store: Map<string, { code: string; expiresAt: number; attempts: number }> = (svc as any).codeStore
+    const store: Map<string, { code: string; expiresAt: number; attempts: number }> = (svc as any)
+      .codeStore
     const oldestEmail = 'oldest@example.com'
     store.set(oldestEmail, { code: '111111', expiresAt: Date.now() + 99999, attempts: 0 })
     for (let i = 1; i < MAX_MAP_ENTRIES; i++) {
-      store.set(`fill${i}@example.com`, { code: '222222', expiresAt: Date.now() + 99999, attempts: 0 })
+      store.set(`fill${i}@example.com`, {
+        code: '222222',
+        expiresAt: Date.now() + 99999,
+        attempts: 0,
+      })
     }
     const newEmail = 'newentry@example.com'
     await svc.sendEmailCode(newEmail)
@@ -693,9 +753,14 @@ test.group('codeStore capacity cap', () => {
 
   test('at 50,000 all expired → expired purged, store size = 1', async ({ assert }) => {
     const svc = new EmailService(async () => {})
-    const store: Map<string, { code: string; expiresAt: number; attempts: number }> = (svc as any).codeStore
+    const store: Map<string, { code: string; expiresAt: number; attempts: number }> = (svc as any)
+      .codeStore
     for (let i = 0; i < MAX_MAP_ENTRIES; i++) {
-      store.set(`expired${i}@example.com`, { code: '333333', expiresAt: Date.now() - 1, attempts: 0 })
+      store.set(`expired${i}@example.com`, {
+        code: '333333',
+        expiresAt: Date.now() - 1,
+        attempts: 0,
+      })
     }
     const newEmail = 'newonly@example.com'
     await svc.sendEmailCode(newEmail)
@@ -703,15 +768,22 @@ test.group('codeStore capacity cap', () => {
     assert.isTrue(store.has(newEmail))
   })
 
-  test('re-send for existing email at capacity → no eviction of unrelated entries', async ({ assert }) => {
+  test('re-send for existing email at capacity → no eviction of unrelated entries', async ({
+    assert,
+  }) => {
     const svc = new EmailService(async () => {})
-    const store: Map<string, { code: string; expiresAt: number; attempts: number }> = (svc as any).codeStore
+    const store: Map<string, { code: string; expiresAt: number; attempts: number }> = (svc as any)
+      .codeStore
     const existingEmail = 'existing@example.com'
     store.set(existingEmail, { code: '444444', expiresAt: Date.now() + 99999, attempts: 0 })
     const oldestEmail = 'oldest2@example.com'
     store.set(oldestEmail, { code: '555555', expiresAt: Date.now() + 99999, attempts: 0 })
     for (let i = 2; i < MAX_MAP_ENTRIES; i++) {
-      store.set(`fill2-${i}@example.com`, { code: '666666', expiresAt: Date.now() + 99999, attempts: 0 })
+      store.set(`fill2-${i}@example.com`, {
+        code: '666666',
+        expiresAt: Date.now() + 99999,
+        attempts: 0,
+      })
     }
     // Re-send for existing email — codeStore already has it, no eviction needed
     await svc.sendEmailCode(existingEmail)
@@ -807,13 +879,21 @@ test.group('validateExportGate', (group) => {
     const controller = new AuthApiController()
 
     // First call: should succeed
-    const { ctx: ctx1, getStatus: getStatus1, getBody: getBody1 } = buildCtx({ body: { gateToken: token } })
+    const {
+      ctx: ctx1,
+      getStatus: getStatus1,
+      getBody: getBody1,
+    } = buildCtx({ body: { gateToken: token } })
     await controller.validateExportGate(ctx1 as any)
     assert.equal(getStatus1(), 200)
     assert.deepEqual(getBody1(), { success: true })
 
     // Second call with same token: should fail
-    const { ctx: ctx2, getStatus: getStatus2, getBody: getBody2 } = buildCtx({ body: { gateToken: token } })
+    const {
+      ctx: ctx2,
+      getStatus: getStatus2,
+      getBody: getBody2,
+    } = buildCtx({ body: { gateToken: token } })
     await controller.validateExportGate(ctx2 as any)
     assert.equal(getStatus2(), 403)
     assert.deepEqual(getBody2(), { error: 'gate_required' })

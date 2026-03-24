@@ -1,86 +1,46 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
+import {
+  getAuthMode,
+  getProviderType,
+  getDefaultProviderType,
+  getDefaultChannel,
+  canSwitchChannel,
+} from './auth-mode'
 
-beforeEach(() => {
-  vi.resetModules()
-  vi.unstubAllEnvs()
-})
-
-async function importFresh() {
-  return import('./auth-mode')
-}
-
-describe('auth-mode (Twilio disabled — default)', () => {
-  beforeEach(() => {
-    vi.stubEnv('NEXT_PUBLIC_TWILIO_ENABLED', '')
+describe('auth-mode (Sippy OTP model)', () => {
+  it('getAuthMode returns sippy-otp for all numbers', () => {
+    expect(getAuthMode('+573001234567')).toBe('sippy-otp')
+    expect(getAuthMode('+15550001234')).toBe('sippy-otp')
   })
 
-  it('shouldUseTwilio returns false for non-NANP number', async () => {
-    const { shouldUseTwilio } = await importFresh()
-    expect(shouldUseTwilio('+573001234567')).toBe(false)
-  })
-
-  it('shouldUseTwilio returns false for NANP number', async () => {
-    const { shouldUseTwilio } = await importFresh()
-    expect(shouldUseTwilio('+15550001234')).toBe(false)
-  })
-
-  it('getAuthMode returns cdp-sms for all numbers', async () => {
-    const { getAuthMode } = await importFresh()
-    expect(getAuthMode('+573001234567')).toBe('cdp-sms')
-    expect(getAuthMode('+15550001234')).toBe('cdp-sms')
-  })
-
-  it('getProviderType returns native for all numbers', async () => {
-    const { getProviderType } = await importFresh()
-    expect(getProviderType('+573001234567')).toBe('native')
-    expect(getProviderType('+15550001234')).toBe('native')
-  })
-
-  it('getDefaultProviderType returns native', async () => {
-    const { getDefaultProviderType } = await importFresh()
-    expect(getDefaultProviderType()).toBe('native')
-  })
-
-  it('isTwilioActive returns false', async () => {
-    const { isTwilioActive } = await importFresh()
-    expect(isTwilioActive()).toBe(false)
-  })
-})
-
-describe('auth-mode (Twilio enabled)', () => {
-  beforeEach(() => {
-    vi.stubEnv('NEXT_PUBLIC_TWILIO_ENABLED', 'true')
-  })
-
-  it('shouldUseTwilio returns true for non-NANP number', async () => {
-    const { shouldUseTwilio } = await importFresh()
-    expect(shouldUseTwilio('+573001234567')).toBe(true)
-  })
-
-  it('shouldUseTwilio returns false for NANP number', async () => {
-    const { shouldUseTwilio } = await importFresh()
-    expect(shouldUseTwilio('+15550001234')).toBe(false)
-  })
-
-  it('getAuthMode returns twilio for non-NANP, cdp-sms for NANP', async () => {
-    const { getAuthMode } = await importFresh()
-    expect(getAuthMode('+573001234567')).toBe('twilio')
-    expect(getAuthMode('+15550001234')).toBe('cdp-sms')
-  })
-
-  it('getProviderType returns custom for non-NANP, native for NANP', async () => {
-    const { getProviderType } = await importFresh()
+  it('getProviderType returns custom for all numbers', () => {
     expect(getProviderType('+573001234567')).toBe('custom')
-    expect(getProviderType('+15550001234')).toBe('native')
+    expect(getProviderType('+15550001234')).toBe('custom')
   })
 
-  it('getDefaultProviderType returns custom', async () => {
-    const { getDefaultProviderType } = await importFresh()
+  it('getDefaultProviderType returns custom', () => {
     expect(getDefaultProviderType()).toBe('custom')
   })
+})
 
-  it('isTwilioActive returns true', async () => {
-    const { isTwilioActive } = await importFresh()
-    expect(isTwilioActive()).toBe(true)
+describe('channel selection', () => {
+  it('getDefaultChannel returns whatsapp for NANP (+1) numbers', () => {
+    expect(getDefaultChannel('+15550001234')).toBe('whatsapp')
+    expect(getDefaultChannel('+12125551234')).toBe('whatsapp')
+  })
+
+  it('getDefaultChannel returns sms for non-NANP numbers', () => {
+    expect(getDefaultChannel('+573001234567')).toBe('sms')
+    expect(getDefaultChannel('+5511999990001')).toBe('sms')
+    expect(getDefaultChannel('+447700900001')).toBe('sms')
+  })
+
+  it('canSwitchChannel returns false for NANP (whatsapp-only)', () => {
+    expect(canSwitchChannel('+15550001234')).toBe(false)
+  })
+
+  it('canSwitchChannel returns true for non-NANP', () => {
+    expect(canSwitchChannel('+573001234567')).toBe(true)
+    expect(canSwitchChannel('+5511999990001')).toBe(true)
   })
 })

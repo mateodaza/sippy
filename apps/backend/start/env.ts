@@ -36,9 +36,9 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // JWT (RS256)
   JWT_PRIVATE_KEY_PEM: Env.schema.string.optional(), // base64-encoded PEM
-  JWT_PUBLIC_KEY_PEM: Env.schema.string.optional(),  // base64-encoded PEM
-  JWT_KEY_ID: Env.schema.string.optional(),          // default "sippy-1" applied at call site
-  JWT_ISSUER: Env.schema.string.optional(),          // default "sippy" applied at call site
+  JWT_PUBLIC_KEY_PEM: Env.schema.string.optional(), // base64-encoded PEM
+  JWT_KEY_ID: Env.schema.string.optional(), // default "sippy-1" applied at call site
+  JWT_ISSUER: Env.schema.string.optional(), // default "sippy" applied at call site
 
   // LLM
   GROQ_API_KEY: Env.schema.string(),
@@ -77,7 +77,9 @@ export default await Env.create(new URL('../', import.meta.url), {
   EMAIL_ENCRYPTION_KEY: (key, value) => {
     if (value === undefined || value === null || value === '') return undefined
     if (!/^[0-9a-fA-F]{64}$/.test(value)) {
-      throw new Error(`${key} must be a 64-character hex string (32 bytes); got length ${String(value).length}`)
+      throw new Error(
+        `${key} must be a 64-character hex string (32 bytes); got length ${String(value).length}`
+      )
     }
     return value
   },

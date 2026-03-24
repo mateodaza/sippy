@@ -2,16 +2,37 @@ import logger from '@adonisjs/core/services/logger'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1_000  // 24 hours (rates update daily)
-const FETCH_TIMEOUT_MS    = 10_000            // abort fetch after 10s
+const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1_000 // 24 hours (rates update daily)
+const FETCH_TIMEOUT_MS = 10_000 // abort fetch after 10s
 const API_URL = 'https://open.er-api.com/v6/latest/USD'
 
 const LATAM_CURRENCIES = [
-  'COP', 'MXN', 'ARS', 'BRL', 'PEN', 'CLP',
-  'UYU', 'PYG', 'BOB', 'VES', 'CRC', 'GTQ',
-  'HNL', 'NIO', 'DOP', 'CUP', 'HTG', 'JMD',
-  'TTD', 'BBD', 'GYD', 'SRD', 'BZD', 'AWG',
-  'ANG', 'XCD',
+  'COP',
+  'MXN',
+  'ARS',
+  'BRL',
+  'PEN',
+  'CLP',
+  'UYU',
+  'PYG',
+  'BOB',
+  'VES',
+  'CRC',
+  'GTQ',
+  'HNL',
+  'NIO',
+  'DOP',
+  'CUP',
+  'HTG',
+  'JMD',
+  'TTD',
+  'BBD',
+  'GYD',
+  'SRD',
+  'BZD',
+  'AWG',
+  'ANG',
+  'XCD',
 ] as const
 
 // ── Phone Prefix Map (ordered longest-first to prevent prefix collisions) ──────
@@ -34,12 +55,12 @@ const PHONE_PREFIX_MAP: [string, string | null][] = [
   ['+598', 'UYU'], // Uruguay
   ['+595', 'PYG'], // Paraguay
   ['+591', 'BOB'], // Bolivia
-  ['+593', null],   // Ecuador, USD
-  ['+507', null],   // Panama, USD
+  ['+593', null], // Ecuador, USD
+  ['+507', null], // Panama, USD
   ['+506', 'CRC'], // Costa Rica
   ['+505', 'NIO'], // Nicaragua
   ['+504', 'HNL'], // Honduras
-  ['+503', null],   // El Salvador, USD
+  ['+503', null], // El Salvador, USD
   ['+502', 'GTQ'], // Guatemala
   ['+509', 'HTG'], // Haiti
   ['+599', 'ANG'], // Curaçao / Sint Maarten
@@ -48,15 +69,15 @@ const PHONE_PREFIX_MAP: [string, string | null][] = [
   ['+501', 'BZD'], // Belize
   ['+592', 'GYD'], // Guyana
   // 2-digit prefixes
-  ['+58',  'VES'], // Venezuela
-  ['+57',  'COP'], // Colombia
-  ['+56',  'CLP'], // Chile
-  ['+55',  'BRL'], // Brazil
-  ['+54',  'ARS'], // Argentina
-  ['+53',  'CUP'], // Cuba
-  ['+52',  'MXN'], // Mexico
-  ['+51',  'PEN'], // Peru
-  ['+1',   null],  // USA/Canada, USD (catch-all for +1)
+  ['+58', 'VES'], // Venezuela
+  ['+57', 'COP'], // Colombia
+  ['+56', 'CLP'], // Chile
+  ['+55', 'BRL'], // Brazil
+  ['+54', 'ARS'], // Argentina
+  ['+53', 'CUP'], // Cuba
+  ['+52', 'MXN'], // Mexico
+  ['+51', 'PEN'], // Peru
+  ['+1', null], // USA/Canada, USD (catch-all for +1)
 ]
 
 // ── Service ────────────────────────────────────────────────────────────────────
@@ -115,7 +136,10 @@ class ExchangeRateService {
     } catch (err) {
       // Keep existing cache intact — stale rates are better than breaking callers.
       // If cache is empty (first fetch failed), getLocalRate() will return null.
-      logger.error('ExchangeRateService: fetch failed: %s', err instanceof Error ? err.message : err)
+      logger.error(
+        'ExchangeRateService: fetch failed: %s',
+        err instanceof Error ? err.message : err
+      )
     }
   }
 
@@ -141,11 +165,11 @@ class ExchangeRateService {
 
 // ── Lazy Singleton Export ──────────────────────────────────────────────────────
 
-let _instance: ExchangeRateService | null = null
+let exchangeRateInstance: ExchangeRateService | null = null
 
 function getInstance(): ExchangeRateService {
-  if (!_instance) _instance = new ExchangeRateService()
-  return _instance
+  if (!exchangeRateInstance) exchangeRateInstance = new ExchangeRateService()
+  return exchangeRateInstance
 }
 
 export const exchangeRateService = new Proxy({} as ExchangeRateService, {

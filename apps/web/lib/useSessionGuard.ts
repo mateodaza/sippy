@@ -6,9 +6,6 @@ import {
   useIsSignedIn,
   useCurrentUser,
   useSignOut,
-  useSignInWithSms,
-  useVerifySmsOTP,
-  useGetAccessToken,
 } from '@coinbase/cdp-hooks'
 import {
   getStoredToken,
@@ -19,9 +16,10 @@ import {
   getTokenSecondsRemaining,
   sendOtp,
   verifyOtp,
+  type OtpChannel,
 } from './auth'
 import { isBlockedPrefix } from '@sippy/shared'
-import { shouldUseTwilio, isTwilioActive } from './auth-mode'
+import { getDefaultChannel, canSwitchChannel } from './auth-mode'
 
 type ReAuthStep = 'phone' | 'otp'
 
@@ -47,11 +45,13 @@ export interface SessionGuardResult {
   reAuthOtp: string
   reAuthError: string | null
   reAuthLoading: boolean
+  reAuthChannel: OtpChannel
+  reAuthCanSwitchChannel: boolean
 
   // Re-auth UI handlers
   setReAuthPhone: (v: string) => void
   setReAuthOtp: (v: string) => void
-  handleReAuthSendOtp: () => Promise<void>
+  handleReAuthSendOtp: (channelOverride?: OtpChannel) => Promise<void>
   handleReAuthVerifyOtp: () => Promise<void>
   dismissReAuth: () => void
 
@@ -74,7 +74,7 @@ export function useSessionGuard(): SessionGuardResult {
   const [reAuthOtp, setReAuthOtp] = useState('')
   const [reAuthError, setReAuthError] = useState<string | null>(null)
   const [reAuthLoading, setReAuthLoading] = useState(false)
-  const [reAuthFlowId, setReAuthFlowId] = useState<string | null>(null)
+  const [reAuthChannel, setReAuthChannel] = useState<OtpChannel>('sms')
 
   const prevIsSignedInRef = useRef<boolean | undefined>(undefined)
 
@@ -82,9 +82,6 @@ export function useSessionGuard(): SessionGuardResult {
   const { isSignedIn } = useIsSignedIn()
   const { currentUser } = useCurrentUser()
   const { signOut } = useSignOut()
-  const { signInWithSms } = useSignInWithSms()
-  const { verifySmsOTP } = useVerifySmsOTP()
-  const { getAccessToken } = useGetAccessToken()
 
   // Session check on mount — mirrors existing wallet/settings logic
   useEffect(() => {
@@ -96,24 +93,13 @@ export function useSessionGuard(): SessionGuardResult {
       if (!isSignedIn) {
         const storedJwt = getStoredToken()
         if (storedJwt && !isTokenExpired(storedJwt)) {
-          if (isTwilioActive()) {
-            // Twilio flow: restore CDP session via JWT
-            try {
-              await authenticateWithJWT()
-              return
-            } catch (err) {
-              console.warn('Session recovery: JWT auth failed, clearing token', err)
-              clearToken()
-            }
-          } else {
-            // CDP SMS flow: Sippy JWT is valid for backend calls.
-            // CDP manages its own session — don't call authenticateWithJWT.
-            // User may need SMS re-auth for wallet operations if CDP session expired.
-            setToken(storedJwt)
-            setIsAuthenticated(true)
-            setHasCheckedSession(true)
-            setIsCheckingSession(false)
+          // Restore CDP session via JWT
+          try {
+            await authenticateWithJWT()
             return
+          } catch (err) {
+            console.warn('Session recovery: JWT auth failed, clearing token', err)
+            clearToken()
           }
         }
         setHasCheckedSession(true)
@@ -190,65 +176,39 @@ export function useSessionGuard(): SessionGuardResult {
     setReAuthError(null)
   }, [])
 
-  const handleReAuthSendOtp = useCallback(async () => {
-    setReAuthLoading(true)
-    setReAuthError(null)
-    try {
-      const phone = reAuthPhone.startsWith('+') ? reAuthPhone : `+${reAuthPhone}`
-      if (isBlockedPrefix(phone)) {
-        setReAuthError('This country is not available.')
-        return
-      }
+  const handleReAuthSendOtp = useCallback(
+    async (channelOverride?: OtpChannel) => {
+      setReAuthLoading(true)
+      setReAuthError(null)
+      try {
+        const phone = reAuthPhone.startsWith('+') ? reAuthPhone : `+${reAuthPhone}`
+        if (isBlockedPrefix(phone)) {
+          setReAuthError('This country is not available.')
+          return
+        }
 
-      if (!shouldUseTwilio(phone)) {
-        const result = await signInWithSms({ phoneNumber: phone })
-        setReAuthFlowId(result.flowId)
-      } else {
-        await sendOtp(reAuthPhone)
+        const channel = channelOverride ?? getDefaultChannel(phone)
+        setReAuthChannel(channel)
+
+        if (isSignedIn) await signOut()
+        await sendOtp(phone, channel)
+        setReAuthStep('otp')
+      } catch (err) {
+        setReAuthError(err instanceof Error ? err.message : 'Failed to send OTP')
+      } finally {
+        setReAuthLoading(false)
       }
-      setReAuthStep('otp')
-    } catch (err) {
-      setReAuthError(err instanceof Error ? err.message : 'Failed to send OTP')
-    } finally {
-      setReAuthLoading(false)
-    }
-  }, [reAuthPhone, signInWithSms])
+    },
+    [reAuthPhone, isSignedIn, signOut]
+  )
 
   const handleReAuthVerifyOtp = useCallback(async () => {
     setReAuthLoading(true)
     setReAuthError(null)
     try {
-      const phone = reAuthPhone.startsWith('+') ? reAuthPhone : `+${reAuthPhone}`
-      let newToken: string
-
-      if (!shouldUseTwilio(phone)) {
-        if (!reAuthFlowId) throw new Error('Missing SMS flow. Please resend the code.')
-        await verifySmsOTP({ flowId: reAuthFlowId, otp: reAuthOtp })
-        const cdpToken = await getAccessToken()
-        if (!cdpToken) {
-          // CDP session is now inconsistent (verifySmsOTP succeeded but no token).
-          // Clean up CDP state before surfacing the error.
-          await signOut()
-          throw new Error('Failed to get CDP access token. Please try again.')
-        }
-
-        const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
-        const res = await fetch(`${BACKEND_URL}/api/auth/exchange-cdp-token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cdpAccessToken: cdpToken }),
-        })
-        if (!res.ok) throw new Error('Failed to exchange CDP token')
-        const data = await res.json()
-        newToken = data.token
-      } else {
-        newToken = await verifyOtp(reAuthPhone, reAuthOtp)
-      }
-
+      const newToken = await verifyOtp(reAuthPhone, reAuthOtp)
       storeToken(newToken)
-      // Only call authenticateWithJWT for Twilio flow — CDP SMS users
-      // are already authenticated via verifySmsOTP.
-      if (isTwilioActive()) await authenticateWithJWT()
+      await authenticateWithJWT()
       setToken(newToken)
       setIsAuthenticated(true)
       setExpiryWarning(false)
@@ -256,17 +216,18 @@ export function useSessionGuard(): SessionGuardResult {
       setReAuthStep('phone')
       setReAuthPhone('')
       setReAuthOtp('')
-      setReAuthFlowId(null)
     } catch (err) {
       setReAuthError(err instanceof Error ? err.message : 'Failed to verify OTP')
     } finally {
       setReAuthLoading(false)
     }
-  }, [reAuthPhone, reAuthOtp, reAuthFlowId, authenticateWithJWT, verifySmsOTP, getAccessToken])
+  }, [reAuthPhone, reAuthOtp, authenticateWithJWT])
 
   const dismissReAuth = useCallback(() => {
     setReAuthVisible(false)
   }, [])
+
+  const phone = reAuthPhone.startsWith('+') ? reAuthPhone : `+${reAuthPhone}`
 
   return {
     isAuthenticated,
@@ -280,6 +241,8 @@ export function useSessionGuard(): SessionGuardResult {
     reAuthOtp,
     reAuthError,
     reAuthLoading,
+    reAuthChannel,
+    reAuthCanSwitchChannel: reAuthPhone ? canSwitchChannel(phone) : false,
     setReAuthPhone,
     setReAuthOtp,
     handleReAuthSendOtp,

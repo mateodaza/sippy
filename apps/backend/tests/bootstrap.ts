@@ -13,7 +13,6 @@ import { sessionApiClient } from '@adonisjs/session/plugins/api_client'
 import type { Registry } from '../.adonisjs/client/registry/schema.d.ts'
 
 declare module '@japa/api-client/types' {
-  // eslint-disable-next-line @typescript-eslint/no-empty-interface
   interface RoutesRegistry extends Registry {}
 }
 

@@ -64,7 +64,9 @@ export default class NotifyController {
         return response.status(400).json({ error: 'Invalid phone number' })
       }
 
-      logger.info(`Sending Fund notification to ${maskPhone(canonicalPhone)}: ${amount} ${type.toUpperCase()}`)
+      logger.info(
+        `Sending Fund notification to ${maskPhone(canonicalPhone)}: ${amount} ${type.toUpperCase()}`
+      )
 
       // Verify wallet exists (user must have started via WhatsApp first)
       const wallet = await getUserWallet(canonicalPhone)

@@ -68,8 +68,8 @@ export interface ParseLogEntry {
  */
 export function sanitizePhrase(text: string): string | null {
   let s = text
-    .replace(/\+?\d[\d\s\-().]{6,}\d/g, '[PHONE]')   // phone patterns (7+ digits)
-    .replace(/\$?\d+(\.\d+)?/g, '[AMOUNT]')            // money / standalone numbers
+    .replace(/\+?\d[\d\s\-().]{6,}\d/g, '[PHONE]') // phone patterns (7+ digits)
+    .replace(/\$?\d+(\.\d+)?/g, '[AMOUNT]') // money / standalone numbers
     .toLowerCase()
     .trim()
     .replace(/\s+/g, ' ')

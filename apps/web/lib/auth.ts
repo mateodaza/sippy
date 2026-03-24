@@ -10,12 +10,14 @@ async function extractErrorMessage(response: Response): Promise<string> {
   return response.statusText || String(response.status)
 }
 
-export async function sendOtp(phone: string): Promise<void> {
+export type OtpChannel = 'sms' | 'whatsapp'
+
+export async function sendOtp(phone: string, channel: OtpChannel = 'sms'): Promise<void> {
   const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
   const response = await fetch(`${BACKEND_URL}/api/auth/send-otp`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone }),
+    body: JSON.stringify({ phone, channel }),
   })
   if (!response.ok) {
     const message = await extractErrorMessage(response)

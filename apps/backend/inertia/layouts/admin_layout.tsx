@@ -1,4 +1,4 @@
-import { Link, usePage } from '@inertiajs/react'
+import { Link, usePage } from '@adonisjs/inertia/react'
 import type { ReactNode } from 'react'
 
 interface AuthUser {
@@ -28,7 +28,15 @@ const navItems = [
     href: '/admin',
     label: 'Dashboard',
     icon: (
-      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        className="h-5 w-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <rect x="3" y="3" width="7" height="7" />
         <rect x="14" y="3" width="7" height="7" />
         <rect x="14" y="14" width="7" height="7" />
@@ -40,7 +48,15 @@ const navItems = [
     href: '/admin/users',
     label: 'Users',
     icon: (
-      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        className="h-5 w-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
         <circle cx="9" cy="7" r="4" />
         <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
@@ -52,7 +68,15 @@ const navItems = [
     href: '/admin/analytics',
     label: 'Analytics',
     icon: (
-      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        className="h-5 w-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <line x1="18" y1="20" x2="18" y2="10" />
         <line x1="12" y1="20" x2="12" y2="4" />
         <line x1="6" y1="20" x2="6" y2="14" />
@@ -63,7 +87,15 @@ const navItems = [
     href: '/admin/roles',
     label: 'Roles',
     icon: (
-      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        className="h-5 w-5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
       </svg>
     ),
@@ -71,7 +103,11 @@ const navItems = [
 ]
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const { auth, flash, indexerHeartbeat } = usePage().props as { auth: AuthUser | null; flash: FlashMessages; indexerHeartbeat: number | null }
+  const { auth, flash, indexerHeartbeat } = usePage().props as {
+    auth: AuthUser | null
+    flash: FlashMessages
+    indexerHeartbeat: number | null
+  }
   const currentPath = usePage().url
 
   function isActive(href: string) {
@@ -86,7 +122,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         {/* Brand */}
         <div className="mb-8 flex items-center gap-3 px-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sippy to-sippy-dark shadow-[0_8px_32px_-8px_rgba(16,185,129,0.3)]">
-            <svg className="h-5 w-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              className="h-5 w-5 text-white"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M12 2L2 7l10 5 10-5-10-5z" />
               <path d="M2 17l10 5 10-5" />
               <path d="M2 12l10 5 10-5" />
@@ -110,7 +154,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                   : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
               }`}
             >
-              <span className={isActive(item.href) ? 'text-sippy' : 'text-gray-400'}>{item.icon}</span>
+              <span className={isActive(item.href) ? 'text-sippy' : 'text-gray-400'}>
+                {item.icon}
+              </span>
               {item.label}
             </Link>
           ))}
@@ -161,7 +207,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         {/* Flash messages */}
         {flash?.success && (
           <div className="mb-6 flex items-center gap-2 rounded-xl border border-[#bbf7d0] bg-gradient-to-r from-[#f0fdf4] to-sippy-lightest p-4">
-            <svg className="h-5 w-5 flex-shrink-0 text-sippy" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              className="h-5 w-5 flex-shrink-0 text-sippy"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
               <polyline points="22 4 12 14.01 9 11.01" />
             </svg>
@@ -170,7 +224,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         )}
         {flash?.error && (
           <div className="mb-6 flex items-center gap-2 rounded-xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-100 p-4">
-            <svg className="h-5 w-5 flex-shrink-0 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              className="h-5 w-5 flex-shrink-0 text-red-500"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <circle cx="12" cy="12" r="10" />
               <line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />

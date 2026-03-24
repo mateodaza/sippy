@@ -8,8 +8,6 @@ import {
   useCurrentUser,
   useIsSignedIn,
   useSignOut,
-  useSignInWithSms,
-  useVerifySmsOTP,
   useGetAccessToken,
 } from '@coinbase/cdp-hooks'
 import {
@@ -19,6 +17,7 @@ import {
   getStoredToken,
   clearToken,
   getFreshToken,
+  type OtpChannel,
 } from '../../lib/auth'
 import {
   Language,
@@ -32,9 +31,9 @@ import {
 } from '../../lib/i18n'
 import { parseUnits } from 'viem'
 import { SippyPhoneInput } from '../../components/ui/phone-input'
-import { isBlockedPrefix } from '@sippy/shared'
-import { getAuthMode, getProviderType, type AuthMode } from '../../lib/auth-mode'
-import { CDPProviderCustomAuth, CDPProviderNative } from '../providers/cdp-provider'
+import { isBlockedPrefix, isNANP } from '@sippy/shared'
+import { getDefaultChannel, canSwitchChannel } from '../../lib/auth-mode'
+import { CDPProviderCustomAuth } from '../providers/cdp-provider'
 
 /**
  * Setup Page for Embedded Wallets
@@ -94,13 +93,7 @@ const STEPS: Step[] = ['phone', 'otp', 'email', 'tos', 'done']
 const TOS_VERSION = '1.0'
 const TOS_URL = 'https://www.sippy.lat/terms'
 
-function SetupContent({
-  authMode,
-  phoneFromUrl: phoneFromUrlProp,
-}: {
-  authMode: AuthMode
-  phoneFromUrl: string
-}) {
+function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string }) {
   const router = useRouter()
 
   const phoneFromUrl = phoneFromUrlProp
@@ -152,13 +145,12 @@ function SetupContent({
   const { isSignedIn } = useIsSignedIn()
   const { signOut } = useSignOut()
 
-  // CDP SMS hooks (only used when authMode === 'cdp-sms')
-  const { signInWithSms } = useSignInWithSms()
-  const { verifySmsOTP } = useVerifySmsOTP()
   const { getAccessToken } = useGetAccessToken()
-  const [cdpFlowId, setCdpFlowId] = useState<string | null>(null)
 
-  // Flag: CDP SMS OTP verified, waiting for currentUser to populate with wallet
+  // OTP channel: +1 → whatsapp only, others → sms with whatsapp fallback
+  const [otpChannel, setOtpChannel] = useState<OtpChannel>('sms')
+
+  // Flag: OTP verified, waiting for currentUser to populate with wallet
   const [awaitingCdpWallet, setAwaitingCdpWallet] = useState(false)
 
   // Security: Phone number must match what was sent in the WhatsApp link
@@ -460,8 +452,8 @@ function SetupContent({
     }
   }
 
-  // Step 1: Send SMS OTP
-  const handleSendOtp = async () => {
+  // Step 1: Send OTP via SMS or WhatsApp
+  const handleSendOtp = async (channelOverride?: OtpChannel) => {
     setIsLoading(true)
     setError(null)
 
@@ -486,18 +478,14 @@ function SetupContent({
       storeLanguage(phoneLang)
       setLang(phoneLang)
 
-      if (authMode === 'cdp-sms') {
-        // CDP native SMS — CDP sends the SMS directly
-        // Sign out first if an old CDP session is still active, otherwise
-        // signInWithSms throws "User is already authenticated".
-        if (isSignedIn) await signOut()
-        const result = await signInWithSms({ phoneNumber: formattedPhone })
-        setCdpFlowId(result.flowId)
-      } else {
-        // Twilio flow — backend sends SMS
-        await sendOtp(formattedPhone)
-      }
+      // Determine channel: override (from "Send via WhatsApp" link) or default from phone
+      const channel = channelOverride ?? getDefaultChannel(formattedPhone)
+      setOtpChannel(channel)
 
+      // Sign out first if an old CDP session is still active
+      if (isSignedIn) await signOut()
+
+      await sendOtp(formattedPhone, channel)
       setStep('otp')
     } catch (err) {
       console.error('Failed to send OTP:', err)
@@ -514,59 +502,7 @@ function SetupContent({
     let shouldKeepLoading = false
 
     try {
-      if (authMode === 'cdp-sms') {
-        // CDP native SMS flow: verify OTP via CDP, then wait for wallet via useEffect
-        if (!cdpFlowId) throw new Error('Missing CDP flow ID. Please restart.')
-
-        await verifySmsOTP({ flowId: cdpFlowId, otp })
-
-        // CDP has now authenticated the user and created a wallet.
-        // Get CDP access token and exchange it for a Sippy JWT.
-        const cdpAccessToken = await getAccessToken()
-        if (!cdpAccessToken) {
-          throw new Error('Failed to get CDP access token.')
-        }
-
-        const exchangeRes = await fetch(`${BACKEND_URL}/api/auth/exchange-cdp-token`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cdpAccessToken }),
-        })
-
-        if (!exchangeRes.ok) {
-          const errBody = await exchangeRes.json().catch(() => ({}))
-          // Distinguish auth failures from server errors
-          if (exchangeRes.status === 401 || exchangeRes.status === 422) {
-            throw new Error(errBody.error || 'Authentication failed. Please try again.')
-          }
-          throw new Error(errBody.error || 'Failed to exchange CDP token')
-        }
-
-        const { token } = await exchangeRes.json()
-        storeToken(token)
-
-        // Detect language
-        const phoneLang = detectLanguageFromPhone(phoneNumber)
-        storeLanguage(phoneLang)
-        setLang(phoneLang)
-        fetchUserLanguage(token, BACKEND_URL)
-          .then(({ language }) => {
-            storeLanguage(language)
-            setLang(language)
-          })
-          .catch(() => {
-            /* language fetch failed */
-          })
-
-        // After verifySmsOTP, CDP SDK updates its internal state asynchronously.
-        // React won't re-render mid-handler, so `currentUser` from the closure is stale.
-        // Set a flag so a useEffect can pick up the wallet once currentUser updates.
-        setAwaitingCdpWallet(true)
-        shouldKeepLoading = true
-        return
-      }
-
-      // Twilio flow: verify OTP via backend, get Sippy JWT directly
+      // Verify OTP via Sippy backend, get JWT directly
       const sippyJwt = await verifyOtp(phoneNumber, otp)
       storeToken(sippyJwt)
 
@@ -661,8 +597,8 @@ function SetupContent({
     }
   }
 
-  // Effect: After CDP SMS OTP verification, wait for currentUser to populate with a wallet.
-  // verifySmsOTP triggers an internal SDK state update; React re-renders with the new
+  // Effect: After OTP verification, wait for currentUser to populate with a wallet.
+  // authenticateWithJWT triggers an internal SDK state update; React re-renders with the new
   // currentUser in a subsequent render cycle. This effect fires on that re-render.
   useEffect(() => {
     if (!awaitingCdpWallet) return
@@ -1078,7 +1014,7 @@ function SetupContent({
               </p>
             )}
             <button
-              onClick={handleSendOtp}
+              onClick={() => handleSendOtp()}
               disabled={
                 isLoading ||
                 !phoneNumber ||
@@ -1099,7 +1035,13 @@ function SetupContent({
               {t('setup.enterCode', lang)}
             </h1>
             <p className="text-[var(--text-secondary)] mb-6">
-              {t('setup.codeSentTo', lang)} {phoneNumber}
+              {otpChannel === 'whatsapp'
+                ? lang === 'es'
+                  ? `Enviamos un codigo a tu WhatsApp (${phoneNumber})`
+                  : lang === 'pt'
+                    ? `Enviamos um codigo para seu WhatsApp (${phoneNumber})`
+                    : `We sent a code to your WhatsApp (${phoneNumber})`
+                : `${t('setup.codeSentTo', lang)} ${phoneNumber}`}
             </p>
             <input
               type="text"
@@ -1117,6 +1059,29 @@ function SetupContent({
             >
               {isLoading ? t('setup.verifying', lang) : t('setup.verify', lang)}
             </button>
+            {/* Channel fallback for non-+1: switch between SMS and WhatsApp */}
+            {canSwitchChannel(phoneNumber) && (
+              <button
+                onClick={() => {
+                  const alt: OtpChannel = otpChannel === 'sms' ? 'whatsapp' : 'sms'
+                  handleSendOtp(alt)
+                }}
+                disabled={isLoading}
+                className="w-full mt-3 text-sm text-brand-primary hover:text-brand-primary-hover py-2"
+              >
+                {otpChannel === 'sms'
+                  ? lang === 'es'
+                    ? 'No llego? Enviar por WhatsApp'
+                    : lang === 'pt'
+                      ? 'Nao chegou? Enviar por WhatsApp'
+                      : "Didn't get it? Send via WhatsApp"
+                  : lang === 'es'
+                    ? 'Enviar por SMS'
+                    : lang === 'pt'
+                      ? 'Enviar por SMS'
+                      : 'Send via SMS instead'}
+              </button>
+            )}
             <button
               onClick={() => setStep('phone')}
               className="w-full mt-2 text-[var(--text-secondary)] py-2"
@@ -1327,12 +1292,8 @@ function PhoneEntryGate() {
     )
   }
 
-  const authMode = getAuthMode(submittedPhone)
-  const Provider =
-    getProviderType(submittedPhone) === 'native' ? CDPProviderNative : CDPProviderCustomAuth
-
   return (
-    <Provider>
+    <CDPProviderCustomAuth>
       <Suspense
         fallback={
           <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
@@ -1340,9 +1301,9 @@ function PhoneEntryGate() {
           </div>
         }
       >
-        <SetupContent authMode={authMode} phoneFromUrl={submittedPhone} />
+        <SetupContent phoneFromUrl={submittedPhone} />
       </Suspense>
-    </Provider>
+    </CDPProviderCustomAuth>
   )
 }
 
@@ -1411,15 +1372,11 @@ function SetupPageInner() {
     return <PhoneEntryGate />
   }
 
-  // Phone from URL → mount correct provider immediately
-  const authMode = getAuthMode(phoneFromUrl)
-  const Provider =
-    getProviderType(phoneFromUrl) === 'native' ? CDPProviderNative : CDPProviderCustomAuth
-
+  // Phone from URL → mount provider immediately
   return (
-    <Provider>
-      <SetupContent authMode={authMode} phoneFromUrl={phoneFromUrl} />
-    </Provider>
+    <CDPProviderCustomAuth>
+      <SetupContent phoneFromUrl={phoneFromUrl} />
+    </CDPProviderCustomAuth>
   )
 }
 

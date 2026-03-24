@@ -30,7 +30,9 @@ test.group('Message Parser | Privacy Regex', () => {
     assert.equal(result.detectedLanguage, 'en')
   })
 
-  test('TC-PV-004-U-R03: "PRIVACY ON" (uppercase) → command=privacy, action=on, lang=en', ({ assert }) => {
+  test('TC-PV-004-U-R03: "PRIVACY ON" (uppercase) → command=privacy, action=on, lang=en', ({
+    assert,
+  }) => {
     const result = parseMessageWithRegex('PRIVACY ON')
     assert.equal(result.command, 'privacy')
     assert.equal(result.privacyAction, 'on')
@@ -58,7 +60,9 @@ test.group('Message Parser | Privacy Regex', () => {
     assert.equal(result.detectedLanguage, 'pt')
   })
 
-  test('TC-PV-004-U-R07: "privacidade off" → command=privacy, action=off, lang=pt', ({ assert }) => {
+  test('TC-PV-004-U-R07: "privacidade off" → command=privacy, action=off, lang=pt', ({
+    assert,
+  }) => {
     const result = parseMessageWithRegex('privacidade off')
     assert.equal(result.command, 'privacy')
     assert.equal(result.privacyAction, 'off')
@@ -104,7 +108,9 @@ test.group('routeCommand | Privacy Dispatch', (group) => {
     restoreUserPreference()
   })
 
-  test('TC-PV-004-U-C01: privacy on, lang=en, no legacy row → phoneVisible=true, message contains "visible"', async ({ assert }) => {
+  test('TC-PV-004-U-C01: privacy on, lang=en, no legacy row → phoneVisible=true, message contains "visible"', async ({
+    assert,
+  }) => {
     // Simulate post-SH-003: no bare-digit row
     ;(UserPreference as any).findBy = async () => null
 
@@ -122,14 +128,26 @@ test.group('routeCommand | Privacy Dispatch', (group) => {
     }
 
     const cmd: ParsedCommand = { command: 'privacy', privacyAction: 'on' }
-    await routeCommand('+573001234567', cmd, 'en' as Lang, emptyRateCtx, [], undefined, undefined, undefined, fakeSend as any)
+    await routeCommand(
+      '+573001234567',
+      cmd,
+      'en' as Lang,
+      emptyRateCtx,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      fakeSend as any
+    )
 
     assert.deepEqual(updateOrCreateSearch, { phoneNumber: '+573001234567' })
     assert.deepEqual(updateOrCreateData, { phoneVisible: true })
     assert.include(sentMessage, 'visible')
   })
 
-  test('TC-PV-004-U-C02: privacy off, lang=en, no legacy row → phoneVisible=false, message contains "hidden"', async ({ assert }) => {
+  test('TC-PV-004-U-C02: privacy off, lang=en, no legacy row → phoneVisible=false, message contains "hidden"', async ({
+    assert,
+  }) => {
     ;(UserPreference as any).findBy = async () => null
 
     let updateOrCreateData: unknown
@@ -144,13 +162,25 @@ test.group('routeCommand | Privacy Dispatch', (group) => {
     }
 
     const cmd: ParsedCommand = { command: 'privacy', privacyAction: 'off' }
-    await routeCommand('+573001234567', cmd, 'en' as Lang, emptyRateCtx, [], undefined, undefined, undefined, fakeSend as any)
+    await routeCommand(
+      '+573001234567',
+      cmd,
+      'en' as Lang,
+      emptyRateCtx,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      fakeSend as any
+    )
 
     assert.deepEqual(updateOrCreateData, { phoneVisible: false })
     assert.include(sentMessage, 'hidden')
   })
 
-  test('TC-PV-004-U-C03: privacy on, lang=es → updateOrCreate called, ES message contains "visible"', async ({ assert }) => {
+  test('TC-PV-004-U-C03: privacy on, lang=es → updateOrCreate called, ES message contains "visible"', async ({
+    assert,
+  }) => {
     ;(UserPreference as any).findBy = async () => null
 
     let updateOrCreateCalled = false
@@ -165,13 +195,25 @@ test.group('routeCommand | Privacy Dispatch', (group) => {
     }
 
     const cmd: ParsedCommand = { command: 'privacy', privacyAction: 'on' }
-    await routeCommand('+573001234567', cmd, 'es' as Lang, emptyRateCtx, [], undefined, undefined, undefined, fakeSend as any)
+    await routeCommand(
+      '+573001234567',
+      cmd,
+      'es' as Lang,
+      emptyRateCtx,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      fakeSend as any
+    )
 
     assert.isTrue(updateOrCreateCalled)
     assert.include(sentMessage, 'visible')
   })
 
-  test('TC-PV-004-U-C04: privacy off, lang=pt → updateOrCreate called, PT message contains "oculto"', async ({ assert }) => {
+  test('TC-PV-004-U-C04: privacy off, lang=pt → updateOrCreate called, PT message contains "oculto"', async ({
+    assert,
+  }) => {
     ;(UserPreference as any).findBy = async () => null
 
     let updateOrCreateCalled = false
@@ -186,13 +228,25 @@ test.group('routeCommand | Privacy Dispatch', (group) => {
     }
 
     const cmd: ParsedCommand = { command: 'privacy', privacyAction: 'off' }
-    await routeCommand('+573001234567', cmd, 'pt' as Lang, emptyRateCtx, [], undefined, undefined, undefined, fakeSend as any)
+    await routeCommand(
+      '+573001234567',
+      cmd,
+      'pt' as Lang,
+      emptyRateCtx,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      fakeSend as any
+    )
 
     assert.isTrue(updateOrCreateCalled)
     assert.include(sentMessage, 'oculto')
   })
 
-  test('TC-PV-004-U-C05: privacy on, legacy bare-digit row exists → updateOrCreate uses bare-digit key', async ({ assert }) => {
+  test('TC-PV-004-U-C05: privacy on, legacy bare-digit row exists → updateOrCreate uses bare-digit key', async ({
+    assert,
+  }) => {
     // Simulate pre-SH-003: bare-digit row exists
     const legacyPref = { phoneNumber: '573001234567', phoneVisible: false }
     ;(UserPreference as any).findBy = async (_key: string, value: string) => {
@@ -212,7 +266,17 @@ test.group('routeCommand | Privacy Dispatch', (group) => {
     }
 
     const cmd: ParsedCommand = { command: 'privacy', privacyAction: 'on' }
-    await routeCommand('+573001234567', cmd, 'en' as Lang, emptyRateCtx, [], undefined, undefined, undefined, fakeSend as any)
+    await routeCommand(
+      '+573001234567',
+      cmd,
+      'en' as Lang,
+      emptyRateCtx,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      fakeSend as any
+    )
 
     // Bare-digit key must be used (not the + canonical key)
     assert.deepEqual(updateOrCreateSearch, { phoneNumber: '573001234567' })

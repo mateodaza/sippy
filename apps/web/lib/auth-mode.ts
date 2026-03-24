@@ -1,39 +1,33 @@
 import { isNANP } from '@sippy/shared'
+import type { OtpChannel } from './auth'
 
-export type AuthMode = 'twilio' | 'cdp-sms'
+export type AuthMode = 'sippy-otp'
 
-function isTwilioEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_TWILIO_ENABLED === 'true'
+/** All users use Sippy custom auth (JWT + authenticateWithJWT). */
+export function getAuthMode(_phone: string): AuthMode {
+  return 'sippy-otp'
+}
+
+/** All users use customAuth provider (JWT-based). */
+export function getProviderType(_phone: string): 'custom' {
+  return 'custom'
+}
+
+/** Returning-user pages always use customAuth. */
+export function getDefaultProviderType(): 'custom' {
+  return 'custom'
 }
 
 /**
- * Returns true only when Twilio is explicitly enabled AND the phone is non-NANP.
- * When Twilio is disabled (the default), ALL numbers use CDP native SMS.
+ * Determine the OTP delivery channel for a given phone number.
+ * +1 (NANP): WhatsApp only — no SMS option.
+ * Everyone else: SMS default, WhatsApp as fallback.
  */
-export function shouldUseTwilio(phone: string): boolean {
-  return isTwilioEnabled() && !isNANP(phone)
+export function getDefaultChannel(phone: string): OtpChannel {
+  return isNANP(phone) ? 'whatsapp' : 'sms'
 }
 
-/** Determine the auth mode for a given phone number. */
-export function getAuthMode(phone: string): AuthMode {
-  return shouldUseTwilio(phone) ? 'twilio' : 'cdp-sms'
-}
-
-/** Determine the correct CDP provider type for a given phone. */
-export function getProviderType(phone: string): 'native' | 'custom' {
-  return shouldUseTwilio(phone) ? 'custom' : 'native'
-}
-
-/**
- * For returning-user pages (settings, wallet) that don't have a phone
- * at mount time. Returns 'native' when Twilio is off (CDP handles its
- * own session via SMS), 'custom' when Twilio is on (needs customAuth.getJwt).
- */
-export function getDefaultProviderType(): 'native' | 'custom' {
-  return isTwilioEnabled() ? 'custom' : 'native'
-}
-
-/** Whether Twilio is currently enabled (exposed for session guard logic). */
-export function isTwilioActive(): boolean {
-  return isTwilioEnabled()
+/** Whether the user can switch channels (non-NANP only). */
+export function canSwitchChannel(phone: string): boolean {
+  return !isNANP(phone)
 }

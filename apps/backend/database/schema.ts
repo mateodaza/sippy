@@ -8,7 +8,15 @@ import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
 
 export class AdminUserSchema extends BaseModel {
-  static $columns = ['id', 'fullName', 'email', 'password', 'role', 'createdAt', 'updatedAt'] as const
+  static $columns = [
+    'id',
+    'fullName',
+    'email',
+    'password',
+    'role',
+    'createdAt',
+    'updatedAt',
+  ] as const
   $columns = AdminUserSchema.$columns
   @column({ isPrimary: true })
   declare id: number
@@ -55,7 +63,21 @@ export class ExportAuditLogSchema extends BaseModel {
 }
 
 export class ParseLogSchema extends BaseModel {
-  static $columns = ['id', 'messageId', 'phoneNumber', 'parseSource', 'intent', 'model', 'promptTokens', 'completionTokens', 'latencyMs', 'status', 'detectedLanguage', 'createdAt', 'matchedPhrase'] as const
+  static $columns = [
+    'id',
+    'messageId',
+    'phoneNumber',
+    'parseSource',
+    'intent',
+    'model',
+    'promptTokens',
+    'completionTokens',
+    'latencyMs',
+    'status',
+    'detectedLanguage',
+    'createdAt',
+    'matchedPhrase',
+  ] as const
   $columns = ParseLogSchema.$columns
   @column({ isPrimary: true })
   declare id: number
@@ -86,7 +108,16 @@ export class ParseLogSchema extends BaseModel {
 }
 
 export class PendingInviteSchema extends BaseModel {
-  static $columns = ['id', 'senderPhone', 'recipientPhone', 'status', 'createdAt', 'expiresAt', 'claimedAt', 'notifiedAt'] as const
+  static $columns = [
+    'id',
+    'senderPhone',
+    'recipientPhone',
+    'status',
+    'createdAt',
+    'expiresAt',
+    'claimedAt',
+    'notifiedAt',
+  ] as const
   $columns = PendingInviteSchema.$columns
   @column({ isPrimary: true })
   declare id: number
@@ -107,7 +138,18 @@ export class PendingInviteSchema extends BaseModel {
 }
 
 export class PhoneRegistrySchema extends BaseModel {
-  static $columns = ['phoneNumber', 'cdpWalletName', 'walletAddress', 'createdAt', 'lastActivity', 'dailySpent', 'lastResetDate', 'spendPermissionHash', 'dailyLimit', 'permissionCreatedAt'] as const
+  static $columns = [
+    'phoneNumber',
+    'cdpWalletName',
+    'walletAddress',
+    'createdAt',
+    'lastActivity',
+    'dailySpent',
+    'lastResetDate',
+    'spendPermissionHash',
+    'dailyLimit',
+    'permissionCreatedAt',
+  ] as const
   $columns = PhoneRegistrySchema.$columns
   @column()
   declare phoneNumber: string
@@ -132,7 +174,19 @@ export class PhoneRegistrySchema extends BaseModel {
 }
 
 export class UserPreferenceSchema extends BaseModel {
-  static $columns = ['phoneNumber', 'preferredLanguage', 'updatedAt', 'emailEncrypted', 'emailHash', 'emailVerified', 'emailVerifiedAt', 'phoneVisible', 'blocked', 'tosAcceptedAt', 'tosVersion'] as const
+  static $columns = [
+    'phoneNumber',
+    'preferredLanguage',
+    'updatedAt',
+    'emailEncrypted',
+    'emailHash',
+    'emailVerified',
+    'emailVerifiedAt',
+    'phoneVisible',
+    'blocked',
+    'tosAcceptedAt',
+    'tosVersion',
+  ] as const
   $columns = UserPreferenceSchema.$columns
   @column()
   declare phoneNumber: string
@@ -159,7 +213,15 @@ export class UserPreferenceSchema extends BaseModel {
 }
 
 export class WebSendLogSchema extends BaseModel {
-  static $columns = ['id', 'phoneHash', 'walletAddress', 'toAddress', 'amount', 'txHash', 'createdAt'] as const
+  static $columns = [
+    'id',
+    'phoneHash',
+    'walletAddress',
+    'toAddress',
+    'amount',
+    'txHash',
+    'createdAt',
+  ] as const
   $columns = WebSendLogSchema.$columns
   @column({ isPrimary: true })
   declare id: number

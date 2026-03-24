@@ -9,7 +9,13 @@ export default class DashboardController {
       db
         .from('parse_log')
         .whereRaw('created_at >= CURRENT_DATE')
-        .whereIn('status', ['regex-matched', 'normalized-send', 'llm-success', 'loose-matched', 'format-hint'])
+        .whereIn('status', [
+          'regex-matched',
+          'normalized-send',
+          'llm-success',
+          'loose-matched',
+          'format-hint',
+        ])
         .count('* as total')
         .first(),
     ])

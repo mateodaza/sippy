@@ -29,7 +29,9 @@ export async function isDbAvailable(): Promise<boolean> {
     cachedResult = true
   } catch {
     if (process.env.CI === 'true') {
-      throw new Error('DB is unavailable but CI=true — DB-backed tests must not be silently skipped in CI')
+      throw new Error(
+        'DB is unavailable but CI=true — DB-backed tests must not be silently skipped in CI'
+      )
     }
     cachedResult = false
   }

@@ -87,10 +87,7 @@ test.group('formatBalanceMessage | dual currency integration', () => {
   })
 
   test('without rate — en: USD only, no tilde', ({ assert }) => {
-    const result = formatBalanceMessage(
-      { balance: 10, wallet: '0x1234567890abcdef1234' },
-      'en'
-    )
+    const result = formatBalanceMessage({ balance: 10, wallet: '0x1234567890abcdef1234' }, 'en')
     assert.include(result, '$10.00')
     assert.notInclude(result, '~')
   })

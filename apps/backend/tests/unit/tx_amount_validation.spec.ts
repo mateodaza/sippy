@@ -34,7 +34,9 @@ const NO_OP_RATE_CTX: RateContext = {
   recipientCurrency: null,
 }
 
-function makePendingMap(entries: [string, PendingTransaction][] = []): Map<string, PendingTransaction> {
+function makePendingMap(
+  entries: [string, PendingTransaction][] = []
+): Map<string, PendingTransaction> {
   return new Map(entries)
 }
 
@@ -43,7 +45,7 @@ function makePendingMap(entries: [string, PendingTransaction][] = []): Map<strin
 test.group('Group A | parseAndValidateAmount core cases', () => {
   test('A-01: "10.50" → value=10.50, no error', ({ assert }) => {
     const r = parseAndValidateAmount('10.50')
-    assert.equal(r.value, 10.50)
+    assert.equal(r.value, 10.5)
     assert.isNull(r.errorCode)
   })
 
@@ -133,7 +135,7 @@ test.group('Group A | parseAndValidateAmount core cases', () => {
 
   test('A-18: "0.10" → value=0.10, no error (exactly at minimum)', ({ assert }) => {
     const r = parseAndValidateAmount('0.10')
-    assert.equal(r.value, 0.10)
+    assert.equal(r.value, 0.1)
     assert.isNull(r.errorCode)
   })
 
@@ -155,7 +157,7 @@ test.group('Group A | parseAndValidateAmount core cases', () => {
 test.group('Group B | Comma normalization', () => {
   test('B-01: "10,50" → value=10.50 (LATAM decimal comma)', ({ assert }) => {
     const r = parseAndValidateAmount('10,50')
-    assert.equal(r.value, 10.50)
+    assert.equal(r.value, 10.5)
     assert.isNull(r.errorCode)
   })
 
@@ -205,15 +207,19 @@ test.group('Group C | isLarge flag', () => {
 // ── Group D — Send parsing with amount errors ──────────────────────────────
 
 test.group('Group D | Send parsing with amount errors (parseMessageWithRegex)', () => {
-  test('D-01: "send 10,50 to +573001234567" → command=send, amount=10.50, no errors', ({ assert }) => {
+  test('D-01: "send 10,50 to +573001234567" → command=send, amount=10.50, no errors', ({
+    assert,
+  }) => {
     const r = parseMessageWithRegex('send 10,50 to +573001234567')
     assert.equal(r.command, 'send')
     assert.isUndefined(r.amountError)
     assert.isUndefined(r.recipientError)
-    assert.equal(r.amount, 10.50)
+    assert.equal(r.amount, 10.5)
   })
 
-  test('D-02: "send 1.000 to +573001234567" → command=send, amountError=AMBIGUOUS_SEPARATOR', ({ assert }) => {
+  test('D-02: "send 1.000 to +573001234567" → command=send, amountError=AMBIGUOUS_SEPARATOR', ({
+    assert,
+  }) => {
     const r = parseMessageWithRegex('send 1.000 to +573001234567')
     assert.equal(r.command, 'send')
     assert.equal(r.amountError, 'AMBIGUOUS_SEPARATOR')
@@ -228,14 +234,18 @@ test.group('Group D | Send parsing with amount errors (parseMessageWithRegex)', 
     assert.isUndefined(r.amount)
   })
 
-  test('D-04: "send 10.1234 to +573001234567" → command=send, amountError=TOO_MANY_DECIMALS', ({ assert }) => {
+  test('D-04: "send 10.1234 to +573001234567" → command=send, amountError=TOO_MANY_DECIMALS', ({
+    assert,
+  }) => {
     const r = parseMessageWithRegex('send 10.1234 to +573001234567')
     assert.equal(r.command, 'send')
     assert.equal(r.amountError, 'TOO_MANY_DECIMALS')
     assert.isUndefined(r.amount)
   })
 
-  test('D-05: "send 99999 to +573001234567" → command=send, amountError=TOO_LARGE', ({ assert }) => {
+  test('D-05: "send 99999 to +573001234567" → command=send, amountError=TOO_LARGE', ({
+    assert,
+  }) => {
     const r = parseMessageWithRegex('send 99999 to +573001234567')
     assert.equal(r.command, 'send')
     assert.equal(r.amountError, 'TOO_LARGE')
@@ -249,7 +259,9 @@ test.group('Group D | Send parsing with amount errors (parseMessageWithRegex)', 
     assert.isUndefined(r.amount)
   })
 
-  test('D-06: "send 10 to 0" → command=send, recipientError=INVALID_PHONE, amount=10', ({ assert }) => {
+  test('D-06: "send 10 to 0" → command=send, recipientError=INVALID_PHONE, amount=10', ({
+    assert,
+  }) => {
     const r = parseMessageWithRegex('send 10 to 0')
     assert.equal(r.command, 'send')
     assert.isUndefined(r.amountError)
@@ -257,14 +269,18 @@ test.group('Group D | Send parsing with amount errors (parseMessageWithRegex)', 
     assert.equal(r.amount, 10)
   })
 
-  test('D-07: "send 10 to 123" → command=send, recipientError=INVALID_PHONE, amount=10', ({ assert }) => {
+  test('D-07: "send 10 to 123" → command=send, recipientError=INVALID_PHONE, amount=10', ({
+    assert,
+  }) => {
     const r = parseMessageWithRegex('send 10 to 123')
     assert.equal(r.command, 'send')
     assert.equal(r.recipientError, 'INVALID_PHONE')
     assert.equal(r.amount, 10)
   })
 
-  test('D-08: "send 10 to 12345678901234567" → command=send, recipientError=INVALID_PHONE, amount=10', ({ assert }) => {
+  test('D-08: "send 10 to 12345678901234567" → command=send, recipientError=INVALID_PHONE, amount=10', ({
+    assert,
+  }) => {
     const r = parseMessageWithRegex('send 10 to 12345678901234567')
     assert.equal(r.command, 'send')
     assert.equal(r.recipientError, 'INVALID_PHONE')
@@ -275,52 +291,140 @@ test.group('Group D | Send parsing with amount errors (parseMessageWithRegex)', 
 // ── Group E — Large amount warning in confirmation ─────────────────────────
 
 test.group('Group E | Large amount warning in confirmation (routeCommand)', () => {
-  test('E-01: amount=600, valid recipient → confirmation prompt includes large transfer warning (en)', async ({ assert }) => {
+  test('E-01: amount=600, valid recipient → confirmation prompt includes large transfer warning (en)', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     const capturedMessages: string[] = []
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
-    const fakeSend = async (..._args: any[]) => { return true }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
+    const fakeSend = async (..._args: any[]) => {
+      return true
+    }
 
-    const cmd: ParsedCommand = { command: 'send', amount: 600, recipient: '+573001234567', isLargeAmount: true }
-    await routeCommand('+1555000201', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    const cmd: ParsedCommand = {
+      command: 'send',
+      amount: 600,
+      recipient: '+573001234567',
+      isLargeAmount: true,
+    }
+    await routeCommand(
+      '+1555000201',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
-    assert.isTrue(capturedMessages.some(m => m.includes('This is a large transfer.')))
+    assert.isTrue(capturedMessages.some((m) => m.includes('This is a large transfer.')))
   })
 
-  test('E-02: amount=300, valid recipient → confirmation prompt does NOT include warning (en)', async ({ assert }) => {
+  test('E-02: amount=300, valid recipient → confirmation prompt does NOT include warning (en)', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     const capturedMessages: string[] = []
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
-    const fakeSend = async (..._args: any[]) => { return true }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
+    const fakeSend = async (..._args: any[]) => {
+      return true
+    }
 
-    const cmd: ParsedCommand = { command: 'send', amount: 300, recipient: '+573001234567', isLargeAmount: false }
-    await routeCommand('+1555000202', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    const cmd: ParsedCommand = {
+      command: 'send',
+      amount: 300,
+      recipient: '+573001234567',
+      isLargeAmount: false,
+    }
+    await routeCommand(
+      '+1555000202',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
-    assert.isFalse(capturedMessages.some(m => m.includes('large transfer')))
+    assert.isFalse(capturedMessages.some((m) => m.includes('large transfer')))
   })
 
-  test('E-03: amount=600, es → confirmation prompt includes ES warning line', async ({ assert }) => {
+  test('E-03: amount=600, es → confirmation prompt includes ES warning line', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     const capturedMessages: string[] = []
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
-    const fakeSend = async (..._args: any[]) => { return true }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
+    const fakeSend = async (..._args: any[]) => {
+      return true
+    }
 
-    const cmd: ParsedCommand = { command: 'send', amount: 600, recipient: '+573001234567', isLargeAmount: true }
-    await routeCommand('+573009990203', cmd, 'es', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    const cmd: ParsedCommand = {
+      command: 'send',
+      amount: 600,
+      recipient: '+573001234567',
+      isLargeAmount: true,
+    }
+    await routeCommand(
+      '+573009990203',
+      cmd,
+      'es',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
-    assert.isTrue(capturedMessages.some(m => m.includes('Esta es una transferencia grande.')))
+    assert.isTrue(capturedMessages.some((m) => m.includes('Esta es una transferencia grande.')))
   })
 
-  test('E-04: amount=600, pt → confirmation prompt includes PT warning line', async ({ assert }) => {
+  test('E-04: amount=600, pt → confirmation prompt includes PT warning line', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     const capturedMessages: string[] = []
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
-    const fakeSend = async (..._args: any[]) => { return true }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
+    const fakeSend = async (..._args: any[]) => {
+      return true
+    }
 
-    const cmd: ParsedCommand = { command: 'send', amount: 600, recipient: '+5511987654321', isLargeAmount: true }
-    await routeCommand('+5511900000204', cmd, 'pt', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    const cmd: ParsedCommand = {
+      command: 'send',
+      amount: 600,
+      recipient: '+5511987654321',
+      isLargeAmount: true,
+    }
+    await routeCommand(
+      '+5511900000204',
+      cmd,
+      'pt',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
-    assert.isTrue(capturedMessages.some(m => m.includes('Esta e uma transferencia grande.')))
+    assert.isTrue(capturedMessages.some((m) => m.includes('Esta e uma transferencia grande.')))
   })
 })
 
@@ -330,51 +434,114 @@ test.group('Group F | Phone validation in send (routeCommand)', () => {
   const invalidPhoneMsg = formatInvalidPhoneNumberMessage('en')
   const invalidFormatMsg = formatInvalidSendFormat('en')
 
-  test('F-01: "send 10 to 0" → routeCommand sends formatInvalidPhoneNumberMessage, NOT formatInvalidSendFormat', async ({ assert }) => {
+  test('F-01: "send 10 to 0" → routeCommand sends formatInvalidPhoneNumberMessage, NOT formatInvalidSendFormat', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     const capturedMessages: string[] = []
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
-    const fakeSend = async (..._args: any[]) => { return true }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
+    const fakeSend = async (..._args: any[]) => {
+      return true
+    }
 
     const cmd: ParsedCommand = { command: 'send', amount: 10, recipientError: 'INVALID_PHONE' }
-    await routeCommand('+1555000301', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      '+1555000301',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
-    assert.isTrue(capturedMessages.some(m => m === invalidPhoneMsg))
-    assert.isFalse(capturedMessages.some(m => m === invalidFormatMsg))
+    assert.isTrue(capturedMessages.some((m) => m === invalidPhoneMsg))
+    assert.isFalse(capturedMessages.some((m) => m === invalidFormatMsg))
   })
 
   test('F-02: short phone "123" → sends invalid phone message', async ({ assert }) => {
     const pendingTxs = makePendingMap()
     const capturedMessages: string[] = []
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
-    const fakeSend = async (..._args: any[]) => { return true }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
+    const fakeSend = async (..._args: any[]) => {
+      return true
+    }
 
     const cmd: ParsedCommand = { command: 'send', amount: 10, recipientError: 'INVALID_PHONE' }
-    await routeCommand('+1555000302', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      '+1555000302',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
-    assert.isTrue(capturedMessages.some(m => m === invalidPhoneMsg))
+    assert.isTrue(capturedMessages.some((m) => m === invalidPhoneMsg))
   })
 
-  test('F-03: too-long phone "12345678901234567" → sends invalid phone message', async ({ assert }) => {
+  test('F-03: too-long phone "12345678901234567" → sends invalid phone message', async ({
+    assert,
+  }) => {
     const pendingTxs = makePendingMap()
     const capturedMessages: string[] = []
-    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => { capturedMessages.push(msg) }
-    const fakeSend = async (..._args: any[]) => { return true }
+    const fakeMsg = async (_p: string, msg: string, _lang: Lang) => {
+      capturedMessages.push(msg)
+    }
+    const fakeSend = async (..._args: any[]) => {
+      return true
+    }
 
     const cmd: ParsedCommand = { command: 'send', amount: 10, recipientError: 'INVALID_PHONE' }
-    await routeCommand('+1555000303', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      '+1555000303',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
-    assert.isTrue(capturedMessages.some(m => m === invalidPhoneMsg))
+    assert.isTrue(capturedMessages.some((m) => m === invalidPhoneMsg))
   })
 
   test('F-04: valid recipient "+573001234567" → proceeds (no phone error)', async ({ assert }) => {
     const pendingTxs = makePendingMap()
     let sendHandlerCalled = false
     const fakeMsg = async (..._args: any[]) => {}
-    const fakeSend = async (..._args: any[]) => { sendHandlerCalled = true; return true }
+    const fakeSend = async (..._args: any[]) => {
+      sendHandlerCalled = true
+      return true
+    }
 
     const cmd: ParsedCommand = { command: 'send', amount: 3, recipient: '+573001234567' }
-    await routeCommand('+1555000304', cmd, 'en', NO_OP_RATE_CTX, [], undefined, fakeSend as any, undefined, fakeMsg as any, pendingTxs)
+    await routeCommand(
+      '+1555000304',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
 
     assert.isTrue(sendHandlerCalled)
   })
@@ -400,7 +567,9 @@ test.group('Group G | Trilingual error messages', () => {
     assert.include(msg.toLowerCase(), 'valor')
   })
 
-  test('G-04: formatAmountError AMBIGUOUS_SEPARATOR en → contains example without separators', ({ assert }) => {
+  test('G-04: formatAmountError AMBIGUOUS_SEPARATOR en → contains example without separators', ({
+    assert,
+  }) => {
     const msg = formatAmountError('AMBIGUOUS_SEPARATOR', 'en')
     assert.include(msg, '1000')
     assert.include(msg, '10.50')
@@ -434,13 +603,17 @@ test.group('Group G | Trilingual error messages', () => {
     assert.include(msg.toLowerCase(), 'telefone')
   })
 
-  test('G-07: formatConfirmationPromptWithWarning isLargeAmount=false → same as base prompt', ({ assert }) => {
+  test('G-07: formatConfirmationPromptWithWarning isLargeAmount=false → same as base prompt', ({
+    assert,
+  }) => {
     const base = formatConfirmationPromptWithWarning(10, '+573001234567', false, 'en')
     assert.isFalse(base.includes('large transfer'))
     assert.include(base, '***')
   })
 
-  test('G-08: formatConfirmationPromptWithWarning isLargeAmount=true → appends warning', ({ assert }) => {
+  test('G-08: formatConfirmationPromptWithWarning isLargeAmount=true → appends warning', ({
+    assert,
+  }) => {
     const msg = formatConfirmationPromptWithWarning(600, '+573001234567', true, 'en')
     assert.include(msg, 'This is a large transfer.')
   })

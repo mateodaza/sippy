@@ -22,7 +22,9 @@ const NO_OP_RATE_CTX: RateContext = {
   recipientCurrency: null,
 }
 
-function makePendingMap(entries: [string, PendingTransaction][] = []): Map<string, PendingTransaction> {
+function makePendingMap(
+  entries: [string, PendingTransaction][] = []
+): Map<string, PendingTransaction> {
   return new Map(entries)
 }
 
@@ -72,7 +74,14 @@ test.group('Group A | validateLLMResponse unit behavior', () => {
   })
 
   test('A-08: accepts optional dialectHint parameter', async ({ assert }) => {
-    const result = await validateLLMResponse('Quiubo parce!', 'hola', 'es', [], 'onboarded', 'Use natural Colombian Spanish.')
+    const result = await validateLLMResponse(
+      'Quiubo parce!',
+      'hola',
+      'es',
+      [],
+      'onboarded',
+      'Use natural Colombian Spanish.'
+    )
     assert.isTrue(result.passed)
   })
 })
@@ -82,29 +91,48 @@ test.group('Group A | validateLLMResponse unit behavior', () => {
 test.group('Group B | routeCommand with validator', () => {
   // Always-pass validator (same as default when LLM_VALIDATOR is off)
   const alwaysPass = async (): Promise<ValidationResult> => ({
-    passed: true, correctedText: null, reason: null,
+    passed: true,
+    correctedText: null,
+    reason: null,
   })
 
   // Always-fail validator with corrected text
   const alwaysFailWithCorrection = async (): Promise<ValidationResult> => ({
-    passed: false, correctedText: 'Fixed reply.', reason: 'tone',
+    passed: false,
+    correctedText: 'Fixed reply.',
+    reason: 'tone',
   })
 
   // Always-fail validator without corrected text (forces template fallback)
   const alwaysFailNoCorrection = async (): Promise<ValidationResult> => ({
-    passed: false, correctedText: null, reason: 'scope',
+    passed: false,
+    correctedText: null,
+    reason: 'scope',
   })
 
   test('B-01: greeting with passing validator sends LLM reply', async ({ assert }) => {
     const messages: string[] = []
-    const fakeMsg = async (_p: string, msg: string) => { messages.push(msg) }
+    const fakeMsg = async (_p: string, msg: string) => {
+      messages.push(msg)
+    }
     const fakeGen = async () => 'Hey! Check your balance or send some cash.'
 
     const cmd: ParsedCommand = { command: 'greeting', originalText: 'hola' }
     await routeCommand(
-      '+573001234567', cmd, 'es', NO_OP_RATE_CTX, [],
-      undefined, undefined as any, fakeGen as any, fakeMsg as any,
-      makePendingMap(), new Set(), 30_000, 'onboarded', 'neutral',
+      '+573001234567',
+      cmd,
+      'es',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      undefined as any,
+      fakeGen as any,
+      fakeMsg as any,
+      makePendingMap(),
+      new Set(),
+      30_000,
+      'onboarded',
+      'neutral',
       alwaysPass
     )
 
@@ -112,16 +140,31 @@ test.group('Group B | routeCommand with validator', () => {
     assert.equal(messages[0], 'Hey! Check your balance or send some cash.')
   })
 
-  test('B-02: greeting with failing validator (has correction) sends corrected text', async ({ assert }) => {
+  test('B-02: greeting with failing validator (has correction) sends corrected text', async ({
+    assert,
+  }) => {
     const messages: string[] = []
-    const fakeMsg = async (_p: string, msg: string) => { messages.push(msg) }
+    const fakeMsg = async (_p: string, msg: string) => {
+      messages.push(msg)
+    }
     const fakeGen = async () => 'I am here to assist you with your blockchain needs.'
 
     const cmd: ParsedCommand = { command: 'greeting', originalText: 'hola' }
     await routeCommand(
-      '+573001234567', cmd, 'es', NO_OP_RATE_CTX, [],
-      undefined, undefined as any, fakeGen as any, fakeMsg as any,
-      makePendingMap(), new Set(), 30_000, 'onboarded', 'neutral',
+      '+573001234567',
+      cmd,
+      'es',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      undefined as any,
+      fakeGen as any,
+      fakeMsg as any,
+      makePendingMap(),
+      new Set(),
+      30_000,
+      'onboarded',
+      'neutral',
       alwaysFailWithCorrection
     )
 
@@ -129,16 +172,31 @@ test.group('Group B | routeCommand with validator', () => {
     assert.equal(messages[0], 'Fixed reply.')
   })
 
-  test('B-03: greeting with failing validator (no correction) falls back to template', async ({ assert }) => {
+  test('B-03: greeting with failing validator (no correction) falls back to template', async ({
+    assert,
+  }) => {
     const messages: string[] = []
-    const fakeMsg = async (_p: string, msg: string) => { messages.push(msg) }
+    const fakeMsg = async (_p: string, msg: string) => {
+      messages.push(msg)
+    }
     const fakeGen = async () => 'Bad reply that will be rejected.'
 
     const cmd: ParsedCommand = { command: 'greeting', originalText: 'hola' }
     await routeCommand(
-      '+573001234567', cmd, 'es', NO_OP_RATE_CTX, [],
-      undefined, undefined as any, fakeGen as any, fakeMsg as any,
-      makePendingMap(), new Set(), 30_000, 'onboarded', 'neutral',
+      '+573001234567',
+      cmd,
+      'es',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      undefined as any,
+      fakeGen as any,
+      fakeMsg as any,
+      makePendingMap(),
+      new Set(),
+      30_000,
+      'onboarded',
+      'neutral',
       alwaysFailNoCorrection
     )
 
@@ -150,14 +208,27 @@ test.group('Group B | routeCommand with validator', () => {
 
   test('B-04: social with failing validator falls back to template', async ({ assert }) => {
     const messages: string[] = []
-    const fakeMsg = async (_p: string, msg: string) => { messages.push(msg) }
+    const fakeMsg = async (_p: string, msg: string) => {
+      messages.push(msg)
+    }
     const fakeGen = async () => 'I can help you invest in crypto tokens.'
 
     const cmd: ParsedCommand = { command: 'social', originalText: 'gracias' }
     await routeCommand(
-      '+573001234567', cmd, 'es', NO_OP_RATE_CTX, [],
-      undefined, undefined as any, fakeGen as any, fakeMsg as any,
-      makePendingMap(), new Set(), 30_000, 'onboarded', 'neutral',
+      '+573001234567',
+      cmd,
+      'es',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      undefined as any,
+      fakeGen as any,
+      fakeMsg as any,
+      makePendingMap(),
+      new Set(),
+      30_000,
+      'onboarded',
+      'neutral',
       alwaysFailNoCorrection
     )
 
@@ -165,16 +236,31 @@ test.group('Group B | routeCommand with validator', () => {
     assert.notEqual(messages[0], 'I can help you invest in crypto tokens.')
   })
 
-  test('B-05: confirm no-pending with failing validator falls back to social template', async ({ assert }) => {
+  test('B-05: confirm no-pending with failing validator falls back to social template', async ({
+    assert,
+  }) => {
     const messages: string[] = []
-    const fakeMsg = async (_p: string, msg: string) => { messages.push(msg) }
+    const fakeMsg = async (_p: string, msg: string) => {
+      messages.push(msg)
+    }
     const fakeGen = async () => 'Let me assist you with your DeFi needs.'
 
     const cmd: ParsedCommand = { command: 'confirm', originalText: 'dale' }
     await routeCommand(
-      '+573001234567', cmd, 'es', NO_OP_RATE_CTX, [],
-      undefined, undefined as any, fakeGen as any, fakeMsg as any,
-      makePendingMap(), new Set(), 30_000, 'onboarded', 'neutral',
+      '+573001234567',
+      cmd,
+      'es',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      undefined as any,
+      fakeGen as any,
+      fakeMsg as any,
+      makePendingMap(),
+      new Set(),
+      30_000,
+      'onboarded',
+      'neutral',
       alwaysFailNoCorrection
     )
 
@@ -182,9 +268,13 @@ test.group('Group B | routeCommand with validator', () => {
     assert.notEqual(messages[0], 'Let me assist you with your DeFi needs.')
   })
 
-  test('B-06: unknown with helpfulMessage — failing validator falls back to unknown template', async ({ assert }) => {
+  test('B-06: unknown with helpfulMessage — failing validator falls back to unknown template', async ({
+    assert,
+  }) => {
     const messages: string[] = []
-    const fakeMsg = async (_p: string, msg: string) => { messages.push(msg) }
+    const fakeMsg = async (_p: string, msg: string) => {
+      messages.push(msg)
+    }
 
     const cmd: ParsedCommand = {
       command: 'unknown',
@@ -192,9 +282,20 @@ test.group('Group B | routeCommand with validator', () => {
       helpfulMessage: 'Sure! You can buy stocks and invest in blockchain.',
     }
     await routeCommand(
-      '+573001234567', cmd, 'es', NO_OP_RATE_CTX, [],
-      undefined, undefined as any, undefined as any, fakeMsg as any,
-      makePendingMap(), new Set(), 30_000, 'onboarded', 'neutral',
+      '+573001234567',
+      cmd,
+      'es',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      undefined as any,
+      undefined as any,
+      fakeMsg as any,
+      makePendingMap(),
+      new Set(),
+      30_000,
+      'onboarded',
+      'neutral',
       alwaysFailNoCorrection
     )
 
@@ -203,9 +304,13 @@ test.group('Group B | routeCommand with validator', () => {
     assert.notEqual(messages[0], 'Sure! You can buy stocks and invest in blockchain.')
   })
 
-  test('B-07: unknown with helpfulMessage — passing validator sends helpfulMessage', async ({ assert }) => {
+  test('B-07: unknown with helpfulMessage — passing validator sends helpfulMessage', async ({
+    assert,
+  }) => {
     const messages: string[] = []
-    const fakeMsg = async (_p: string, msg: string) => { messages.push(msg) }
+    const fakeMsg = async (_p: string, msg: string) => {
+      messages.push(msg)
+    }
 
     const cmd: ParsedCommand = {
       command: 'unknown',
@@ -213,9 +318,20 @@ test.group('Group B | routeCommand with validator', () => {
       helpfulMessage: 'Sippy te ayuda a enviar dolares por WhatsApp.',
     }
     await routeCommand(
-      '+573001234567', cmd, 'es', NO_OP_RATE_CTX, [],
-      undefined, undefined as any, undefined as any, fakeMsg as any,
-      makePendingMap(), new Set(), 30_000, 'onboarded', 'neutral',
+      '+573001234567',
+      cmd,
+      'es',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      undefined as any,
+      undefined as any,
+      fakeMsg as any,
+      makePendingMap(),
+      new Set(),
+      30_000,
+      'onboarded',
+      'neutral',
       alwaysPass
     )
 
@@ -223,16 +339,31 @@ test.group('Group B | routeCommand with validator', () => {
     assert.equal(messages[0], 'Sippy te ayuda a enviar dolares por WhatsApp.')
   })
 
-  test('B-08: template commands (help, balance, etc.) are NOT affected by validator', async ({ assert }) => {
+  test('B-08: template commands (help, balance, etc.) are NOT affected by validator', async ({
+    assert,
+  }) => {
     const messages: string[] = []
-    const fakeMsg = async (_p: string, msg: string) => { messages.push(msg) }
+    const fakeMsg = async (_p: string, msg: string) => {
+      messages.push(msg)
+    }
 
     // Even with a failing validator, help should send the template directly
     const cmd: ParsedCommand = { command: 'help' }
     await routeCommand(
-      '+573001234567', cmd, 'es', NO_OP_RATE_CTX, [],
-      undefined, undefined as any, undefined as any, fakeMsg as any,
-      makePendingMap(), new Set(), 30_000, 'onboarded', 'neutral',
+      '+573001234567',
+      cmd,
+      'es',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      undefined as any,
+      undefined as any,
+      fakeMsg as any,
+      makePendingMap(),
+      new Set(),
+      30_000,
+      'onboarded',
+      'neutral',
       alwaysFailNoCorrection
     )
 

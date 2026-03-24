@@ -52,9 +52,8 @@ export async function notifyPaymentReceived(opts: {
   const templateLang = TEMPLATE_LANG_MAP[lang] || 'en'
 
   // Mask sender phone for privacy: +573001234567 → +57***4567
-  const masked = senderPhone.length > 4
-    ? `${senderPhone.slice(0, 3)}***${senderPhone.slice(-4)}`
-    : senderPhone
+  const masked =
+    senderPhone.length > 4 ? `${senderPhone.slice(0, 3)}***${senderPhone.slice(-4)}` : senderPhone
 
   const amountWithAsset = `${amount} ${asset.toUpperCase()}`
 
@@ -74,9 +73,13 @@ export async function notifyPaymentReceived(opts: {
       ]
     )
     if (result) {
-      logger.info(`Payment notification sent to ${maskPhone(recipientPhone)} (${amountWithAsset}, tx: ${txHash})`)
+      logger.info(
+        `Payment notification sent to ${maskPhone(recipientPhone)} (${amountWithAsset}, tx: ${txHash})`
+      )
     } else {
-      logger.warn(`Payment notification failed for ${maskPhone(recipientPhone)} — template may not be approved yet`)
+      logger.warn(
+        `Payment notification failed for ${maskPhone(recipientPhone)} — template may not be approved yet`
+      )
     }
   } catch (error) {
     logger.error('Failed to send payment notification to %s: %o', recipientPhone, error)
@@ -103,24 +106,23 @@ export async function notifyFundReceived(opts: {
   const assetLabel = type.toUpperCase()
 
   try {
-    const result = await sendTemplateMessage(
-      recipientPhone,
-      TEMPLATES.fundReceived,
-      templateLang,
-      [
-        {
-          type: 'body',
-          parameters: [
-            { type: 'text', text: amount },
-            { type: 'text', text: assetLabel },
-          ],
-        },
-      ]
-    )
+    const result = await sendTemplateMessage(recipientPhone, TEMPLATES.fundReceived, templateLang, [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: amount },
+          { type: 'text', text: assetLabel },
+        ],
+      },
+    ])
     if (result) {
-      logger.info(`Fund notification sent to ${maskPhone(recipientPhone)} (${amount} ${assetLabel}, tx: ${txHash})`)
+      logger.info(
+        `Fund notification sent to ${maskPhone(recipientPhone)} (${amount} ${assetLabel}, tx: ${txHash})`
+      )
     } else {
-      logger.warn(`Fund notification failed for ${maskPhone(recipientPhone)} — template may not be approved yet`)
+      logger.warn(
+        `Fund notification failed for ${maskPhone(recipientPhone)} — template may not be approved yet`
+      )
     }
   } catch (error) {
     logger.error('Failed to send fund notification to %s: %o', recipientPhone, error)
@@ -153,7 +155,9 @@ export async function notifyInviteRecipient(opts: {
       logger.info(`Invite notification sent to ${maskPhone(recipientPhone)}`)
       return true
     } else {
-      logger.warn(`Invite notification failed for ${maskPhone(recipientPhone)} — template may not be approved yet`)
+      logger.warn(
+        `Invite notification failed for ${maskPhone(recipientPhone)} — template may not be approved yet`
+      )
       return false
     }
   } catch (error) {
@@ -179,30 +183,32 @@ export async function notifyInviteCompleted(opts: {
   const templateLang = TEMPLATE_LANG_MAP[lang] || 'en'
 
   // Mask recipient phone for privacy: +573001234567 → +57***4567
-  const masked = recipientPhone.length > 4
-    ? `${recipientPhone.slice(0, 3)}***${recipientPhone.slice(-4)}`
-    : recipientPhone
+  const masked =
+    recipientPhone.length > 4
+      ? `${recipientPhone.slice(0, 3)}***${recipientPhone.slice(-4)}`
+      : recipientPhone
 
   try {
-    const result = await sendTemplateMessage(
-      senderPhone,
-      TEMPLATES.inviteCompleted,
-      templateLang,
-      [
-        {
-          type: 'body',
-          parameters: [
-            { type: 'text', text: masked },
-          ],
-        },
-      ]
-    )
+    const result = await sendTemplateMessage(senderPhone, TEMPLATES.inviteCompleted, templateLang, [
+      {
+        type: 'body',
+        parameters: [{ type: 'text', text: masked }],
+      },
+    ])
     if (result) {
-      logger.info(`Invite completed notification sent to ${maskPhone(senderPhone)} (recipient: ${masked})`)
+      logger.info(
+        `Invite completed notification sent to ${maskPhone(senderPhone)} (recipient: ${masked})`
+      )
     } else {
-      logger.warn(`Invite completed notification failed for ${maskPhone(senderPhone)} — template may not be approved yet`)
+      logger.warn(
+        `Invite completed notification failed for ${maskPhone(senderPhone)} — template may not be approved yet`
+      )
     }
   } catch (error) {
-    logger.error('Failed to send invite completed notification to %s: %o', maskPhone(senderPhone), error)
+    logger.error(
+      'Failed to send invite completed notification to %s: %o',
+      maskPhone(senderPhone),
+      error
+    )
   }
 }
