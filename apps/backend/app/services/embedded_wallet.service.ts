@@ -23,6 +23,7 @@ import {
   getUsdcAddress,
 } from '#config/network'
 import { getRefuelService } from '#services/refuel.service'
+import { GAS_MIN_BALANCE_ETH } from '@sippy/shared'
 import { type TransferResult } from '#types/index'
 
 /**
@@ -334,7 +335,7 @@ export async function sendWithSpendPermission(
       // Refuel service unavailable — check balance directly as a safety net
       const provider = new ethers.providers.JsonRpcProvider(getRpcUrl())
       const spenderBalance = await provider.getBalance(spenderAccount.address)
-      const minBalance = ethers.utils.parseEther('0.0005')
+      const minBalance = ethers.utils.parseEther(GAS_MIN_BALANCE_ETH.toString())
       if (spenderBalance.lt(minBalance)) {
         throw new Error('Spender wallet has no gas and refuel service is unavailable')
       }

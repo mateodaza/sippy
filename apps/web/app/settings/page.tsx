@@ -172,6 +172,7 @@ function SettingsContent() {
   const [permissionStatus, setPermissionStatus] = useState<
     'idle' | 'loading' | 'success' | 'error'
   >('idle')
+  const [showLimitPicker, setShowLimitPicker] = useState(false)
 
   // Export state machine (wallet recovery)
   const [exportStep, setExportStep] = useState<ExportStep>('idle')
@@ -623,6 +624,12 @@ function SettingsContent() {
         if (!response.ok) {
           const errorText = await response.text()
           console.error('Failed to register permission with backend:', errorText)
+          // Preserve tier-cap messages so the catch block can show them directly;
+          // generic backend errors get localized to a user-friendly fallback.
+          const errorLower = errorText.toLowerCase()
+          if (errorLower.includes('cannot exceed')) {
+            throw new Error(errorText)
+          }
           throw new Error(localizeError({ message: errorText }, 'enable-permission', lang))
         }
 
@@ -641,6 +648,7 @@ function SettingsContent() {
       }
 
       setPermissionStatus('success')
+      setShowLimitPicker(false)
     } catch (err) {
       console.error('Change limit failed:', err)
       const rawMsg =
@@ -650,7 +658,10 @@ function SettingsContent() {
             ? String((err as Record<string, unknown>).message)
             : String(err)
       const lower = rawMsg.toLowerCase()
-      if (lower.includes('daily limit') || lower.includes('cooldown')) {
+      if (lower.includes('cannot exceed')) {
+        // Tier-cap rejection from backend — show the server message directly
+        setError(rawMsg)
+      } else if (lower.includes('cooldown')) {
         setError(t('setup.errRefuelLimit', lang))
       } else if (
         lower.includes('insufficient') ||
@@ -1255,7 +1266,76 @@ function SettingsContent() {
           )}
         </div>
 
-        {/* Limit is set once at onboarding — no UI to change it */}
+        {/* Change limit */}
+        {walletStatus?.hasPermission && (
+          <div className="border-t pt-4">
+            {!showLimitPicker ? (
+              <button
+                onClick={() => {
+                  setNewLimit(walletStatus.dailyLimit?.toString() ?? limitOptions[0])
+                  setPermissionStatus('idle')
+                  setShowLimitPicker(true)
+                }}
+                className="text-sm text-brand-crypto hover:underline"
+              >
+                {t('settings.changeLimitLabel', lang)}
+              </button>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-[var(--text-primary)]">
+                    {t('settings.changeLimitLabel', lang)}
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowLimitPicker(false)
+                      setPermissionStatus('idle')
+                    }}
+                    className="text-sm text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+                  >
+                    {t('settings.cancel', lang)}
+                  </button>
+                </div>
+                <div className="space-y-2 mb-4">
+                  {limitOptions.map((amount) => (
+                    <button
+                      key={amount}
+                      onClick={() => setNewLimit(amount)}
+                      className={`w-full p-3 rounded-lg border-2 text-left ${
+                        newLimit === amount
+                          ? 'border-brand-crypto bg-brand-crypto/10'
+                          : 'border-brand-primary/20 hover:border-brand-primary/30'
+                      }`}
+                    >
+                      <span className="font-bold text-[var(--text-primary)]">
+                        ${amount}
+                        {t('settings.perDay', lang)}
+                      </span>
+                      {amount === String(tierMax) && (
+                        <span className="ml-2 text-xs text-[var(--text-muted)]">max</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => handleChangeLimit()}
+                  disabled={
+                    permissionStatus === 'loading' ||
+                    newLimit === walletStatus.dailyLimit?.toString()
+                  }
+                  className="w-full py-3 bg-brand-crypto text-white rounded-lg font-semibold hover:bg-brand-crypto/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {permissionStatus === 'loading'
+                    ? t('settings.updating', lang)
+                    : t('settings.updateLimit', lang)}
+                </button>
+                {permissionStatus === 'error' && error && (
+                  <p className="text-sm text-red-600 mt-2">{error}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Revoke permission */}
         {walletStatus?.hasPermission && (

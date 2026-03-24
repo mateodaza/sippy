@@ -1676,3 +1676,145 @@ describe('privacy toggle', () => {
     expect(container!.textContent).toContain('Failed to save privacy setting')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Change-limit UI (for users with active permission)
+// ---------------------------------------------------------------------------
+
+describe('change-limit UI', () => {
+  async function renderWithPermission(dailyLimit = 50) {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '0xSIPPY')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/api/wallet-status'))
+          return { ok: true, json: async () => ({ hasPermission: true, dailyLimit }) }
+        if (url.includes('/api/auth/email-status'))
+          return { ok: true, json: async () => ({ verified: false }) }
+        if (url.includes('/api/privacy-status'))
+          return { ok: true, json: async () => ({ phoneVisible: true }) }
+        if (url.includes('/api/register-permission'))
+          return { ok: true, json: async () => ({ dailyLimit }) }
+        return { ok: true, json: async () => ({}) }
+      })
+    )
+    await renderPage()
+  }
+
+  it('shows "Change limit" link when user has an active permission', async () => {
+    await renderWithPermission(50)
+    expect(container!.textContent).toContain('Change limit')
+  })
+
+  it('opens limit picker when "Change limit" is clicked', async () => {
+    await renderWithPermission(50)
+
+    await act(async () => {
+      findButton('Change limit')!.click()
+    })
+
+    // Limit options should be visible (unverified: $10, $25, $50)
+    expect(container!.textContent).toContain('$10')
+    expect(container!.textContent).toContain('$25')
+    expect(container!.textContent).toContain('$50')
+    // Cancel button should be present
+    expect(findButton('Cancel')).not.toBeNull()
+  })
+
+  it('disables Update Limit button when selected value matches current limit', async () => {
+    await renderWithPermission(50)
+
+    await act(async () => {
+      findButton('Change limit')!.click()
+    })
+
+    const updateBtn = findButton('Update Limit')
+    expect(updateBtn).not.toBeNull()
+    // Current limit is 50, default selection should be 50 → disabled
+    expect(updateBtn!.disabled).toBe(true)
+  })
+
+  it('enables Update Limit button when a different value is selected', async () => {
+    await renderWithPermission(50)
+
+    await act(async () => {
+      findButton('Change limit')!.click()
+    })
+
+    // Click the $25 option
+    const option25 = Array.from(container!.querySelectorAll('button')).find(
+      (b) => b.textContent?.includes('$25') && b.textContent?.includes('/day')
+    )
+    expect(option25).not.toBeNull()
+
+    await act(async () => {
+      option25!.click()
+    })
+
+    const updateBtn = findButton('Update Limit')
+    expect(updateBtn!.disabled).toBe(false)
+  })
+
+  it('collapses picker after Cancel is clicked', async () => {
+    await renderWithPermission(50)
+
+    await act(async () => {
+      findButton('Change limit')!.click()
+    })
+    expect(findButton('Update Limit')).not.toBeNull()
+
+    await act(async () => {
+      findButton('Cancel')!.click()
+    })
+    // Picker should be gone, "Change limit" link should be back
+    expect(findButton('Update Limit')).toBeNull()
+    expect(findButton('Change limit')).not.toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Error classification in handleChangeLimit
+// ---------------------------------------------------------------------------
+
+describe('handleChangeLimit error classification', () => {
+  it('shows tier-cap error directly instead of misclassifying as refuel cooldown', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '0xSIPPY')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xSMART456'], evmAccounts: ['0xEOA123'] }
+    mocks.getStoredToken.mockReturnValue('mock-token')
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
+
+    // wallet-status: no permission → shows Enable Sippy with limit picker
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/api/wallet-status'))
+          return { ok: true, json: async () => ({ hasPermission: false }) }
+        if (url.includes('/api/auth/email-status'))
+          return { ok: true, json: async () => ({ verified: false }) }
+        if (url.includes('/api/register-permission'))
+          return {
+            ok: false,
+            status: 400,
+            text: async () =>
+              'Daily limit cannot exceed $50. Verify your email at sippy.lat/settings to increase your limit.',
+          }
+        return { ok: true, json: async () => ({}) }
+      })
+    )
+    await renderPage()
+
+    await act(async () => {
+      findButton('Enable Sippy')!.click()
+    })
+
+    // Should show the actual tier-cap message, NOT the refuel cooldown message
+    expect(container!.textContent).toContain('cannot exceed')
+    expect(container!.textContent).not.toContain('too many times')
+  })
+})

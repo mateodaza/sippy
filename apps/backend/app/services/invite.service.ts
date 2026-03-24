@@ -45,7 +45,7 @@ export function __resetDeps() {
 /**
  * Create a pending invite from sender to recipient.
  *
- * Enforces a 3-invite-per-24h daily limit per sender.
+ * Enforces a 10-invite-per-24h daily limit per sender.
  * Uses a partial unique index to prevent duplicate pending invites
  * for the same sender/recipient pair.
  *

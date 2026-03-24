@@ -37,6 +37,7 @@ import { DateTime } from 'luxon'
 import { canonicalizePhone, maskPhone } from '#utils/phone'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { velocityService } from '#services/velocity_service'
+import { GAS_MIN_BALANCE_ETH } from '@sippy/shared'
 import { checkAndNotifySender } from '#services/invite.service'
 
 // Concurrency guard: prevent duplicate web sends from the same user
@@ -432,7 +433,7 @@ export default class EmbeddedWalletController {
 
       // Check current balance
       let balance = await refuelService.getUserBalance(targetAddress)
-      const minBalance = 0.0005 // Must cover a CDP UserOp (~0.0005 ETH on Arbitrum)
+      const minBalance = GAS_MIN_BALANCE_ETH
 
       if (Number.parseFloat(balance) >= minBalance) {
         logger.info(`Wallet already has sufficient balance: ${balance} ETH`)
@@ -523,11 +524,17 @@ export default class EmbeddedWalletController {
       // Get daily usage info
       const limitStatus = await getSecurityLimitStatus(normalizedPhone)
 
+      // Cap displayed limit at the backend-enforced tier cap.
+      // On-chain permission may be higher (e.g. legacy $10K) but the backend
+      // never allows spending beyond effectiveLimit.
+      const rawLimit = row.daily_limit ? Number.parseFloat(row.daily_limit) : null
+      const dailyLimit = rawLimit !== null ? Math.min(rawLimit, limitStatus.effectiveLimit) : null
+
       return response.json({
         hasWallet: true,
         walletAddress: row.wallet_address,
         hasPermission: !!row.spend_permission_hash,
-        dailyLimit: row.daily_limit ? Number.parseFloat(row.daily_limit) : null,
+        dailyLimit,
         dailySpent: limitStatus.dailySpent,
         tosAccepted,
         phoneNumber,

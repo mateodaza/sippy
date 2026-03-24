@@ -7,6 +7,7 @@
 import env from '#start/env'
 import logger from '@adonisjs/core/services/logger'
 import { ethers } from 'ethers'
+import { GAS_MIN_BALANCE_ETH } from '@sippy/shared'
 
 // GasRefuel Contract ABI (only the functions we need)
 const REFUEL_ABI = [
@@ -161,7 +162,7 @@ class RefuelService {
         }
 
         const userBalance = await this.getUserBalance(userAddress)
-        if (Number.parseFloat(userBalance) >= 0.0005) {
+        if (Number.parseFloat(userBalance) >= GAS_MIN_BALANCE_ETH) {
           return {
             success: false,
             error: `User already has sufficient ETH: ${userBalance}`,

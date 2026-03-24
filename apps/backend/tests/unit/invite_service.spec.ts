@@ -51,9 +51,9 @@ test.group('InviteService | createInvite — success path', (group) => {
     assert,
   }) => {
     const { mockQuery, calls } = buildMockQuery([
-      { rows: [] },                        // expire stale
-      { rows: [{ count: '0' }] },          // count < 3
-      { rows: [{ id: 42 }] },              // insert returned a row
+      { rows: [] }, // expire stale
+      { rows: [{ count: '0' }] }, // count < 3
+      { rows: [{ id: 42 }] }, // insert returned a row
     ])
 
     __setDepsForTest({
@@ -91,10 +91,10 @@ test.group('InviteService | createInvite — success path', (group) => {
 test.group('InviteService | createInvite — daily limit', (group) => {
   group.teardown(() => __resetDeps())
 
-  test('returns dailyLimitReached when count >= 3', async ({ assert }) => {
+  test('returns dailyLimitReached when count >= 10', async ({ assert }) => {
     const { mockQuery, calls } = buildMockQuery([
-      { rows: [] },                        // expire stale
-      { rows: [{ count: '3' }] },          // count = 3
+      { rows: [] }, // expire stale
+      { rows: [{ count: '10' }] }, // count = 10 (matches service cap)
     ])
 
     __setDepsForTest({ query: mockQuery })
@@ -105,10 +105,10 @@ test.group('InviteService | createInvite — daily limit', (group) => {
     assert.equal(calls.length, 2)
   })
 
-  test('count of 2 does not trigger limit', async ({ assert }) => {
+  test('count of 9 does not trigger limit', async ({ assert }) => {
     const { mockQuery } = buildMockQuery([
       { rows: [] },
-      { rows: [{ count: '2' }] },
+      { rows: [{ count: '9' }] },
       { rows: [{ id: 50 }] },
     ])
 
@@ -129,9 +129,9 @@ test.group('InviteService | createInvite — deduplication', (group) => {
 
   test('returns alreadyInvited when INSERT returns 0 rows (conflict)', async ({ assert }) => {
     const { mockQuery } = buildMockQuery([
-      { rows: [] },                        // expire stale
-      { rows: [{ count: '0' }] },          // count ok
-      { rows: [] },                        // insert conflict — 0 rows returned
+      { rows: [] }, // expire stale
+      { rows: [{ count: '0' }] }, // count ok
+      { rows: [] }, // insert conflict — 0 rows returned
     ])
 
     let notifyCalled = false
@@ -161,10 +161,7 @@ test.group('InviteService | createInvite — error propagation', (group) => {
     }
     __setDepsForTest({ query: mockQuery as any })
 
-    await assert.rejects(
-      () => createInvite(SENDER, RECIPIENT, 10, 'en'),
-      'connection refused'
-    )
+    await assert.rejects(() => createInvite(SENDER, RECIPIENT, 10, 'en'), 'connection refused')
   })
 
   test('throws when insert query fails', async ({ assert }) => {
@@ -176,10 +173,7 @@ test.group('InviteService | createInvite — error propagation', (group) => {
     }
     __setDepsForTest({ query: mockQuery as any })
 
-    await assert.rejects(
-      () => createInvite(SENDER, RECIPIENT, 10, 'en'),
-      'unique violation'
-    )
+    await assert.rejects(() => createInvite(SENDER, RECIPIENT, 10, 'en'), 'unique violation')
   })
 })
 
@@ -217,10 +211,17 @@ test.group('InviteService | createInvite — expiry cleanup', (group) => {
 test.group('InviteService | checkAndNotifySender — success', (group) => {
   group.teardown(() => __resetDeps())
 
-  test('atomically claims rows via UPDATE SET notifying, then marks completed', async ({ assert }) => {
+  test('atomically claims rows via UPDATE SET notifying, then marks completed', async ({
+    assert,
+  }) => {
     const { mockQuery, calls } = buildMockQuery([
       // Atomic claim: UPDATE ... SET status = 'notifying' ... RETURNING
-      { rows: [{ id: 10, sender_phone: SENDER }, { id: 11, sender_phone: SENDER_B }] },
+      {
+        rows: [
+          { id: 10, sender_phone: SENDER },
+          { id: 11, sender_phone: SENDER_B },
+        ],
+      },
       // UPDATE #1 completed (for SENDER)
       { rows: [] },
       // UPDATE #2 completed (for SENDER_B)
@@ -314,7 +315,13 @@ test.group('InviteService | checkAndNotifySender — notification failure', (gro
       callIndex++
       if (callIndex === 1) {
         // Claim UPDATE returns 2 invites
-        return { rows: [{ id: 10, sender_phone: SENDER }, { id: 11, sender_phone: SENDER_B }], rowCount: 2 }
+        return {
+          rows: [
+            { id: 10, sender_phone: SENDER },
+            { id: 11, sender_phone: SENDER_B },
+          ],
+          rowCount: 2,
+        }
       }
       return { rows: [], rowCount: 0 }
     }
@@ -338,9 +345,9 @@ test.group('InviteService | checkAndNotifySender — notification failure', (gro
     assert.deepEqual(notifiedSenders, [SENDER_B])
     // Claim + revert for first sender + completed UPDATE for second sender
     assert.equal(calls.length, 3)
-    assert.include(calls[0].text, 'notifying')  // claim
-    assert.include(calls[1].text, 'pending')     // revert first
-    assert.include(calls[2].text, 'completed')   // complete second
+    assert.include(calls[0].text, 'notifying') // claim
+    assert.include(calls[1].text, 'pending') // revert first
+    assert.include(calls[2].text, 'completed') // complete second
   })
 })
 
@@ -378,7 +385,9 @@ test.group('InviteService | checkAndNotifySender — DB error', (group) => {
 
   test('does not throw when claim query fails (best-effort)', async ({ assert }) => {
     __setDepsForTest({
-      query: (async () => { throw new Error('DB down') }) as any,
+      query: (async () => {
+        throw new Error('DB down')
+      }) as any,
     })
 
     // Should not throw
@@ -465,7 +474,9 @@ test.group('InviteService | checkAndNotifySender — atomic claim', (group) => {
     assert.isFalse(notifyCalled) // No notification sent by second caller
   })
 
-  test('revert on notification failure clears claimed_at and restores pending', async ({ assert }) => {
+  test('revert on notification failure clears claimed_at and restores pending', async ({
+    assert,
+  }) => {
     const { mockQuery, calls } = buildMockQuery([
       { rows: [{ id: 10, sender_phone: SENDER }] }, // claim
       { rows: [] }, // revert
@@ -527,7 +538,7 @@ test.group('InviteService | retryPendingNotifications', (group) => {
     // 1st: SELECT DISTINCT ... JOIN phone_registry with bare-digit fallback
     assert.include(calls[0].text, 'phone_registry')
     assert.include(calls[0].text, 'pending_invites')
-    assert.include(calls[0].text, 'LTRIM')  // bare-digit compatibility
+    assert.include(calls[0].text, 'LTRIM') // bare-digit compatibility
     // 2nd: checkAndNotifySender claim UPDATE for RECIPIENT
     assert.include(calls[1].text, 'notifying')
     // 3rd: completed UPDATE
@@ -556,7 +567,9 @@ test.group('InviteService | retryPendingNotifications', (group) => {
 
   test('does not throw on DB error (best-effort)', async ({ assert }) => {
     __setDepsForTest({
-      query: (async () => { throw new Error('DB down') }) as any,
+      query: (async () => {
+        throw new Error('DB down')
+      }) as any,
     })
 
     await retryPendingNotifications()

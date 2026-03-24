@@ -93,7 +93,7 @@ export async function handleBalanceCommand(
       lang
     )
 
-    if (ethBalance && parseFloat(ethBalance) < 0.00001) {
+    if (ethBalance && Number.parseFloat(ethBalance) < 0.00001) {
       message += `\n\n${formatLowTransferBalanceMessage(lang)}`
     }
 
@@ -138,22 +138,34 @@ async function handleEmbeddedBalance(
     lang
   )
 
+  // Fetch the backend-enforced limit (tier-based: $50 unverified / $500 verified).
+  // This is always the real cap regardless of on-chain allowance.
+  const limitStatus = await getSecurityLimitStatus(phoneNumber)
+
+  let spendLineRendered = false
+
   if (wallet.spendPermissionHash) {
     const allowanceInfo = await getRemainingAllowance(phoneNumber)
     if (allowanceInfo) {
-      const remaining = allowanceInfo.remaining.toFixed(2)
-      const total = allowanceInfo.allowance.toFixed(2)
+      // Cap displayed values at effective limit — on-chain may be higher (e.g. legacy $10K)
+      const effectiveTotal = Math.min(allowanceInfo.allowance, limitStatus.effectiveLimit)
+      const effectiveRemaining = Math.min(allowanceInfo.remaining, limitStatus.remaining)
+      const remaining = effectiveRemaining.toFixed(2)
+      const total = effectiveTotal.toFixed(2)
       const hoursUntilReset = Math.ceil(
         (allowanceInfo.periodEndsAt - Date.now()) / (1000 * 60 * 60)
       )
       message += `\n\n${formatSpendingLimitBalance(remaining, total, hoursUntilReset, lang)}`
+      spendLineRendered = true
     }
   } else {
     message += `\n\n${formatCompleteSetupMessage(phoneNumber, lang)}`
   }
 
-  const limitStatus = await getSecurityLimitStatus(phoneNumber)
-  message += appendSecurityLimitSuffix(limitStatus, lang)
+  // Show security limit only as fallback when the spend-permission line couldn't render
+  if (!spendLineRendered) {
+    message += appendSecurityLimitSuffix(limitStatus, lang)
+  }
 
   await sendTextMessage(phoneNumber, message, lang)
 

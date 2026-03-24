@@ -20,3 +20,8 @@ export const USDC_ADDRESSES: Record<string, string> = {
 
 // GasRefuel contract on Arbitrum One
 export const GAS_REFUEL_ADDRESS = '0xE4e5474E97E89d990082505fC5708A6a11849936' as const
+
+// Minimum ETH balance before a gas refuel is needed.
+// Must cover a CDP UserOp (~0.000462 ETH on Arbitrum).
+// Keep in sync with GasRefuel.sol on-chain params (minBalance & refuelAmount).
+export const GAS_MIN_BALANCE_ETH = 0.0005
