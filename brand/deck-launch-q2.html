@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sippy — Product Launch Deck Q2 2026</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Electrolize&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand-primary: #00AFD7;
+      --brand-crypto: #00D796;
+      --brand-dark: #0D0D1A;
+      --slide-w: 1280px;
+      --slide-h: 720px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #080810;
+      font-family: 'Chakra Petch', sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      padding: 24px 0;
+    }
+    @media print {
+      html, body { background: var(--brand-dark) !important; gap: 0; padding: 0; margin: 0; }
+      .slide { box-shadow: none !important; page-break-after: always; page-break-inside: avoid; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .slide:last-child { page-break-after: avoid; }
+    }
+    @page { margin: 0; size: 1280px 720px; }
+    .slide {
+      width: var(--slide-w);
+      height: var(--slide-h);
+      background: var(--brand-dark);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .grid-bg {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,175,215,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,175,215,0.04) 1px, transparent 1px);
+      background-size: 80px 80px;
+      pointer-events: none;
+    }
+    .reg-marks::before, .reg-marks::after {
+      content: '+'; position: absolute;
+      font-family: 'Space Mono', monospace; font-size: 14px;
+      color: rgba(0,175,215,0.2); z-index: 1;
+    }
+    .reg-marks::before { top: 16px; left: 20px; }
+    .reg-marks::after { bottom: 16px; right: 20px; }
+    .spec-label {
+      font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase; color: var(--brand-primary);
+    }
+    .spec-label-dim {
+      font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase; color: rgba(0,175,215,0.4);
+    }
+    .panel-frame-subtle {
+      border: 1px solid rgba(0,175,215,0.3); position: relative;
+    }
+    .panel-frame-subtle::after {
+      content: ''; position: absolute; inset: 4px;
+      border: 1px solid rgba(0,175,215,0.15); pointer-events: none;
+    }
+    h2 {
+      font-family: 'Chakra Petch', sans-serif; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.04em; font-size: 32px; color: #fff;
+    }
+    h3 {
+      font-family: 'Chakra Petch', sans-serif; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em; font-size: 18px; color: var(--brand-primary);
+    }
+    p, li {
+      font-family: 'Chakra Petch', sans-serif; font-weight: 400;
+      font-size: 18px; line-height: 1.6; color: rgba(255,255,255,0.75);
+    }
+    .slide-nav {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 40px; border-top: 1px solid rgba(0,175,215,0.15);
+      background: rgba(13,13,26,0.8); z-index: 10;
+    }
+    .slide-content {
+      position: relative; z-index: 2; flex: 1;
+      display: flex; flex-direction: column; padding: 48px 64px 56px;
+    }
+    .indicator-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--brand-crypto);
+      box-shadow: 0 0 8px rgba(0,215,150,0.5); display: inline-block;
+    }
+    .data-readout { font-family: 'Electrolize', sans-serif; font-size: 42px; color: var(--brand-crypto); }
+    .stat-box { text-align: center; padding: 24px 16px; }
+    .stat-value { font-family: 'Electrolize', sans-serif; font-size: 36px; color: var(--brand-crypto); }
+    .stat-label {
+      font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase; color: rgba(0,175,215,0.6); margin-top: 8px;
+    }
+    .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
+    .cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+    .source { font-family: 'Space Mono', monospace; font-size: 9px; color: rgba(255,255,255,0.25); margin-top: 4px; }
+    ul { list-style: none; padding: 0; }
+    ul li { position: relative; padding-left: 20px; margin-bottom: 10px; }
+    ul li::before {
+      content: ''; position: absolute; left: 0; top: 10px;
+      width: 6px; height: 6px; background: var(--brand-primary);
+    }
+    .flow-arrow { color: rgba(0,175,215,0.4); font-size: 28px; font-weight: 300; }
+    .flow-box {
+      background: rgba(0,175,215,0.06); border: 1px solid rgba(0,175,215,0.3);
+      padding: 28px 24px; text-align: center; position: relative;
+    }
+    .flow-box::after {
+      content: ''; position: absolute; inset: 4px;
+      border: 1px solid rgba(0,175,215,0.15); pointer-events: none;
+    }
+    .flow-box h3 { font-size: 16px; margin-bottom: 8px; }
+    .flow-box p { font-size: 13px; color: rgba(255,255,255,0.5); }
+    .step-number {
+      font-family: 'Electrolize', sans-serif; font-size: 18px;
+      color: var(--brand-dark); background: var(--brand-primary);
+      width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+      font-weight: 700; flex-shrink: 0;
+    }
+    .step-arrow {
+      font-family: 'Electrolize', sans-serif; font-size: 24px;
+      color: rgba(0,175,215,0.3); display: flex; align-items: center;
+    }
+    .code-bar {
+      background: var(--brand-crypto); padding: 16px 32px;
+      font-family: 'Space Mono', monospace; font-size: 15px;
+      color: var(--brand-dark); font-weight: 700; letter-spacing: 0.02em;
+    }
+    .timeline-dot {
+      width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+    }
+    .timeline-dot.done { background: var(--brand-primary); }
+    .timeline-dot.current { background: var(--brand-crypto); box-shadow: 0 0 12px rgba(0,215,150,0.5); }
+    .timeline-dot.future { background: rgba(255,255,255,0.2); }
+    .timeline-line {
+      flex: 1; height: 2px; background: var(--brand-primary); opacity: 0.4;
+    }
+    .verified-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase; color: var(--brand-crypto);
+    }
+    .verified-badge::before {
+      content: ''; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--brand-crypto); box-shadow: 0 0 8px rgba(0,215,150,0.5);
+    }
+    .qr-badge {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .qr-badge svg {
+      display: block;
+    }
+    .qr-badge span {
+      font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase; color: rgba(0,175,215,0.5);
+    }
+    .cover-footer {
+      position: absolute; left: 52px; right: 52px; bottom: 58px; z-index: 10;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 28px;
+      padding-top: 18px; border-top: 2px solid var(--brand-primary);
+    }
+    .cover-footer-meta {
+      display: flex; flex-direction: column; gap: 10px; flex: 1; min-width: 0;
+    }
+    .cover-footer-stack {
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .cover-session {
+      font-size: 13px; color: rgba(255,255,255,0.36); line-height: 1.2;
+    }
+    .cover-footer-right {
+      display: flex; align-items: center; gap: 18px; flex-shrink: 0;
+    }
+    .cover-live {
+      display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+      padding-top: 4px;
+    }
+    .cover-qr {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+    }
+    .cover-qr-code {
+      width: 84px; height: 84px; padding: 2px;
+      background: #fff;
+      box-shadow: 0 0 0 1px rgba(0,175,215,0.35);
+      flex-shrink: 0;
+    }
+    .cover-qr-code svg {
+      width: 100%; height: 100%; display: block;
+      filter: invert(1);
+    }
+    .cover-qr-copy {
+      display: flex; flex-direction: column; gap: 3px; text-align: center;
+      min-width: 0;
+    }
+    .cover-qr-kicker {
+      font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.14em; text-transform: uppercase; color: var(--brand-primary);
+    }
+    .cover-qr-note {
+      font-size: 12px; font-weight: 500; line-height: 1.25; color: rgba(255,255,255,0.72);
+    }
+  </style>
+</head>
+<body>
+
+<!-- QR code defined once, referenced via <use href="#qr-wa"/> -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs><rect id="p" width="8" height="8"/></defs>
+  <symbol id="qr-wa" viewBox="16 16 328 328">
+    <rect x="16" y="16" width="328" height="328" fill="#ffffff"/>
+    <g fill="#000000">
+      <use xlink:href="#p" x="32" y="32"/><use xlink:href="#p" x="32" y="40"/><use xlink:href="#p" x="32" y="48"/><use xlink:href="#p" x="32" y="56"/><use xlink:href="#p" x="32" y="64"/><use xlink:href="#p" x="32" y="72"/><use xlink:href="#p" x="32" y="80"/><use xlink:href="#p" x="32" y="96"/><use xlink:href="#p" x="32" y="104"/><use xlink:href="#p" x="32" y="152"/><use xlink:href="#p" x="32" y="168"/><use xlink:href="#p" x="32" y="216"/><use xlink:href="#p" x="32" y="224"/><use xlink:href="#p" x="32" y="232"/><use xlink:href="#p" x="32" y="240"/><use xlink:href="#p" x="32" y="256"/><use xlink:href="#p" x="32" y="272"/><use xlink:href="#p" x="32" y="280"/><use xlink:href="#p" x="32" y="288"/><use xlink:href="#p" x="32" y="296"/><use xlink:href="#p" x="32" y="304"/><use xlink:href="#p" x="32" y="312"/><use xlink:href="#p" x="32" y="320"/>
+      <use xlink:href="#p" x="40" y="32"/><use xlink:href="#p" x="40" y="80"/><use xlink:href="#p" x="40" y="96"/><use xlink:href="#p" x="40" y="104"/><use xlink:href="#p" x="40" y="120"/><use xlink:href="#p" x="40" y="144"/><use xlink:href="#p" x="40" y="152"/><use xlink:href="#p" x="40" y="168"/><use xlink:href="#p" x="40" y="176"/><use xlink:href="#p" x="40" y="184"/><use xlink:href="#p" x="40" y="192"/><use xlink:href="#p" x="40" y="208"/><use xlink:href="#p" x="40" y="216"/><use xlink:href="#p" x="40" y="248"/><use xlink:href="#p" x="40" y="256"/><use xlink:href="#p" x="40" y="272"/><use xlink:href="#p" x="40" y="320"/>
+      <use xlink:href="#p" x="48" y="32"/><use xlink:href="#p" x="48" y="48"/><use xlink:href="#p" x="48" y="56"/><use xlink:href="#p" x="48" y="64"/><use xlink:href="#p" x="48" y="80"/><use xlink:href="#p" x="48" y="96"/><use xlink:href="#p" x="48" y="104"/><use xlink:href="#p" x="48" y="112"/><use xlink:href="#p" x="48" y="120"/><use xlink:href="#p" x="48" y="128"/><use xlink:href="#p" x="48" y="136"/><use xlink:href="#p" x="48" y="144"/><use xlink:href="#p" x="48" y="152"/><use xlink:href="#p" x="48" y="160"/><use xlink:href="#p" x="48" y="168"/><use xlink:href="#p" x="48" y="176"/><use xlink:href="#p" x="48" y="184"/><use xlink:href="#p" x="48" y="200"/><use xlink:href="#p" x="48" y="216"/><use xlink:href="#p" x="48" y="224"/><use xlink:href="#p" x="48" y="232"/><use xlink:href="#p" x="48" y="248"/><use xlink:href="#p" x="48" y="272"/><use xlink:href="#p" x="48" y="288"/><use xlink:href="#p" x="48" y="296"/><use xlink:href="#p" x="48" y="304"/><use xlink:href="#p" x="48" y="320"/>
+      <use xlink:href="#p" x="56" y="32"/><use xlink:href="#p" x="56" y="48"/><use xlink:href="#p" x="56" y="56"/><use xlink:href="#p" x="56" y="64"/><use xlink:href="#p" x="56" y="80"/><use xlink:href="#p" x="56" y="96"/><use xlink:href="#p" x="56" y="104"/><use xlink:href="#p" x="56" y="128"/><use xlink:href="#p" x="56" y="184"/><use xlink:href="#p" x="56" y="200"/><use xlink:href="#p" x="56" y="208"/><use xlink:href="#p" x="56" y="224"/><use xlink:href="#p" x="56" y="232"/><use xlink:href="#p" x="56" y="240"/><use xlink:href="#p" x="56" y="248"/><use xlink:href="#p" x="56" y="256"/><use xlink:href="#p" x="56" y="272"/><use xlink:href="#p" x="56" y="288"/><use xlink:href="#p" x="56" y="296"/><use xlink:href="#p" x="56" y="304"/><use xlink:href="#p" x="56" y="320"/>
+      <use xlink:href="#p" x="64" y="32"/><use xlink:href="#p" x="64" y="48"/><use xlink:href="#p" x="64" y="56"/><use xlink:href="#p" x="64" y="64"/><use xlink:href="#p" x="64" y="80"/><use xlink:href="#p" x="64" y="112"/><use xlink:href="#p" x="64" y="144"/><use xlink:href="#p" x="64" y="152"/><use xlink:href="#p" x="64" y="160"/><use xlink:href="#p" x="64" y="168"/><use xlink:href="#p" x="64" y="192"/><use xlink:href="#p" x="64" y="208"/><use xlink:href="#p" x="64" y="272"/><use xlink:href="#p" x="64" y="288"/><use xlink:href="#p" x="64" y="296"/><use xlink:href="#p" x="64" y="304"/><use xlink:href="#p" x="64" y="320"/>
+      <use xlink:href="#p" x="72" y="32"/><use xlink:href="#p" x="72" y="80"/><use xlink:href="#p" x="72" y="104"/><use xlink:href="#p" x="72" y="112"/><use xlink:href="#p" x="72" y="120"/><use xlink:href="#p" x="72" y="128"/><use xlink:href="#p" x="72" y="144"/><use xlink:href="#p" x="72" y="160"/><use xlink:href="#p" x="72" y="200"/><use xlink:href="#p" x="72" y="216"/><use xlink:href="#p" x="72" y="232"/><use xlink:href="#p" x="72" y="240"/><use xlink:href="#p" x="72" y="248"/><use xlink:href="#p" x="72" y="256"/><use xlink:href="#p" x="72" y="272"/><use xlink:href="#p" x="72" y="320"/>
+      <use xlink:href="#p" x="80" y="32"/><use xlink:href="#p" x="80" y="40"/><use xlink:href="#p" x="80" y="48"/><use xlink:href="#p" x="80" y="56"/><use xlink:href="#p" x="80" y="64"/><use xlink:href="#p" x="80" y="72"/><use xlink:href="#p" x="80" y="80"/><use xlink:href="#p" x="80" y="96"/><use xlink:href="#p" x="80" y="112"/><use xlink:href="#p" x="80" y="128"/><use xlink:href="#p" x="80" y="144"/><use xlink:href="#p" x="80" y="160"/><use xlink:href="#p" x="80" y="176"/><use xlink:href="#p" x="80" y="192"/><use xlink:href="#p" x="80" y="208"/><use xlink:href="#p" x="80" y="224"/><use xlink:href="#p" x="80" y="240"/><use xlink:href="#p" x="80" y="256"/><use xlink:href="#p" x="80" y="272"/><use xlink:href="#p" x="80" y="280"/><use xlink:href="#p" x="80" y="288"/><use xlink:href="#p" x="80" y="296"/><use xlink:href="#p" x="80" y="304"/><use xlink:href="#p" x="80" y="312"/><use xlink:href="#p" x="80" y="320"/>
+      <use xlink:href="#p" x="88" y="128"/><use xlink:href="#p" x="88" y="144"/><use xlink:href="#p" x="88" y="176"/><use xlink:href="#p" x="88" y="184"/><use xlink:href="#p" x="88" y="192"/><use xlink:href="#p" x="88" y="224"/><use xlink:href="#p" x="88" y="232"/><use xlink:href="#p" x="88" y="248"/><use xlink:href="#p" x="88" y="256"/>
+      <use xlink:href="#p" x="96" y="32"/><use xlink:href="#p" x="96" y="48"/><use xlink:href="#p" x="96" y="56"/><use xlink:href="#p" x="96" y="64"/><use xlink:href="#p" x="96" y="80"/><use xlink:href="#p" x="96" y="96"/><use xlink:href="#p" x="96" y="120"/><use xlink:href="#p" x="96" y="128"/><use xlink:href="#p" x="96" y="152"/><use xlink:href="#p" x="96" y="176"/><use xlink:href="#p" x="96" y="208"/><use xlink:href="#p" x="96" y="216"/><use xlink:href="#p" x="96" y="224"/><use xlink:href="#p" x="96" y="232"/><use xlink:href="#p" x="96" y="256"/><use xlink:href="#p" x="96" y="264"/><use xlink:href="#p" x="96" y="296"/><use xlink:href="#p" x="96" y="304"/><use xlink:href="#p" x="96" y="312"/><use xlink:href="#p" x="96" y="320"/>
+      <use xlink:href="#p" x="104" y="32"/><use xlink:href="#p" x="104" y="56"/><use xlink:href="#p" x="104" y="64"/><use xlink:href="#p" x="104" y="72"/><use xlink:href="#p" x="104" y="88"/><use xlink:href="#p" x="104" y="104"/><use xlink:href="#p" x="104" y="120"/><use xlink:href="#p" x="104" y="136"/><use xlink:href="#p" x="104" y="168"/><use xlink:href="#p" x="104" y="176"/><use xlink:href="#p" x="104" y="192"/><use xlink:href="#p" x="104" y="224"/><use xlink:href="#p" x="104" y="240"/><use xlink:href="#p" x="104" y="248"/><use xlink:href="#p" x="104" y="256"/><use xlink:href="#p" x="104" y="272"/><use xlink:href="#p" x="104" y="280"/><use xlink:href="#p" x="104" y="312"/><use xlink:href="#p" x="104" y="320"/>
+      <use xlink:href="#p" x="112" y="64"/><use xlink:href="#p" x="112" y="80"/><use xlink:href="#p" x="112" y="128"/><use xlink:href="#p" x="112" y="144"/><use xlink:href="#p" x="112" y="152"/><use xlink:href="#p" x="112" y="200"/><use xlink:href="#p" x="112" y="208"/><use xlink:href="#p" x="112" y="264"/><use xlink:href="#p" x="112" y="280"/><use xlink:href="#p" x="112" y="304"/>
+      <use xlink:href="#p" x="120" y="48"/><use xlink:href="#p" x="120" y="56"/><use xlink:href="#p" x="120" y="64"/><use xlink:href="#p" x="120" y="88"/><use xlink:href="#p" x="120" y="120"/><use xlink:href="#p" x="120" y="128"/><use xlink:href="#p" x="120" y="136"/><use xlink:href="#p" x="120" y="160"/><use xlink:href="#p" x="120" y="176"/><use xlink:href="#p" x="120" y="192"/><use xlink:href="#p" x="120" y="208"/><use xlink:href="#p" x="120" y="232"/><use xlink:href="#p" x="120" y="240"/><use xlink:href="#p" x="120" y="248"/><use xlink:href="#p" x="120" y="280"/><use xlink:href="#p" x="120" y="296"/><use xlink:href="#p" x="120" y="304"/><use xlink:href="#p" x="120" y="320"/>
+      <use xlink:href="#p" x="128" y="48"/><use xlink:href="#p" x="128" y="72"/><use xlink:href="#p" x="128" y="80"/><use xlink:href="#p" x="128" y="120"/><use xlink:href="#p" x="128" y="144"/><use xlink:href="#p" x="128" y="152"/><use xlink:href="#p" x="128" y="168"/><use xlink:href="#p" x="128" y="176"/><use xlink:href="#p" x="128" y="184"/><use xlink:href="#p" x="128" y="192"/><use xlink:href="#p" x="128" y="200"/><use xlink:href="#p" x="128" y="208"/><use xlink:href="#p" x="128" y="224"/><use xlink:href="#p" x="128" y="232"/><use xlink:href="#p" x="128" y="272"/><use xlink:href="#p" x="128" y="288"/><use xlink:href="#p" x="128" y="296"/><use xlink:href="#p" x="128" y="304"/><use xlink:href="#p" x="128" y="312"/>
+      <use xlink:href="#p" x="136" y="48"/><use xlink:href="#p" x="136" y="56"/><use xlink:href="#p" x="136" y="72"/><use xlink:href="#p" x="136" y="96"/><use xlink:href="#p" x="136" y="104"/><use xlink:href="#p" x="136" y="112"/><use xlink:href="#p" x="136" y="120"/><use xlink:href="#p" x="136" y="128"/><use xlink:href="#p" x="136" y="144"/><use xlink:href="#p" x="136" y="160"/><use xlink:href="#p" x="136" y="168"/><use xlink:href="#p" x="136" y="176"/><use xlink:href="#p" x="136" y="208"/><use xlink:href="#p" x="136" y="216"/><use xlink:href="#p" x="136" y="224"/><use xlink:href="#p" x="136" y="240"/><use xlink:href="#p" x="136" y="256"/><use xlink:href="#p" x="136" y="272"/><use xlink:href="#p" x="136" y="312"/><use xlink:href="#p" x="136" y="320"/>
+      <use xlink:href="#p" x="144" y="32"/><use xlink:href="#p" x="144" y="40"/><use xlink:href="#p" x="144" y="56"/><use xlink:href="#p" x="144" y="80"/><use xlink:href="#p" x="144" y="88"/><use xlink:href="#p" x="144" y="96"/><use xlink:href="#p" x="144" y="104"/><use xlink:href="#p" x="144" y="120"/><use xlink:href="#p" x="144" y="128"/><use xlink:href="#p" x="144" y="136"/><use xlink:href="#p" x="144" y="152"/><use xlink:href="#p" x="144" y="184"/><use xlink:href="#p" x="144" y="192"/><use xlink:href="#p" x="144" y="200"/><use xlink:href="#p" x="144" y="208"/><use xlink:href="#p" x="144" y="216"/><use xlink:href="#p" x="144" y="224"/><use xlink:href="#p" x="144" y="232"/><use xlink:href="#p" x="144" y="240"/><use xlink:href="#p" x="144" y="248"/><use xlink:href="#p" x="144" y="272"/><use xlink:href="#p" x="144" y="280"/><use xlink:href="#p" x="144" y="288"/><use xlink:href="#p" x="144" y="296"/>
+      <use xlink:href="#p" x="152" y="56"/><use xlink:href="#p" x="152" y="64"/><use xlink:href="#p" x="152" y="88"/><use xlink:href="#p" x="152" y="120"/><use xlink:href="#p" x="152" y="128"/><use xlink:href="#p" x="152" y="136"/><use xlink:href="#p" x="152" y="152"/><use xlink:href="#p" x="152" y="168"/><use xlink:href="#p" x="152" y="176"/><use xlink:href="#p" x="152" y="184"/><use xlink:href="#p" x="152" y="232"/><use xlink:href="#p" x="152" y="248"/><use xlink:href="#p" x="152" y="264"/><use xlink:href="#p" x="152" y="272"/><use xlink:href="#p" x="152" y="280"/><use xlink:href="#p" x="152" y="288"/><use xlink:href="#p" x="152" y="312"/>
+      <use xlink:href="#p" x="160" y="32"/><use xlink:href="#p" x="160" y="40"/><use xlink:href="#p" x="160" y="48"/><use xlink:href="#p" x="160" y="64"/><use xlink:href="#p" x="160" y="72"/><use xlink:href="#p" x="160" y="80"/><use xlink:href="#p" x="160" y="88"/><use xlink:href="#p" x="160" y="96"/><use xlink:href="#p" x="160" y="120"/><use xlink:href="#p" x="160" y="128"/><use xlink:href="#p" x="160" y="136"/><use xlink:href="#p" x="160" y="152"/><use xlink:href="#p" x="160" y="192"/><use xlink:href="#p" x="160" y="200"/><use xlink:href="#p" x="160" y="208"/><use xlink:href="#p" x="160" y="232"/><use xlink:href="#p" x="160" y="248"/><use xlink:href="#p" x="160" y="256"/><use xlink:href="#p" x="160" y="280"/><use xlink:href="#p" x="160" y="288"/><use xlink:href="#p" x="160" y="296"/><use xlink:href="#p" x="160" y="304"/><use xlink:href="#p" x="160" y="320"/>
+      <use xlink:href="#p" x="168" y="32"/><use xlink:href="#p" x="168" y="40"/><use xlink:href="#p" x="168" y="56"/><use xlink:href="#p" x="168" y="64"/><use xlink:href="#p" x="168" y="88"/><use xlink:href="#p" x="168" y="96"/><use xlink:href="#p" x="168" y="112"/><use xlink:href="#p" x="168" y="128"/><use xlink:href="#p" x="168" y="184"/><use xlink:href="#p" x="168" y="192"/><use xlink:href="#p" x="168" y="200"/><use xlink:href="#p" x="168" y="208"/><use xlink:href="#p" x="168" y="224"/><use xlink:href="#p" x="168" y="240"/><use xlink:href="#p" x="168" y="264"/><use xlink:href="#p" x="168" y="272"/><use xlink:href="#p" x="168" y="280"/><use xlink:href="#p" x="168" y="288"/><use xlink:href="#p" x="168" y="304"/>
+      <use xlink:href="#p" x="176" y="48"/><use xlink:href="#p" x="176" y="64"/><use xlink:href="#p" x="176" y="80"/><use xlink:href="#p" x="176" y="96"/><use xlink:href="#p" x="176" y="104"/><use xlink:href="#p" x="176" y="112"/><use xlink:href="#p" x="176" y="120"/><use xlink:href="#p" x="176" y="128"/><use xlink:href="#p" x="176" y="136"/><use xlink:href="#p" x="176" y="144"/><use xlink:href="#p" x="176" y="160"/><use xlink:href="#p" x="176" y="168"/><use xlink:href="#p" x="176" y="176"/><use xlink:href="#p" x="176" y="192"/><use xlink:href="#p" x="176" y="200"/><use xlink:href="#p" x="176" y="240"/><use xlink:href="#p" x="176" y="256"/><use xlink:href="#p" x="176" y="288"/><use xlink:href="#p" x="176" y="296"/><use xlink:href="#p" x="176" y="304"/><use xlink:href="#p" x="176" y="312"/>
+      <use xlink:href="#p" x="184" y="32"/><use xlink:href="#p" x="184" y="48"/><use xlink:href="#p" x="184" y="64"/><use xlink:href="#p" x="184" y="72"/><use xlink:href="#p" x="184" y="88"/><use xlink:href="#p" x="184" y="96"/><use xlink:href="#p" x="184" y="104"/><use xlink:href="#p" x="184" y="120"/><use xlink:href="#p" x="184" y="136"/><use xlink:href="#p" x="184" y="144"/><use xlink:href="#p" x="184" y="152"/><use xlink:href="#p" x="184" y="192"/><use xlink:href="#p" x="184" y="200"/><use xlink:href="#p" x="184" y="216"/><use xlink:href="#p" x="184" y="224"/><use xlink:href="#p" x="184" y="232"/><use xlink:href="#p" x="184" y="240"/><use xlink:href="#p" x="184" y="288"/><use xlink:href="#p" x="184" y="296"/><use xlink:href="#p" x="184" y="312"/><use xlink:href="#p" x="184" y="320"/>
+      <use xlink:href="#p" x="192" y="32"/><use xlink:href="#p" x="192" y="40"/><use xlink:href="#p" x="192" y="48"/><use xlink:href="#p" x="192" y="56"/><use xlink:href="#p" x="192" y="80"/><use xlink:href="#p" x="192" y="128"/><use xlink:href="#p" x="192" y="136"/><use xlink:href="#p" x="192" y="176"/><use xlink:href="#p" x="192" y="224"/><use xlink:href="#p" x="192" y="264"/><use xlink:href="#p" x="192" y="280"/><use xlink:href="#p" x="192" y="288"/><use xlink:href="#p" x="192" y="296"/>
+      <use xlink:href="#p" x="200" y="32"/><use xlink:href="#p" x="200" y="64"/><use xlink:href="#p" x="200" y="96"/><use xlink:href="#p" x="200" y="104"/><use xlink:href="#p" x="200" y="136"/><use xlink:href="#p" x="200" y="152"/><use xlink:href="#p" x="200" y="168"/><use xlink:href="#p" x="200" y="176"/><use xlink:href="#p" x="200" y="192"/><use xlink:href="#p" x="200" y="200"/><use xlink:href="#p" x="200" y="232"/><use xlink:href="#p" x="200" y="248"/><use xlink:href="#p" x="200" y="256"/><use xlink:href="#p" x="200" y="264"/><use xlink:href="#p" x="200" y="296"/><use xlink:href="#p" x="200" y="304"/>
+      <use xlink:href="#p" x="208" y="40"/><use xlink:href="#p" x="208" y="56"/><use xlink:href="#p" x="208" y="64"/><use xlink:href="#p" x="208" y="72"/><use xlink:href="#p" x="208" y="80"/><use xlink:href="#p" x="208" y="104"/><use xlink:href="#p" x="208" y="112"/><use xlink:href="#p" x="208" y="120"/><use xlink:href="#p" x="208" y="136"/><use xlink:href="#p" x="208" y="152"/><use xlink:href="#p" x="208" y="160"/><use xlink:href="#p" x="208" y="168"/><use xlink:href="#p" x="208" y="208"/><use xlink:href="#p" x="208" y="224"/><use xlink:href="#p" x="208" y="232"/><use xlink:href="#p" x="208" y="240"/><use xlink:href="#p" x="208" y="248"/><use xlink:href="#p" x="208" y="264"/><use xlink:href="#p" x="208" y="280"/><use xlink:href="#p" x="208" y="296"/><use xlink:href="#p" x="208" y="320"/>
+      <use xlink:href="#p" x="216" y="32"/><use xlink:href="#p" x="216" y="40"/><use xlink:href="#p" x="216" y="104"/><use xlink:href="#p" x="216" y="112"/><use xlink:href="#p" x="216" y="128"/><use xlink:href="#p" x="216" y="160"/><use xlink:href="#p" x="216" y="168"/><use xlink:href="#p" x="216" y="184"/><use xlink:href="#p" x="216" y="200"/><use xlink:href="#p" x="216" y="208"/><use xlink:href="#p" x="216" y="248"/><use xlink:href="#p" x="216" y="256"/><use xlink:href="#p" x="216" y="264"/><use xlink:href="#p" x="216" y="296"/><use xlink:href="#p" x="216" y="304"/><use xlink:href="#p" x="216" y="312"/>
+      <use xlink:href="#p" x="224" y="48"/><use xlink:href="#p" x="224" y="64"/><use xlink:href="#p" x="224" y="80"/><use xlink:href="#p" x="224" y="88"/><use xlink:href="#p" x="224" y="104"/><use xlink:href="#p" x="224" y="112"/><use xlink:href="#p" x="224" y="160"/><use xlink:href="#p" x="224" y="176"/><use xlink:href="#p" x="224" y="184"/><use xlink:href="#p" x="224" y="192"/><use xlink:href="#p" x="224" y="200"/><use xlink:href="#p" x="224" y="208"/><use xlink:href="#p" x="224" y="256"/><use xlink:href="#p" x="224" y="272"/><use xlink:href="#p" x="224" y="288"/><use xlink:href="#p" x="224" y="296"/>
+      <use xlink:href="#p" x="232" y="32"/><use xlink:href="#p" x="232" y="48"/><use xlink:href="#p" x="232" y="56"/><use xlink:href="#p" x="232" y="64"/><use xlink:href="#p" x="232" y="104"/><use xlink:href="#p" x="232" y="112"/><use xlink:href="#p" x="232" y="120"/><use xlink:href="#p" x="232" y="128"/><use xlink:href="#p" x="232" y="144"/><use xlink:href="#p" x="232" y="160"/><use xlink:href="#p" x="232" y="216"/><use xlink:href="#p" x="232" y="224"/><use xlink:href="#p" x="232" y="240"/><use xlink:href="#p" x="232" y="256"/><use xlink:href="#p" x="232" y="264"/><use xlink:href="#p" x="232" y="272"/><use xlink:href="#p" x="232" y="304"/><use xlink:href="#p" x="232" y="312"/><use xlink:href="#p" x="232" y="320"/>
+      <use xlink:href="#p" x="240" y="40"/><use xlink:href="#p" x="240" y="56"/><use xlink:href="#p" x="240" y="64"/><use xlink:href="#p" x="240" y="72"/><use xlink:href="#p" x="240" y="80"/><use xlink:href="#p" x="240" y="96"/><use xlink:href="#p" x="240" y="128"/><use xlink:href="#p" x="240" y="136"/><use xlink:href="#p" x="240" y="144"/><use xlink:href="#p" x="240" y="152"/><use xlink:href="#p" x="240" y="160"/><use xlink:href="#p" x="240" y="168"/><use xlink:href="#p" x="240" y="176"/><use xlink:href="#p" x="240" y="200"/><use xlink:href="#p" x="240" y="208"/><use xlink:href="#p" x="240" y="216"/><use xlink:href="#p" x="240" y="240"/><use xlink:href="#p" x="240" y="256"/><use xlink:href="#p" x="240" y="264"/><use xlink:href="#p" x="240" y="272"/><use xlink:href="#p" x="240" y="296"/><use xlink:href="#p" x="240" y="304"/>
+      <use xlink:href="#p" x="248" y="56"/><use xlink:href="#p" x="248" y="64"/><use xlink:href="#p" x="248" y="88"/><use xlink:href="#p" x="248" y="96"/><use xlink:href="#p" x="248" y="120"/><use xlink:href="#p" x="248" y="136"/><use xlink:href="#p" x="248" y="152"/><use xlink:href="#p" x="248" y="168"/><use xlink:href="#p" x="248" y="176"/><use xlink:href="#p" x="248" y="184"/><use xlink:href="#p" x="248" y="192"/><use xlink:href="#p" x="248" y="224"/><use xlink:href="#p" x="248" y="232"/><use xlink:href="#p" x="248" y="264"/><use xlink:href="#p" x="248" y="280"/><use xlink:href="#p" x="248" y="304"/><use xlink:href="#p" x="248" y="320"/>
+      <use xlink:href="#p" x="256" y="32"/><use xlink:href="#p" x="256" y="48"/><use xlink:href="#p" x="256" y="56"/><use xlink:href="#p" x="256" y="64"/><use xlink:href="#p" x="256" y="80"/><use xlink:href="#p" x="256" y="88"/><use xlink:href="#p" x="256" y="112"/><use xlink:href="#p" x="256" y="144"/><use xlink:href="#p" x="256" y="152"/><use xlink:href="#p" x="256" y="184"/><use xlink:href="#p" x="256" y="192"/><use xlink:href="#p" x="256" y="200"/><use xlink:href="#p" x="256" y="208"/><use xlink:href="#p" x="256" y="232"/><use xlink:href="#p" x="256" y="256"/><use xlink:href="#p" x="256" y="264"/><use xlink:href="#p" x="256" y="272"/><use xlink:href="#p" x="256" y="280"/><use xlink:href="#p" x="256" y="288"/><use xlink:href="#p" x="256" y="296"/><use xlink:href="#p" x="256" y="304"/>
+      <use xlink:href="#p" x="264" y="96"/><use xlink:href="#p" x="264" y="104"/><use xlink:href="#p" x="264" y="112"/><use xlink:href="#p" x="264" y="128"/><use xlink:href="#p" x="264" y="160"/><use xlink:href="#p" x="264" y="176"/><use xlink:href="#p" x="264" y="184"/><use xlink:href="#p" x="264" y="192"/><use xlink:href="#p" x="264" y="208"/><use xlink:href="#p" x="264" y="216"/><use xlink:href="#p" x="264" y="224"/><use xlink:href="#p" x="264" y="232"/><use xlink:href="#p" x="264" y="240"/><use xlink:href="#p" x="264" y="248"/><use xlink:href="#p" x="264" y="256"/><use xlink:href="#p" x="264" y="288"/><use xlink:href="#p" x="264" y="296"/><use xlink:href="#p" x="264" y="304"/><use xlink:href="#p" x="264" y="312"/><use xlink:href="#p" x="264" y="320"/>
+      <use xlink:href="#p" x="272" y="32"/><use xlink:href="#p" x="272" y="40"/><use xlink:href="#p" x="272" y="48"/><use xlink:href="#p" x="272" y="56"/><use xlink:href="#p" x="272" y="64"/><use xlink:href="#p" x="272" y="72"/><use xlink:href="#p" x="272" y="80"/><use xlink:href="#p" x="272" y="128"/><use xlink:href="#p" x="272" y="136"/><use xlink:href="#p" x="272" y="152"/><use xlink:href="#p" x="272" y="168"/><use xlink:href="#p" x="272" y="184"/><use xlink:href="#p" x="272" y="216"/><use xlink:href="#p" x="272" y="224"/><use xlink:href="#p" x="272" y="232"/><use xlink:href="#p" x="272" y="240"/><use xlink:href="#p" x="272" y="256"/><use xlink:href="#p" x="272" y="272"/><use xlink:href="#p" x="272" y="288"/><use xlink:href="#p" x="272" y="296"/><use xlink:href="#p" x="272" y="304"/><use xlink:href="#p" x="272" y="312"/><use xlink:href="#p" x="272" y="320"/>
+      <use xlink:href="#p" x="280" y="32"/><use xlink:href="#p" x="280" y="80"/><use xlink:href="#p" x="280" y="104"/><use xlink:href="#p" x="280" y="112"/><use xlink:href="#p" x="280" y="120"/><use xlink:href="#p" x="280" y="136"/><use xlink:href="#p" x="280" y="160"/><use xlink:href="#p" x="280" y="184"/><use xlink:href="#p" x="280" y="200"/><use xlink:href="#p" x="280" y="208"/><use xlink:href="#p" x="280" y="216"/><use xlink:href="#p" x="280" y="232"/><use xlink:href="#p" x="280" y="240"/><use xlink:href="#p" x="280" y="256"/><use xlink:href="#p" x="280" y="288"/><use xlink:href="#p" x="280" y="304"/><use xlink:href="#p" x="280" y="320"/>
+      <use xlink:href="#p" x="288" y="32"/><use xlink:href="#p" x="288" y="48"/><use xlink:href="#p" x="288" y="56"/><use xlink:href="#p" x="288" y="64"/><use xlink:href="#p" x="288" y="80"/><use xlink:href="#p" x="288" y="96"/><use xlink:href="#p" x="288" y="112"/><use xlink:href="#p" x="288" y="128"/><use xlink:href="#p" x="288" y="136"/><use xlink:href="#p" x="288" y="144"/><use xlink:href="#p" x="288" y="184"/><use xlink:href="#p" x="288" y="192"/><use xlink:href="#p" x="288" y="208"/><use xlink:href="#p" x="288" y="224"/><use xlink:href="#p" x="288" y="232"/><use xlink:href="#p" x="288" y="248"/><use xlink:href="#p" x="288" y="256"/><use xlink:href="#p" x="288" y="264"/><use xlink:href="#p" x="288" y="272"/><use xlink:href="#p" x="288" y="280"/><use xlink:href="#p" x="288" y="288"/><use xlink:href="#p" x="288" y="296"/><use xlink:href="#p" x="288" y="304"/><use xlink:href="#p" x="288" y="312"/>
+      <use xlink:href="#p" x="296" y="32"/><use xlink:href="#p" x="296" y="48"/><use xlink:href="#p" x="296" y="56"/><use xlink:href="#p" x="296" y="64"/><use xlink:href="#p" x="296" y="80"/><use xlink:href="#p" x="296" y="96"/><use xlink:href="#p" x="296" y="104"/><use xlink:href="#p" x="296" y="128"/><use xlink:href="#p" x="296" y="136"/><use xlink:href="#p" x="296" y="144"/><use xlink:href="#p" x="296" y="152"/><use xlink:href="#p" x="296" y="168"/><use xlink:href="#p" x="296" y="184"/><use xlink:href="#p" x="296" y="200"/><use xlink:href="#p" x="296" y="208"/><use xlink:href="#p" x="296" y="216"/><use xlink:href="#p" x="296" y="312"/>
+      <use xlink:href="#p" x="304" y="32"/><use xlink:href="#p" x="304" y="48"/><use xlink:href="#p" x="304" y="56"/><use xlink:href="#p" x="304" y="64"/><use xlink:href="#p" x="304" y="80"/><use xlink:href="#p" x="304" y="96"/><use xlink:href="#p" x="304" y="104"/><use xlink:href="#p" x="304" y="112"/><use xlink:href="#p" x="304" y="120"/><use xlink:href="#p" x="304" y="128"/><use xlink:href="#p" x="304" y="136"/><use xlink:href="#p" x="304" y="160"/><use xlink:href="#p" x="304" y="176"/><use xlink:href="#p" x="304" y="216"/><use xlink:href="#p" x="304" y="224"/><use xlink:href="#p" x="304" y="240"/><use xlink:href="#p" x="304" y="256"/><use xlink:href="#p" x="304" y="296"/><use xlink:href="#p" x="304" y="304"/><use xlink:href="#p" x="304" y="312"/><use xlink:href="#p" x="304" y="320"/>
+      <use xlink:href="#p" x="312" y="32"/><use xlink:href="#p" x="312" y="80"/><use xlink:href="#p" x="312" y="104"/><use xlink:href="#p" x="312" y="112"/><use xlink:href="#p" x="312" y="120"/><use xlink:href="#p" x="312" y="144"/><use xlink:href="#p" x="312" y="160"/><use xlink:href="#p" x="312" y="168"/><use xlink:href="#p" x="312" y="176"/><use xlink:href="#p" x="312" y="184"/><use xlink:href="#p" x="312" y="192"/><use xlink:href="#p" x="312" y="200"/><use xlink:href="#p" x="312" y="224"/><use xlink:href="#p" x="312" y="240"/><use xlink:href="#p" x="312" y="256"/><use xlink:href="#p" x="312" y="272"/><use xlink:href="#p" x="312" y="320"/>
+      <use xlink:href="#p" x="320" y="32"/><use xlink:href="#p" x="320" y="40"/><use xlink:href="#p" x="320" y="48"/><use xlink:href="#p" x="320" y="56"/><use xlink:href="#p" x="320" y="64"/><use xlink:href="#p" x="320" y="72"/><use xlink:href="#p" x="320" y="80"/><use xlink:href="#p" x="320" y="96"/><use xlink:href="#p" x="320" y="120"/><use xlink:href="#p" x="320" y="128"/><use xlink:href="#p" x="320" y="136"/><use xlink:href="#p" x="320" y="152"/><use xlink:href="#p" x="320" y="168"/><use xlink:href="#p" x="320" y="176"/><use xlink:href="#p" x="320" y="224"/><use xlink:href="#p" x="320" y="232"/><use xlink:href="#p" x="320" y="248"/><use xlink:href="#p" x="320" y="256"/><use xlink:href="#p" x="320" y="264"/><use xlink:href="#p" x="320" y="272"/><use xlink:href="#p" x="320" y="320"/>
+    </g>
+  </symbol>
+</svg>
+
+<!-- ======== SLIDE 1: COVER ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content" style="justify-content: center; align-items: center; text-align: center;">
+    <span class="spec-label" style="font-size: 10px; margin-bottom: 32px;">Product // Launch Deck // Q2 2026</span>
+    <div style="border-top: 2px solid var(--brand-primary); padding-top: 48px; width: 100%;">
+      <svg xmlns="http://www.w3.org/2000/svg" width="540" height="170" viewBox="80 376 864 272" style="margin-bottom: 32px;">
+        <rect fill="#00AFD7" x="80" y="376" width="160" height="32"/>
+        <rect fill="#00AFD7" x="80" y="426" width="160" height="32"/>
+        <rect fill="#00AFD7" x="208" y="476" width="32" height="172"/>
+        <rect fill="#00AFD7" x="80" y="616" width="160" height="32"/>
+        <rect fill="#00AFD7" x="280" y="376" width="64" height="32"/>
+        <rect fill="#00AFD7" x="312" y="376" width="32" height="272"/>
+        <rect fill="#00AFD7" x="384" y="376" width="32" height="272"/>
+        <rect fill="#00AFD7" x="384" y="376" width="160" height="32"/>
+        <rect fill="#00AFD7" x="512" y="376" width="32" height="160"/>
+        <rect fill="#00AFD7" x="384" y="512" width="160" height="32"/>
+        <rect fill="#00AFD7" x="584" y="376" width="32" height="272"/>
+        <rect fill="#00AFD7" x="584" y="376" width="160" height="32"/>
+        <rect fill="#00AFD7" x="712" y="376" width="32" height="160"/>
+        <rect fill="#00AFD7" x="584" y="512" width="160" height="32"/>
+        <rect fill="#00AFD7" x="784" y="376" width="32" height="160"/>
+        <rect fill="#00AFD7" x="784" y="512" width="160" height="32"/>
+        <rect fill="#00AFD7" x="912" y="376" width="32" height="272"/>
+      </svg>
+      <p style="font-size: 24px; color: rgba(255,255,255,0.85); margin-bottom: 40px; font-weight: 500;">
+        El wallet de d&oacute;lares que vive en WhatsApp.
+      </p>
+      <div style="border-top: 2px solid var(--brand-primary); padding-top: 20px; display: flex; align-items: center; justify-content: space-between; width: 100%;">
+        <div>
+          <span class="spec-label-dim" style="font-size: 11px;">USDC // Arbitrum One // LATAM</span>
+          <p style="font-size: 13px; color: rgba(255,255,255,0.3); margin-top: 8px;">Charla virtual &middot; 30 min</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 24px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="indicator-dot"></span>
+            <span style="font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--brand-crypto);">LIVE</span>
+          </div>
+          <div class="qr-badge">
+            <svg width="148" height="148" viewBox="16 16 328 328"><use href="#qr-wa"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">01 / 08</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 2: EL PROBLEMA ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">01 // El Problema</span>
+    <h2 style="font-size: 42px; line-height: 1.2; margin-bottom: 12px; text-transform: none;">
+      Llevo a&ntilde;os explicando<br>c&oacute;mo usar una wallet.
+    </h2>
+    <p style="font-size: 20px; color: var(--brand-primary); margin-bottom: 40px;">
+      Y a&uacute;n as&iacute;... a la mayor&iacute;a le sigue costando.
+    </p>
+    <div style="border-top: 2px solid var(--brand-primary); padding-top: 32px;">
+      <div class="cols-3">
+        <div class="panel-frame-subtle" style="padding: 28px 24px;">
+          <h3 style="font-size: 16px; margin-bottom: 14px; color: var(--brand-primary);">Seed phrases</h3>
+          <p style="font-size: 16px;">12 palabras al azar que perder = perder todo</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 28px 24px;">
+          <h3 style="font-size: 16px; margin-bottom: 14px; color: var(--brand-primary);">Nueva app</h3>
+          <p style="font-size: 16px;">&iquest;Descargar otra app? La gente ya no quiere m&aacute;s apps</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 28px 24px;">
+          <h3 style="font-size: 16px; margin-bottom: 14px; color: var(--brand-primary);">Conceptos crypto</h3>
+          <p style="font-size: 16px;">Gas, network, confirmaciones... demasiado para el d&iacute;a a d&iacute;a</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">02 / 08</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 3: LA OPORTUNIDAD ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">02 // La Oportunidad</span>
+    <div class="cols-2" style="flex: 1; align-items: stretch;">
+      <div class="panel-frame-subtle" style="padding: 48px 40px; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;">
+        <div style="font-family: 'Electrolize', sans-serif; font-size: 96px; color: var(--brand-primary); line-height: 1;">90%+</div>
+        <p style="font-size: 18px; color: rgba(255,255,255,0.65); margin-top: 20px;">de penetraci&oacute;n de<br>WhatsApp en LATAM</p>
+        <p class="source" style="margin-top: 16px;">Fuente: Meta, 2024</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+        <div class="panel-frame-subtle" style="padding: 28px 32px; flex: 1; display: flex; flex-direction: column; justify-content: center;">
+          <div class="data-readout" style="font-size: 48px; margin-bottom: 4px;">500M+</div>
+          <p style="font-size: 15px; color: rgba(255,255,255,0.55);">usuarios activos de WhatsApp en LATAM</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 28px 32px; flex: 1; display: flex; flex-direction: column; justify-content: center;">
+          <div class="data-readout" style="font-size: 48px; margin-bottom: 4px;">0 apps</div>
+          <p style="font-size: 15px; color: rgba(255,255,255,0.55);">nuevas requeridas para usar Sippy</p>
+        </div>
+        <div class="panel-frame-subtle" style="padding: 28px 32px; flex: 1; display: flex; flex-direction: column; justify-content: center;">
+          <div class="data-readout" style="font-size: 48px; margin-bottom: 4px;">$0.01</div>
+          <p style="font-size: 15px; color: rgba(255,255,255,0.55);">costo por transacci&oacute;n en Arbitrum One</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">03 / 08</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 4: QUE ES SIPPY ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">03 // Qu&eacute; es Sippy</span>
+    <h2 style="font-size: 38px; line-height: 1.2; margin-bottom: 8px; text-transform: none;">
+      Sippy convierte WhatsApp en<br>tu wallet de d&oacute;lares.
+    </h2>
+    <p style="font-size: 18px; color: var(--brand-primary); margin-bottom: 36px;">
+      Sin app nueva. Sin seed phrases. Sin saber nada de crypto.
+    </p>
+    <div style="border-top: 2px solid var(--brand-primary); padding-top: 32px;">
+      <div style="display: flex; align-items: flex-start; gap: 20px; margin-bottom: 40px;">
+        <div style="flex: 1; display: flex; align-items: flex-start; gap: 16px;">
+          <div class="step-number">01</div>
+          <div>
+            <h3 style="font-size: 16px; margin-bottom: 8px; color: #fff;">Crea tu wallet</h3>
+            <p style="font-size: 15px;">SMS. 30 segundos. Tienes tu propia smart wallet.</p>
+          </div>
+        </div>
+        <div class="step-arrow">&rarr;</div>
+        <div style="flex: 1; display: flex; align-items: flex-start; gap: 16px;">
+          <div class="step-number">02</div>
+          <div>
+            <h3 style="font-size: 16px; margin-bottom: 8px; color: #fff;">Fondea</h3>
+            <p style="font-size: 15px;">Compra USDC con pesos o d&oacute;lares. Llega directo a tu wallet.</p>
+          </div>
+        </div>
+        <div class="step-arrow">&rarr;</div>
+        <div style="flex: 1; display: flex; align-items: flex-start; gap: 16px;">
+          <div class="step-number">03</div>
+          <div>
+            <h3 style="font-size: 16px; margin-bottom: 8px; color: #fff;">Env&iacute;a</h3>
+            <p style="font-size: 15px;">Escribe "envia $20 a +57..." en WhatsApp. Listo en segundos.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="code-bar" style="margin-top: auto;">
+      "send $20 to +573001234567" &nbsp;&rarr;&nbsp; transacci&oacute;n on-chain en segundos
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">04 / 08</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 5: ARQUITECTURA ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">04 // Arquitectura // WhatsApp &rarr; Onchain</span>
+    <div style="display: flex; align-items: center; justify-content: center; gap: 20px; margin-bottom: 40px; margin-top: 16px;">
+      <div class="flow-box" style="flex: 1;">
+        <h3 style="font-size: 15px; margin-bottom: 8px; color: #fff;">WhatsApp<br>Business API</h3>
+        <p>Meta Cloud API</p>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box" style="flex: 1;">
+        <h3 style="font-size: 15px; margin-bottom: 8px; color: #fff;">AI Agent</h3>
+        <p>ES / EN / PT</p>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box" style="flex: 1;">
+        <h3 style="font-size: 15px; margin-bottom: 8px; color: #fff;">CDP Wallets</h3>
+        <p>Coinbase &middot; Noncustodial</p>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-box" style="flex: 1;">
+        <h3 style="font-size: 15px; margin-bottom: 8px; color: #fff;">USDC on<br>Arbitrum One</h3>
+        <p>$0.01/tx &middot; GasRefuel.sol</p>
+      </div>
+    </div>
+    <div style="border-top: 2px solid rgba(0,175,215,0.15); padding-top: 28px;">
+      <span class="spec-label" style="font-size: 10px; margin-bottom: 20px; display: block;">Trust &amp; Security</span>
+      <div class="cols-3">
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <span class="indicator-dot" style="margin-top: 8px; flex-shrink: 0;"></span>
+          <div>
+            <h3 style="font-size: 15px; margin-bottom: 6px; color: var(--brand-crypto);">Non-custodial</h3>
+            <p style="font-size: 15px;">El usuario controla su wallet. Puede exportar su clave privada.</p>
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <span class="indicator-dot" style="margin-top: 8px; flex-shrink: 0;"></span>
+          <div>
+            <h3 style="font-size: 15px; margin-bottom: 6px; color: var(--brand-crypto);">L&iacute;mites onchain</h3>
+            <p style="font-size: 15px;">SpendPermissionManager &mdash; el usuario los define y revoca cuando quiere.</p>
+          </div>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+          <span class="indicator-dot" style="margin-top: 8px; flex-shrink: 0;"></span>
+          <div>
+            <h3 style="font-size: 15px; margin-bottom: 6px; color: var(--brand-crypto);">100% transparente</h3>
+            <p style="font-size: 15px;">Cada transacci&oacute;n verificable en Arbiscan. Monto, destino, timestamp.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">05 / 08</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 6: TRACCION & VALIDACION ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">05 // Tracci&oacute;n &amp; Validaci&oacute;n</span>
+    <div class="cols-2" style="flex: 1; align-items: stretch; gap: 48px;">
+      <div class="panel-frame-subtle" style="padding: 40px 36px; display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <span class="spec-label" style="font-size: 10px; color: var(--brand-crypto); display: block; margin-bottom: 24px;">ETHOnline 2025</span>
+          <h2 style="font-size: 36px; text-transform: none; margin-bottom: 24px;">Finalistas Globales</h2>
+          <p style="font-size: 17px;">
+            Seleccionados de cientos de proyectos en ETHGlobal. Showcase p&uacute;blico validado por la comunidad.
+          </p>
+        </div>
+        <div class="verified-badge" style="margin-top: 32px;">Verificado</div>
+      </div>
+      <div class="panel-frame-subtle" style="padding: 40px 36px; display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <span class="spec-label" style="font-size: 10px; color: var(--brand-crypto); display: block; margin-bottom: 24px;">Mainnet</span>
+          <h2 style="font-size: 36px; text-transform: none; margin-bottom: 24px;">Live en Arbitrum One</h2>
+          <p style="font-size: 17px;">
+            Contratos deployados y operativos. Flujo completo de pago validado end-to-end.
+          </p>
+        </div>
+        <div class="verified-badge" style="margin-top: 32px;">Verificado</div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">06 / 08</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 7: ROADMAP ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content">
+    <span class="spec-label" style="margin-bottom: 24px;">06 // Roadmap // Colombia &rarr; LATAM</span>
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+      <!-- Timeline labels -->
+      <div style="display: flex; align-items: flex-start; margin-bottom: 24px; padding: 0 20px;">
+        <div style="flex: 1; text-align: center;">
+          <span class="spec-label" style="font-size: 11px;">Q4 2025</span>
+        </div>
+        <div style="flex: 1; text-align: center;">
+          <span class="spec-label" style="font-size: 11px;">Q1 2026</span>
+        </div>
+        <div style="flex: 1; text-align: center;">
+          <span class="spec-label" style="font-size: 11px; color: var(--brand-crypto);">Q2 2026</span>
+        </div>
+        <div style="flex: 1; text-align: center;">
+          <span class="spec-label" style="font-size: 11px;">Q3&ndash;Q4 2026</span>
+        </div>
+      </div>
+      <!-- Timeline line + dots -->
+      <div style="display: flex; align-items: center; padding: 0 20px; margin-bottom: 32px;">
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+          <div class="timeline-dot done"></div>
+        </div>
+        <div class="timeline-line"></div>
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+          <div class="timeline-dot done"></div>
+        </div>
+        <div class="timeline-line"></div>
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+          <div class="timeline-dot current"></div>
+        </div>
+        <div class="timeline-line" style="opacity: 0.15;"></div>
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center;">
+          <div class="timeline-dot future"></div>
+        </div>
+      </div>
+      <!-- Timeline descriptions -->
+      <div style="display: flex; align-items: flex-start; padding: 0 20px; margin-bottom: 48px;">
+        <div style="flex: 1; text-align: center;">
+          <p style="font-size: 16px; color: rgba(255,255,255,0.6);">Mainnet<br>deploy</p>
+        </div>
+        <div style="flex: 1; text-align: center;">
+          <p style="font-size: 16px; color: rgba(255,255,255,0.6);">Beta<br>cerrada</p>
+        </div>
+        <div style="flex: 1; text-align: center;">
+          <div class="panel-frame-subtle" style="padding: 16px 20px; display: inline-block; border-color: rgba(0,215,150,0.3);">
+            <p style="font-size: 16px; color: var(--brand-crypto);">Lanzamiento<br>Colombia</p>
+          </div>
+        </div>
+        <div style="flex: 1; text-align: center;">
+          <p style="font-size: 16px; color: rgba(255,255,255,0.4);">Expansi&oacute;n<br>LATAM</p>
+        </div>
+      </div>
+      <!-- Bottom tagline -->
+      <div style="border-top: 2px solid var(--brand-primary); padding-top: 32px; text-align: center;">
+        <h2 style="font-size: 30px; text-transform: none; margin-bottom: 12px;">Construido para escalar por toda Latinoam&eacute;rica.</h2>
+        <p style="font-size: 18px; color: var(--brand-primary);">El onboarding que siempre quisimos &mdash; dentro del app que ya tienen.</p>
+      </div>
+    </div>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">07 / 08</span>
+  </div>
+</div>
+
+<!-- ======== SLIDE 8: CLOSE ======== -->
+<div class="slide reg-marks">
+  <div class="grid-bg"></div>
+  <div class="slide-content" style="justify-content: center; align-items: center; text-align: center;">
+    <div style="border: 1px solid rgba(0,175,215,0.25); padding: 80px 64px; position: relative;">
+      <div style="position: absolute; inset: 4px; border: 1px solid rgba(0,175,215,0.12); pointer-events: none;"></div>
+      <h2 style="font-size: 56px; text-transform: none; line-height: 1.2; margin-bottom: 48px; font-weight: 700;">
+        Money as fast as<br>your messages.
+      </h2>
+      <div style="border-top: 2px solid var(--brand-primary); padding-top: 32px; display: flex; gap: 40px; justify-content: center; align-items: center;">
+        <div style="display: flex; flex-direction: column; gap: 16px; align-items: stretch;">
+          <div style="background: var(--brand-primary); padding: 14px 40px;">
+            <span style="font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; color: var(--brand-dark); letter-spacing: 0.05em;">hello@sippy.lat</span>
+          </div>
+          <div class="panel-frame-subtle" style="padding: 14px 40px; border-color: rgba(0,215,150,0.4); text-align: center;">
+            <span style="font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; color: var(--brand-crypto); letter-spacing: 0.05em;">sippy.lat</span>
+          </div>
+        </div>
+        <div style="width: 1px; height: 80px; background: rgba(0,175,215,0.2);"></div>
+        <div class="qr-badge">
+          <svg width="140" height="140" viewBox="16 16 328 328"><use href="#qr-wa"/></svg>
+          <span>Prueba en WhatsApp</span>
+        </div>
+      </div>
+    </div>
+    <p class="spec-label-dim" style="margin-top: 40px; font-size: 10px;">Lanzamiento Q2 2026 &middot; Colombia &middot; Arbitrum One</p>
+  </div>
+  <div class="slide-nav">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">08 / 08</span>
+  </div>
+</div>
+
+</body>
+</html>

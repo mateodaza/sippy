@@ -110,25 +110,31 @@ export function formatDateUTC(date: Date): string {
 export function formatHelpMessage(lang: Lang = 'en'): string {
   const m = {
     en: () =>
-      `Send money — "send 5 to +573001234567"\n` +
-      `Check balance — "balance"\n` +
-      `History — "history"\n` +
-      `Settings — "settings"\n` +
-      `Language — "language es/en/pt"\n\n` +
+      `Here's what you can do:\n\n` +
+      `💸 *Send money*\n"send 5 to +573001234567"\n\n` +
+      `💰 *Check your balance*\n"balance"\n\n` +
+      `📋 *See your transactions*\n"history"\n\n` +
+      `👋 *Invite a friend*\n"invite +573001234567"\n\n` +
+      `⚙️ *Change settings or limits*\n"settings"\n\n` +
+      `🌐 *Switch language*\n"language es/en/pt"\n\n` +
       `Add funds: ${FUND_URL}`,
     es: () =>
-      `Enviar dinero — "enviar 5 a +573001234567"\n` +
-      `Ver saldo — "saldo"\n` +
-      `Historial — "historial"\n` +
-      `Ajustes — "ajustes"\n` +
-      `Idioma — "idioma es/en/pt"\n\n` +
+      `Esto es lo que puedes hacer:\n\n` +
+      `💸 *Enviar dinero*\n"enviar 5 a +573001234567"\n\n` +
+      `💰 *Ver tu saldo*\n"saldo"\n\n` +
+      `📋 *Ver tus transacciones*\n"historial"\n\n` +
+      `👋 *Invitar a un amigo*\n"invitar +573001234567"\n\n` +
+      `⚙️ *Cambiar ajustes o limites*\n"ajustes"\n\n` +
+      `🌐 *Cambiar idioma*\n"idioma es/en/pt"\n\n` +
       `Agregar fondos: ${FUND_URL}`,
     pt: () =>
-      `Enviar dinheiro — "enviar 5 para +573001234567"\n` +
-      `Ver saldo — "saldo"\n` +
-      `Historico — "historico"\n` +
-      `Ajustes — "ajustes"\n` +
-      `Idioma — "idioma es/en/pt"\n\n` +
+      `Aqui esta o que voce pode fazer:\n\n` +
+      `💸 *Enviar dinheiro*\n"enviar 5 para +573001234567"\n\n` +
+      `💰 *Ver seu saldo*\n"saldo"\n\n` +
+      `📋 *Ver suas transacoes*\n"historico"\n\n` +
+      `👋 *Convidar um amigo*\n"convidar +573001234567"\n\n` +
+      `⚙️ *Mudar ajustes ou limites*\n"ajustes"\n\n` +
+      `🌐 *Mudar idioma*\n"idioma es/en/pt"\n\n` +
       `Adicionar fundos: ${FUND_URL}`,
   }
   return m[lang]()
@@ -138,14 +144,20 @@ export function formatHelpNewUser(phoneNumber: string, lang: Lang = 'en'): strin
   const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
-      `Sippy lets you send dollars to any phone number, right from WhatsApp.\n\n` +
-      `Set up your wallet to get started (takes 60 seconds):\n${setupUrl}`,
+      `Welcome to Sippy! Someone might have invited you, or maybe you're just curious.\n\n` +
+      `Sippy lets you send dollars to any phone number via WhatsApp. No app, no fees, instant.\n\n` +
+      `To get started, set up your wallet (takes 60 seconds):\n${setupUrl}\n\n` +
+      `Once you're in, type "help" and I'll show you everything you can do.`,
     es: () =>
-      `Sippy te permite enviar dolares a cualquier numero de telefono, directo desde WhatsApp.\n\n` +
-      `Configura tu billetera para comenzar (toma 60 segundos):\n${setupUrl}`,
+      `Bienvenido a Sippy! Puede que alguien te haya invitado, o que tengas curiosidad.\n\n` +
+      `Sippy te permite enviar dolares a cualquier numero por WhatsApp. Sin app, sin comisiones, al instante.\n\n` +
+      `Para empezar, configura tu billetera (toma 60 segundos):\n${setupUrl}\n\n` +
+      `Cuando estes listo, escribe "ayuda" y te muestro todo lo que puedes hacer.`,
     pt: () =>
-      `Sippy te permite enviar dolares para qualquer numero de telefone, direto do WhatsApp.\n\n` +
-      `Configure sua carteira para comecar (leva 60 segundos):\n${setupUrl}`,
+      `Bem-vindo ao Sippy! Alguem pode ter te convidado, ou talvez voce esteja curioso.\n\n` +
+      `Sippy te permite enviar dolares para qualquer numero pelo WhatsApp. Sem app, sem taxas, instantaneo.\n\n` +
+      `Para comecar, configure sua carteira (leva 60 segundos):\n${setupUrl}\n\n` +
+      `Quando estiver pronto, escreva "ajuda" e te mostro tudo que voce pode fazer.`,
   }
   return m[lang]()
 }
@@ -163,9 +175,10 @@ export function formatHelpIncomplete(phoneNumber: string, lang: Lang = 'en'): st
 export function formatNudgeSetup(phoneNumber: string, lang: Lang = 'en'): string {
   const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
-    en: () => `To get started, set up your wallet here:\n${setupUrl}`,
-    es: () => `Para comenzar, configura tu billetera aqui:\n${setupUrl}`,
-    pt: () => `Para comecar, configure sua carteira aqui:\n${setupUrl}`,
+    en: () => `You'll need a wallet first. Set it up here (takes 60 seconds):\n${setupUrl}`,
+    es: () => `Primero necesitas una billetera. Configurala aqui (toma 60 segundos):\n${setupUrl}`,
+    pt: () =>
+      `Voce precisa de uma carteira primeiro. Configure aqui (leva 60 segundos):\n${setupUrl}`,
   }
   return m[lang]()
 }
@@ -186,14 +199,17 @@ export function formatGreetingNewUser(phoneNumber: string, lang: Lang = 'en'): s
   const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
-      `Hey! I'm Sippy. I help you send dollars to any phone number via WhatsApp.\n\n` +
-      `Set up your wallet to get started:\n${setupUrl}`,
+      `Hey! I'm Sippy. I help you send dollars to anyone using just their phone number.\n\n` +
+      `No app to download, no fees, and transfers arrive in seconds.\n\n` +
+      `Set up your wallet to get started (60 seconds):\n${setupUrl}`,
     es: () =>
-      `Hola! Soy Sippy. Te ayudo a enviar dolares a cualquier numero de telefono por WhatsApp.\n\n` +
-      `Configura tu billetera para comenzar:\n${setupUrl}`,
+      `Hola! Soy Sippy. Te ayudo a enviar dolares a cualquier persona usando solo su numero de telefono.\n\n` +
+      `No necesitas descargar nada, sin comisiones, y las transferencias llegan en segundos.\n\n` +
+      `Configura tu billetera para comenzar (60 segundos):\n${setupUrl}`,
     pt: () =>
-      `Oi! Sou o Sippy. Te ajudo a enviar dolares para qualquer numero de telefone pelo WhatsApp.\n\n` +
-      `Configure sua carteira para comecar:\n${setupUrl}`,
+      `Oi! Sou o Sippy. Te ajudo a enviar dolares para qualquer pessoa usando so o numero de telefone.\n\n` +
+      `Sem app pra baixar, sem taxas, e as transferencias chegam em segundos.\n\n` +
+      `Configure sua carteira para comecar (60 segundos):\n${setupUrl}`,
   }
   return m[lang]()
 }

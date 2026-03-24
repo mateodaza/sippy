@@ -830,7 +830,32 @@ function WalletContent() {
         </div>
 
         {/* Activity */}
-        <ActivityList transactions={activity} lang={lang} />
+        {isLoadingData && activity.length === 0 ? (
+          <div className="bg-[var(--bg-primary)] backdrop-blur-xl rounded-2xl sm:rounded-[32px] shadow-[0_20px_50px_rgba(15,23,42,0.12)] border border-[var(--border-default)] overflow-hidden animate-pulse">
+            <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-[var(--border-default)]">
+              <div className="h-5 bg-[var(--bg-tertiary)] rounded w-32 mb-2" />
+              <div className="h-3 bg-[var(--bg-tertiary)] rounded w-24" />
+            </div>
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 border-b border-[var(--border-default)] last:border-b-0"
+              >
+                <div className="w-10 h-10 rounded-full bg-[var(--bg-tertiary)]" />
+                <div className="flex-1">
+                  <div className="h-4 bg-[var(--bg-tertiary)] rounded w-24 mb-2" />
+                  <div className="h-3 bg-[var(--bg-tertiary)] rounded w-32" />
+                </div>
+                <div className="text-right">
+                  <div className="h-4 bg-[var(--bg-tertiary)] rounded w-16 mb-2" />
+                  <div className="h-3 bg-[var(--bg-tertiary)] rounded w-12" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <ActivityList transactions={activity} lang={lang} />
+        )}
 
         {/* Navigation */}
         <div className="bg-[var(--bg-primary)] panel-frame rounded-2xl p-4 flex items-center justify-between">
