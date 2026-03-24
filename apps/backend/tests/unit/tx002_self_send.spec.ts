@@ -141,12 +141,12 @@ test.group('Group A | Self-send block', () => {
 
   test('A-04: self-send message — es', ({ assert }) => {
     const msg = formatSelfSendMessage('es')
-    assert.include(msg, 'ti mismo')
+    assert.include(msg, 'eres tu')
   })
 
   test('A-05: self-send message — pt', ({ assert }) => {
     const msg = formatSelfSendMessage('pt')
-    assert.include(msg, 'voce mesmo')
+    assert.include(msg, 'e voce')
   })
 
   test('A-06: canonicalizePhone returns null for malformed recipient → self-send check skipped; no self-send message sent', async ({

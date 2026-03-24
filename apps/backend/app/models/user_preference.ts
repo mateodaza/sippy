@@ -38,6 +38,9 @@ export default class UserPreference extends BaseModel {
   @column.dateTime()
   declare emailNudgeSentAt: DateTime | null
 
+  @column.dateTime()
+  declare setupNotifiedAt: DateTime | null
+
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime
 }

@@ -17,9 +17,9 @@
 // ============================================================================
 
 const SAFE_FALLBACK: Record<string, string> = {
-  en: 'Sorry, something went wrong. Please try again or type "help" for available commands.',
-  es: 'Lo sentimos, algo salio mal. Intente de nuevo o escriba "ayuda" para ver los comandos disponibles.',
-  pt: 'Desculpe, algo deu errado. Tente novamente ou digite "ajuda" para ver os comandos disponiveis.',
+  en: 'Something went wrong. Try again — just tell me what you need.',
+  es: 'Algo salio mal. Intenta de nuevo — solo dime que necesitas.',
+  pt: 'Algo deu errado. Tenta de novo — so me diz o que precisa.',
 }
 
 // ============================================================================

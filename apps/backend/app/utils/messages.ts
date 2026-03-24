@@ -110,31 +110,31 @@ export function formatDateUTC(date: Date): string {
 export function formatHelpMessage(lang: Lang = 'en'): string {
   const m = {
     en: () =>
-      `Here's what you can do:\n\n` +
-      `💸 *Send money*\n"send 5 to +573001234567"\n\n` +
-      `💰 *Check your balance*\n"balance"\n\n` +
-      `📋 *See your transactions*\n"history"\n\n` +
-      `👋 *Invite a friend*\n"invite +573001234567"\n\n` +
-      `⚙️ *Change settings or limits*\n"settings"\n\n` +
-      `🌐 *Switch language*\n"language es/en/pt"\n\n` +
+      `Here's what I can help with:\n\n` +
+      `💸 *Send money* — just tell me who and how much\n\n` +
+      `💰 *Check your balance* — ask me anytime\n\n` +
+      `📋 *See your transactions* — ask for your history\n\n` +
+      `👋 *Invite a friend* — give me their number\n\n` +
+      `⚙️ *Change settings or limits* — ask for settings\n\n` +
+      `🌐 *Switch language* — just tell me which one\n\n` +
       `Add funds: ${FUND_URL}`,
     es: () =>
-      `Esto es lo que puedes hacer:\n\n` +
-      `💸 *Enviar dinero*\n"enviar 5 a +573001234567"\n\n` +
-      `💰 *Ver tu saldo*\n"saldo"\n\n` +
-      `📋 *Ver tus transacciones*\n"historial"\n\n` +
-      `👋 *Invitar a un amigo*\n"invitar +573001234567"\n\n` +
-      `⚙️ *Cambiar ajustes o limites*\n"ajustes"\n\n` +
-      `🌐 *Cambiar idioma*\n"idioma es/en/pt"\n\n` +
+      `Esto es lo que puedo hacer:\n\n` +
+      `💸 *Enviar dinero* — dime a quien y cuanto\n\n` +
+      `💰 *Ver tu saldo* — preguntame cuando quieras\n\n` +
+      `📋 *Ver tus transacciones* — pideme tu historial\n\n` +
+      `👋 *Invitar a un amigo* — dame su numero\n\n` +
+      `⚙️ *Cambiar ajustes o limites* — pideme los ajustes\n\n` +
+      `🌐 *Cambiar idioma* — solo dime cual\n\n` +
       `Agregar fondos: ${FUND_URL}`,
     pt: () =>
-      `Aqui esta o que voce pode fazer:\n\n` +
-      `💸 *Enviar dinheiro*\n"enviar 5 para +573001234567"\n\n` +
-      `💰 *Ver seu saldo*\n"saldo"\n\n` +
-      `📋 *Ver suas transacoes*\n"historico"\n\n` +
-      `👋 *Convidar um amigo*\n"convidar +573001234567"\n\n` +
-      `⚙️ *Mudar ajustes ou limites*\n"ajustes"\n\n` +
-      `🌐 *Mudar idioma*\n"idioma es/en/pt"\n\n` +
+      `Aqui esta o que posso fazer:\n\n` +
+      `💸 *Enviar dinheiro* — me diz pra quem e quanto\n\n` +
+      `💰 *Ver seu saldo* — me pergunta quando quiser\n\n` +
+      `📋 *Ver suas transacoes* — pede seu historico\n\n` +
+      `👋 *Convidar um amigo* — me da o numero\n\n` +
+      `⚙️ *Mudar ajustes ou limites* — pede os ajustes\n\n` +
+      `🌐 *Mudar idioma* — so me diz qual\n\n` +
       `Adicionar fundos: ${FUND_URL}`,
   }
   return m[lang]()
@@ -147,17 +147,17 @@ export function formatHelpNewUser(phoneNumber: string, lang: Lang = 'en'): strin
       `Welcome to Sippy! Someone might have invited you, or maybe you're just curious.\n\n` +
       `Sippy lets you send dollars to any phone number via WhatsApp. No app, no fees, instant.\n\n` +
       `To get started, set up your wallet (takes 60 seconds):\n${setupUrl}\n\n` +
-      `Once you're in, type "help" and I'll show you everything you can do.`,
+      `Once you're in, just send me a message and we'll get going.`,
     es: () =>
       `Bienvenido a Sippy! Puede que alguien te haya invitado, o que tengas curiosidad.\n\n` +
       `Sippy te permite enviar dolares a cualquier numero por WhatsApp. Sin app, sin comisiones, al instante.\n\n` +
       `Para empezar, configura tu billetera (toma 60 segundos):\n${setupUrl}\n\n` +
-      `Cuando estes listo, escribe "ayuda" y te muestro todo lo que puedes hacer.`,
+      `Cuando estes listo, mandame un mensaje y arrancamos.`,
     pt: () =>
       `Bem-vindo ao Sippy! Alguem pode ter te convidado, ou talvez voce esteja curioso.\n\n` +
       `Sippy te permite enviar dolares para qualquer numero pelo WhatsApp. Sem app, sem taxas, instantaneo.\n\n` +
       `Para comecar, configure sua carteira (leva 60 segundos):\n${setupUrl}\n\n` +
-      `Quando estiver pronto, escreva "ajuda" e te mostro tudo que voce pode fazer.`,
+      `Quando estiver pronto, me manda uma mensagem e a gente comeca.`,
   }
   return m[lang]()
 }
@@ -234,19 +234,19 @@ export function formatAboutMessage(lang: Lang = 'en'): string {
       `$1 is always $1 — your balance stays in digital dollars, always stable.\n` +
       `Transfers happen in seconds and we cover the fees.\n` +
       `Works in English, Spanish, and Portuguese.\n\n` +
-      `Say "help" to see what you can do.`,
+      `Just tell me what you need!`,
     es: () =>
       `Soy Sippy, tu billetera de WhatsApp. Envias dinero usando numeros de telefono y ya.\n\n` +
       `$1 siempre es $1 — tu saldo esta en dolares digitales, siempre estables.\n` +
       `Las transferencias llegan en segundos y nosotros cubrimos las comisiones.\n` +
       `Funciono en espanol, ingles y portugues.\n\n` +
-      `Di "ayuda" para ver que puedes hacer.`,
+      `Solo dime que necesitas!`,
     pt: () =>
       `Sou o Sippy, sua carteira no WhatsApp. Voce envia dinheiro usando numeros de telefone, so isso.\n\n` +
       `$1 e sempre $1 — seu saldo fica em dolares digitais, sempre estaveis.\n` +
       `Transferencias chegam em segundos e nos cobrimos as taxas.\n` +
       `Funciono em portugues, espanhol e ingles.\n\n` +
-      `Diga "ajuda" pra ver o que voce pode fazer.`,
+      `So me diz o que precisa!`,
   }
   return m[lang]()
 }
@@ -446,20 +446,21 @@ export function formatInsufficientBalanceMessage(
     params.localCurrency ?? null
   )
   const m = {
-    en: () => `Insufficient balance.\n\nBalance: ${bal}\nNeeded: ${need}\n\nAdd funds: ${FUND_URL}`,
+    en: () =>
+      `You're short for this one.\n\nBalance: ${bal}\nNeeded: ${need}\n\nAdd funds here: ${FUND_URL}`,
     es: () =>
-      `Saldo insuficiente.\n\nSaldo: ${bal}\nNecesario: ${need}\n\nAgregar fondos: ${FUND_URL}`,
+      `Te falta para este envio.\n\nSaldo: ${bal}\nNecesario: ${need}\n\nAgrega fondos aqui: ${FUND_URL}`,
     pt: () =>
-      `Saldo insuficiente.\n\nSaldo: ${bal}\nNecessario: ${need}\n\nAdicionar fundos: ${FUND_URL}`,
+      `Falta um pouco pra esse envio.\n\nSaldo: ${bal}\nNecessario: ${need}\n\nAdicione fundos aqui: ${FUND_URL}`,
   }
   return m[lang]()
 }
 
 export function formatNoWalletMessage(lang: Lang = 'en'): string {
   const m = {
-    en: () => `You don't have a wallet yet. Say "start" and I'll set one up for you.`,
-    es: () => `Aun no tienes billetera. Di "comenzar" y te creo una.`,
-    pt: () => `Voce ainda nao tem carteira. Diga "comecar" e eu crio uma pra voce.`,
+    en: () => `You don't have a wallet yet. Want me to set one up? It takes 60 seconds.`,
+    es: () => `Aun no tienes billetera. Quieres que te cree una? Toma 60 segundos.`,
+    pt: () => `Voce ainda nao tem carteira. Quer que eu crie uma? Leva 60 segundos.`,
   }
   return m[lang]()
 }
@@ -475,9 +476,10 @@ export function formatFundMessage(fundUrl: string, lang: Lang = 'en'): string {
 
 export function formatSessionExpiredMessage(lang: Lang = 'en'): string {
   const m = {
-    en: () => `Session expired.\n\nSend "start" to renew your session.`,
-    es: () => `Sesion expirada.\n\nEnvia "comenzar" para renovar tu sesion.`,
-    pt: () => `Sessao expirada.\n\nEnvie "comecar" para renovar sua sessao.`,
+    en: () =>
+      `I need to reconnect you. Just send me any message and we'll pick up where we left off.`,
+    es: () => `Necesito reconectarte. Mandame cualquier mensaje y seguimos donde quedamos.`,
+    pt: () => `Preciso te reconectar. Me manda qualquer mensagem e continuamos de onde paramos.`,
   }
   return m[lang]()
 }
@@ -485,23 +487,20 @@ export function formatSessionExpiredMessage(lang: Lang = 'en'): string {
 export function formatRecipientNotFoundMessage(phone: string, lang: Lang = 'en'): string {
   const m = {
     en: () =>
-      `Recipient not found.\n\n${phone} is not registered with Sippy.\n\nAsk them to send "start" to this number to create their wallet.`,
+      `${phone} isn't on Sippy yet. We couldn't send them an invite right now, but if they join we'll let you know.`,
     es: () =>
-      `Destinatario no encontrado.\n\n${phone} no esta registrado en Sippy.\n\nPidele que envie "comenzar" a este numero para crear su billetera.`,
+      `${phone} aun no esta en Sippy. No pudimos enviarle una invitacion ahora, pero si se une te avisamos.`,
     pt: () =>
-      `Destinatario nao encontrado.\n\n${phone} nao esta registrado no Sippy.\n\nPeca para enviar "comecar" para este numero para criar a carteira.`,
+      `${phone} ainda nao esta no Sippy. Nao conseguimos enviar um convite agora, mas se entrar avisamos.`,
   }
   return m[lang]()
 }
 
 export function formatInvalidAmountMessage(lang: Lang = 'en'): string {
   const m = {
-    en: () =>
-      `Invalid amount.\n\nPlease send a positive number.\n\nExample: send 5 to +573001234567`,
-    es: () =>
-      `Monto invalido.\n\nPor favor envia un numero positivo.\n\nEjemplo: enviar 5 a +573001234567`,
-    pt: () =>
-      `Valor invalido.\n\nPor favor envie um numero positivo.\n\nExemplo: enviar 5 para +573001234567`,
+    en: () => `Try with a number, like:\n\n"send 5 to +573001234567"`,
+    es: () => `Intenta con un numero, tipo:\n\n"enviar 5 a +573001234567"`,
+    pt: () => `Tenta com um numero, tipo:\n\n"enviar 5 para +573001234567"`,
   }
   return m[lang]()
 }
@@ -524,23 +523,23 @@ export function formatWelcomeMessage(
         `You're all set! Your wallet is ready:\n${addr}\n\n` +
         `Here's how to get going:\n` +
         `1. Add funds: ${FUND_URL}\n` +
-        `2. Check your balance — just say "balance"\n` +
-        `3. Send money — "send 5 to +57..."\n\n` +
-        `No fees. We cover them. Say "help" anytime.`,
+        `2. Ask me for your balance anytime\n` +
+        `3. Tell me who you want to send money to and how much\n\n` +
+        `No fees. We cover them. Just tell me what you need.`,
       es: () =>
         `Listo! Tu billetera esta lista:\n${addr}\n\n` +
         `Asi empiezas:\n` +
         `1. Agrega fondos: ${FUND_URL}\n` +
-        `2. Ve tu saldo — solo di "saldo"\n` +
-        `3. Envia dinero — "enviar 5 a +57..."\n\n` +
-        `Sin comisiones. Nosotros las cubrimos. Di "ayuda" cuando quieras.`,
+        `2. Preguntame tu saldo cuando quieras\n` +
+        `3. Dime a quien quieres enviar y cuanto\n\n` +
+        `Sin comisiones. Nosotros las cubrimos. Solo dime que necesitas.`,
       pt: () =>
         `Pronto! Sua carteira esta pronta:\n${addr}\n\n` +
         `Como comecar:\n` +
         `1. Adicione fundos: ${FUND_URL}\n` +
-        `2. Veja seu saldo — so diga "saldo"\n` +
-        `3. Envie dinheiro — "enviar 5 para +57..."\n\n` +
-        `Sem taxas. Nos cobrimos. Diga "ajuda" quando quiser.`,
+        `2. Me pergunta seu saldo quando quiser\n` +
+        `3. Me diz pra quem quer enviar e quanto\n\n` +
+        `Sem taxas. Nos cobrimos. So me diz o que precisa.`,
     }
     return m[lang]()
   } else {
@@ -579,10 +578,12 @@ export function formatAskForRecipient(amount: number, lang: Lang = 'en'): string
 
 export function formatInvalidSendFormat(lang: Lang = 'en'): string {
   const m = {
-    en: () => `I couldn't catch the details. Try something like:\n\n"send 5 to +573001234567"`,
-    es: () => `No pude entender los detalles. Intenta algo como:\n\n"enviar 5 a +573001234567"`,
+    en: () =>
+      `I didn't catch that. Just tell me who you want to send to and how much — like "send 5 to +573001234567".`,
+    es: () =>
+      `No te cache. Dime a quien quieres enviar y cuanto — tipo "enviar 5 a +573001234567".`,
     pt: () =>
-      `Nao consegui entender os detalhes. Tente algo como:\n\n"enviar 5 para +573001234567"`,
+      `Nao peguei. Me diz pra quem quer enviar e quanto — tipo "enviar 5 para +573001234567".`,
   }
   return m[lang]()
 }
@@ -624,12 +625,9 @@ export function formatSettingsMessage(phoneNumber: string, lang: Lang = 'en'): s
 
 export function formatRateLimitedMessage(lang: Lang = 'en'): string {
   const m = {
-    en: () =>
-      `I'm a bit busy right now. Try saying exactly what you need — like "balance" or "send 5 to +57..."`,
-    es: () =>
-      `Estoy un poco ocupado. Intenta decir exactamente lo que necesitas — como "saldo" o "enviar 5 a +57..."`,
-    pt: () =>
-      `Estou um pouco ocupado. Tente dizer exatamente o que precisa — como "saldo" ou "enviar 5 para +57..."`,
+    en: () => `I'm a bit busy right now. Try again in a moment — just tell me what you need.`,
+    es: () => `Estoy un poco ocupado. Intenta de nuevo en un momento — solo dime que necesitas.`,
+    pt: () => `Estou um pouco ocupado. Tenta de novo em um momento — so me diz o que precisa.`,
   }
   return m[lang]()
 }
@@ -641,37 +639,40 @@ export function formatUnknownCommandMessage(
 ): string {
   if (lang === 'es' && dialect !== 'neutral') {
     const d: Record<string, string> = {
-      co: `Hmm, no te entendi. Intenta "saldo", "enviar 5 a +57...", o "ayuda".`,
-      mx: `Hmm, no te entendi. Intenta "saldo", "enviar 5 a +52...", o "ayuda".`,
-      ar: `Hmm, no te entendi. Proba "saldo", "enviar 5 a +54...", o "ayuda".`,
-      ve: `Hmm, no te entendi. Intenta "saldo", "enviar 5 a +58...", o "ayuda".`,
+      co: `Hmm, no te entendi. Puedes ver tu saldo, enviar plata, o decirme que necesitas.`,
+      mx: `Hmm, no te entendi. Puedes ver tu saldo, enviar dinero, o decirme que necesitas.`,
+      ar: `Hmm, no te entendi. Podes ver tu saldo, enviar plata, o decirme que necesitas.`,
+      ve: `Hmm, no te entendi. Puedes ver tu saldo, enviar plata, o decirme que necesitas.`,
     }
     if (d[dialect]) return d[dialect]
   }
   const m = {
-    en: () => `Hmm, not sure what you mean. Try "balance", "send 5 to +57...", or "help".`,
-    es: () => `Hmm, no te pille. Intenta "saldo", "enviar 5 a +57...", o "ayuda".`,
-    pt: () => `Hmm, nao entendi. Tenta "saldo", "enviar 5 para +55...", ou "ajuda".`,
+    en: () =>
+      `Hmm, not sure what you mean. You can check your balance, send money, or just tell me what you need.`,
+    es: () => `Hmm, no te entendi. Puedes ver tu saldo, enviar dinero, o decirme que necesitas.`,
+    pt: () =>
+      `Hmm, nao entendi. Voce pode ver seu saldo, enviar dinheiro, ou me dizer o que precisa.`,
   }
   return m[lang]()
 }
 
 export function formatTransactionBlockedMessage(reason: string, lang: Lang = 'en'): string {
   const m = {
-    en: () => `Transaction blocked.\n\n${reason}\n\nThese limits help keep your account secure.`,
+    en: () =>
+      `This send is paused.\n\n${reason}\n\nYour funds are safe — these limits protect your account.`,
     es: () =>
-      `Transaccion bloqueada.\n\n${reason}\n\nEstos limites ayudan a mantener tu cuenta segura.`,
+      `Este envio quedo en pausa.\n\n${reason}\n\nTus fondos estan seguros — estos limites protegen tu cuenta.`,
     pt: () =>
-      `Transacao bloqueada.\n\n${reason}\n\nEstes limites ajudam a manter sua conta segura.`,
+      `Esse envio ficou em pausa.\n\n${reason}\n\nSeus fundos estao seguros — esses limites protegem sua conta.`,
   }
   return m[lang]()
 }
 
 export function formatTransferFailedMessage(errorMessage: string, lang: Lang = 'en'): string {
   const m = {
-    en: () => `Transfer failed.\n\n${errorMessage}`,
-    es: () => `Transferencia fallida.\n\n${errorMessage}`,
-    pt: () => `Transferencia falhou.\n\n${errorMessage}`,
+    en: () => `The send didn't go through. Your balance wasn't affected.\n\n${errorMessage}`,
+    es: () => `El envio no paso. Tu saldo no cambio.\n\n${errorMessage}`,
+    pt: () => `O envio nao foi. Seu saldo nao mudou.\n\n${errorMessage}`,
   }
   return m[lang]()
 }
@@ -679,12 +680,9 @@ export function formatTransferFailedMessage(errorMessage: string, lang: Lang = '
 export function formatSetupRequiredMessage(phoneNumber: string, lang: Lang = 'en'): string {
   const setupUrl = `${FRONTEND_URL}/setup?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
-    en: () =>
-      `You need to complete your wallet setup before sending.\n\nPlease finish setup here:\n${setupUrl}`,
-    es: () =>
-      `Necesitas completar la configuracion de tu billetera antes de enviar.\n\nCompleta la configuracion aqui:\n${setupUrl}`,
-    pt: () =>
-      `Voce precisa completar a configuracao da sua carteira antes de enviar.\n\nComplete a configuracao aqui:\n${setupUrl}`,
+    en: () => `Almost there! Finish your setup and you're good to send:\n${setupUrl}`,
+    es: () => `Ya casi! Termina tu setup y listo para enviar:\n${setupUrl}`,
+    pt: () => `Quase la! Termine seu setup e ja pode enviar:\n${setupUrl}`,
   }
   return m[lang]()
 }
@@ -714,9 +712,9 @@ export function formatTieredDailyLimitExceededMessage(
 ): string {
   if (emailVerified) {
     const m = {
-      en: `You've reached your daily limit of $${dailyLimit}. Try again tomorrow.`,
-      es: `Has alcanzado tu limite diario de $${dailyLimit}. Intenta de nuevo manana.`,
-      pt: `Voce atingiu seu limite diario de $${dailyLimit}. Tente novamente amanha.`,
+      en: `You've reached your daily limit of $${dailyLimit}. Your limit resets tomorrow.`,
+      es: `Llegaste a tu limite diario de $${dailyLimit}. Tu limite se renueva manana.`,
+      pt: `Voce atingiu seu limite diario de $${dailyLimit}. Seu limite renova amanha.`,
     }
     return m[lang]
   } else {
@@ -920,19 +918,17 @@ export function formatCommandErrorMessage(lang: Lang = 'en'): string {
 export function formatGreetingMessage(lang: Lang = 'en', dialect: Dialect = 'neutral'): string {
   if (lang === 'es' && dialect !== 'neutral') {
     const d: Record<string, string> = {
-      co: `Hola! Que necesitas? Ver tu saldo, enviar plata, o di "ayuda" para ver todo.`,
-      mx: `Hola! Que necesitas? Ver tu saldo, enviar dinero, o di "ayuda" para ver todo.`,
-      ar: `Hola! Que necesitas? Podes ver tu saldo, enviar plata, o decime "ayuda" para ver todo.`,
-      ve: `Hola! Que necesitas? Ver tu saldo, enviar plata, o di "ayuda" para ver todo.`,
+      co: `Hola! Que necesitas? Puedo ver tu saldo o enviar plata — solo dime.`,
+      mx: `Hola! Que necesitas? Puedo ver tu saldo o enviar dinero — solo dime.`,
+      ar: `Hola! Que necesitas? Puedo ver tu saldo o enviar plata — solo decime.`,
+      ve: `Hola! Que necesitas? Puedo ver tu saldo o enviar plata — solo dime.`,
     }
     if (d[dialect]) return d[dialect]
   }
   const m = {
-    en: () =>
-      `Hey! What do you need? Check your balance, send money, or say "help" to see everything.`,
-    es: () =>
-      `Hola! Que necesitas? Puedes ver tu saldo, enviar dinero, o di "ayuda" para ver todo.`,
-    pt: () => `Oi! O que precisa? Ver saldo, enviar dinheiro, ou diga "ajuda" pra ver tudo.`,
+    en: () => `Hey! What do you need? I can check your balance or send money — just tell me.`,
+    es: () => `Hola! Que necesitas? Puedo ver tu saldo o enviar dinero — solo dime.`,
+    pt: () => `Oi! O que precisa? Posso ver seu saldo ou enviar dinheiro — so me diz.`,
   }
   return m[lang]()
 }
@@ -1067,9 +1063,9 @@ export function formatNoPendingTransfer(lang: Lang): string {
 
 export function formatSelfSendMessage(lang: Lang): string {
   const m = {
-    en: () => `You cannot send money to yourself.`,
-    es: () => `No puedes enviarte dinero a ti mismo.`,
-    pt: () => `Voce nao pode enviar dinheiro para voce mesmo.`,
+    en: () => `That number is you! Want me to check your balance instead?`,
+    es: () => `Ese numero eres tu! Quieres que te muestre tu saldo?`,
+    pt: () => `Esse numero e voce! Quer que eu veja seu saldo?`,
   }
   return m[lang]()
 }
@@ -1144,9 +1140,9 @@ export function formatAmountInvalidMessage(lang: Lang): string {
 
 export function formatInvalidPhoneNumberMessage(lang: Lang): string {
   const m = {
-    en: () => `That doesn't look like a phone number.`,
-    es: () => `Eso no parece un numero de telefono.`,
-    pt: () => `Isso nao parece um numero de telefone.`,
+    en: () => `Didn't catch the number. Try with country code, like +57 or +52.`,
+    es: () => `No capte el numero. Intenta con codigo de pais, tipo +57 o +52.`,
+    pt: () => `Nao peguei o numero. Tenta com codigo do pais, tipo +55 ou +57.`,
   }
   return m[lang]()
 }
@@ -1192,11 +1188,9 @@ export function formatConfirmationPromptWithWarning(
 export function formatInviteSentToSender(recipientPhone: string, lang: Lang = 'en'): string {
   const phone = recipientPhone
   const m = {
-    en: () =>
-      `${phone} isn't on Sippy yet.\n\nWe sent them an invite. We'll let you know when they join.`,
-    es: () =>
-      `${phone} no esta en Sippy todavia.\n\nLe enviamos una invitacion. Te avisamos cuando se una.`,
-    pt: () => `${phone} ainda nao esta no Sippy.\n\nEnviamos um convite. Avisamos quando entrar.`,
+    en: () => `We invited ${phone} to Sippy! We'll let you know when they join so you can send.`,
+    es: () => `Invitamos a ${phone} a Sippy! Te avisamos cuando se una para que le puedas enviar.`,
+    pt: () => `Convidamos ${phone} pro Sippy! Avisamos quando entrar pra voce poder enviar.`,
   }
   return m[lang]()
 }
@@ -1205,11 +1199,11 @@ export function formatInviteDeliveryFailed(recipientPhone: string, lang: Lang = 
   const phone = recipientPhone
   const m = {
     en: () =>
-      `${phone} isn't on Sippy yet.\n\nWe couldn't reach them right now, but if they join we'll let you know.`,
+      `${phone} isn't on Sippy yet. We couldn't reach them right now, but if they join we'll let you know.`,
     es: () =>
-      `${phone} no esta en Sippy todavia.\n\nNo pudimos contactarles ahora, pero si se unen te avisamos.`,
+      `${phone} aun no esta en Sippy. No los pudimos contactar ahora, pero si se unen te avisamos.`,
     pt: () =>
-      `${phone} ainda nao esta no Sippy.\n\nNao conseguimos contata-los agora, mas se entrarem avisamos.`,
+      `${phone} ainda nao esta no Sippy. Nao conseguimos contata-los agora, mas se entrarem avisamos.`,
   }
   return m[lang]()
 }
@@ -1217,9 +1211,9 @@ export function formatInviteDeliveryFailed(recipientPhone: string, lang: Lang = 
 export function formatInviteAlreadyPending(recipientPhone: string, lang: Lang = 'en'): string {
   const phone = recipientPhone
   const m = {
-    en: () => `We already invited ${phone}. We'll let you know when they join.`,
-    es: () => `Ya invitamos a ${phone}. Te avisamos cuando se una.`,
-    pt: () => `Ja convidamos ${phone}. Avisamos quando entrar.`,
+    en: () => `${phone} already has an invite from you. We'll let you know when they join!`,
+    es: () => `${phone} ya tiene una invitacion tuya. Te avisamos cuando se una!`,
+    pt: () => `${phone} ja tem um convite seu. Avisamos quando entrar!`,
   }
   return m[lang]()
 }

@@ -10,9 +10,9 @@ type ErrorMessages = Record<string, Record<Lang, string>>
 
 const ERROR_MAP: ErrorMessages = {
   insufficient: {
-    en: 'Insufficient balance or network fees. Please check your balance.',
-    es: 'Saldo insuficiente o tarifas de red. Por favor verifica tu saldo.',
-    pt: 'Saldo insuficiente ou taxas de rede. Por favor verifique seu saldo.',
+    en: 'Not enough balance for this one. Want me to check your balance?',
+    es: 'No alcanza el saldo para este. Quieres que revise tu saldo?',
+    pt: 'Saldo nao e suficiente pra esse. Quer que eu veja seu saldo?',
   },
   network: {
     en: 'Network issue. Please try again in a moment.',
@@ -20,9 +20,9 @@ const ERROR_MAP: ErrorMessages = {
     pt: 'Erro de rede. Por favor tente novamente em um momento.',
   },
   wallet: {
-    en: 'Wallet error. Please send "start" to refresh your session.',
-    es: 'Error de billetera. Por favor envia "comenzar" para renovar tu sesion.',
-    pt: 'Erro de carteira. Por favor envie "comecar" para renovar sua sessao.',
+    en: "Wallet hiccup. Send me any message and I'll reconnect you.",
+    es: 'Fallo de billetera. Mandame cualquier mensaje y te reconecto.',
+    pt: 'Erro de carteira. Me manda qualquer mensagem e eu te reconecto.',
   },
   whatsapp: {
     en: 'Messaging error. Your transaction may have succeeded — check "balance".',
@@ -30,14 +30,14 @@ const ERROR_MAP: ErrorMessages = {
     pt: 'Erro de mensagem. Sua transacao pode ter sido concluida — verifique "saldo".',
   },
   session: {
-    en: 'Session expired. Send "start" to renew your session.',
-    es: 'Sesion expirada. Envia "comenzar" para renovar tu sesion.',
-    pt: 'Sessao expirada. Envie "comecar" para renovar sua sessao.',
+    en: 'I need to reconnect you. Just send me any message.',
+    es: 'Necesito reconectarte. Mandame cualquier mensaje.',
+    pt: 'Preciso te reconectar. Me manda qualquer mensagem.',
   },
   transaction: {
-    en: 'Transaction failed. Please try again or contact support.',
-    es: 'Transaccion fallida. Por favor intenta de nuevo o contacta soporte.',
-    pt: 'Transacao falhou. Por favor tente novamente ou entre em contato com o suporte.',
+    en: "That didn't go through. Try again — your balance wasn't affected.",
+    es: 'Eso no paso. Intenta de nuevo — tu saldo no cambio.',
+    pt: 'Nao foi dessa vez. Tente de novo — seu saldo nao mudou.',
   },
   generic: {
     en: 'An error occurred. Please try again or contact support.',

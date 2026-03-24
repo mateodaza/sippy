@@ -30,6 +30,7 @@ const TEMPLATES = {
   fundReceived: 'fund_received',
   friendInvite: 'friend_invite',
   inviteCompleted: 'invite_completed',
+  setupCompleted: 'setup_completed',
 } as const
 
 /**
@@ -210,5 +211,34 @@ export async function notifyInviteCompleted(opts: {
       maskPhone(senderPhone),
       error
     )
+  }
+}
+
+/**
+ * Notify a user that their wallet setup is complete (return magnet).
+ *
+ * Pulls user back to WhatsApp after finishing onboarding in the browser.
+ * Only call this on first-time setup — caller must check prior state.
+ *
+ * Template: setup_completed
+ * No body parameters.
+ *
+ * Best-effort: logs errors but never throws.
+ */
+export async function notifySetupCompleted(opts: { phone: string; lang: string }): Promise<void> {
+  const { phone, lang } = opts
+  const templateLang = TEMPLATE_LANG_MAP[lang] || 'en'
+
+  try {
+    const result = await sendTemplateMessage(phone, TEMPLATES.setupCompleted, templateLang, [])
+    if (result) {
+      logger.info(`Setup completed notification sent to ${maskPhone(phone)}`)
+    } else {
+      logger.warn(
+        `Setup completed notification failed for ${maskPhone(phone)} — template may not be approved yet`
+      )
+    }
+  } catch (error) {
+    logger.error('Failed to send setup completed notification to %s: %o', maskPhone(phone), error)
   }
 }

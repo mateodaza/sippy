@@ -13,7 +13,7 @@ test.group('sanitizeOutboundMessage | Empty/whitespace', () => {
     const result = sanitizeOutboundMessage('', 'en')
     assert.isTrue(result.blocked)
     assert.include(result.violations, 'empty-message')
-    assert.include(result.text, 'something went wrong')
+    assert.include(result.text, 'Something went wrong')
   })
 
   test('returns safe fallback for whitespace-only', ({ assert }) => {
@@ -25,13 +25,13 @@ test.group('sanitizeOutboundMessage | Empty/whitespace', () => {
   test('returns Spanish fallback when lang is es', ({ assert }) => {
     const result = sanitizeOutboundMessage('', 'es')
     assert.isTrue(result.blocked)
-    assert.include(result.text, 'algo salio mal')
+    assert.include(result.text, 'Algo salio mal')
   })
 
   test('returns Portuguese fallback when lang is pt', ({ assert }) => {
     const result = sanitizeOutboundMessage('', 'pt')
     assert.isTrue(result.blocked)
-    assert.include(result.text, 'algo deu errado')
+    assert.include(result.text, 'Algo deu errado')
   })
 })
 

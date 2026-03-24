@@ -39,6 +39,8 @@ import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup
 import { velocityService } from '#services/velocity_service'
 import { GAS_MIN_BALANCE_ETH } from '@sippy/shared'
 import { checkAndNotifySender } from '#services/invite.service'
+import { notifySetupCompleted } from '#services/notification.service'
+import { getUserLanguage } from '#services/db'
 
 // Concurrency guard: prevent duplicate web sends from the same user
 const webActiveSends = new Set<string>()
@@ -330,6 +332,14 @@ export default class EmbeddedWalletController {
       logger.info(
         `Spend permission registered for ${maskPhone(canonicalPhone)} with $${onchainAllowance}/day limit`
       )
+
+      // Return magnet: send setup_completed template on first-time setup only.
+      // Best-effort — must never fail the endpoint after permission is already written.
+      try {
+        await maybeNotifySetupCompleted(canonicalPhone)
+      } catch (err) {
+        logger.warn('setup_completed notification failed (non-fatal): %o', err)
+      }
 
       return response.json({ success: true, permissionHash, dailyLimit: onchainAllowance })
     } catch (error) {
@@ -933,4 +943,50 @@ export default class EmbeddedWalletController {
       return response.status(500).json({ error: 'Internal server error' })
     }
   }
+}
+
+// ── Setup completed notification (extracted for testability) ──────────────────
+
+type SetupNotifyDeps = {
+  resolveUserPrefKey: (phone: string) => Promise<string>
+  findPref: (
+    prefKey: string
+  ) => Promise<{ setupNotifiedAt: unknown; save: () => Promise<unknown> } | null>
+  getUserLanguage: (phone: string) => Promise<string | null>
+  notifySetupCompleted: (opts: { phone: string; lang: string }) => Promise<void>
+  now: () => DateTime
+}
+
+const defaultDeps: SetupNotifyDeps = {
+  resolveUserPrefKey,
+  findPref: async (prefKey) => UserPreference.query().where('phoneNumber', prefKey).first(),
+  getUserLanguage,
+  notifySetupCompleted: (opts) => notifySetupCompleted(opts).catch(() => {}),
+  now: () => DateTime.now(),
+}
+
+let activeDeps = defaultDeps
+
+export async function maybeNotifySetupCompleted(
+  canonicalPhone: string,
+  deps: SetupNotifyDeps = activeDeps
+): Promise<boolean> {
+  const prefKey = await deps.resolveUserPrefKey(canonicalPhone)
+  const pref = await deps.findPref(prefKey)
+  if (pref && !pref.setupNotifiedAt) {
+    pref.setupNotifiedAt = deps.now()
+    await pref.save()
+    const lang = (await deps.getUserLanguage(canonicalPhone)) ?? 'en'
+    await deps.notifySetupCompleted({ phone: canonicalPhone, lang })
+    return true
+  }
+  return false
+}
+
+export function __setSetupNotifyDepsForTest(overrides: Partial<SetupNotifyDeps>) {
+  activeDeps = { ...defaultDeps, ...overrides }
+}
+
+export function __resetSetupNotifyDeps() {
+  activeDeps = defaultDeps
 }
