@@ -284,9 +284,9 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
   }
 
   // Strip greeting/filler prefix and retry send patterns
-  // Catches: "Hola envia 5 a +57...", "Hey send 10 to ...", "Oi envia 5 para ..."
+  // Catches: "Hola envia 5 a +57...", "Hey send 10 to ...", "Listo envia 5 a +57..."
   const GREETING_PREFIX =
-    /^(?:hola|hey|hi|oi|buenas|oye|epa|que tal|buenos d[ií]as|buenas (?:tardes|noches))[,!.;]?\s+/i
+    /^(?:hola|hey|hi|oi|buenas|oye|epa|que tal|buenos d[ií]as|buenas (?:tardes|noches)|listo|dale|vale|va|ok[aá]y?|ya|bueno|bien|si|s[ií]|sure|yes|ready)[,!.;]?\s+/i
   const withoutGreeting = trimmedText.replace(GREETING_PREFIX, '')
   if (withoutGreeting !== trimmedText) {
     for (const { pattern, lang } of SEND_PATTERNS) {
@@ -558,12 +558,15 @@ export async function parseMessage(
           if (reparse.command === 'send' && reparse.amount && reparse.recipient) {
             // Safety: verify amount and recipient from LLM output exist in the original text.
             // This prevents prompt injection from fabricating amounts or recipients.
+            // Compare digits only (strip spaces/dashes from original) so "+57 315 3007266"
+            // matches "573153007266".
             const amountStr = String(reparse.amount)
             const amountComma = amountStr.replace('.', ',')
             const recipientDigits = reparse.recipient.replace(/\+/g, '')
+            const textDigitsOnly = text.replace(/[\s\-().]/g, '')
             if (
               (!text.includes(amountStr) && !text.includes(amountComma)) ||
-              !text.includes(recipientDigits)
+              !textDigitsOnly.includes(recipientDigits)
             ) {
               logger.warn(
                 'normalizeSendCommand: LLM output contains data not in original text — original: "%s", normalized: "%s"',

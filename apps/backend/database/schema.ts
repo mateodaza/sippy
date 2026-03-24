@@ -186,6 +186,8 @@ export class UserPreferenceSchema extends BaseModel {
     'blocked',
     'tosAcceptedAt',
     'tosVersion',
+    'emailNudgeSentAt',
+    'setupNotifiedAt',
   ] as const
   $columns = UserPreferenceSchema.$columns
   @column()
@@ -210,6 +212,10 @@ export class UserPreferenceSchema extends BaseModel {
   declare tosAcceptedAt: DateTime | null
   @column()
   declare tosVersion: string | null
+  @column.dateTime()
+  declare emailNudgeSentAt: DateTime | null
+  @column.dateTime()
+  declare setupNotifiedAt: DateTime | null
 }
 
 export class WebSendLogSchema extends BaseModel {

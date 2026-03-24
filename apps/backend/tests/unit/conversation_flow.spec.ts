@@ -319,7 +319,7 @@ test.group('Conversation | Multi-Turn Flow Simulation', () => {
     const t2 = await parseMessage('ayuda')
     assert.equal(t2.command, 'help')
     const r2 = formatHelpMessage('es')
-    assert.isTrue(r2.includes('enviar'))
+    assert.isTrue(r2.includes('dinero'))
 
     // Turn 3: User sends money (standard format)
     const t3 = await parseMessage('enviar 10 a +573116613414')

@@ -581,7 +581,7 @@ export function formatInvalidSendFormat(lang: Lang = 'en'): string {
     en: () =>
       `I didn't catch that. Just tell me who you want to send to and how much — like "send 5 to +573001234567".`,
     es: () =>
-      `No te cache. Dime a quien quieres enviar y cuanto — tipo "enviar 5 a +573001234567".`,
+      `No te entendi. Dime a quien quieres enviar y cuanto — tipo "enviar 5 a +573001234567".`,
     pt: () =>
       `Nao peguei. Me diz pra quem quer enviar e quanto — tipo "enviar 5 para +573001234567".`,
   }

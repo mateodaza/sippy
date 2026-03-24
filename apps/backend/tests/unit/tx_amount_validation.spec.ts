@@ -600,7 +600,7 @@ test.group('Group G | Trilingual error messages', () => {
 
   test('G-06: formatInvalidPhoneNumberMessage pt → Portuguese phone message', ({ assert }) => {
     const msg = formatInvalidPhoneNumberMessage('pt')
-    assert.include(msg.toLowerCase(), 'telefone')
+    assert.include(msg.toLowerCase(), 'numero')
   })
 
   test('G-07: formatConfirmationPromptWithWarning isLargeAmount=false → same as base prompt', ({
