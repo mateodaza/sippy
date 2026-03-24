@@ -1240,9 +1240,30 @@ function SettingsContent() {
               )}
               {(emailSectionStep === 'verified' ||
                 emailSectionStep === 'change_entry' ||
-                emailSectionStep === 'change_sent') && (
+                emailSectionStep === 'change_sent') &&
+              walletStatus?.dailyLimit != null &&
+              walletStatus.dailyLimit < tierMax ? (
+                <div className="mt-3 border border-green-400 bg-green-50 rounded-lg p-3">
+                  <p className="text-sm text-green-800 mb-2">
+                    {t('settings.upgradeLimitCta', lang)} ${tierMax}
+                    {t('settings.perDay', lang)}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setNewLimit(String(tierMax))
+                      setPermissionStatus('idle')
+                      setShowLimitPicker(true)
+                    }}
+                    className="text-sm font-semibold text-green-700 underline"
+                  >
+                    {t('settings.upgradeNow', lang)}
+                  </button>
+                </div>
+              ) : emailSectionStep === 'verified' ||
+                emailSectionStep === 'change_entry' ||
+                emailSectionStep === 'change_sent' ? (
                 <p className="text-xs text-green-600 mt-2">✓ {t('settings.emailVerified', lang)}</p>
-              )}
+              ) : null}
               {(emailSectionStep === 'unverified' ||
                 emailSectionStep === 'no_email' ||
                 emailSectionStep === 'add_sent' ||
