@@ -1,4 +1,5 @@
-import { Link, usePage } from '@adonisjs/inertia/react'
+import { Link } from '@adonisjs/inertia/react'
+import { usePage } from '@inertiajs/react'
 import type { ReactNode } from 'react'
 
 interface AuthUser {
