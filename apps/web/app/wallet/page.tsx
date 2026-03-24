@@ -6,6 +6,7 @@ import { Info } from 'lucide-react'
 import { useSendUserOperation } from '@coinbase/cdp-hooks'
 import { getStoredToken, clearToken } from '@/lib/auth'
 import { useSessionGuard } from '@/lib/useSessionGuard'
+import { ChannelPicker, ResendButton } from '../../components/shared/ChannelPicker'
 import {
   getActivity,
   formatAddress,
@@ -408,13 +409,13 @@ function WalletContent() {
                   {t('wallet.phoneFromWhatsapp', lang)}
                 </p>
               )}
-              <button
-                onClick={() => handleReAuthSendOtp()}
-                disabled={reAuthLoading || !reAuthPhone || !isCdpConfigured}
-                className="w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {reAuthLoading ? t('wallet.sending', lang) : t('wallet.sendCode', lang)}
-              </button>
+              <ChannelPicker
+                canSwitch={reAuthCanSwitchChannel}
+                isLoading={reAuthLoading}
+                disabled={!reAuthPhone || !isCdpConfigured}
+                lang={lang}
+                onSend={handleReAuthSendOtp}
+              />
             </>
           )}
 
@@ -445,25 +446,12 @@ function WalletContent() {
               >
                 {reAuthLoading ? t('wallet.verifying', lang) : t('wallet.verify', lang)}
               </button>
-              {reAuthCanSwitchChannel && (
-                <button
-                  onClick={() => handleReAuthSendOtp(reAuthChannel === 'sms' ? 'whatsapp' : 'sms')}
-                  disabled={reAuthLoading}
-                  className="w-full mt-3 text-sm text-brand-primary hover:text-brand-primary-hover py-2"
-                >
-                  {reAuthChannel === 'sms'
-                    ? lang === 'es'
-                      ? 'No llego? Enviar por WhatsApp'
-                      : lang === 'pt'
-                        ? 'Nao chegou? Enviar por WhatsApp'
-                        : "Didn't get it? Send via WhatsApp"
-                    : lang === 'es'
-                      ? 'Enviar por SMS'
-                      : lang === 'pt'
-                        ? 'Enviar por SMS'
-                        : 'Send via SMS instead'}
-                </button>
-              )}
+              <ResendButton
+                channel={reAuthChannel}
+                isLoading={reAuthLoading}
+                lang={lang}
+                onResend={() => handleReAuthSendOtp(reAuthChannel)}
+              />
               <button
                 onClick={() => setReAuthOtp('')}
                 className="w-full mt-2 text-[var(--text-secondary)] py-2"
@@ -526,13 +514,13 @@ function WalletContent() {
                   disabled={!!reAuthPhone}
                   className="w-full p-3 border rounded-lg mb-3 text-[var(--text-primary)] disabled:bg-[var(--bg-tertiary)] disabled:cursor-not-allowed"
                 />
-                <button
-                  onClick={() => handleReAuthSendOtp()}
-                  disabled={reAuthLoading || !reAuthPhone}
-                  className="w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {reAuthLoading ? t('wallet.sending', lang) : t('wallet.sendCode', lang)}
-                </button>
+                <ChannelPicker
+                  canSwitch={reAuthCanSwitchChannel}
+                  isLoading={reAuthLoading}
+                  disabled={!reAuthPhone}
+                  lang={lang}
+                  onSend={handleReAuthSendOtp}
+                />
               </>
             )}
             {reAuthStep === 'otp' && (
@@ -562,27 +550,12 @@ function WalletContent() {
                 >
                   {reAuthLoading ? t('wallet.verifying', lang) : t('wallet.verify', lang)}
                 </button>
-                {reAuthCanSwitchChannel && (
-                  <button
-                    onClick={() =>
-                      handleReAuthSendOtp(reAuthChannel === 'sms' ? 'whatsapp' : 'sms')
-                    }
-                    disabled={reAuthLoading}
-                    className="w-full mt-2 text-xs text-brand-primary hover:text-brand-primary-hover py-1"
-                  >
-                    {reAuthChannel === 'sms'
-                      ? lang === 'es'
-                        ? 'Enviar por WhatsApp'
-                        : lang === 'pt'
-                          ? 'Enviar por WhatsApp'
-                          : 'Send via WhatsApp instead'
-                      : lang === 'es'
-                        ? 'Enviar por SMS'
-                        : lang === 'pt'
-                          ? 'Enviar por SMS'
-                          : 'Send via SMS instead'}
-                  </button>
-                )}
+                <ResendButton
+                  channel={reAuthChannel}
+                  isLoading={reAuthLoading}
+                  lang={lang}
+                  onResend={() => handleReAuthSendOtp(reAuthChannel)}
+                />
               </>
             )}
           </div>

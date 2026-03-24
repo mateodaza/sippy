@@ -205,7 +205,16 @@ async function goToOtpStep(phone = '+573001234567') {
     setInputValue(input, phone)
   })
   await act(async () => {
-    findButton('Send Verification Code')!.click()
+    // Non-+1 shows two buttons (SMS / WhatsApp); +1 shows single WhatsApp button
+    const smsBtn = findButton('SMS')
+    const waBtn = findButton('WhatsApp')
+    if (smsBtn) {
+      smsBtn.click()
+    } else if (waBtn) {
+      waBtn.click()
+    } else {
+      throw new Error('Neither SMS nor WhatsApp button found on phone step')
+    }
   })
 }
 

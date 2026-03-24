@@ -33,6 +33,7 @@ import { parseUnits } from 'viem'
 import { SippyPhoneInput } from '../../components/ui/phone-input'
 import { isBlockedPrefix, isNANP } from '@sippy/shared'
 import { getDefaultChannel, canSwitchChannel } from '../../lib/auth-mode'
+import { ChannelPicker, ResendButton } from '../../components/shared/ChannelPicker'
 import { CDPProviderCustomAuth } from '../providers/cdp-provider'
 
 /**
@@ -1013,18 +1014,15 @@ function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string
                 {t('setup.phoneFromWhatsapp', lang)}
               </p>
             )}
-            <button
-              onClick={() => handleSendOtp()}
+            <ChannelPicker
+              canSwitch={canSwitchChannel(phoneNumber)}
+              isLoading={isLoading}
               disabled={
-                isLoading ||
-                !phoneNumber ||
-                phoneNumber.replace(/\D/g, '').length < 7 ||
-                !isCdpConfigured
+                !phoneNumber || phoneNumber.replace(/\D/g, '').length < 7 || !isCdpConfigured
               }
-              className="w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? t('setup.sending', lang) : t('setup.sendCode', lang)}
-            </button>
+              lang={lang}
+              onSend={handleSendOtp}
+            />
           </div>
         )}
 
@@ -1059,29 +1057,12 @@ function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string
             >
               {isLoading ? t('setup.verifying', lang) : t('setup.verify', lang)}
             </button>
-            {/* Channel fallback for non-+1: switch between SMS and WhatsApp */}
-            {canSwitchChannel(phoneNumber) && (
-              <button
-                onClick={() => {
-                  const alt: OtpChannel = otpChannel === 'sms' ? 'whatsapp' : 'sms'
-                  handleSendOtp(alt)
-                }}
-                disabled={isLoading}
-                className="w-full mt-3 text-sm text-brand-primary hover:text-brand-primary-hover py-2"
-              >
-                {otpChannel === 'sms'
-                  ? lang === 'es'
-                    ? 'No llego? Enviar por WhatsApp'
-                    : lang === 'pt'
-                      ? 'Nao chegou? Enviar por WhatsApp'
-                      : "Didn't get it? Send via WhatsApp"
-                  : lang === 'es'
-                    ? 'Enviar por SMS'
-                    : lang === 'pt'
-                      ? 'Enviar por SMS'
-                      : 'Send via SMS instead'}
-              </button>
-            )}
+            <ResendButton
+              channel={otpChannel}
+              isLoading={isLoading}
+              lang={lang}
+              onResend={() => handleSendOtp(otpChannel)}
+            />
             <button
               onClick={() => setStep('phone')}
               className="w-full mt-2 text-[var(--text-secondary)] py-2"
@@ -1252,7 +1233,6 @@ function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-[var(--text-secondary)]">
           <p>{t('setup.poweredBy', lang)}</p>
-          <p className="mt-1">Network: {NETWORK}</p>
           {SIPPY_SPENDER_ADDRESS && (
             <p className="mt-1 font-mono text-[10px] truncate">Spender: {SIPPY_SPENDER_ADDRESS}</p>
           )}
