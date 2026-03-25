@@ -297,7 +297,32 @@ export async function markAsRead(messageId: string): Promise<any> {
     return await response.json()
   } catch (error) {
     logger.error('Failed to mark message as read: %s', (error as Error).message)
-    // Non-critical error, don't throw
+    return null
+  }
+}
+
+/**
+ * Mark as read + show "typing..." indicator (lasts up to 25s or until reply)
+ */
+export async function markAsReadWithTyping(messageId: string): Promise<any> {
+  try {
+    const response = await fetch(`${WHATSAPP_API_URL}/${PHONE_NUMBER_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+        typing_indicator: { type: 'text' },
+      }),
+    })
+
+    return await response.json()
+  } catch (error) {
+    logger.error('Failed to mark as read with typing: %s', (error as Error).message)
     return null
   }
 }

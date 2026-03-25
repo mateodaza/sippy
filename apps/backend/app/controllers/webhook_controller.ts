@@ -17,7 +17,7 @@ import type { WebhookPayload, ParsedCommand, PendingTransaction, PartialSend } f
 import '#types/container'
 import type { Lang } from '#utils/messages'
 import { parseMessage, parseAndValidateAmount } from '#utils/message_parser'
-import { sendTextMessage, markAsRead } from '#services/whatsapp.service'
+import { sendTextMessage, markAsReadWithTyping } from '#services/whatsapp.service'
 import {
   getUserLanguage,
   setUserLanguage,
@@ -936,8 +936,8 @@ export default class WebhookController {
 
     logger.info('Message from %s: "%s"', maskPhone(from), text)
 
-    // Mark as read (non-blocking, best-effort)
-    await markAsRead(messageId)
+    // Mark as read + show typing indicator (non-blocking, best-effort)
+    await markAsReadWithTyping(messageId)
 
     // ── Non-text messages (image, audio, sticker, video, location) ────
     if (!text && message.type && message.type !== 'text' && message.type !== 'interactive') {
