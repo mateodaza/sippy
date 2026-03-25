@@ -895,10 +895,11 @@ export default class EmbeddedWalletController {
   /**
    * GET /api/profile
    *
-   * Public endpoint — returns wallet address, canonical phone, and phone_visible
-   * preference for the given phone number. Used by public profile pages.
+   * Authenticated endpoint — returns wallet address for the requesting user's
+   * own phone number only. Rejects requests for other users' profiles.
    */
-  async getProfile({ request, response }: HttpContext) {
+  async getProfile(ctx: HttpContext) {
+    const { request, response } = ctx
     try {
       const phone = request.input('phone') as string | undefined
       if (!phone || typeof phone !== 'string') {
@@ -908,6 +909,20 @@ export default class EmbeddedWalletController {
       const canonicalPhone = canonicalizePhone(phone)
       if (!canonicalPhone) {
         return response.status(400).json({ error: 'Invalid phone number' })
+      }
+
+      // Ownership check: JWT phone must match requested phone
+      const jwtPhone = ctx.cdpUser?.phoneNumber
+      if (!jwtPhone) {
+        return response.status(401).json({ error: 'Unauthorized' })
+      }
+
+      const jwtCanonical = canonicalizePhone(jwtPhone)
+      const requestedDigits = canonicalPhone.replace(/\D/g, '')
+      const jwtDigits = jwtCanonical ? jwtCanonical.replace(/\D/g, '') : ''
+
+      if (requestedDigits !== jwtDigits) {
+        return response.status(403).json({ error: 'You can only view your own profile' })
       }
 
       // Query phone_registry for wallet_address

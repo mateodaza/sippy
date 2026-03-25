@@ -1,38 +1,43 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server'
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || (process.env.NODE_ENV === 'production' ? (() => { throw new Error('NEXT_PUBLIC_BACKEND_URL is required in production') })() : 'http://localhost:3001');
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? (() => {
+        throw new Error('NEXT_PUBLIC_BACKEND_URL is required in production')
+      })()
+    : 'http://localhost:3001')
 
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const phone = searchParams.get('phone');
+    const searchParams = request.nextUrl.searchParams
+    const phone = searchParams.get('phone')
 
     if (!phone) {
-      return NextResponse.json(
-        { error: 'Phone number is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Phone number is required' }, { status: 400 })
     }
 
-    const response = await fetch(
-      `${BACKEND_URL}/api/profile?phone=${encodeURIComponent(phone)}`
-    );
+    const headers: Record<string, string> = {}
+    const authHeader = request.headers.get('authorization')
+    if (authHeader) {
+      headers['Authorization'] = authHeader
+    }
 
-    const data = await response.json().catch(() => null);
+    const response = await fetch(`${BACKEND_URL}/api/profile?phone=${encodeURIComponent(phone)}`, {
+      headers,
+    })
+
+    const data = await response.json().catch(() => null)
 
     if (!response.ok) {
-      return NextResponse.json(
-        data || { error: 'Failed to fetch profile' },
-        { status: response.status }
-      );
+      return NextResponse.json(data || { error: 'Failed to fetch profile' }, {
+        status: response.status,
+      })
     }
 
-    return NextResponse.json(data);
+    return NextResponse.json(data)
   } catch (error) {
-    console.error('profile proxy error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('profile proxy error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -1,7 +1,6 @@
 import { Metadata } from 'next'
 import { ReceiptCard } from '@/components/receipt/ReceiptCard'
 import { getTransactionByHash, formatAddress } from '@/lib/blockscout'
-import { BackButton } from '@/components/shared/BackButton'
 import { WHATSAPP_BOT_NUMBER } from '@/lib/constants'
 
 interface ReceiptPageProps {
@@ -107,11 +106,6 @@ export default async function ReceiptPage({ params }: ReceiptPageProps) {
   return (
     <div className="min-h-screen relative">
       <div className="relative z-10 pt-6 sm:pt-8 md:pt-12 pb-6 sm:pb-8 px-4 sm:px-6 lg:px-8">
-        {/* Back Button */}
-        <div className="max-w-4xl mx-auto mb-4 sm:mb-6">
-          <BackButton />
-        </div>
-
         {/* Receipt Card */}
         <ReceiptCard
           transaction={transaction}

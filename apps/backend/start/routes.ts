@@ -33,7 +33,6 @@ router.post('/webhook/whatsapp', [WebhookController, 'handle'])
 // ── Public resolution (IP-throttled, privacy-aware) ─────────────────────────
 router.get('/resolve-phone', [ResolveController, 'byPhone']).use(middleware.ipThrottle())
 router.get('/resolve-address', [ResolveController, 'byAddress']).use(middleware.ipThrottle())
-router.get('/api/profile', [EmbeddedWalletController, 'getProfile']).use(middleware.ipThrottle())
 
 // ── Notifications (require shared secret) ───────────────────────────────────
 router.post('/notify-fund', [NotifyController, 'fund'])
@@ -84,6 +83,7 @@ router
     router.get('/privacy-status', [EmbeddedWalletController, 'privacyStatus'])
     router.post('/accept-tos', [EmbeddedWalletController, 'acceptTos'])
     router.get('/tos-status', [EmbeddedWalletController, 'tosStatus'])
+    router.get('/profile', [EmbeddedWalletController, 'getProfile'])
     router.post('/support/tickets', [SupportController, 'create'])
   })
   .prefix('/api')
