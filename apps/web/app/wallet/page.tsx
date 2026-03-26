@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Info } from 'lucide-react'
-import { useSendUserOperation, useSendEvmTransaction, useEvmAccounts } from '@coinbase/cdp-hooks'
+import { useSendUserOperation } from '@coinbase/cdp-hooks'
 import { SippyPhoneInput } from '@/components/ui/phone-input'
 import { getStoredToken, clearToken } from '@/lib/auth'
 import { useSessionGuard } from '@/lib/useSessionGuard'
@@ -46,7 +46,7 @@ async function getBalancesRpc(address: string): Promise<Balance> {
     usdc: formatUnits(usdcResult as bigint, 6),
   }
 }
-import { ensureGasReady, buildUsdcTransferCall, encodeUsdcTransfer } from '@/lib/usdc-transfer'
+import { ensureGasReady, buildUsdcTransferCall } from '@/lib/usdc-transfer'
 import { ActivityList } from '@/components/activity/ActivityList'
 import {
   Language,
@@ -132,28 +132,12 @@ function WalletContent() {
     data: sendOpData,
     error: sendOpError,
   } = useSendUserOperation()
-  const { sendEvmTransaction } = useSendEvmTransaction()
-  const { evmAccounts } = useEvmAccounts()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const smartAccountAddress = (currentUser as any)?.evmSmartAccountObjects?.[0]?.address ?? null
 
-  // Debug: log CDP account addresses vs backend address (remove after confirming)
-  useEffect(() => {
-    if (eoaAddress || evmAccounts?.length || smartAccountAddress) {
-      console.log('[Sippy wallet debug]', {
-        backendEoaAddress: eoaAddress,
-        cdpEvmAccounts: evmAccounts?.map((a: { address: string }) => a.address),
-        cdpSmartAccount: smartAccountAddress,
-      })
-    }
-  }, [eoaAddress, evmAccounts, smartAccountAddress])
-
   // Active balance based on selected send-from wallet
   const activeBalance = sendFrom === 'whatsapp' ? eoaBalances : smartBalances
-
-  // EOA has enough ETH to pay its own gas (direct send bypassing spender)
-  const eoaHasGas = parseFloat(eoaBalances?.eth ?? '0') > 0.0001
 
   // ============================================================================
   // Language
@@ -297,39 +281,8 @@ function WalletContent() {
     setSendStep('sending')
 
     try {
-      if (sendFrom === 'web') {
-        // Direct send from smart account — user pays gas, no spend permission, no limits
-        if (!smartAccountAddress) throw new Error('Smart account not found.')
-        const smartGas = parseFloat(smartBalances?.eth ?? '0')
-        if (smartGas < 0.0001) throw new Error('Not enough ETH for gas in your web wallet.')
-
-        const call = buildUsdcTransferCall(resolvedAddress, amount)
-        await sendUserOperation({
-          evmSmartAccount: smartAccountAddress as `0x${string}`,
-          network: NETWORK as 'arbitrum',
-          calls: [call],
-        })
-        // success handled by useEffect watching sendOpStatus
-      } else if (eoaHasGas && eoaAddress) {
-        // Direct send from whatsapp wallet (EOA) — user pays gas, no spend permission, no limits
-        const cdpEoa = evmAccounts?.[0]?.address ?? eoaAddress
-        console.log('[Sippy send] Direct EOA path, using:', cdpEoa)
-        const txData = encodeUsdcTransfer(resolvedAddress, amount)
-        const result = await sendEvmTransaction({
-          evmAccount: cdpEoa as `0x${string}`,
-          network: NETWORK as 'arbitrum',
-          transaction: {
-            to: USDC_ADDRESS,
-            data: txData,
-            value: BigInt(0),
-            chainId: 42161,
-          },
-        })
-        setSendTxHash(result.transactionHash ?? null)
-        setSendStep('success')
-        fetchWalletData()
-      } else {
-        // Spender path via backend — free gas, limits apply
+      if (sendFrom === 'whatsapp') {
+        // EOA send via backend SpendPermission
         const accessToken = getStoredToken()
         if (!accessToken) throw new Error('Session expired. Please sign in again.')
 
@@ -351,6 +304,22 @@ function WalletContent() {
         setSendTxHash(data.txHash ?? null)
         setSendStep('success')
         fetchWalletData()
+      } else {
+        // Smart account UserOp
+        if (!smartAccountAddress) throw new Error('Smart account not found.')
+
+        const accessToken = getStoredToken()
+        if (!accessToken) throw new Error('Session expired. Please sign in again.')
+
+        await ensureGasReady(BACKEND_URL, accessToken, 2, smartAccountAddress ?? undefined)
+
+        const call = buildUsdcTransferCall(resolvedAddress, amount)
+        await sendUserOperation({
+          evmSmartAccount: smartAccountAddress as `0x${string}`,
+          network: NETWORK as 'arbitrum',
+          calls: [call],
+        })
+        // success handled by useEffect watching sendOpStatus
       }
     } catch (err) {
       console.error('Send failed:', err)
@@ -359,9 +328,9 @@ function WalletContent() {
     }
   }
 
-  // Watch UserOp status (direct send paths — both smart account and EOA-as-smart-account)
+  // Watch smart account UserOp status
   useEffect(() => {
-    if (sendStep !== 'sending') return
+    if (sendFrom !== 'web') return
     if (sendOpStatus === 'success' && sendOpData) {
       setSendTxHash(sendOpData.transactionHash ?? null)
       setSendStep('success')
@@ -371,7 +340,7 @@ function WalletContent() {
       setSendError(localizeError(sendOpError, 'send', lang))
       setSendStep('error')
     }
-  }, [sendOpStatus, sendOpData, sendOpError, sendStep, fetchWalletData])
+  }, [sendOpStatus, sendOpData, sendOpError, sendFrom, fetchWalletData])
 
   const resetSend = () => {
     setSendStep('form')
