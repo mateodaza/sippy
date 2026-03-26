@@ -3,7 +3,8 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Info } from 'lucide-react'
-import { useSendUserOperation, useSendEvmTransaction, useEvmAccounts } from '@coinbase/cdp-hooks'
+import { useSendUserOperation } from '@coinbase/cdp-hooks'
+import { SippyPhoneInput } from '@/components/ui/phone-input'
 import { getStoredToken, clearToken } from '@/lib/auth'
 import { useSessionGuard } from '@/lib/useSessionGuard'
 import { ChannelPicker, ResendButton } from '../../components/shared/ChannelPicker'
@@ -45,7 +46,7 @@ async function getBalancesRpc(address: string): Promise<Balance> {
     usdc: formatUnits(usdcResult as bigint, 6),
   }
 }
-import { ensureGasReady, buildUsdcTransferCall, encodeUsdcTransfer } from '@/lib/usdc-transfer'
+import { ensureGasReady, buildUsdcTransferCall } from '@/lib/usdc-transfer'
 import { ActivityList } from '@/components/activity/ActivityList'
 import {
   Language,
@@ -122,6 +123,7 @@ function WalletContent() {
   const [amount, setAmount] = useState('')
   const [sendError, setSendError] = useState<string | null>(null)
   const [sendTxHash, setSendTxHash] = useState<string | null>(null)
+  const [recipientMode, setRecipientMode] = useState<'phone' | 'address'>('phone')
 
   // CDP Hooks
   const {
@@ -130,10 +132,6 @@ function WalletContent() {
     data: sendOpData,
     error: sendOpError,
   } = useSendUserOperation()
-  const { sendEvmTransaction } = useSendEvmTransaction()
-  const { evmAccounts } = useEvmAccounts()
-  const cdpEoaAddress = evmAccounts?.[0]?.address ?? null
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const smartAccountAddress = (currentUser as any)?.evmSmartAccountObjects?.[0]?.address ?? null
 
@@ -300,24 +298,17 @@ function WalletContent() {
         // success handled by useEffect watching sendOpStatus
       } else if (
         eoaHasGas &&
-        cdpEoaAddress &&
-        cdpEoaAddress.toLowerCase() === eoaAddress?.toLowerCase()
+        smartAccountAddress &&
+        eoaAddress?.toLowerCase() === smartAccountAddress?.toLowerCase()
       ) {
-        // Direct send from EOA — user pays gas, bypasses spender, no limits
-        const data = encodeUsdcTransfer(resolvedAddress, amount)
-        const result = await sendEvmTransaction({
-          evmAccount: cdpEoaAddress as `0x${string}`,
+        // Direct send from smart account (which IS the "whatsapp wallet") — user pays gas, no limits
+        const call = buildUsdcTransferCall(resolvedAddress, amount)
+        await sendUserOperation({
+          evmSmartAccount: smartAccountAddress as `0x${string}`,
           network: NETWORK as 'arbitrum',
-          transaction: {
-            to: USDC_ADDRESS,
-            data,
-            value: BigInt(0),
-            chainId: 42161,
-          },
+          calls: [call],
         })
-        setSendTxHash(result.transactionHash ?? null)
-        setSendStep('success')
-        fetchWalletData()
+        // success handled by useEffect watching sendOpStatus
       } else {
         // Spender path via backend — free gas, limits apply
         const accessToken = getStoredToken()
@@ -349,9 +340,9 @@ function WalletContent() {
     }
   }
 
-  // Watch smart account UserOp status (direct send path)
+  // Watch UserOp status (direct send paths — both smart account and EOA-as-smart-account)
   useEffect(() => {
-    if (sendFrom !== 'web') return
+    if (sendStep !== 'sending') return
     if (sendOpStatus === 'success' && sendOpData) {
       setSendTxHash(sendOpData.transactionHash ?? null)
       setSendStep('success')
@@ -361,7 +352,7 @@ function WalletContent() {
       setSendError(localizeError(sendOpError, 'send', lang))
       setSendStep('error')
     }
-  }, [sendOpStatus, sendOpData, sendOpError, sendFrom, fetchWalletData])
+  }, [sendOpStatus, sendOpData, sendOpError, sendStep, fetchWalletData])
 
   const resetSend = () => {
     setSendStep('form')
@@ -370,6 +361,7 @@ function WalletContent() {
     setAmount('')
     setSendError(null)
     setSendTxHash(null)
+    setRecipientMode('phone')
   }
 
   const handleMax = () => {
@@ -742,16 +734,42 @@ function WalletContent() {
           {sendStep === 'form' && (
             <div className="space-y-3">
               <div>
-                <label className="block text-sm text-[var(--text-secondary)] mb-1">
-                  {t('wallet.toLabel', lang)} ({t('wallet.toLabelHint', lang)})
-                </label>
-                <input
-                  type="text"
-                  value={recipient}
-                  onChange={(e) => setRecipient(e.target.value)}
-                  placeholder="+573001234567 or 0x..."
-                  className="w-full p-3 border rounded-lg text-[var(--text-primary)]"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm text-[var(--text-secondary)]">
+                    {t('wallet.toLabel', lang)}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRecipientMode(recipientMode === 'phone' ? 'address' : 'phone')
+                      setRecipient('')
+                    }}
+                    className="text-xs text-brand-primary hover:text-brand-primary-hover"
+                  >
+                    {recipientMode === 'phone'
+                      ? lang === 'es'
+                        ? 'Usar direccion 0x'
+                        : lang === 'pt'
+                          ? 'Usar endereco 0x'
+                          : 'Use 0x address'
+                      : lang === 'es'
+                        ? 'Usar telefono'
+                        : lang === 'pt'
+                          ? 'Usar telefone'
+                          : 'Use phone number'}
+                  </button>
+                </div>
+                {recipientMode === 'phone' ? (
+                  <SippyPhoneInput value={recipient} onChange={setRecipient} />
+                ) : (
+                  <input
+                    type="text"
+                    value={recipient}
+                    onChange={(e) => setRecipient(e.target.value)}
+                    placeholder="0x..."
+                    className="w-full p-3 border rounded-lg text-[var(--text-primary)]"
+                  />
+                )}
               </div>
               <div>
                 <label className="block text-sm text-[var(--text-secondary)] mb-1">
