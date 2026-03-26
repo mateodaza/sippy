@@ -39,6 +39,7 @@ export interface PendingTransaction {
 export interface PartialSend {
   amount?: number // present if user gave an amount
   recipient?: string // present if user gave a phone (canonical E.164)
+  ownerPhone?: string // sender's phone, needed for alias resolution in follow-ups
   timestamp: number // Date.now()
   lang: Lang
 }
@@ -62,9 +63,15 @@ export interface ParsedCommand {
     | 'invite'
     | 'confirm'
     | 'cancel'
+    | 'save_contact'
+    | 'delete_contact'
+    | 'list_contacts'
     | 'unknown'
   amount?: number
   recipient?: string
+  recipientRaw?: string // raw text when canonicalization fails — allows alias resolution
+  alias?: string // contact alias for save/delete commands
+  phone?: string // target phone for save_contact command
   privacyAction?: 'on' | 'off'
   originalText?: string
   helpfulMessage?: string // Natural, conversational response for unknown commands
@@ -110,6 +117,18 @@ export interface WhatsAppMessage {
       description?: string
     }
   }
+  contacts?: Array<{
+    name: {
+      formatted_name: string
+      first_name?: string
+      last_name?: string
+    }
+    phones?: Array<{
+      phone: string
+      type?: string
+      wa_id?: string
+    }>
+  }>
   type: string
 }
 

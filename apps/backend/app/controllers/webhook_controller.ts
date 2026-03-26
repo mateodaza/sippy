@@ -84,11 +84,22 @@ import { getIsPaused } from '#controllers/admin/moderation_controller'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { getDialect, dialectHint, type Dialect } from '#utils/dialect'
 import { validateLLMResponse } from '#services/llm_validator.service'
+import { resolveAlias, fuzzyResolveAlias, updateContact } from '#services/contact.service'
+import {
+  handleSaveContact,
+  handleDeleteContact,
+  handleListContacts,
+  handleContactCard,
+} from '#commands/contact_command'
 
 // Exported so tests can seed/inspect state directly
 export const pendingTransactions = new Map<string, PendingTransaction>()
 export const partialSends = new Map<string, PartialSend>()
 export const activeSends = new Set<string>()
+export const pendingContactOverwrites = new Map<
+  string,
+  { alias: string; newPhone: string; timestamp: number }
+>()
 
 const FUND_URL = env.get('FUND_URL', 'https://fund.sippy.lat')
 const FUND_TOKEN_SECRET = env.get('FUND_TOKEN_SECRET', '')
@@ -134,6 +145,7 @@ async function generateFundUrl(phoneNumber: string): Promise<string> {
 const CONFIRM_THRESHOLD_DEFAULT = 5
 const ACTIVE_SEND_TIMEOUT_MS = 60_000 // safety valve — clears stuck sends
 const PENDING_TX_TTL_MS = 2 * 60 * 1000 // 2 minutes
+const PENDING_OVERWRITE_TTL_MS = 60_000 // 60 seconds for contact overwrite confirmation
 
 // GC interval — removes entries that were never confirmed/cancelled.
 // Correctness is NOT reliant on this interval; expiry is enforced lazily
@@ -153,6 +165,11 @@ const pendingTxCleanupInterval = setInterval(() => {
         partialSends.delete(phone)
       }
     }
+    for (const [phone, ow] of pendingContactOverwrites.entries()) {
+      if (now - ow.timestamp > PENDING_OVERWRITE_TTL_MS) {
+        pendingContactOverwrites.delete(phone)
+      }
+    }
   } catch (err) {
     logger.error('pendingTx cleanup error: %o', err)
   }
@@ -168,6 +185,11 @@ function clearPendingIfUnrelated(
     if (pendingTxs.has(from)) {
       pendingTxs.delete(from)
       logger.info('Pending tx cancelled due to new command from %s', maskPhone(from))
+    }
+    // Clear pending contact overwrites on non-confirm commands
+    if (pendingContactOverwrites.has(from)) {
+      pendingContactOverwrites.delete(from)
+      logger.info('Pending contact overwrite cancelled due to new command from %s', maskPhone(from))
     }
   }
   // Clear partial sends on any non-send command (user moved on)
@@ -337,7 +359,59 @@ export async function routeCommand(
           return
         }
 
-        // NEW: phone canonicalization failed — specific message, bail early
+        // ── Alias resolution: recipientRaw present but no canonical phone ──
+        if (!command.recipient && command.recipientRaw && command.amount) {
+          // 1. Exact alias match
+          const exactPhone = await resolveAlias(phoneNumber, command.recipientRaw)
+          if (exactPhone) {
+            command.recipient = exactPhone
+            // Falls through to normal send handling below
+          } else {
+            // 2. Fuzzy match
+            const fuzzyMatches = await fuzzyResolveAlias(phoneNumber, command.recipientRaw)
+
+            if (fuzzyMatches.length === 1) {
+              // Single close match — ask confirmation via pendingTransactions
+              const match = fuzzyMatches[0]
+              pendingTxs.set(phoneNumber, {
+                amount: command.amount,
+                recipient: match.targetPhone,
+                timestamp: Date.now(),
+                lang,
+              })
+              const fuzzyMsg = {
+                en: `Did you mean ${match.aliasDisplay} (${match.targetPhone})? Send $${command.amount}? Reply YES to confirm.`,
+                es: `\u00bfQuisiste decir ${match.aliasDisplay} (${match.targetPhone})? \u00bfEnviar $${command.amount}? Responde S\u00cd para confirmar.`,
+                pt: `Quis dizer ${match.aliasDisplay} (${match.targetPhone})? Enviar $${command.amount}? Responda SIM para confirmar.`,
+              }
+              await sendMessageFn(phoneNumber, fuzzyMsg[lang], lang)
+              return
+            } else if (fuzzyMatches.length > 1) {
+              // Multiple ties — store partial send so follow-up alias resolves
+              partialSends.set(phoneNumber, {
+                amount: command.amount,
+                ownerPhone: phoneNumber,
+                timestamp: Date.now(),
+                lang,
+              })
+              const lines = fuzzyMatches.map(
+                (m, i) => `${i + 1}. ${m.aliasDisplay} (${m.targetPhone})`
+              )
+              const disambigMsg = {
+                en: `Multiple contacts match "${command.recipientRaw}":\n${lines.join('\n')}\nReply with the exact contact name.`,
+                es: `Varios contactos coinciden con "${command.recipientRaw}":\n${lines.join('\n')}\nResponde con el nombre exacto del contacto.`,
+                pt: `V\u00e1rios contatos correspondem a "${command.recipientRaw}":\n${lines.join('\n')}\nResponda com o nome exato do contato.`,
+              }
+              await sendMessageFn(phoneNumber, disambigMsg[lang], lang)
+              return
+            } else {
+              // No match at all — treat as invalid phone
+              command.recipientError = 'INVALID_PHONE'
+            }
+          }
+        }
+
+        // Phone canonicalization failed and alias resolution didn't help — bail
         if (command.recipientError === 'INVALID_PHONE') {
           await sendMessageFn(phoneNumber, formatInvalidPhoneNumberMessage(lang), lang)
           return
@@ -421,9 +495,10 @@ export async function routeCommand(
             )
           }
         } else if (command.amount && !command.recipient) {
-          // Has amount, missing recipient → store partial, ask for phone
+          // Has amount, missing recipient → store partial, ask for phone or alias
           partialSends.set(phoneNumber, {
             amount: command.amount,
+            ownerPhone: phoneNumber,
             timestamp: Date.now(),
             lang,
           })
@@ -501,7 +576,64 @@ export async function routeCommand(
         break
       }
 
+      case 'save_contact': {
+        const result = await handleSaveContact(
+          phoneNumber,
+          command.alias ?? '',
+          command.phone ?? '',
+          lang
+        )
+        if (result.pendingOverwrite) {
+          pendingContactOverwrites.set(phoneNumber, {
+            alias: result.pendingOverwrite.alias,
+            newPhone: result.pendingOverwrite.newPhone,
+            timestamp: Date.now(),
+          })
+        }
+        await sendMessageFn(phoneNumber, result.message, lang)
+        break
+      }
+
+      case 'delete_contact': {
+        const msg = await handleDeleteContact(phoneNumber, command.alias ?? '', lang)
+        await sendMessageFn(phoneNumber, msg, lang)
+        break
+      }
+
+      case 'list_contacts': {
+        const msg = await handleListContacts(phoneNumber, lang)
+        await sendMessageFn(phoneNumber, msg, lang)
+        break
+      }
+
       case 'confirm': {
+        // Check for pending contact overwrite confirmation BEFORE pending tx
+        const pendingOverwrite = pendingContactOverwrites.get(phoneNumber)
+        if (
+          pendingOverwrite &&
+          Date.now() - pendingOverwrite.timestamp < PENDING_OVERWRITE_TTL_MS
+        ) {
+          pendingContactOverwrites.delete(phoneNumber)
+          const overwriteResult = await updateContact(
+            phoneNumber,
+            pendingOverwrite.alias,
+            pendingOverwrite.newPhone
+          )
+          if (overwriteResult.success) {
+            const updatedMsg = {
+              en: `\u2713 Updated ${overwriteResult.alias} \u2192 ${overwriteResult.phone}`,
+              es: `\u2713 Actualizado ${overwriteResult.alias} \u2192 ${overwriteResult.phone}`,
+              pt: `\u2713 Atualizado ${overwriteResult.alias} \u2192 ${overwriteResult.phone}`,
+            }
+            await sendMessageFn(phoneNumber, updatedMsg[lang], lang)
+          } else {
+            await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+          }
+          return
+        }
+        // Clear expired overwrite if any
+        if (pendingOverwrite) pendingContactOverwrites.delete(phoneNumber)
+
         const pending = pendingTxs.get(phoneNumber)
         // Lazy expiry check — guarantees 2-minute cutoff regardless of GC interval timing
         if (!pending || Date.now() - pending.timestamp > PENDING_TX_TTL_MS) {
@@ -563,6 +695,8 @@ export async function routeCommand(
 
       case 'cancel':
         pendingTxs.delete(phoneNumber)
+        pendingContactOverwrites.delete(phoneNumber)
+        partialSends.delete(phoneNumber)
         await sendMessageFn(phoneNumber, formatTransferCancelled(lang), lang)
         break
 
@@ -756,10 +890,10 @@ export async function dispatchCommand(
  * Try to fill in the missing piece of a partial send.
  * Returns { amount, recipient } if successful, null otherwise.
  */
-function resolvePartialSend(
+async function resolvePartialSend(
   partial: PartialSend,
   text: string
-): { amount: number; recipient: string } | null {
+): Promise<{ amount: number; recipient: string } | null> {
   const trimmed = text.trim()
 
   if (partial.recipient && !partial.amount) {
@@ -776,10 +910,17 @@ function resolvePartialSend(
   }
 
   if (partial.amount && !partial.recipient) {
-    // We have the amount, user should be sending the phone number.
+    // We have the amount, user should be sending the phone number or alias.
     const phone = canonicalizePhone(trimmed)
     if (phone) {
       return { amount: partial.amount, recipient: phone }
+    }
+    // Try alias resolution (for disambiguation follow-ups like "maria garcia")
+    if (partial.ownerPhone) {
+      const aliasPhone = await resolveAlias(partial.ownerPhone, trimmed)
+      if (aliasPhone) {
+        return { amount: partial.amount, recipient: aliasPhone }
+      }
     }
   }
 
@@ -939,6 +1080,20 @@ export default class WebhookController {
     // Mark as read + show typing indicator (non-blocking, best-effort)
     await markAsReadWithTyping(messageId)
 
+    // ── Contact card messages (vCard import) ────────────────────────────
+    if (message.type === 'contacts' && message.contacts?.length) {
+      // Clear any pending state so stale confirmations can't be triggered later
+      pendingTransactions.delete(from)
+      pendingContactOverwrites.delete(from)
+      partialSends.delete(from)
+
+      const contactLang: Lang = (await getUserLanguage(from)) || 'en'
+      const response = await handleContactCard(from, message.contacts, contactLang)
+      await sendTextMessage(from, response, contactLang)
+      rateLimitService.markProcessed(messageId)
+      return
+    }
+
     // ── Non-text messages (image, audio, sticker, video, location) ────
     if (!text && message.type && message.type !== 'text' && message.type !== 'interactive') {
       logger.info('Non-text message (%s) from %s', message.type, maskPhone(from))
@@ -956,7 +1111,7 @@ export default class WebhookController {
     // try to interpret this message as the missing piece.
     const partial = partialSends.get(from)
     if (partial && Date.now() - partial.timestamp <= PENDING_TX_TTL_MS) {
-      const resolved = resolvePartialSend(partial, text)
+      const resolved = await resolvePartialSend(partial, text)
       if (resolved) {
         partialSends.delete(from)
         logger.info(
