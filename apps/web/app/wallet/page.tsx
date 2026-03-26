@@ -114,6 +114,7 @@ function WalletContent() {
   const [smartBalances, setSmartBalances] = useState<Balance | null>(null)
   const [activity, setActivity] = useState<NormalizedTransaction[]>([])
   const [isLoadingData, setIsLoadingData] = useState(false)
+  const [walletDrift, setWalletDrift] = useState(false)
 
   // Send state
   const [sendStep, setSendStep] = useState<SendStep>('form')
@@ -201,11 +202,13 @@ function WalletContent() {
         ) {
           console.warn(
             `[Sippy] Wallet drift detected: backend=${freshEoaAddress} cdp=${smartAccountAddress}. ` +
-              'User may need to re-setup. Backend wallet will be updated on next register-wallet call.'
+              'User may need to re-setup.'
           )
+          setWalletDrift(true)
           const smartBal = await getBalancesRpc(smartAccountAddress)
           setSmartBalances(smartBal)
         } else {
+          setWalletDrift(false)
           // Same address — reuse freshly fetched balance
           setSmartBalances(freshEoaBal)
         }
@@ -246,7 +249,21 @@ function WalletContent() {
     }
 
     const trimmed = recipient.trim()
+    // Self-send check helper
+    const isSelfSend = (addr: string) =>
+      walletAddress && addr.toLowerCase() === walletAddress.toLowerCase()
+
     if (isAddress(trimmed)) {
+      if (isSelfSend(trimmed)) {
+        setSendError(
+          lang === 'es'
+            ? 'No puedes enviarte a ti mismo.'
+            : lang === 'pt'
+              ? 'Voce nao pode enviar para si mesmo.'
+              : 'Cannot send to yourself.'
+        )
+        return
+      }
       setResolvedAddress(trimmed)
       setSendStep('confirm')
     } else if (isPhoneNumber(trimmed)) {
@@ -282,6 +299,16 @@ function WalletContent() {
         }
 
         const data = await response.json()
+        if (isSelfSend(data.address)) {
+          setSendError(
+            lang === 'es'
+              ? 'No puedes enviarte a ti mismo.'
+              : lang === 'pt'
+                ? 'Voce nao pode enviar para si mesmo.'
+                : 'Cannot send to yourself.'
+          )
+          return
+        }
         setResolvedAddress(data.address)
         setSendStep('confirm')
       } catch {
@@ -585,6 +612,19 @@ function WalletContent() {
           </div>
         )}
 
+        {/* Drift warning */}
+        {walletDrift && (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-2xl p-4">
+            <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
+              {lang === 'es'
+                ? 'Tu billetera necesita actualizarse. Ve a /setup para reconectar.'
+                : lang === 'pt'
+                  ? 'Sua carteira precisa ser atualizada. Va para /setup para reconectar.'
+                  : 'Your wallet needs to be updated. Go to /setup to reconnect.'}
+            </p>
+          </div>
+        )}
+
         {/* Wallet balance */}
         <div className="bg-[var(--bg-primary)] rounded-2xl border border-brand-primary/20 p-5">
           <p className="text-xs text-[var(--text-secondary)] font-medium mb-1">
@@ -739,7 +779,7 @@ function WalletContent() {
               {sendError && <p className="text-sm text-red-600">{sendError}</p>}
               <button
                 onClick={handleSendReview}
-                disabled={!recipient || !amount}
+                disabled={!recipient || !amount || walletDrift}
                 className="w-full py-3 bg-brand-primary text-white rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t('wallet.review', lang)}
