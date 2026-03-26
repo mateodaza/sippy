@@ -1,0 +1,71 @@
+---
+title: How your money is stored
+description: Where your funds live, who can access them, and how you can verify it yourself.
+---
+
+## Your wallet is yours
+
+When you sign up for Sippy, a smart contract wallet is created for you on Arbitrum.
+This wallet holds your USDC. It's not a row in a database, not a balance in
+Sippy's system, and not an entry in a bank ledger. It's a real wallet on a public
+blockchain, and only your keys can move funds out of it.
+
+Sippy helps you interact with that wallet through WhatsApp and the web. But Sippy
+itself can't withdraw, redirect, or freeze your money.
+
+## Where the money actually sits
+
+Your USDC lives in your smart contract wallet on Arbitrum -- a fast, low-cost
+network built on Ethereum. Every transaction is recorded on-chain, which means
+anyone (including you) can verify your balance and transaction history using a
+public block explorer like [Arbiscan](https://arbiscan.io).
+
+This is different from a bank, where you trust the institution to keep accurate
+records. Here, the records are public and independently verifiable.
+
+## What Sippy can and can't do with your funds
+
+**Sippy can:**
+
+- Show you your balance and transaction history
+- Submit transactions on your behalf when you ask (like "send 20 to +57...")
+- Cover gas fees for WhatsApp sends so you don't pay network costs
+
+**Sippy can't:**
+
+- Move your money without your permission
+- Freeze or lock your wallet
+- Take a cut of your balance
+- Access your wallet if you revoke permissions
+
+## How WhatsApp sends work
+
+When you send money through WhatsApp, you're giving Sippy permission to submit
+that specific transaction for you. Sippy acts on your instruction -- it doesn't
+have blanket access to your funds. Each send goes through confirmation prompts
+and daily limits before anything moves.
+
+## What "non-custodial" means in plain terms
+
+A custodial service holds your money for you -- like a bank. If the bank has a
+problem, your access to your money depends on the bank.
+
+Sippy is non-custodial. Your wallet exists independently of Sippy. If Sippy's
+servers went offline tomorrow, your funds would still be in your wallet on
+Arbitrum. You could access them with any compatible wallet app using your
+private key.
+
+The trade-off: because Sippy doesn't hold your funds, Sippy can't reverse a
+transaction you've already sent. More on that in
+[Account recovery](/docs/trust/recovery).
+
+## Verify it yourself
+
+Your wallet address is visible in [Settings](https://www.sippy.lat/settings).
+Copy it, paste it into [Arbiscan](https://arbiscan.io), and you'll see your
+exact balance and every transaction. No trust required -- just math.
+
+## What's next?
+
+- [Security model](/docs/trust/security) -- how Sippy protects your account day to day
+- [Account recovery](/docs/trust/recovery) -- what to do if you lose access

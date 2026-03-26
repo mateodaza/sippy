@@ -1,0 +1,96 @@
+---
+title: Security model
+description: Daily limits, confirmation prompts, rate limiting, and two-factor verification -- how Sippy protects your account.
+---
+
+## Layers of protection
+
+Sippy uses several overlapping safeguards so that no single failure can drain
+your wallet. None of them require you to configure anything -- they're on by
+default.
+
+---
+
+## Daily limits
+
+Every account has a daily spending cap. This is the most important protection
+against a stolen session: even if someone gains access to your WhatsApp, they
+can't send more than your daily limit allows.
+
+| Status | Maximum daily cap |
+|---|---|
+| Unverified (no email) | $50 per day |
+| Verified (email confirmed) | $500 per day |
+
+You control the exact amount within your tier. Change it anytime in
+[Settings](https://www.sippy.lat/settings). Limits reset at midnight UTC.
+
+See [Spending limits](/docs/using-sippy/limits) for full details.
+
+## Confirmation prompts
+
+For any WhatsApp send above $5, Sippy asks you to confirm before executing.
+You'll see the amount, the recipient's phone number, and a yes/no prompt.
+Nothing moves until you say yes.
+
+Small sends ($5 and under) skip the prompt to keep everyday transfers fast.
+
+## Rate limiting
+
+Sippy watches for unusual activity -- like many sends in quick succession or
+repeated failed attempts. If something looks off, Sippy slows down or
+temporarily pauses activity on the account. This typically resolves within
+minutes and exists to catch compromised sessions early.
+
+## Email verification
+
+Adding a verified email does two things:
+
+1. Unlocks the $500 daily limit tier
+2. Gates sensitive actions -- like changing your daily limit or recovering
+   your account
+
+Without a verified email, your account still works, but your cap stays at $50
+and you have fewer recovery options.
+
+See [Recovery email](/docs/using-sippy/recovery-email) for setup steps.
+
+## Two-factor through WhatsApp + email
+
+Sippy doesn't use a traditional authenticator app. Instead, your two factors are:
+
+- **WhatsApp** -- your primary channel for sending money and interacting with Sippy
+- **Email** -- required for account recovery and sensitive changes
+
+So even if someone intercepts your WhatsApp messages, they'd also need access to
+your email to make meaningful changes to your account.
+
+---
+
+## What non-custodial means for security
+
+Because Sippy is non-custodial, there are things Sippy genuinely cannot do --
+even if asked, even by law enforcement, even by Sippy's own team:
+
+- **Can't freeze your wallet.** Your smart contract wallet exists on Arbitrum
+  independently of Sippy.
+- **Can't seize your funds.** Sippy doesn't have the keys.
+- **Can't reverse a completed transaction.** Once confirmed on-chain, it's final.
+
+This is a feature, not a gap. It means your money is yours in a way that a bank
+account isn't. But it also means you carry more responsibility. If you send money
+to the wrong number and the recipient doesn't send it back, Sippy can't undo it.
+
+## What you should do
+
+- **Add a recovery email.** It takes 30 seconds and dramatically improves your
+  account security.
+- **Keep your daily limit reasonable.** Don't set it higher than you'd normally
+  send in a day.
+- **Don't share your WhatsApp verification codes.** This is the most common way
+  accounts get hijacked.
+
+## What's next?
+
+- [Account recovery](/docs/trust/recovery) -- what happens if you lose your phone
+- [How your money is stored](/docs/trust/money-safety) -- where your funds actually live

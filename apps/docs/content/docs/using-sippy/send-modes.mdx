@@ -1,0 +1,68 @@
+---
+title: Free Gas vs Direct mode
+description: Two ways to send money from the web wallet -- and when to use each one.
+---
+
+When you send money from the [web wallet](https://www.sippy.lat/wallet), you choose
+between two modes. Both send USDC on Arbitrum. The difference is who pays the network
+fee and whether a daily limit applies.
+
+## Free Gas
+
+Sippy submits the transaction for you and covers the network fee.
+
+- **Cost to you:** $0
+- **Daily limit:** $500 (or $50 without a verified email)
+- **How it works:** Sippy's infrastructure moves the money on your behalf, using a
+  permission you granted during setup
+- **Also used by:** WhatsApp sends (same mechanism)
+
+This is the default. It's the simplest way to send -- no ETH needed, no extra steps.
+
+## Direct
+
+You submit the transaction yourself and pay a small network fee.
+
+- **Cost to you:** less than $0.01 in ETH per transaction (Arbitrum fees are very low)
+- **Daily limit:** none
+- **How it works:** your wallet signs the transaction directly. Sippy's infrastructure
+  is not involved.
+- **Requires:** a small amount of ETH in your wallet for gas
+
+Use Direct mode when you want to send more than your daily limit allows, or when you
+prefer to sign transactions yourself.
+
+## Side by side
+
+|  | Free Gas | Direct |
+|---|---|---|
+| Network fee | Sippy pays | You pay (~$0.01) |
+| Daily limit | $500 / $50 | None |
+| ETH required | No | Yes (small amount) |
+| Available on | WhatsApp + Web | Web only |
+| Who signs | Sippy (on your behalf) | You |
+
+## Which should I use?
+
+**Most of the time, Free Gas is fine.** It's free, it's fast, and the $500 daily limit
+covers everyday sends.
+
+**Use Direct when:**
+- You need to send more than $500 in a day
+- You want full control over the transaction (no intermediary)
+- You prefer the non-custodial approach where Sippy never touches your funds
+
+## How to switch
+
+On the web wallet, the two modes appear as a toggle above the send form:
+- **"Gas gratis"** / **"Free gas"** -- the default
+- **"Directo"** / **"Direct"** -- available when your wallet has ETH
+
+If your wallet has no ETH, Direct mode shows a message explaining what you need.
+You can deposit ETH to your wallet address on Arbitrum to unlock it.
+
+## What's next?
+
+- [Send money](/docs/using-sippy/send-money) -- step-by-step sending guide
+- [Limits](/docs/using-sippy/limits) -- how daily limits work and how to increase them
+- [Add funds](/docs/using-sippy/add-funds) -- how to get USDC and ETH into your wallet

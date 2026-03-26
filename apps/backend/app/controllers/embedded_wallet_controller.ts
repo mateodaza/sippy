@@ -794,7 +794,11 @@ export default class EmbeddedWalletController {
     } catch (error) {
       logger.error('sendFromWeb error: %o', error)
       const msg = error instanceof Error ? error.message : ''
-      const safeMessages = ['Insufficient balance', 'Amount has too many decimal places']
+      const safeMessages = [
+        'Insufficient balance',
+        'Amount has too many decimal places',
+        'Insufficient allowance',
+      ]
       const userMsg = safeMessages.some((s) => msg.includes(s)) ? msg : 'Internal server error'
       return response.status(500).json({ error: userMsg })
     } finally {

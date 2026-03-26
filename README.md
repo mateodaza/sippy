@@ -52,6 +52,7 @@ WhatsApp message
 ## Current Features
 
 **WhatsApp Bot**
+
 - Trilingual commands: English, Spanish, Portuguese
 - Regex-first parsing -- 80%+ of messages resolved at zero cost, <1ms
 - LLM classifier (Groq / Llama 4 Scout) for natural language questions
@@ -62,25 +63,29 @@ WhatsApp message
 - Casual, friendly tone -- like a friend on WhatsApp
 
 **Wallets**
+
 - Coinbase CDP Embedded Wallets (non-custodial)
 - One wallet per phone number, created on first interaction
 - Users never manage keys or seed phrases
 
 **Transfers**
+
 - USDC peer-to-peer on Arbitrum
 - Gasless — GasRefuel contract auto-funds gas before each transfer
 - Daily spending limits (configurable per user)
 - Recipient notifications via WhatsApp
 
 **Frontend**
+
 - Setup page: phone verification → wallet creation → spending limit
-- Settings page: daily limit, private key export with sweep-to-EOA
-- Wallet page: web fallback — balance, send USDC (to phone or 0x address), activity
+- Settings page: daily limit, private key export
+- Wallet page: unified balance, two send modes (Free gas + Direct), send USDC (to phone or 0x address), activity
 - Transaction receipts: shareable links
 - Profile pages: balance + transaction history
 - Fund page: add USDC to your wallet
 
 **Observability**
+
 - Structured parse logging (parse_log table with correlation keys)
 - Regex vs LLM ratio tracking
 - Per-message latency and token usage
@@ -89,18 +94,18 @@ WhatsApp message
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Runtime | Node.js 20 + TypeScript |
-| Framework | AdonisJS v7 |
-| Wallets | Coinbase CDP Embedded Wallets (non-custodial) |
-| LLM | Groq (Llama 4 Scout + Qwen3-32b + 8B, free tier) |
-| Validation | Zod |
-| Blockchain | Arbitrum One (USDC) |
-| Smart Contract | GasRefuel.sol (gasless transfers) |
-| Database | PostgreSQL (Railway) |
-| Frontend | Next.js 16 + Tailwind CSS |
-| Messaging | WhatsApp Business API (Meta) |
+| Layer          | Technology                                       |
+| -------------- | ------------------------------------------------ |
+| Runtime        | Node.js 20 + TypeScript                          |
+| Framework      | AdonisJS v7                                      |
+| Wallets        | Coinbase CDP Embedded Wallets (non-custodial)    |
+| LLM            | Groq (Llama 4 Scout + Qwen3-32b + 8B, free tier) |
+| Validation     | Zod                                              |
+| Blockchain     | Arbitrum One (USDC)                              |
+| Smart Contract | GasRefuel.sol (gasless transfers)                |
+| Database       | PostgreSQL (Railway)                             |
+| Frontend       | Next.js 16 + Tailwind CSS                        |
+| Messaging      | WhatsApp Business API (Meta)                     |
 
 ---
 
@@ -121,7 +126,7 @@ sippy/
 │   │   ├── app/
 │   │   │   ├── setup/                     # Wallet setup flow
 │   │   │   ├── settings/                  # User settings + key export + sweep
-│   │   │   ├── wallet/                    # Web fallback wallet
+│   │   │   ├── wallet/                    # Web wallet (Free gas + Direct send)
 │   │   │   ├── fund/                      # Add funds
 │   │   │   ├── profile/[phone]/           # Public profile
 │   │   │   └── receipt/[txHash]/          # Transaction receipts
@@ -228,11 +233,11 @@ Bot:  Here's what you can do:
 
 **Questbook Arbitrum Grant** — $25,000 (approved Feb 2026)
 
-| Milestone | Amount | Deadline | Focus |
-|-----------|--------|----------|-------|
-| M1 | $12,000 | Mar 26, 2026 | Production ready |
-| M2 | $9,250 | Jun 5, 2026 | Public launch |
-| M3 | $3,750 | Sep 5, 2026 | Final report |
+| Milestone | Amount  | Deadline     | Focus            |
+| --------- | ------- | ------------ | ---------------- |
+| M1        | $12,000 | Mar 26, 2026 | Production ready |
+| M2        | $9,250  | Jun 5, 2026  | Public launch    |
+| M3        | $3,750  | Sep 5, 2026  | Final report     |
 
 See [M1_PLAN.md](./M1_PLAN.md) for detailed implementation plan.
 

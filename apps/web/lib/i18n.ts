@@ -233,19 +233,21 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.emailNotVerified': 'Email not verified',
     'settings.emailEnterToVerify': 'Enter your email to verify it',
     'settings.walletSecurity': 'Wallet Security',
-    'settings.exportKey': 'Export Private Key',
+    'settings.exportKey': 'Backup Private Key',
     'settings.exportWarningTitle': 'Warning',
     'settings.exportWarningBody':
-      'Your private key gives full access to your wallet. Never share it. Store it securely.',
+      'This is a backup of your signing key. Never share it. Sippy keeps working normally after export.',
     'settings.understandContinue': 'I understand, continue',
     'settings.loadingKey': 'Loading...',
     'settings.transferFirst': 'Transfer funds first',
-    'settings.transferDesc': 'Move your USDC to your Web Wallet before exporting.',
-    'settings.smartBalance': 'Smart account balance',
-    'settings.transferTo': 'Transfer to Web Wallet',
+    'settings.transferDesc':
+      'Move your USDC to the export address before exporting. After transfer, these funds will only be accessible with the exported key, not through Sippy.',
+    'settings.smartBalance': 'Wallet balance',
+    'settings.transferTo': 'Transfer to export address',
     'settings.transferBtn': 'Transfer',
     'settings.skipShowKey': 'Skip and show key anyway',
-    'settings.skipWarning': 'Your EOA still has funds. Transfer them first to avoid loss.',
+    'settings.skipWarning':
+      'If you skip, your funds stay in your Sippy wallet and remain accessible through the app.',
     'settings.transferring': 'Transferring...',
     'settings.movingFunds': 'Moving funds...',
     'settings.retryTransfer': 'Retry transfer',
@@ -960,20 +962,21 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.emailNotVerified': 'Correo no verificado',
     'settings.emailEnterToVerify': 'Ingresa tu correo para verificarlo',
     'settings.walletSecurity': 'Seguridad de Billetera',
-    'settings.exportKey': 'Exportar Clave Privada',
+    'settings.exportKey': 'Respaldar Clave Privada',
     'settings.exportWarningTitle': 'Advertencia',
     'settings.exportWarningBody':
-      'Tu clave privada da acceso total a tu billetera. Nunca la compartas. Guárdala de forma segura.',
+      'Este es un respaldo de tu clave de firma. Nunca la compartas. Sippy sigue funcionando normalmente despues de exportar.',
     'settings.understandContinue': 'Entiendo, continuar',
     'settings.loadingKey': 'Cargando...',
     'settings.transferFirst': 'Transfiere fondos primero',
-    'settings.transferDesc': 'Mueve tu USDC a tu Billetera Web antes de exportar.',
-    'settings.smartBalance': 'Balance de cuenta inteligente',
-    'settings.transferTo': 'Transferir a Billetera Web',
+    'settings.transferDesc':
+      'Mueve tu USDC a la direccion de exportacion. Despues de transferir, estos fondos solo seran accesibles con la clave exportada, no a traves de Sippy.',
+    'settings.smartBalance': 'Balance de billetera',
+    'settings.transferTo': 'Transferir a direccion de exportacion',
     'settings.transferBtn': 'Transferir',
     'settings.skipShowKey': 'Omitir y mostrar clave de todas formas',
     'settings.skipWarning':
-      'Tu EOA todavía tiene fondos. Transfíerelos primero para evitar pérdidas.',
+      'Si omites, tus fondos permanecen en tu billetera Sippy y siguen siendo accesibles desde la app.',
     'settings.transferring': 'Transfiriendo...',
     'settings.movingFunds': 'Moviendo fondos...',
     'settings.retryTransfer': 'Reintentar transferencia',
@@ -1417,19 +1420,21 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'settings.emailNotVerified': 'E-mail não verificado',
     'settings.emailEnterToVerify': 'Digite seu e-mail para verificá-lo',
     'settings.walletSecurity': 'Segurança da Carteira',
-    'settings.exportKey': 'Exportar Chave Privada',
+    'settings.exportKey': 'Fazer Backup da Chave Privada',
     'settings.exportWarningTitle': 'Aviso',
     'settings.exportWarningBody':
-      'Sua chave privada dá acesso total à sua carteira. Nunca a compartilhe. Guarde-a com segurança.',
+      'Este e um backup da sua chave de assinatura. Nunca a compartilhe. O Sippy continua funcionando normalmente apos a exportacao.',
     'settings.understandContinue': 'Entendo, continuar',
     'settings.loadingKey': 'Carregando...',
     'settings.transferFirst': 'Transfira fundos primeiro',
-    'settings.transferDesc': 'Mova seu USDC para sua Carteira Web antes de exportar.',
-    'settings.smartBalance': 'Saldo da conta inteligente',
-    'settings.transferTo': 'Transferir para Carteira Web',
+    'settings.transferDesc':
+      'Mova seu USDC para o endereco de exportacao. Apos a transferencia, esses fundos so serao acessiveis com a chave exportada, nao pelo Sippy.',
+    'settings.smartBalance': 'Saldo da carteira',
+    'settings.transferTo': 'Transferir para endereco de exportacao',
     'settings.transferBtn': 'Transferir',
     'settings.skipShowKey': 'Pular e mostrar chave mesmo assim',
-    'settings.skipWarning': 'Sua EOA ainda tem fundos. Transfira-os primeiro para evitar perda.',
+    'settings.skipWarning':
+      'Se pular, seus fundos permanecem na sua carteira Sippy e continuam acessiveis pelo app.',
     'settings.transferring': 'Transferindo...',
     'settings.movingFunds': 'Movendo fundos...',
     'settings.retryTransfer': 'Tentar transferência novamente',
@@ -1832,8 +1837,21 @@ export function localizeError(err: unknown, context: ErrorContext, lang: Languag
       return t('settings.errRevokeFailed', lang)
     case 'enable-permission':
       return t('settings.errEnableFailed', lang)
-    case 'send':
+    case 'send': {
+      const lc = code.toLowerCase()
+      if (lc.includes('daily limit') || lc.includes('insufficient allowance')) {
+        const msg = {
+          en: 'Amount exceeds your daily limit. Send less, use "Direct" mode (your gas, no limit), or wait for reset.',
+          es: 'El monto excede tu limite diario. Envia menos, usa el modo "Directo" (tu gas, sin limite), o espera el reinicio.',
+          pt: 'O valor excede seu limite diario. Envie menos, use o modo "Direto" (seu gas, sem limite), ou aguarde o reinicio.',
+        }
+        return msg[lang] || msg.en
+      }
+      if (lc.includes('insufficient balance')) {
+        return t('wallet.errInsufficientBalance', lang)
+      }
       return t('wallet.errSendFailed', lang)
+    }
     case 'sweep':
       return t('settings.errSweepFailed', lang)
     case 'export':
