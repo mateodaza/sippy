@@ -13,29 +13,8 @@ const writeDb = drizzle(writePool)
 
 const app = new Hono()
 
-// ══════════════════════════════════════════════════════════════
-// CAPPED DEBOUNCE RESTART
-// ══════════════════════════════════════════════════════════════
-
-let restartScheduledAt: number | null = null
-const RESTART_DELAY_MS = 30 * 60_000 // 30 min — batch new wallets before restarting
-const MAX_DEFERRAL_MS = 60 * 60_000 // 1 hour — hard cap on deferral
-
-function scheduleRestart() {
-  const now = Date.now()
-  if (restartScheduledAt !== null) {
-    if (now - restartScheduledAt > MAX_DEFERRAL_MS) {
-      console.log('Max deferral reached, scheduling immediate restart')
-      setTimeout(() => process.exit(0), 100)
-    }
-    return
-  }
-  restartScheduledAt = now
-  setTimeout(() => {
-    console.log('Restarting to reload wallet filter...')
-    process.exit(0)
-  }, RESTART_DELAY_MS)
-}
+// Wallet filter reloads happen via scheduled Railway cron restart (hourly).
+// New wallets get backfilled immediately; live filter picks them up on next restart.
 
 // ══════════════════════════════════════════════════════════════
 // AUTH MIDDLEWARE (shared secret for write endpoints)
@@ -377,7 +356,9 @@ app.post('/wallets/register', requireSecret, async (c) => {
     // Restart is batched (30 min window) — backfill provides immediate data,
     // restart updates the live event filter for future transfers.
     invalidateWalletSetCache()
-    scheduleRestart()
+    console.log(
+      `New wallet ${normalized} registered — live filter will update on next scheduled restart`
+    )
   }
 
   return c.json({ ok: true, address: normalized, isNew: isNewOrReactivated, backfillOk })
@@ -461,7 +442,9 @@ app.post('/wallets/sync', requireSecret, async (c) => {
   const filterChanged = newInserts + reactivations
   if (filterChanged > 0) {
     invalidateWalletSetCache()
-    scheduleRestart()
+    console.log(
+      `Sync added ${filterChanged} wallet(s) — live filter will update on next scheduled restart`
+    )
   }
 
   return c.json({
