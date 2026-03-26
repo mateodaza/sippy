@@ -108,7 +108,7 @@ function WalletContent() {
     document.documentElement.lang = lang
   }, [lang])
 
-  // Wallet state — two wallets
+  // Wallet state
   const [eoaAddress, setEoaAddress] = useState<string | null>(null)
   const [eoaBalances, setEoaBalances] = useState<Balance | null>(null)
   const [smartBalances, setSmartBalances] = useState<Balance | null>(null)
@@ -136,8 +136,14 @@ function WalletContent() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const smartAccountAddress = (currentUser as any)?.evmSmartAccountObjects?.[0]?.address ?? null
 
-  // Active balance based on selected send-from wallet
-  const activeBalance = sendFrom === 'whatsapp' ? eoaBalances : smartBalances
+  // Unified wallet: after re-setup, eoaAddress === smartAccountAddress
+  // Use smart account balance as primary (it's where funds live)
+  const walletAddress = smartAccountAddress ?? eoaAddress
+  const walletBalances = smartBalances ?? eoaBalances
+  const hasGasForDirect = parseFloat(walletBalances?.eth ?? '0') > 0.0001
+
+  // Active balance for form validation — always the primary wallet
+  const activeBalance = walletBalances
 
   // ============================================================================
   // Language
@@ -164,6 +170,9 @@ function WalletContent() {
     if (!token) return
     setIsLoadingData(true)
     try {
+      let freshEoaAddress: string | null = null
+      let freshEoaBal: Balance | null = null
+
       // Fetch EOA address from backend
       const statusRes = await fetch(`${BACKEND_URL}/api/wallet-status`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -171,25 +180,34 @@ function WalletContent() {
       if (statusRes.ok) {
         const status = await statusRes.json()
         if (status.walletAddress) {
-          setEoaAddress(status.walletAddress)
+          freshEoaAddress = status.walletAddress
+          setEoaAddress(freshEoaAddress)
           const [eoaBal, act] = await Promise.all([
-            getBalancesRpc(status.walletAddress),
-            getActivity(status.walletAddress, 10),
+            getBalancesRpc(freshEoaAddress!),
+            getActivity(freshEoaAddress!, 10),
           ])
+          freshEoaBal = eoaBal
           setEoaBalances(eoaBal)
           setActivity(act)
-          // Auto-select whichever wallet has funds
-          if (parseFloat(eoaBal?.usdc ?? '0') > 0) setSendFrom('whatsapp')
         }
       }
 
-      // Fetch smart account balance in parallel if available
+      // Fetch smart account balance
       if (smartAccountAddress) {
-        const smartBal = await getBalancesRpc(smartAccountAddress)
-        setSmartBalances(smartBal)
-        // If EOA is empty but smart account has funds, auto-select smart
-        if (parseFloat(eoaBalances?.usdc ?? '0') === 0 && parseFloat(smartBal?.usdc ?? '0') > 0) {
-          setSendFrom('web')
+        // Drift detection: warn if backend wallet doesn't match CDP smart account
+        if (
+          freshEoaAddress &&
+          smartAccountAddress.toLowerCase() !== freshEoaAddress.toLowerCase()
+        ) {
+          console.warn(
+            `[Sippy] Wallet drift detected: backend=${freshEoaAddress} cdp=${smartAccountAddress}. ` +
+              'User may need to re-setup. Backend wallet will be updated on next register-wallet call.'
+          )
+          const smartBal = await getBalancesRpc(smartAccountAddress)
+          setSmartBalances(smartBal)
+        } else {
+          // Same address — reuse freshly fetched balance
+          setSmartBalances(freshEoaBal)
         }
       }
     } catch (err) {
@@ -305,13 +323,16 @@ function WalletContent() {
         setSendStep('success')
         fetchWalletData()
       } else {
-        // Smart account UserOp
+        // Direct send — user pays gas, no spend permission, no limits
         if (!smartAccountAddress) throw new Error('Smart account not found.')
-
-        const accessToken = getStoredToken()
-        if (!accessToken) throw new Error('Session expired. Please sign in again.')
-
-        await ensureGasReady(BACKEND_URL, accessToken, 2, smartAccountAddress ?? undefined)
+        if (!hasGasForDirect)
+          throw new Error(
+            lang === 'es'
+              ? 'Necesitas ETH para gas.'
+              : lang === 'pt'
+                ? 'Voce precisa de ETH para gas.'
+                : 'Not enough ETH for gas.'
+          )
 
         const call = buildUsdcTransferCall(resolvedAddress, amount)
         await sendUserOperation({
@@ -564,163 +585,97 @@ function WalletContent() {
           </div>
         )}
 
-        {/* Wallet cards */}
-        <div className="grid grid-cols-2 gap-3">
-          {/* WhatsApp Wallet (EOA) */}
-          <div
-            role="button"
-            tabIndex={0}
-            aria-pressed={sendFrom === 'whatsapp'}
-            onClick={() => setSendFrom('whatsapp')}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                setSendFrom('whatsapp')
-              }
-            }}
-            className={`bg-[var(--bg-primary)] rounded-2xl border border-brand-primary/20 p-4 text-left transition-all cursor-pointer ${
-              sendFrom === 'whatsapp' ? 'ring-2 ring-brand-primary' : 'opacity-70'
-            }`}
-          >
-            <div className="flex items-center gap-1 mb-1">
-              <p className="text-xs text-[var(--text-secondary)] font-medium">
-                {t('wallet.whatsappWallet', lang)}
-              </p>
-              <div className="relative">
-                <button
-                  type="button"
-                  aria-label="Info"
-                  className="peer p-0.5"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    e.currentTarget.focus()
-                  }}
-                >
-                  <Info size={12} className="text-[var(--text-muted)]" />
-                </button>
-                <div className="absolute bottom-full left-0 mb-1 hidden peer-hover:block peer-focus:block bg-[var(--bg-tertiary)] text-xs text-[var(--text-secondary)] p-2 rounded-lg shadow-lg w-48 z-10">
-                  {lang === 'es'
-                    ? 'Tu billetera principal. Sippy envia desde aqui por WhatsApp.'
-                    : lang === 'pt'
-                      ? 'Sua carteira principal. Sippy envia daqui pelo WhatsApp.'
-                      : 'Your main wallet. Sippy sends from here when you use WhatsApp.'}
-                </div>
-              </div>
-            </div>
-            {isLoadingData ? (
-              <div className="animate-pulse h-7 bg-[var(--bg-tertiary)] rounded w-20 mb-1" />
-            ) : (
-              <p className="text-xl font-bold text-[var(--text-primary)]">
-                ${parseFloat(eoaBalances?.usdc ?? '0').toFixed(2)}
-              </p>
+        {/* Wallet balance */}
+        <div className="bg-[var(--bg-primary)] rounded-2xl border border-brand-primary/20 p-5">
+          <p className="text-xs text-[var(--text-secondary)] font-medium mb-1">
+            {t('wallet.walletAddress', lang)}
+          </p>
+          {isLoadingData ? (
+            <div className="animate-pulse h-8 bg-[var(--bg-tertiary)] rounded w-28 mb-1" />
+          ) : (
+            <p className="text-2xl font-bold text-[var(--text-primary)]">
+              ${parseFloat(walletBalances?.usdc ?? '0').toFixed(2)}{' '}
+              <span className="text-sm font-normal text-[var(--text-muted)]">USDC</span>
+            </p>
+          )}
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-xs text-[var(--text-muted)] truncate font-mono">
+              {walletAddress ? formatAddress(walletAddress) : '—'}
+            </p>
+            {walletAddress && (
+              <button
+                onClick={() => navigator.clipboard.writeText(walletAddress)}
+                className="text-xs text-brand-primary hover:text-brand-primary-hover font-medium shrink-0"
+              >
+                {t('wallet.copy', lang)}
+              </button>
             )}
-            <p className="text-xs text-[var(--text-muted)] mt-1 truncate">
-              {eoaAddress ? formatAddress(eoaAddress) : '—'}
-            </p>
           </div>
-
-          {/* Web Wallet (Smart Account) */}
-          <div
-            role="button"
-            tabIndex={0}
-            aria-pressed={sendFrom === 'web'}
-            onClick={() => setSendFrom('web')}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                setSendFrom('web')
-              }
-            }}
-            className={`bg-[var(--bg-primary)] rounded-2xl border border-brand-primary/20 p-4 text-left transition-all cursor-pointer ${
-              sendFrom === 'web' ? 'ring-2 ring-brand-primary' : 'opacity-70'
-            }`}
-          >
-            <div className="flex items-center gap-1 mb-1">
-              <p className="text-xs text-[var(--text-secondary)] font-medium">
-                {t('wallet.webWallet', lang)}
-              </p>
-              <div className="relative">
-                <button
-                  type="button"
-                  aria-label="Info"
-                  className="peer p-0.5"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    e.currentTarget.focus()
-                  }}
-                >
-                  <Info size={12} className="text-[var(--text-muted)]" />
-                </button>
-                <div className="absolute bottom-full left-0 mb-1 hidden peer-hover:block peer-focus:block bg-[var(--bg-tertiary)] text-xs text-[var(--text-secondary)] p-2 rounded-lg shadow-lg w-48 z-10">
-                  {lang === 'es'
-                    ? 'Tu billetera web. Una cuenta inteligente que agrupa transacciones.'
-                    : lang === 'pt'
-                      ? 'Sua carteira web. Uma conta inteligente que agrupa transacoes.'
-                      : 'Your web wallet. A smart account that batches transactions for lower fees.'}
-                </div>
-              </div>
-            </div>
-            {isLoadingData ? (
-              <div className="animate-pulse h-7 bg-[var(--bg-tertiary)] rounded w-20 mb-1" />
-            ) : (
-              <p className="text-xl font-bold text-[var(--text-primary)]">
-                ${parseFloat(smartBalances?.usdc ?? '0').toFixed(2)}
-              </p>
-            )}
-            <p className="text-xs text-[var(--text-muted)] mt-1 truncate">
-              {smartAccountAddress ? formatAddress(smartAccountAddress) : '—'}
+          {walletBalances && parseFloat(walletBalances.eth) > 0 && (
+            <p className="text-xs text-[var(--text-muted)] mt-1">
+              {parseFloat(walletBalances.eth).toFixed(6)} ETH
             </p>
-          </div>
-        </div>
-
-        {/* Selected wallet address + copy */}
-        <div className="bg-[var(--bg-primary)] panel-frame rounded-2xl px-5 py-3 flex items-center justify-between">
-          <div>
-            <p className="text-xs text-[var(--text-muted)]">
-              {sendFrom === 'whatsapp'
-                ? t('wallet.whatsappWallet', lang)
-                : t('wallet.webWallet', lang)}{' '}
-              {t('wallet.walletAddress', lang)}
-            </p>
-            <p className="text-sm font-mono text-[var(--text-secondary)]">
-              {sendFrom === 'whatsapp'
-                ? eoaAddress
-                  ? formatAddress(eoaAddress)
-                  : '—'
-                : smartAccountAddress
-                  ? formatAddress(smartAccountAddress)
-                  : '—'}
-            </p>
-          </div>
-          <button
-            onClick={() => {
-              const addr = sendFrom === 'whatsapp' ? eoaAddress : smartAccountAddress
-              if (addr) navigator.clipboard.writeText(addr)
-            }}
-            className="text-xs text-brand-primary hover:text-brand-primary-hover font-medium"
-          >
-            {t('wallet.copy', lang)}
-          </button>
+          )}
         </div>
 
         {/* Send section */}
         <div className="bg-[var(--bg-primary)] panel-frame rounded-2xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-display text-lg font-bold uppercase text-[var(--text-primary)]">
-              {t('wallet.send', lang)}
-            </h2>
-            <span className="text-xs text-[var(--text-muted)]">
-              {t('wallet.sendFrom', lang)}{' '}
-              <span className="font-medium text-[var(--text-secondary)]">
-                {sendFrom === 'whatsapp'
-                  ? t('wallet.whatsappWallet', lang)
-                  : t('wallet.webWallet', lang)}
-              </span>
-            </span>
-          </div>
+          <h2 className="font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-4">
+            {t('wallet.send', lang)}
+          </h2>
 
           {sendStep === 'form' && (
             <div className="space-y-3">
+              {/* Send mode toggle */}
+              <div className="flex gap-2 p-1 bg-[var(--bg-secondary)] rounded-lg">
+                <button
+                  onClick={() => setSendFrom('whatsapp')}
+                  className={`flex-1 py-2 px-3 rounded-md text-xs font-medium transition-all ${
+                    sendFrom === 'whatsapp'
+                      ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {lang === 'es' ? 'Gas gratis' : lang === 'pt' ? 'Gas gratis' : 'Free gas'}
+                  <span className="block text-[10px] opacity-70 mt-0.5">
+                    {lang === 'es'
+                      ? 'limite diario via WhatsApp'
+                      : lang === 'pt'
+                        ? 'limite diario via WhatsApp'
+                        : 'daily limit via WhatsApp'}
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (!hasGasForDirect) {
+                      setSendError(
+                        lang === 'es'
+                          ? 'Necesitas ETH para gas. Deposita ETH en tu billetera.'
+                          : lang === 'pt'
+                            ? 'Voce precisa de ETH para gas. Deposite ETH na sua carteira.'
+                            : 'You need ETH for gas. Deposit ETH to your wallet.'
+                      )
+                      return
+                    }
+                    setSendError(null)
+                    setSendFrom('web')
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-md text-xs font-medium transition-all ${
+                    sendFrom === 'web'
+                      ? 'bg-[var(--bg-primary)] text-[var(--text-primary)] shadow-sm'
+                      : 'text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {lang === 'es' ? 'Directo' : lang === 'pt' ? 'Direto' : 'Direct'}
+                  <span className="block text-[10px] opacity-70 mt-0.5">
+                    {lang === 'es'
+                      ? 'tu gas, sin limite'
+                      : lang === 'pt'
+                        ? 'seu gas, sem limite'
+                        : 'your gas, no limit'}
+                  </span>
+                </button>
+              </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-sm text-[var(--text-secondary)]">
@@ -806,10 +761,17 @@ function WalletContent() {
                     : formatAddress(resolvedAddress || '')}
                 </p>
                 <p className="text-xs text-[var(--text-muted)] mt-2">
-                  from{' '}
-                  {sendFrom === 'whatsapp'
-                    ? t('wallet.whatsappWallet', lang)
-                    : t('wallet.webWallet', lang)}
+                  {sendFrom === 'web'
+                    ? lang === 'es'
+                      ? 'Directo — tu gas, sin limite'
+                      : lang === 'pt'
+                        ? 'Direto — seu gas, sem limite'
+                        : 'Direct — your gas, no limit'
+                    : lang === 'es'
+                      ? 'Gas gratis via Sippy'
+                      : lang === 'pt'
+                        ? 'Gas gratis via Sippy'
+                        : 'Free gas via Sippy'}
                 </p>
               </div>
               <button
