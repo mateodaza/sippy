@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@types/mdx": "^2.0.13",
+    "flexsearch": "^0.8.212",
     "fumadocs-core": "^16.7.6",
     "fumadocs-mdx": "^14.2.11",
     "fumadocs-ui": "^16.7.6",
