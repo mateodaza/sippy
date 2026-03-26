@@ -296,15 +296,11 @@ function WalletContent() {
           calls: [call],
         })
         // success handled by useEffect watching sendOpStatus
-      } else if (
-        eoaHasGas &&
-        smartAccountAddress &&
-        eoaAddress?.toLowerCase() === smartAccountAddress?.toLowerCase()
-      ) {
-        // Direct send from smart account (which IS the "whatsapp wallet") — user pays gas, no limits
+      } else if (eoaHasGas && eoaAddress) {
+        // Direct send from whatsapp wallet — user pays gas, no spend permission, no limits
         const call = buildUsdcTransferCall(resolvedAddress, amount)
         await sendUserOperation({
-          evmSmartAccount: smartAccountAddress as `0x${string}`,
+          evmSmartAccount: eoaAddress as `0x${string}`,
           network: NETWORK as 'arbitrum',
           calls: [call],
         })
