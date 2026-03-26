@@ -79,6 +79,7 @@
     "@inertiajs/react": "^2.3.17",
     "@japa/api-client": "^3.2.1",
     "@sippy/shared": "workspace:*",
+    "@tuyau/client": "^0.2.10",
     "@tuyau/core": "^1.0.0",
     "@types/cors": "^2.8.19",
     "@vinejs/vine": "^4.3.0",
