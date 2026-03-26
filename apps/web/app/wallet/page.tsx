@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Info } from 'lucide-react'
-import { useSendUserOperation, useSendEvmTransaction } from '@coinbase/cdp-hooks'
+import { useSendUserOperation, useSendEvmTransaction, useEvmAccounts } from '@coinbase/cdp-hooks'
 import { SippyPhoneInput } from '@/components/ui/phone-input'
 import { getStoredToken, clearToken } from '@/lib/auth'
 import { useSessionGuard } from '@/lib/useSessionGuard'
@@ -133,9 +133,21 @@ function WalletContent() {
     error: sendOpError,
   } = useSendUserOperation()
   const { sendEvmTransaction } = useSendEvmTransaction()
+  const { evmAccounts } = useEvmAccounts()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const smartAccountAddress = (currentUser as any)?.evmSmartAccountObjects?.[0]?.address ?? null
+
+  // Debug: log CDP account addresses vs backend address (remove after confirming)
+  useEffect(() => {
+    if (eoaAddress || evmAccounts?.length || smartAccountAddress) {
+      console.log('[Sippy wallet debug]', {
+        backendEoaAddress: eoaAddress,
+        cdpEvmAccounts: evmAccounts?.map((a: { address: string }) => a.address),
+        cdpSmartAccount: smartAccountAddress,
+      })
+    }
+  }, [eoaAddress, evmAccounts, smartAccountAddress])
 
   // Active balance based on selected send-from wallet
   const activeBalance = sendFrom === 'whatsapp' ? eoaBalances : smartBalances
@@ -300,9 +312,11 @@ function WalletContent() {
         // success handled by useEffect watching sendOpStatus
       } else if (eoaHasGas && eoaAddress) {
         // Direct send from whatsapp wallet (EOA) — user pays gas, no spend permission, no limits
+        const cdpEoa = evmAccounts?.[0]?.address ?? eoaAddress
+        console.log('[Sippy send] Direct EOA path, using:', cdpEoa)
         const txData = encodeUsdcTransfer(resolvedAddress, amount)
         const result = await sendEvmTransaction({
-          evmAccount: eoaAddress as `0x${string}`,
+          evmAccount: cdpEoa as `0x${string}`,
           network: NETWORK as 'arbitrum',
           transaction: {
             to: USDC_ADDRESS,
