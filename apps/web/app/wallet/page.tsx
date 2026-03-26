@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Info } from 'lucide-react'
-import { useSendUserOperation } from '@coinbase/cdp-hooks'
+import { useSendUserOperation, useSendEvmTransaction, useEvmAccounts } from '@coinbase/cdp-hooks'
 import { getStoredToken, clearToken } from '@/lib/auth'
 import { useSessionGuard } from '@/lib/useSessionGuard'
 import { ChannelPicker, ResendButton } from '../../components/shared/ChannelPicker'
@@ -45,7 +45,7 @@ async function getBalancesRpc(address: string): Promise<Balance> {
     usdc: formatUnits(usdcResult as bigint, 6),
   }
 }
-import { ensureGasReady, buildUsdcTransferCall } from '@/lib/usdc-transfer'
+import { ensureGasReady, buildUsdcTransferCall, encodeUsdcTransfer } from '@/lib/usdc-transfer'
 import { ActivityList } from '@/components/activity/ActivityList'
 import {
   Language,
@@ -130,12 +130,18 @@ function WalletContent() {
     data: sendOpData,
     error: sendOpError,
   } = useSendUserOperation()
+  const { sendEvmTransaction } = useSendEvmTransaction()
+  const { evmAccounts } = useEvmAccounts()
+  const cdpEoaAddress = evmAccounts?.[0]?.address ?? null
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const smartAccountAddress = (currentUser as any)?.evmSmartAccountObjects?.[0]?.address ?? null
 
   // Active balance based on selected send-from wallet
   const activeBalance = sendFrom === 'whatsapp' ? eoaBalances : smartBalances
+
+  // EOA has enough ETH to pay its own gas (direct send bypassing spender)
+  const eoaHasGas = parseFloat(eoaBalances?.eth ?? '0') > 0.0001
 
   // ============================================================================
   // Language
@@ -279,8 +285,41 @@ function WalletContent() {
     setSendStep('sending')
 
     try {
-      if (sendFrom === 'whatsapp') {
-        // EOA send via backend SpendPermission
+      if (sendFrom === 'web') {
+        // Direct send from smart account — user pays gas, no spend permission, no limits
+        if (!smartAccountAddress) throw new Error('Smart account not found.')
+        const smartGas = parseFloat(smartBalances?.eth ?? '0')
+        if (smartGas < 0.0001) throw new Error('Not enough ETH for gas in your web wallet.')
+
+        const call = buildUsdcTransferCall(resolvedAddress, amount)
+        await sendUserOperation({
+          evmSmartAccount: smartAccountAddress as `0x${string}`,
+          network: NETWORK as 'arbitrum',
+          calls: [call],
+        })
+        // success handled by useEffect watching sendOpStatus
+      } else if (
+        eoaHasGas &&
+        cdpEoaAddress &&
+        cdpEoaAddress.toLowerCase() === eoaAddress?.toLowerCase()
+      ) {
+        // Direct send from EOA — user pays gas, bypasses spender, no limits
+        const data = encodeUsdcTransfer(resolvedAddress, amount)
+        const result = await sendEvmTransaction({
+          evmAccount: cdpEoaAddress as `0x${string}`,
+          network: NETWORK as 'arbitrum',
+          transaction: {
+            to: USDC_ADDRESS,
+            data,
+            value: BigInt(0),
+            chainId: 42161,
+          },
+        })
+        setSendTxHash(result.transactionHash ?? null)
+        setSendStep('success')
+        fetchWalletData()
+      } else {
+        // Spender path via backend — free gas, limits apply
         const accessToken = getStoredToken()
         if (!accessToken) throw new Error('Session expired. Please sign in again.')
 
@@ -302,22 +341,6 @@ function WalletContent() {
         setSendTxHash(data.txHash ?? null)
         setSendStep('success')
         fetchWalletData()
-      } else {
-        // Smart account UserOp
-        if (!smartAccountAddress) throw new Error('Smart account not found.')
-
-        const accessToken = getStoredToken()
-        if (!accessToken) throw new Error('Session expired. Please sign in again.')
-
-        await ensureGasReady(BACKEND_URL, accessToken, 2, smartAccountAddress ?? undefined)
-
-        const call = buildUsdcTransferCall(resolvedAddress, amount)
-        await sendUserOperation({
-          evmSmartAccount: smartAccountAddress as `0x${string}`,
-          network: NETWORK as 'arbitrum',
-          calls: [call],
-        })
-        // success handled by useEffect watching sendOpStatus
       }
     } catch (err) {
       console.error('Send failed:', err)
@@ -326,7 +349,7 @@ function WalletContent() {
     }
   }
 
-  // Watch smart account UserOp status
+  // Watch smart account UserOp status (direct send path)
   useEffect(() => {
     if (sendFrom !== 'web') return
     if (sendOpStatus === 'success' && sendOpData) {
