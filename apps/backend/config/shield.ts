@@ -23,6 +23,7 @@ const shieldConfig = defineConfig({
         pattern.startsWith('/api/') ||
         pattern.startsWith('/debug/') ||
         pattern === '/webhook/whatsapp' ||
+        pattern === '/webhook/alchemy/address-activity' ||
         pattern === '/notify-fund' ||
         pattern === '/resolve-phone' ||
         pattern === '/resolve-address'

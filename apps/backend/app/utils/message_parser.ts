@@ -256,6 +256,10 @@ const SEND_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
  */
 export function parseMessageWithRegex(text: string): ParsedCommand {
   const normalizedText = text.trim().toLowerCase()
+  // Accent-stripped version for send pattern matching: "Mándale" → "mandale", "Envíale" → "enviale"
+  // JS /i flag doesn't fold Unicode accents, and Spanish imperatives shift accents
+  // to different syllables (mándale vs mandá), so we strip all combining marks.
+  const accentFreeText = normalizedText.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
   // Check language command first (needs to extract the lang code)
   for (const pattern of COMMAND_PATTERNS.language) {
@@ -306,10 +310,15 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
     }
   }
 
-  // Check send patterns (need to extract amount + recipient)
+  // Check send patterns against accent-stripped text so "Mándale 0.1 a Carlos"
+  // matches the same pattern as "mandale 0.1 a Carlos".
+  // NFD strip preserves string length (each accented char stays 1 codepoint),
+  // so capture group positions map 1:1 to normalizedText. We restore accented
+  // captures from normalizedText so alias resolution preserves "mamá" not "mama".
   for (const { pattern, lang } of SEND_PATTERNS) {
-    const match = trimmedText.match(pattern)
+    const match = accentFreeText.match(pattern)
     if (match) {
+      restoreAccents(match, accentFreeText, normalizedText)
       return parseSendMatch(match, text, lang)
     }
   }
@@ -330,11 +339,15 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
   // Catches: "Hola envia 5 a +57...", "Hey send 10 to ...", "Listo envia 5 a +57..."
   const GREETING_PREFIX =
     /^(?:hola|hey|hi|oi|buenas|oye|epa|que tal|buenos d[ií]as|buenas (?:tardes|noches)|listo|dale|vale|va|ok[aá]y?|ya|bueno|bien|si|s[ií]|sure|yes|ready)[,!.;]?\s+/i
-  const withoutGreeting = trimmedText.replace(GREETING_PREFIX, '')
-  if (withoutGreeting !== trimmedText) {
+  const withoutGreeting = accentFreeText.replace(GREETING_PREFIX, '')
+  // Compute the accent-preserved version by stripping the same prefix length
+  const greetingLen = accentFreeText.length - withoutGreeting.length
+  const withoutGreetingAccented = normalizedText.slice(greetingLen)
+  if (withoutGreeting !== accentFreeText) {
     for (const { pattern, lang } of SEND_PATTERNS) {
       const match = withoutGreeting.match(pattern)
       if (match) {
+        restoreAccents(match, withoutGreeting, withoutGreetingAccented)
         return parseSendMatch(match, text, lang)
       }
     }
@@ -344,7 +357,7 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
   }
 
   // Check partial send patterns (recipient only, no amount)
-  const partialResult = matchPartialSend(trimmedText)
+  const partialResult = matchPartialSend(accentFreeText)
   if (partialResult) return partialResult
 
   // Unknown command
@@ -509,6 +522,30 @@ export function parseAndValidateAmount(raw: string): AmountParseResult {
   }
 
   return { value, errorCode: null, isLarge: value > 500 }
+}
+
+// ============================================================================
+// Accent restoration helper
+// ============================================================================
+
+/**
+ * Restore accented characters in regex capture groups.
+ * When matching against accent-stripped text, captures lose accents ("mamá" → "mama").
+ * Since NFD stripping preserves string length, positions map 1:1 to the accented source.
+ */
+function restoreAccents(
+  match: RegExpMatchArray,
+  strippedSource: string,
+  accentedSource: string
+): void {
+  for (let g = 1; g < match.length; g++) {
+    if (match[g] !== undefined && match.index !== undefined) {
+      const groupStart = strippedSource.indexOf(match[g], match.index)
+      if (groupStart !== -1) {
+        match[g] = accentedSource.slice(groupStart, groupStart + match[g].length)
+      }
+    }
+  }
 }
 
 // ============================================================================

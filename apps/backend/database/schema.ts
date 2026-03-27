@@ -173,6 +173,33 @@ export class PhoneRegistrySchema extends BaseModel {
   declare permissionCreatedAt: bigint | number | null
 }
 
+export class UserContactSchema extends BaseModel {
+  static $columns = [
+    'id',
+    'ownerPhone',
+    'alias',
+    'aliasDisplay',
+    'targetPhone',
+    'source',
+    'createdAt',
+  ] as const
+  $columns = UserContactSchema.$columns
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare ownerPhone: string
+  @column()
+  declare alias: string
+  @column()
+  declare aliasDisplay: string
+  @column()
+  declare targetPhone: string
+  @column()
+  declare source: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime | null
+}
+
 export class UserPreferenceSchema extends BaseModel {
   static $columns = [
     'phoneNumber',
@@ -216,6 +243,15 @@ export class UserPreferenceSchema extends BaseModel {
   declare emailNudgeSentAt: DateTime | null
   @column.dateTime()
   declare setupNotifiedAt: DateTime | null
+}
+
+export class WalletAliasSchema extends BaseModel {
+  static $columns = ['address', 'ownerPhone'] as const
+  $columns = WalletAliasSchema.$columns
+  @column()
+  declare address: string
+  @column()
+  declare ownerPhone: string
 }
 
 export class WebSendLogSchema extends BaseModel {
