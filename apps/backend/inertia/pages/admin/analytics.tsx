@@ -105,7 +105,7 @@ export default function Analytics({
       <Head title="Analytics" />
 
       <div className="mb-8">
-        <h1 className="font-sans text-2xl font-bold uppercase tracking-[0.05em] admin-text">
+        <h1 className="font-sans text-3xl font-bold uppercase tracking-[0.05em] admin-text">
           Analytics
         </h1>
         <p className="spec-label mt-1">ON-CHAIN VOLUME // USERS // KPI TRACKING</p>
@@ -123,25 +123,25 @@ export default function Analytics({
             aria-hidden="true"
           />
           <div className="flex-1">
-            <p className="font-mono text-xs font-bold tracking-wider uppercase admin-text">
+            <p className="font-mono text-sm font-bold tracking-wider uppercase admin-text">
               {isEmpty ? 'GASREFUEL CONTRACT EMPTY' : 'GASREFUEL BALANCE LOW'}
             </p>
-            <p className="mt-1 font-mono text-[11px] tracking-wider admin-text-secondary">
+            <p className="mt-1 font-mono text-[13px] tracking-wider admin-text-secondary">
               {isEmpty
                 ? 'Users cannot receive gas sponsorship. Send ETH immediately.'
                 : `Balance: ${contractBalanceNum.toFixed(4)} ETH (threshold: ${LOW_BALANCE_THRESHOLD} ETH)`}
             </p>
-            <p className="mt-1 font-mono text-[11px] tracking-wider admin-text-muted">
+            <p className="mt-1 font-mono text-[13px] tracking-wider admin-text-muted">
               Contract: {gasStatus?.contractAddress || 'N/A'}
             </p>
             {gasStatus?.spenderAddress && (
-              <p className="font-mono text-[11px] tracking-wider admin-text-muted">
+              <p className="font-mono text-[13px] tracking-wider admin-text-muted">
                 Payer: {gasStatus.spenderAddress}
               </p>
             )}
           </div>
           <span
-            className={`font-mono text-[11px] font-bold tracking-[0.15em] uppercase ${isEmpty ? 'text-danger' : 'text-warning'}`}
+            className={`font-mono text-[13px] font-bold tracking-[0.15em] uppercase ${isEmpty ? 'text-danger' : 'text-warning'}`}
           >
             {isEmpty ? 'CRITICAL' : 'WARNING'}
           </span>
@@ -151,19 +151,19 @@ export default function Analytics({
         <div className="mb-6 flex items-center gap-3 border border-warning/30 bg-warning-light px-5 py-4">
           <span className="indicator-dot indicator-dot-warning" aria-hidden="true" />
           <div className="flex-1">
-            <p className="font-mono text-xs font-bold tracking-wider uppercase admin-text">
+            <p className="font-mono text-sm font-bold tracking-wider uppercase admin-text">
               SPENDER NEEDS GAS
             </p>
-            <p className="mt-1 font-mono text-[11px] tracking-wider admin-text-secondary">
+            <p className="mt-1 font-mono text-[13px] tracking-wider admin-text-secondary">
               Balance: {spenderBalanceNum.toFixed(6)} ETH. Sends will fail without gas.
             </p>
             {gasStatus?.spenderAddress && (
-              <p className="mt-1 font-mono text-[11px] tracking-wider admin-text-muted">
+              <p className="mt-1 font-mono text-[13px] tracking-wider admin-text-muted">
                 Payer: {gasStatus.spenderAddress}
               </p>
             )}
           </div>
-          <span className="font-mono text-[11px] font-bold tracking-[0.15em] uppercase text-warning">
+          <span className="font-mono text-[13px] font-bold tracking-[0.15em] uppercase text-warning">
             WARNING
           </span>
         </div>
@@ -174,14 +174,14 @@ export default function Analytics({
         {/* Total USDC Volume */}
         <div className="panel-frame p-5">
           <p className="spec-label mb-3">TOTAL VOLUME</p>
-          <div className="font-sans text-3xl font-bold admin-text">{formatUSDC(totalVolume)}</div>
+          <div className="font-sans text-4xl font-bold admin-text">{formatUSDC(totalVolume)}</div>
           <div className="mt-3 h-1 bg-brand/10">
             <div
               className="h-full bg-brand transition-all duration-500"
               style={{ width: `${volumePct}%` }}
             />
           </div>
-          <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] tracking-wider admin-text-muted">
+          <div className="mt-1.5 flex items-center justify-between font-mono text-[13px] tracking-wider admin-text-muted">
             <span>{volumePct}%</span>
             <span>TARGET: ${volumeTarget.toLocaleString()}</span>
           </div>
@@ -190,14 +190,14 @@ export default function Analytics({
         {/* Registered Users */}
         <div className="panel-frame p-5">
           <p className="spec-label mb-3">REGISTERED USERS</p>
-          <div className="font-sans text-3xl font-bold admin-text">{registeredUsers}</div>
+          <div className="font-sans text-4xl font-bold admin-text">{registeredUsers}</div>
           <div className="mt-3 h-1 bg-brand/10">
             <div
               className="h-full bg-brand transition-all duration-500"
               style={{ width: `${usersPct}%` }}
             />
           </div>
-          <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] tracking-wider admin-text-muted">
+          <div className="mt-1.5 flex items-center justify-between font-mono text-[13px] tracking-wider admin-text-muted">
             <span>{usersPct}%</span>
             <span>TARGET: {usersTarget}</span>
           </div>
@@ -206,8 +206,8 @@ export default function Analytics({
         {/* Active Today */}
         <div className="panel-frame p-5">
           <p className="spec-label mb-3">ACTIVE TODAY</p>
-          <div className="font-sans text-3xl font-bold admin-text">{activeToday}</div>
-          <p className="mt-3 font-mono text-[11px] tracking-wider admin-text-muted">
+          <div className="font-sans text-4xl font-bold admin-text">{activeToday}</div>
+          <p className="mt-3 font-mono text-[13px] tracking-wider admin-text-muted">
             UNIQUE WALLETS (24H)
           </p>
         </div>
@@ -215,10 +215,10 @@ export default function Analytics({
         {/* Gas Refuels */}
         <div className="panel-frame p-5">
           <p className="spec-label mb-3">GAS REFUELS</p>
-          <div className="font-sans text-3xl font-bold admin-text">
+          <div className="font-sans text-4xl font-bold admin-text">
             {gasStatus?.totalRefuels ?? 0}
           </div>
-          <div className="mt-3 space-y-1 font-mono text-[11px] tracking-wider admin-text-muted">
+          <div className="mt-3 space-y-1 font-mono text-[13px] tracking-wider admin-text-muted">
             <div className="flex items-center gap-2">
               <span>{gasStatus ? formatETH(gasStatus.totalEthSpent) : '0 ETH'} SPENT</span>
               {gasStatus?.isPaused && <span className="font-bold text-danger">PAUSED</span>}
@@ -268,12 +268,12 @@ export default function Analytics({
                 return (
                   <div key={row.flowType}>
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-wider">
+                      <span className="flex items-center gap-2 font-mono text-[13px] font-bold tracking-wider">
                         <span className={config.color}>{config.icon}</span>
                         <span className="admin-text">{config.label}</span>
                         <span className="admin-text-muted">({Number(row.txCount)} TXS)</span>
                       </span>
-                      <span className="font-mono text-xs font-bold admin-text">
+                      <span className="font-mono text-sm font-bold admin-text">
                         {formatUSDC(row.volume)}
                       </span>
                     </div>
@@ -283,21 +283,21 @@ export default function Analytics({
                         style={{ width: `${Math.max(pct, 2)}%` }}
                       />
                     </div>
-                    <div className="mt-1 text-right font-mono text-[11px] tracking-wider admin-text-muted">
+                    <div className="mt-1 text-right font-mono text-[13px] tracking-wider admin-text-muted">
                       {pct}%
                     </div>
                   </div>
                 )
               })
             ) : (
-              <p className="py-4 text-center font-mono text-[11px] tracking-wider admin-text-muted">
+              <p className="py-4 text-center font-mono text-[13px] tracking-wider admin-text-muted">
                 NO DATA YET
               </p>
             )}
 
             {fundFlow.length > 0 && (
               <div className="mt-2 border-t border-brand/10 pt-3">
-                <div className="flex items-center justify-between font-mono text-xs">
+                <div className="flex items-center justify-between font-mono text-sm">
                   <span className="tracking-wider admin-text-muted">TOTAL</span>
                   <span className="font-bold admin-text">
                     {formatUSDC(String(totalFlowVolume))}
@@ -318,24 +318,24 @@ export default function Analytics({
                   key={user.address}
                   className="flex items-center justify-between px-2 py-2 transition-colors hover:bg-brand-light"
                 >
-                  <span className="flex items-center gap-3 font-mono text-[11px] tracking-wider">
+                  <span className="flex items-center gap-3 font-mono text-[13px] tracking-wider">
                     <span className="w-5 font-bold text-brand">
                       {String(i + 1).padStart(2, '0')}
                     </span>
                     <span className="admin-text-secondary">{truncateAddress(user.address)}</span>
                   </span>
                   <div className="text-right">
-                    <span className="font-mono text-[11px] font-bold tracking-wider admin-text">
+                    <span className="font-mono text-[13px] font-bold tracking-wider admin-text">
                       {formatUSDC(user.totalVolume)}
                     </span>
-                    <div className="font-mono text-[10px] tracking-wider admin-text-muted">
+                    <div className="font-mono text-xs tracking-wider admin-text-muted">
                       {user.txCount} TXS
                     </div>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="py-4 text-center font-mono text-[11px] tracking-wider admin-text-muted">
+              <p className="py-4 text-center font-mono text-[13px] tracking-wider admin-text-muted">
                 NO DATA YET
               </p>
             )}
@@ -365,14 +365,14 @@ export default function Analytics({
                   role="img"
                   aria-label={`${formatUSDC(row.totalUsdcVolume)} on ${formattedDate}`}
                 >
-                  <span className="mb-1 font-mono text-[10px] font-bold admin-text opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                  <span className="mb-1 font-mono text-xs font-bold admin-text opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
                     {formatUSDC(row.totalUsdcVolume)}
                   </span>
                   <div
                     className="w-full bg-brand transition-colors group-hover:bg-brand-hover"
                     style={{ height: barHeight }}
                   />
-                  <span className="mt-1 font-mono text-[10px] tracking-wider admin-text-muted">
+                  <span className="mt-1 font-mono text-xs tracking-wider admin-text-muted">
                     {new Date(row.date + 'T00:00:00').toLocaleDateString(undefined, {
                       month: 'short',
                       day: 'numeric',
@@ -383,7 +383,7 @@ export default function Analytics({
             })}
           </div>
         ) : (
-          <p className="py-8 text-center font-mono text-[11px] tracking-wider admin-text-muted">
+          <p className="py-8 text-center font-mono text-[13px] tracking-wider admin-text-muted">
             NO DATA YET
           </p>
         )}

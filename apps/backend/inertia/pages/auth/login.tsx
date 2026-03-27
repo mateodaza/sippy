@@ -22,10 +22,32 @@ export default function Login() {
       >
         <div className="relative w-full max-w-md px-6">
           {/* Brand */}
-          <div className="mb-8 text-center">
-            <div className="font-sans text-3xl font-bold uppercase tracking-[0.1em] admin-text">
-              Sippy
-            </div>
+          <div className="mb-8 flex flex-col items-center">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="80 376 864 272"
+              className="h-8 w-auto text-brand"
+              aria-label="Sippy"
+              role="img"
+            >
+              <rect fill="currentColor" x="80" y="376" width="160" height="32" />
+              <rect fill="currentColor" x="80" y="426" width="160" height="32" />
+              <rect fill="currentColor" x="208" y="476" width="32" height="172" />
+              <rect fill="currentColor" x="80" y="616" width="160" height="32" />
+              <rect fill="currentColor" x="280" y="376" width="64" height="32" />
+              <rect fill="currentColor" x="312" y="376" width="32" height="272" />
+              <rect fill="currentColor" x="384" y="376" width="32" height="272" />
+              <rect fill="currentColor" x="384" y="376" width="160" height="32" />
+              <rect fill="currentColor" x="512" y="376" width="32" height="160" />
+              <rect fill="currentColor" x="384" y="512" width="160" height="32" />
+              <rect fill="currentColor" x="584" y="376" width="32" height="272" />
+              <rect fill="currentColor" x="584" y="376" width="160" height="32" />
+              <rect fill="currentColor" x="712" y="376" width="32" height="160" />
+              <rect fill="currentColor" x="584" y="512" width="160" height="32" />
+              <rect fill="currentColor" x="784" y="376" width="32" height="160" />
+              <rect fill="currentColor" x="784" y="512" width="160" height="32" />
+              <rect fill="currentColor" x="912" y="376" width="32" height="272" />
+            </svg>
             <p className="spec-label mt-2">ADMIN PANEL // SIGN IN</p>
           </div>
 
@@ -41,7 +63,7 @@ export default function Login() {
                   type="email"
                   value={data.email}
                   onChange={(e) => setData('email', e.target.value)}
-                  className="w-full border px-4 py-3 font-mono text-sm transition-colors focus:border-brand focus:ring-1 focus:ring-brand/20 focus-visible:outline-none"
+                  className="w-full border px-4 py-3 font-mono text-[15px] transition-colors focus:border-brand focus:ring-1 focus:ring-brand/20 focus-visible:outline-none"
                   style={{
                     backgroundColor: 'var(--admin-surface)',
                     borderColor: 'var(--admin-border)',
@@ -52,7 +74,7 @@ export default function Login() {
                 />
                 {errors.email && (
                   <p
-                    className="mt-1.5 font-mono text-[11px] font-bold tracking-wider text-danger"
+                    className="mt-1.5 font-mono text-[13px] font-bold tracking-wider text-danger"
                     role="alert"
                   >
                     {errors.email}
@@ -69,7 +91,7 @@ export default function Login() {
                   type="password"
                   value={data.password}
                   onChange={(e) => setData('password', e.target.value)}
-                  className="w-full border px-4 py-3 font-mono text-sm transition-colors focus:border-brand focus:ring-1 focus:ring-brand/20 focus-visible:outline-none"
+                  className="w-full border px-4 py-3 font-mono text-[15px] transition-colors focus:border-brand focus:ring-1 focus:ring-brand/20 focus-visible:outline-none"
                   style={{
                     backgroundColor: 'var(--admin-surface)',
                     borderColor: 'var(--admin-border)',
@@ -80,7 +102,7 @@ export default function Login() {
                 />
                 {errors.password && (
                   <p
-                    className="mt-1.5 font-mono text-[11px] font-bold tracking-wider text-danger"
+                    className="mt-1.5 font-mono text-[13px] font-bold tracking-wider text-danger"
                     role="alert"
                   >
                     {errors.password}
@@ -91,7 +113,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={processing}
-                className="w-full bg-brand px-6 py-3.5 font-mono text-sm font-bold tracking-[0.12em] uppercase text-white transition-colors hover:bg-brand-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
+                className="w-full bg-brand px-6 py-3.5 font-mono text-[15px] font-bold tracking-[0.12em] uppercase text-white transition-colors hover:bg-brand-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
               >
                 {processing ? (
                   <span className="flex items-center justify-center gap-2">
@@ -124,7 +146,7 @@ export default function Login() {
             </form>
           </div>
 
-          <p className="mt-6 text-center font-mono text-[11px] tracking-[0.2em] uppercase admin-text-muted">
+          <p className="mt-6 text-center font-mono text-[13px] tracking-[0.2em] uppercase admin-text-muted">
             SIPPY ADMIN // {new Date().getFullYear()}
           </p>
         </div>

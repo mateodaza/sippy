@@ -45,21 +45,21 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
 
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="font-sans text-2xl font-bold uppercase tracking-[0.05em] admin-text">
+          <h1 className="font-sans text-3xl font-bold uppercase tracking-[0.05em] admin-text">
             Users
           </h1>
           <p className="spec-label mt-1">{users.meta.total} REGISTERED</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="indicator-dot indicator-dot-active" aria-hidden="true" />
-          <span className="font-mono text-[11px] font-bold tracking-[0.12em] text-crypto-hover">
+          <span className="font-mono text-[13px] font-bold tracking-[0.12em] text-crypto-hover">
             {users.meta.total} TOTAL
           </span>
         </div>
       </div>
 
       <div className="panel-frame overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full text-[15px]">
           <caption className="sr-only">Registered users and their on-chain activity</caption>
           <thead>
             <tr
@@ -82,40 +82,40 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
                 <td className="px-5 py-3.5">
                   <Link
                     href={`/admin/users/${encodeURIComponent(user.phone_number)}`}
-                    className="font-mono text-xs font-bold text-brand transition-colors hover:text-brand-hover focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
+                    className="font-mono text-sm font-bold text-brand transition-colors hover:text-brand-hover focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
                   >
                     {user.phone_number}
                   </Link>
                 </td>
-                <td className="px-5 py-3.5 font-mono text-[11px] admin-text-secondary">
+                <td className="px-5 py-3.5 font-mono text-[13px] admin-text-secondary">
                   {user.wallet_address ? (
                     `${user.wallet_address.slice(0, 6)}...${user.wallet_address.slice(-4)}`
                   ) : (
                     <span className="admin-text-muted">---</span>
                   )}
                 </td>
-                <td className="px-5 py-3.5 font-mono text-xs admin-text">
+                <td className="px-5 py-3.5 font-mono text-sm admin-text">
                   {user.onchain ? (
                     formatUSDC(user.onchain.totalSent)
                   ) : (
                     <span className="admin-text-muted">---</span>
                   )}
                 </td>
-                <td className="px-5 py-3.5 font-mono text-xs admin-text">
+                <td className="px-5 py-3.5 font-mono text-sm admin-text">
                   {user.onchain ? (
                     formatUSDC(user.onchain.totalReceived)
                   ) : (
                     <span className="admin-text-muted">---</span>
                   )}
                 </td>
-                <td className="px-5 py-3.5 font-mono text-xs admin-text-secondary">
+                <td className="px-5 py-3.5 font-mono text-sm admin-text-secondary">
                   {user.onchain ? (
                     user.onchain.txCount
                   ) : (
                     <span className="admin-text-muted">0</span>
                   )}
                 </td>
-                <td className="px-5 py-3.5 font-mono text-[11px] tracking-wider admin-text-muted">
+                <td className="px-5 py-3.5 font-mono text-[13px] tracking-wider admin-text-muted">
                   {user.onchain?.lastActivity ? (
                     <span title="On-chain activity">
                       {new Date(user.onchain.lastActivity * 1000).toLocaleDateString()}
@@ -132,7 +132,7 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
               <tr>
                 <td
                   colSpan={6}
-                  className="px-5 py-12 text-center font-mono text-[11px] tracking-wider admin-text-muted"
+                  className="px-5 py-12 text-center font-mono text-[13px] tracking-wider admin-text-muted"
                 >
                   NO USERS REGISTERED YET
                 </td>
@@ -149,7 +149,7 @@ export default function UsersIndex({ users }: { users: PaginatedUsers }) {
             <Link
               key={pg}
               href={`/admin/users?page=${pg}`}
-              className={`px-3 py-1.5 font-mono text-[11px] font-bold tracking-wider transition-colors focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none ${
+              className={`px-3 py-1.5 font-mono text-[13px] font-bold tracking-wider transition-colors focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none ${
                 pg === users.meta.current_page
                   ? 'bg-brand text-white'
                   : 'border border-brand/15 admin-text-secondary hover:border-brand/30 hover:text-brand'

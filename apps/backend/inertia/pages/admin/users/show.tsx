@@ -55,7 +55,7 @@ export default function UserShow({
           <p className="spec-label mb-2">USER NOT FOUND</p>
           <Link
             href="/admin/users"
-            className="mt-3 font-mono text-[11px] font-bold tracking-wider text-brand hover:text-brand-hover focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
+            className="mt-3 font-mono text-[13px] font-bold tracking-wider text-brand hover:text-brand-hover focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
           >
             BACK TO USERS
           </Link>
@@ -120,7 +120,7 @@ export default function UserShow({
       {/* Back link */}
       <Link
         href="/admin/users"
-        className="mb-6 inline-flex items-center gap-2 font-mono text-[11px] font-bold tracking-wider admin-text-muted transition-colors hover:text-brand focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
+        className="mb-6 inline-flex items-center gap-2 font-mono text-[13px] font-bold tracking-wider admin-text-muted transition-colors hover:text-brand focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
       >
         <svg
           className="h-3 w-3"
@@ -138,7 +138,7 @@ export default function UserShow({
       </Link>
 
       <div className="mb-8">
-        <h1 className="font-sans text-2xl font-bold uppercase tracking-[0.05em] admin-text">
+        <h1 className="font-sans text-3xl font-bold uppercase tracking-[0.05em] admin-text">
           {user.phone_number}
         </h1>
         <p className="spec-label mt-1">USER DETAILS // ACTIVITY</p>
@@ -151,7 +151,7 @@ export default function UserShow({
             <div key={d.label}>
               <p className="spec-label mb-1">{d.label}</p>
               {d.badge ? (
-                <span className="inline-flex items-center gap-2 font-mono text-xs">
+                <span className="inline-flex items-center gap-2 font-mono text-sm">
                   <span
                     className={`indicator-dot ${d.badgeActive ? 'indicator-dot-active' : 'indicator-dot-muted'}`}
                     aria-hidden="true"
@@ -162,7 +162,7 @@ export default function UserShow({
                 </span>
               ) : (
                 <div
-                  className={`text-sm admin-text ${d.mono ? 'break-all font-mono text-[11px]' : ''}`}
+                  className={`text-[15px] admin-text ${d.mono ? 'break-all font-mono text-[13px]' : ''}`}
                 >
                   {d.value}
                 </div>
@@ -175,13 +175,13 @@ export default function UserShow({
       {/* Activity */}
       <div className="mb-4 flex items-center justify-between">
         <p className="spec-label">RECENT ACTIVITY</p>
-        <span className="font-mono text-[11px] tracking-wider admin-text-muted">
+        <span className="font-mono text-[13px] tracking-wider admin-text-muted">
           {activity.length} RECORDS
         </span>
       </div>
 
       <div className="panel-frame overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full text-[15px]">
           <caption className="sr-only">Recent message parsing activity</caption>
           <thead>
             <tr
@@ -200,10 +200,10 @@ export default function UserShow({
           <tbody className="divide-y" style={{ borderColor: 'var(--admin-border-subtle)' }}>
             {activity.map((a) => (
               <tr key={a.id} className="transition-colors hover:bg-brand-light/50">
-                <td className="px-5 py-3 font-mono text-xs admin-text">{a.intent}</td>
+                <td className="px-5 py-3 font-mono text-sm admin-text">{a.intent}</td>
                 <td className="px-5 py-3">
                   <span
-                    className={`font-mono text-[11px] font-bold tracking-wider uppercase ${
+                    className={`font-mono text-[13px] font-bold tracking-wider uppercase ${
                       a.parse_source === 'llm' ? 'text-[#7c3aed]' : 'text-brand'
                     }`}
                   >
@@ -211,7 +211,7 @@ export default function UserShow({
                   </span>
                 </td>
                 <td className="px-5 py-3">
-                  <span className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-wider uppercase">
+                  <span className="flex items-center gap-2 font-mono text-[13px] font-bold tracking-wider uppercase">
                     <span
                       className={`indicator-dot ${
                         a.status === 'success'
@@ -225,10 +225,10 @@ export default function UserShow({
                     {a.status}
                   </span>
                 </td>
-                <td className="px-5 py-3 font-mono text-[11px] tracking-wider admin-text-muted">
+                <td className="px-5 py-3 font-mono text-[13px] tracking-wider admin-text-muted">
                   {a.latency_ms}MS
                 </td>
-                <td className="px-5 py-3 font-mono text-[11px] tracking-wider admin-text-muted">
+                <td className="px-5 py-3 font-mono text-[13px] tracking-wider admin-text-muted">
                   {new Date(a.created_at).toLocaleString()}
                 </td>
               </tr>
@@ -237,7 +237,7 @@ export default function UserShow({
               <tr>
                 <td
                   colSpan={5}
-                  className="px-5 py-12 text-center font-mono text-[11px] tracking-wider admin-text-muted"
+                  className="px-5 py-12 text-center font-mono text-[13px] tracking-wider admin-text-muted"
                 >
                   NO ACTIVITY YET
                 </td>

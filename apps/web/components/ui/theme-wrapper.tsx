@@ -1,21 +1,21 @@
-'use client';
+'use client'
 
-import { usePathname } from 'next/navigation';
-import { ThemeProvider } from 'next-themes';
+import { usePathname } from 'next/navigation'
+import { ThemeProvider } from 'next-themes'
 
 export function ThemeWrapper({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const isLanding = pathname === '/';
+  const pathname = usePathname()
+  const supportsTheme = pathname === '/' || pathname === '/stats'
 
   return (
     <ThemeProvider
-      attribute='class'
-      defaultTheme={isLanding ? 'system' : 'light'}
-      enableSystem={isLanding}
-      forcedTheme={isLanding ? undefined : 'light'}
-      storageKey='sippy_theme'
+      attribute="class"
+      defaultTheme={supportsTheme ? 'system' : 'light'}
+      enableSystem={supportsTheme}
+      forcedTheme={supportsTheme ? undefined : 'light'}
+      storageKey="sippy_theme"
     >
       {children}
     </ThemeProvider>
-  );
+  )
 }

@@ -199,7 +199,7 @@ function PollerStatus({
       className="mt-auto space-y-2 px-4 pt-4 pb-4"
       style={{ borderTop: '1px solid var(--admin-border-subtle)' }}
     >
-      <div className="flex items-center gap-2 font-mono text-[11px] tracking-wider uppercase admin-text-secondary">
+      <div className="flex items-center gap-2 font-mono text-[13px] tracking-wider uppercase admin-text-secondary">
         <span
           className={`indicator-dot ${
             indexerStatus.pollerAgo === null
@@ -222,12 +222,12 @@ function PollerStatus({
         <button
           onClick={handleRestart}
           disabled={restarting}
-          className="ml-4 font-mono text-[11px] tracking-wider uppercase text-danger hover:underline disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-danger/30 focus-visible:outline-none"
+          className="ml-4 font-mono text-[13px] tracking-wider uppercase text-danger hover:underline disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-danger/30 focus-visible:outline-none"
         >
           {restarting ? 'Restarting...' : 'Restart'}
         </button>
       )}
-      <div className="flex items-center gap-2 font-mono text-[11px] tracking-wider uppercase admin-text-secondary">
+      <div className="flex items-center gap-2 font-mono text-[13px] tracking-wider uppercase admin-text-secondary">
         <span
           className={`indicator-dot ${
             indexerStatus.webhookAgo === null ? 'indicator-dot-muted' : 'indicator-dot-active'
@@ -265,11 +265,32 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         className="flex items-center justify-between px-5 py-5"
         style={{ borderBottom: '1px solid var(--admin-border-subtle)' }}
       >
-        <div>
-          <div className="font-sans text-lg font-bold uppercase tracking-[0.1em] admin-text">
-            Sippy
-          </div>
-          <div className="spec-label mt-0.5">ADMIN PANEL</div>
+        <div className="flex items-center gap-3">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="80 376 864 272"
+            className="h-6 w-auto text-brand"
+            aria-label="Sippy"
+            role="img"
+          >
+            <rect fill="currentColor" x="80" y="376" width="160" height="32" />
+            <rect fill="currentColor" x="80" y="426" width="160" height="32" />
+            <rect fill="currentColor" x="208" y="476" width="32" height="172" />
+            <rect fill="currentColor" x="80" y="616" width="160" height="32" />
+            <rect fill="currentColor" x="280" y="376" width="64" height="32" />
+            <rect fill="currentColor" x="312" y="376" width="32" height="272" />
+            <rect fill="currentColor" x="384" y="376" width="32" height="272" />
+            <rect fill="currentColor" x="384" y="376" width="160" height="32" />
+            <rect fill="currentColor" x="512" y="376" width="32" height="160" />
+            <rect fill="currentColor" x="384" y="512" width="160" height="32" />
+            <rect fill="currentColor" x="584" y="376" width="32" height="272" />
+            <rect fill="currentColor" x="584" y="376" width="160" height="32" />
+            <rect fill="currentColor" x="712" y="376" width="32" height="160" />
+            <rect fill="currentColor" x="584" y="512" width="160" height="32" />
+            <rect fill="currentColor" x="784" y="376" width="32" height="160" />
+            <rect fill="currentColor" x="784" y="512" width="160" height="32" />
+            <rect fill="currentColor" x="912" y="376" width="32" height="272" />
+          </svg>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle />
@@ -302,7 +323,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <Link
             key={item.href}
             href={item.href}
-            className={`flex items-center gap-3 rounded px-3 py-2.5 font-mono text-[11px] font-bold tracking-[0.12em] transition-colors focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none ${
+            className={`flex items-center gap-3 rounded px-3 py-2.5 font-mono text-[13px] font-bold tracking-[0.12em] transition-colors focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none ${
               isActive(item.href)
                 ? 'bg-brand-light text-brand'
                 : 'admin-text-secondary hover:bg-brand-light/50 hover:text-brand'
@@ -334,13 +355,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <div
-                className="flex h-8 w-8 items-center justify-center rounded font-mono text-[10px] font-bold tracking-wider text-brand"
+                className="flex h-8 w-8 items-center justify-center rounded font-mono text-xs font-bold tracking-wider text-brand"
                 style={{ border: '1px solid var(--admin-border)' }}
               >
                 {auth.initials}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium admin-text">
+                <div className="truncate text-[15px] font-medium admin-text">
                   {auth.fullName || auth.email}
                 </div>
                 <div className="spec-label">{auth.role.toUpperCase()}</div>
@@ -350,7 +371,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               href="/admin/logout"
               method="post"
               as="button"
-              className="w-full rounded px-3 py-2 font-mono text-[11px] font-bold tracking-[0.12em] uppercase admin-text-secondary transition-colors hover:text-brand focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
+              className="w-full rounded px-3 py-2 font-mono text-[13px] font-bold tracking-[0.12em] uppercase admin-text-secondary transition-colors hover:text-brand focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
               style={{ border: '1px solid var(--admin-border)' }}
             >
               SIGN OUT
@@ -391,9 +412,31 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             <line x1="3" y1="18" x2="21" y2="18" />
           </svg>
         </button>
-        <span className="font-sans text-sm font-bold uppercase tracking-[0.1em] admin-text">
-          Sippy
-        </span>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="80 376 864 272"
+          className="h-5 w-auto text-brand"
+          aria-label="Sippy"
+          role="img"
+        >
+          <rect fill="currentColor" x="80" y="376" width="160" height="32" />
+          <rect fill="currentColor" x="80" y="426" width="160" height="32" />
+          <rect fill="currentColor" x="208" y="476" width="32" height="172" />
+          <rect fill="currentColor" x="80" y="616" width="160" height="32" />
+          <rect fill="currentColor" x="280" y="376" width="64" height="32" />
+          <rect fill="currentColor" x="312" y="376" width="32" height="272" />
+          <rect fill="currentColor" x="384" y="376" width="32" height="272" />
+          <rect fill="currentColor" x="384" y="376" width="160" height="32" />
+          <rect fill="currentColor" x="512" y="376" width="32" height="160" />
+          <rect fill="currentColor" x="384" y="512" width="160" height="32" />
+          <rect fill="currentColor" x="584" y="376" width="32" height="272" />
+          <rect fill="currentColor" x="584" y="376" width="160" height="32" />
+          <rect fill="currentColor" x="712" y="376" width="32" height="160" />
+          <rect fill="currentColor" x="584" y="512" width="160" height="32" />
+          <rect fill="currentColor" x="784" y="376" width="32" height="160" />
+          <rect fill="currentColor" x="784" y="512" width="160" height="32" />
+          <rect fill="currentColor" x="912" y="376" width="32" height="272" />
+        </svg>
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -429,7 +472,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             role="alert"
           >
             <span className="indicator-dot indicator-dot-active" aria-hidden="true" />
-            <p className="font-mono text-xs font-bold tracking-wider uppercase text-crypto-hover">
+            <p className="font-mono text-sm font-bold tracking-wider uppercase text-crypto-hover">
               {flash.success}
             </p>
           </div>
@@ -440,7 +483,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             role="alert"
           >
             <span className="indicator-dot indicator-dot-danger" aria-hidden="true" />
-            <p className="font-mono text-xs font-bold tracking-wider uppercase text-danger">
+            <p className="font-mono text-sm font-bold tracking-wider uppercase text-danger">
               {flash.error}
             </p>
           </div>

@@ -20,21 +20,21 @@ export default function RolesIndex({ admins }: { admins: Admin[] }) {
 
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="font-sans text-2xl font-bold uppercase tracking-[0.05em] admin-text">
+          <h1 className="font-sans text-3xl font-bold uppercase tracking-[0.05em] admin-text">
             Admin Roles
           </h1>
           <p className="spec-label mt-1">ACCESS LEVEL MANAGEMENT</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="indicator-dot indicator-dot-active" aria-hidden="true" />
-          <span className="font-mono text-[11px] font-bold tracking-[0.12em] text-crypto-hover">
+          <span className="font-mono text-[13px] font-bold tracking-[0.12em] text-crypto-hover">
             {admins.length} ADMINS
           </span>
         </div>
       </div>
 
       <div className="panel-frame overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full text-[15px]">
           <caption className="sr-only">Admin users and their roles</caption>
           <thead>
             <tr
@@ -55,7 +55,7 @@ export default function RolesIndex({ admins }: { admins: Admin[] }) {
                 <td className="px-5 py-3.5">
                   <div className="flex items-center gap-3">
                     <div
-                      className="flex h-8 w-8 items-center justify-center font-mono text-[11px] font-bold tracking-wider text-brand"
+                      className="flex h-8 w-8 items-center justify-center font-mono text-[13px] font-bold tracking-wider text-brand"
                       style={{ border: '1px solid var(--admin-border)' }}
                     >
                       {admin.full_name
@@ -67,12 +67,12 @@ export default function RolesIndex({ admins }: { admins: Admin[] }) {
                             .slice(0, 2)
                         : admin.email[0].toUpperCase()}
                     </div>
-                    <span className="text-sm font-medium admin-text">
+                    <span className="text-[15px] font-medium admin-text">
                       {admin.full_name || '---'}
                     </span>
                   </div>
                 </td>
-                <td className="px-5 py-3.5 font-mono text-[11px] admin-text-secondary">
+                <td className="px-5 py-3.5 font-mono text-[13px] admin-text-secondary">
                   {admin.email}
                 </td>
                 <td className="px-5 py-3.5">
@@ -83,7 +83,7 @@ export default function RolesIndex({ admins }: { admins: Admin[] }) {
                     id={`role-${admin.id}`}
                     value={admin.role}
                     onChange={(e) => handleRoleChange(admin.id, e.target.value)}
-                    className="border px-3 py-1.5 font-mono text-[11px] font-bold tracking-wider uppercase admin-text transition-colors focus:border-brand focus:ring-1 focus:ring-brand/20 focus-visible:outline-none"
+                    className="border px-3 py-1.5 font-mono text-[13px] font-bold tracking-wider uppercase admin-text transition-colors focus:border-brand focus:ring-1 focus:ring-brand/20 focus-visible:outline-none"
                     style={{
                       backgroundColor: 'var(--admin-surface)',
                       borderColor: 'var(--admin-border)',
@@ -93,7 +93,7 @@ export default function RolesIndex({ admins }: { admins: Admin[] }) {
                     <option value="viewer">VIEWER</option>
                   </select>
                 </td>
-                <td className="px-5 py-3.5 font-mono text-[11px] tracking-wider admin-text-muted">
+                <td className="px-5 py-3.5 font-mono text-[13px] tracking-wider admin-text-muted">
                   {new Date(admin.created_at).toLocaleDateString()}
                 </td>
               </tr>
@@ -102,7 +102,7 @@ export default function RolesIndex({ admins }: { admins: Admin[] }) {
               <tr>
                 <td
                   colSpan={4}
-                  className="px-5 py-12 text-center font-mono text-[11px] tracking-wider admin-text-muted"
+                  className="px-5 py-12 text-center font-mono text-[13px] tracking-wider admin-text-muted"
                 >
                   NO ADMIN USERS YET
                 </td>
