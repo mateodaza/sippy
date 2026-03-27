@@ -39,7 +39,6 @@ export interface PendingTransaction {
 export interface PartialSend {
   amount?: number // present if user gave an amount
   recipient?: string // present if user gave a phone (canonical E.164)
-  ownerPhone?: string // sender's phone, needed for alias resolution in follow-ups
   timestamp: number // Date.now()
   lang: Lang
 }
@@ -98,6 +97,19 @@ export interface WalletInfo {
   wallet: string
 }
 
+export interface WhatsAppContact {
+  name?: {
+    formatted_name?: string
+    first_name?: string
+    last_name?: string
+  }
+  phones?: Array<{
+    phone?: string
+    type?: string
+    wa_id?: string
+  }>
+}
+
 export interface WhatsAppMessage {
   from: string
   id: string
@@ -117,18 +129,7 @@ export interface WhatsAppMessage {
       description?: string
     }
   }
-  contacts?: Array<{
-    name: {
-      formatted_name: string
-      first_name?: string
-      last_name?: string
-    }
-    phones?: Array<{
-      phone: string
-      type?: string
-      wa_id?: string
-    }>
-  }>
+  contacts?: WhatsAppContact[]
   type: string
 }
 

@@ -51,6 +51,10 @@ export default class extends BaseSchema {
   }
 
   async down() {
+    this.defer(async (db) => {
+      await db.rawQuery('DROP TRIGGER IF EXISTS trg_contact_limit ON user_contacts')
+      await db.rawQuery('DROP FUNCTION IF EXISTS enforce_contact_limit()')
+    })
     this.schema.dropTableIfExists('user_contacts')
   }
 }

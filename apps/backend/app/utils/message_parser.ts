@@ -155,9 +155,9 @@ const SAVE_CONTACT_PATTERNS: RegExp[] = [
 ]
 
 const DELETE_CONTACT_PATTERNS: RegExp[] = [
-  /^(?:delete|remove)\s+(?:contact\s+)?(.{1,30})$/i,
-  /^(?:borrar|eliminar|quitar)\s+(?:contacto\s+)?(.{1,30})$/i,
-  /^(?:apagar|remover|excluir)\s+(?:contato\s+)?(.{1,30})$/i,
+  /^(?:delete|remove)\s+contact\s+(.{1,30})$/i,
+  /^(?:borrar|eliminar|quitar)\s+contacto\s+(.{1,30})$/i,
+  /^(?:apagar|remover|excluir)\s+contato\s+(.{1,30})$/i,
 ]
 
 const LIST_CONTACT_PATTERNS: RegExp[] = [

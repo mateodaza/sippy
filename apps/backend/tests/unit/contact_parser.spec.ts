@@ -66,8 +66,8 @@ test.group('A | save_contact parsing', () => {
 // ── Group B: delete_contact ─────────────────────────────────────────────────
 
 test.group('B | delete_contact parsing', () => {
-  test('B-01: EN "delete mom"', ({ assert }) => {
-    const r = parseMessageWithRegex('delete mom')
+  test('B-01: EN "delete contact mom"', ({ assert }) => {
+    const r = parseMessageWithRegex('delete contact mom')
     assert.equal(r.command, 'delete_contact')
     assert.equal(r.alias, 'mom')
   })
@@ -78,8 +78,8 @@ test.group('B | delete_contact parsing', () => {
     assert.equal(r.alias, 'John')
   })
 
-  test('B-03: ES "borrar mamá"', ({ assert }) => {
-    const r = parseMessageWithRegex('borrar mamá')
+  test('B-03: ES "borrar contacto mamá"', ({ assert }) => {
+    const r = parseMessageWithRegex('borrar contacto mamá')
     assert.equal(r.command, 'delete_contact')
     assert.equal(r.alias, 'mamá')
   })
@@ -90,8 +90,8 @@ test.group('B | delete_contact parsing', () => {
     assert.equal(r.alias, 'papá')
   })
 
-  test('B-05: PT "apagar mãe"', ({ assert }) => {
-    const r = parseMessageWithRegex('apagar mãe')
+  test('B-05: PT "apagar contato mãe"', ({ assert }) => {
+    const r = parseMessageWithRegex('apagar contato mãe')
     assert.equal(r.command, 'delete_contact')
     assert.equal(r.alias, 'mãe')
   })
@@ -102,10 +102,25 @@ test.group('B | delete_contact parsing', () => {
     assert.equal(r.alias, 'João')
   })
 
-  test('B-07: alias with spaces "delete María García"', ({ assert }) => {
-    const r = parseMessageWithRegex('delete María García')
+  test('B-07: alias with spaces "delete contact María García"', ({ assert }) => {
+    const r = parseMessageWithRegex('delete contact María García')
     assert.equal(r.command, 'delete_contact')
     assert.equal(r.alias, 'María García')
+  })
+
+  test('B-08: "delete mom" without keyword does NOT match (prevents hijacking)', ({ assert }) => {
+    const r = parseMessageWithRegex('delete mom')
+    assert.notEqual(r.command, 'delete_contact')
+  })
+
+  test('B-09: "borrar historial" does NOT match delete_contact', ({ assert }) => {
+    const r = parseMessageWithRegex('borrar historial')
+    assert.notEqual(r.command, 'delete_contact')
+  })
+
+  test('B-10: "eliminar mi cuenta" does NOT match delete_contact', ({ assert }) => {
+    const r = parseMessageWithRegex('eliminar mi cuenta')
+    assert.notEqual(r.command, 'delete_contact')
   })
 })
 

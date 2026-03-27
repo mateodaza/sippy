@@ -85,6 +85,7 @@ import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup
 import { getDialect, dialectHint, type Dialect } from '#utils/dialect'
 import { validateLLMResponse } from '#services/llm_validator.service'
 import { resolveAlias, fuzzyResolveAlias, updateContact } from '#services/contact.service'
+import { sanitizeAlias } from '#utils/contact_sanitizer'
 import {
   handleSaveContact,
   handleDeleteContact,
@@ -390,17 +391,18 @@ export async function routeCommand(
               // Multiple ties — store partial send so follow-up alias resolves
               partialSends.set(phoneNumber, {
                 amount: command.amount,
-                ownerPhone: phoneNumber,
                 timestamp: Date.now(),
                 lang,
               })
+              const safeRaw =
+                sanitizeAlias(command.recipientRaw) ?? command.recipientRaw.slice(0, 30)
               const lines = fuzzyMatches.map(
                 (m, i) => `${i + 1}. ${m.aliasDisplay} (${m.targetPhone})`
               )
               const disambigMsg = {
-                en: `Multiple contacts match "${command.recipientRaw}":\n${lines.join('\n')}\nReply with the exact contact name.`,
-                es: `Varios contactos coinciden con "${command.recipientRaw}":\n${lines.join('\n')}\nResponde con el nombre exacto del contacto.`,
-                pt: `V\u00e1rios contatos correspondem a "${command.recipientRaw}":\n${lines.join('\n')}\nResponda com o nome exato do contato.`,
+                en: `Multiple contacts match "${safeRaw}":\n${lines.join('\n')}\nReply with the exact contact name.`,
+                es: `Varios contactos coinciden con "${safeRaw}":\n${lines.join('\n')}\nResponde con el nombre exacto del contacto.`,
+                pt: `V\u00e1rios contatos correspondem a "${safeRaw}":\n${lines.join('\n')}\nResponda com o nome exato do contato.`,
               }
               await sendMessageFn(phoneNumber, disambigMsg[lang], lang)
               return
@@ -498,7 +500,6 @@ export async function routeCommand(
           // Has amount, missing recipient → store partial, ask for phone or alias
           partialSends.set(phoneNumber, {
             amount: command.amount,
-            ownerPhone: phoneNumber,
             timestamp: Date.now(),
             lang,
           })
@@ -607,17 +608,24 @@ export async function routeCommand(
       }
 
       case 'confirm': {
-        // Check for pending contact overwrite confirmation BEFORE pending tx
         const pendingOverwrite = pendingContactOverwrites.get(phoneNumber)
-        if (
-          pendingOverwrite &&
-          Date.now() - pendingOverwrite.timestamp < PENDING_OVERWRITE_TTL_MS
-        ) {
+        const pendingOverwriteValid =
+          pendingOverwrite && Date.now() - pendingOverwrite.timestamp < PENDING_OVERWRITE_TTL_MS
+        const pending = pendingTxs.get(phoneNumber)
+        const pendingTxValid = pending && Date.now() - pending.timestamp <= PENDING_TX_TTL_MS
+
+        // If BOTH a contact overwrite and a money transfer are pending,
+        // prioritize the money transfer (higher stakes) and discard the overwrite.
+        // The user can re-save the contact after the transfer.
+        if (pendingOverwriteValid && pendingTxValid) {
+          pendingContactOverwrites.delete(phoneNumber)
+          // Fall through to pending tx handling below
+        } else if (pendingOverwriteValid) {
           pendingContactOverwrites.delete(phoneNumber)
           const overwriteResult = await updateContact(
             phoneNumber,
-            pendingOverwrite.alias,
-            pendingOverwrite.newPhone
+            pendingOverwrite!.alias,
+            pendingOverwrite!.newPhone
           )
           if (overwriteResult.success) {
             const updatedMsg = {
@@ -632,9 +640,7 @@ export async function routeCommand(
           return
         }
         // Clear expired overwrite if any
-        if (pendingOverwrite) pendingContactOverwrites.delete(phoneNumber)
-
-        const pending = pendingTxs.get(phoneNumber)
+        if (pendingOverwrite && !pendingOverwriteValid) pendingContactOverwrites.delete(phoneNumber)
         // Lazy expiry check — guarantees 2-minute cutoff regardless of GC interval timing
         if (!pending || Date.now() - pending.timestamp > PENDING_TX_TTL_MS) {
           if (pending) pendingTxs.delete(phoneNumber) // clean up expired entry
@@ -892,7 +898,8 @@ export async function dispatchCommand(
  */
 async function resolvePartialSend(
   partial: PartialSend,
-  text: string
+  text: string,
+  ownerPhone: string
 ): Promise<{ amount: number; recipient: string } | null> {
   const trimmed = text.trim()
 
@@ -916,11 +923,9 @@ async function resolvePartialSend(
       return { amount: partial.amount, recipient: phone }
     }
     // Try alias resolution (for disambiguation follow-ups like "maria garcia")
-    if (partial.ownerPhone) {
-      const aliasPhone = await resolveAlias(partial.ownerPhone, trimmed)
-      if (aliasPhone) {
-        return { amount: partial.amount, recipient: aliasPhone }
-      }
+    const aliasPhone = await resolveAlias(ownerPhone, trimmed)
+    if (aliasPhone) {
+      return { amount: partial.amount, recipient: aliasPhone }
     }
   }
 
@@ -1090,8 +1095,13 @@ export default class WebhookController {
       partialSends.delete(from)
 
       const contactLang: Lang = (await getUserLanguage(from)) || getLanguageForPhone(from)
-      const response = await handleContactCard(from, message.contacts, contactLang)
-      await sendTextMessage(from, response, contactLang)
+      try {
+        const response = await handleContactCard(from, message.contacts, contactLang)
+        await sendTextMessage(from, response, contactLang)
+      } catch (err) {
+        logger.error('Contact card processing failed for %s: %o', maskPhone(from), err)
+        await sendTextMessage(from, formatCommandErrorMessage(contactLang), contactLang)
+      }
       rateLimitService.markProcessed(messageId)
       return
     }
@@ -1113,7 +1123,12 @@ export default class WebhookController {
     // try to interpret this message as the missing piece.
     const partial = partialSends.get(from)
     if (partial && Date.now() - partial.timestamp <= PENDING_TX_TTL_MS) {
-      const resolved = await resolvePartialSend(partial, text)
+      let resolved: { amount: number; recipient: string } | null = null
+      try {
+        resolved = await resolvePartialSend(partial, text, from)
+      } catch (err) {
+        logger.error('resolvePartialSend failed for %s: %o', maskPhone(from), err)
+      }
       if (resolved) {
         partialSends.delete(from)
         logger.info(

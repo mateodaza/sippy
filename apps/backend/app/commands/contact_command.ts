@@ -6,10 +6,12 @@
  * Contact names are never passed to the LLM (prompt injection prevention).
  */
 
-import { type Lang } from '#utils/messages'
+import { type Lang, formatCommandErrorMessage } from '#utils/messages'
 import { saveContact, deleteContact, listContacts } from '#services/contact.service'
+import type { WhatsAppContact } from '#types/index'
 import logger from '@adonisjs/core/services/logger'
 import { maskPhone } from '#utils/phone'
+import { sanitizeAlias } from '#utils/contact_sanitizer'
 
 // ============================================================================
 // Trilingual response strings
@@ -136,7 +138,7 @@ export async function handleSaveContact(
     case 'limit_reached':
       return { message: RESPONSES[lang].save_limit }
     default:
-      return { message: RESPONSES[lang].save_invalid_phone }
+      return { message: formatCommandErrorMessage(lang) }
   }
 }
 
@@ -168,19 +170,6 @@ export async function handleListContacts(senderPhone: string, lang: Lang): Promi
   return `${RESPONSES[lang].list_header}\n${lines.join('\n')}`
 }
 
-export interface WhatsAppContact {
-  name?: {
-    formatted_name?: string
-    first_name?: string
-    last_name?: string
-  }
-  phones?: Array<{
-    phone?: string
-    type?: string
-    wa_id?: string
-  }>
-}
-
 export async function handleContactCard(
   senderPhone: string,
   contacts: WhatsAppContact[],
@@ -192,19 +181,32 @@ export async function handleContactCard(
   const skipped: string[] = []
 
   for (const contact of contacts.slice(0, 5)) {
-    const name = contact.name?.formatted_name
+    const rawName = contact.name?.formatted_name
     const phone = contact.phones?.[0]?.phone
 
-    if (!name || !phone) continue
+    if (!rawName || !phone) {
+      skipped.push(RESPONSES[lang].vcard_no_valid)
+      continue
+    }
 
-    const result = await saveContact(senderPhone, name, phone, 'vcard')
+    const safeName = sanitizeAlias(rawName) ?? rawName.slice(0, 30)
+
+    const result = await saveContact(senderPhone, rawName, phone, 'vcard')
     if (result.success) {
       saved.push(`${result.alias} \u2192 ${result.phone}`)
     } else if (result.error === 'overwrite_conflict') {
-      // Don't silently overwrite — skip and inform the user (trilingual)
       skipped.push(
-        RESPONSES[lang].vcard_conflict.replace(/\{name\}/g, name).replace(/\{phone\}/g, phone)
+        RESPONSES[lang].vcard_conflict
+          .replace(/\{name\}/g, safeName)
+          .replace(/\{phone\}/g, result.existingPhone)
       )
+    } else if (result.error === 'limit_reached') {
+      skipped.push(RESPONSES[lang].save_limit)
+      break // no point continuing if limit is reached
+    } else if (result.error === 'self_contact') {
+      skipped.push(RESPONSES[lang].save_self)
+    } else {
+      skipped.push(`${safeName}: ${RESPONSES[lang].save_invalid_phone}`)
     }
   }
 

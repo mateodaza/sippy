@@ -10,21 +10,32 @@ import { query } from '#services/db'
 import { canonicalizePhone } from '#utils/phone'
 import { sanitizeAlias, normalizeAlias } from '#utils/contact_sanitizer'
 
+export type ContactSource = 'command' | 'vcard'
+
+export type SaveContactError =
+  | 'invalid_alias'
+  | 'invalid_phone'
+  | 'self_contact'
+  | 'overwrite_conflict'
+  | 'limit_reached'
+  | 'not_found'
+
 export interface SavedContact {
   alias: string
   aliasDisplay: string
   targetPhone: string
-  source: string
+  source: ContactSource
 }
 
 export async function saveContact(
   ownerPhone: string,
   rawAlias: string,
   rawTargetPhone: string,
-  source: 'command' | 'vcard' = 'command'
+  source: ContactSource = 'command'
 ): Promise<
   | { success: true; alias: string; phone: string }
-  | { success: false; error: string; existingPhone?: string }
+  | { success: false; error: 'overwrite_conflict'; existingPhone: string }
+  | { success: false; error: Exclude<SaveContactError, 'overwrite_conflict' | 'not_found'> }
 > {
   const alias = sanitizeAlias(rawAlias)
   if (!alias) return { success: false, error: 'invalid_alias' }
@@ -92,7 +103,16 @@ export async function saveContact(
     return { success: false, error: 'limit_reached' }
   }
 
-  return { success: true, alias, phone: actual.rows[0].target_phone }
+  // Verify the stored phone matches what the caller intended.
+  // If a concurrent request won the alias with a different phone, surface a conflict
+  // instead of silently returning the wrong phone.
+  const actualPhone = actual.rows[0].target_phone
+  const actualDigits = actualPhone.replace(/\D/g, '')
+  if (actualDigits !== targetDigits) {
+    return { success: false, error: 'overwrite_conflict', existingPhone: actualPhone }
+  }
+
+  return { success: true, alias, phone: actualPhone }
 }
 
 /**
@@ -102,19 +122,30 @@ export async function updateContact(
   ownerPhone: string,
   rawAlias: string,
   rawTargetPhone: string,
-  source: 'command' | 'vcard' = 'command'
-): Promise<{ success: true; alias: string; phone: string } | { success: false; error: string }> {
+  source: ContactSource = 'command'
+): Promise<
+  { success: true; alias: string; phone: string } | { success: false; error: SaveContactError }
+> {
   const alias = sanitizeAlias(rawAlias)
   if (!alias) return { success: false, error: 'invalid_alias' }
 
   const targetPhone = canonicalizePhone(rawTargetPhone)
   if (!targetPhone) return { success: false, error: 'invalid_phone' }
 
-  await query(
+  // Self-save protection (same guard as saveContact)
+  const ownerDigits = ownerPhone.replace(/\D/g, '')
+  const targetDigits = targetPhone.replace(/\D/g, '')
+  if (ownerDigits === targetDigits) return { success: false, error: 'self_contact' }
+
+  const result = await query(
     `UPDATE user_contacts SET target_phone = $3, alias_display = $4, source = $5
      WHERE owner_phone = $1 AND alias = $2`,
     [ownerPhone, normalizeAlias(alias), targetPhone, alias, source]
   )
+
+  if ((result.rowCount ?? 0) === 0) {
+    return { success: false, error: 'not_found' }
+  }
 
   return { success: true, alias, phone: targetPhone }
 }
@@ -169,11 +200,14 @@ export async function fuzzyResolveAlias(
   const contacts = await listContacts(ownerPhone)
   const normalized = normalizeAlias(alias)
 
-  // Collect all matches within distance <= 2
+  // Scale max distance by alias length: short aliases (<=3 chars) get distance 1 only
+  // to prevent dangerously broad matches in a financial app (e.g. "ana" matching "ali")
+  const maxDistance = normalized.length <= 3 ? 1 : 2
+
   const matches: Array<{ aliasDisplay: string; targetPhone: string; distance: number }> = []
   for (const contact of contacts) {
     const d = levenshtein(normalized, contact.alias)
-    if (d > 0 && d <= 2) {
+    if (d > 0 && d <= maxDistance) {
       matches.push({
         aliasDisplay: contact.aliasDisplay,
         targetPhone: contact.targetPhone,
