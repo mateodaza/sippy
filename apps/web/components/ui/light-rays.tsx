@@ -51,24 +51,25 @@ function createRays(count: number, cycle: number): LightRay[] {
 function Ray({ left, rotate, width, swing, delay, duration, intensity }: LightRay) {
   return (
     <motion.div
-      className="pointer-events-none absolute -top-[12%] h-[var(--light-rays-length)] origin-top -translate-x-1/2 rounded-full opacity-0"
+      className="pointer-events-none absolute -top-[12%] h-[var(--light-rays-length)] origin-top -translate-x-1/2 rounded-full"
       style={{
         left: `${left}%`,
         width: `${width}px`,
         background: `linear-gradient(to bottom, var(--light-rays-color), transparent)`,
         filter: `blur(var(--light-rays-blur))`,
+        opacity: intensity * 0.5,
       }}
-      initial={{ rotate }}
+      initial={{ rotate, opacity: intensity * 0.5 }}
       animate={{
-        opacity: [0, intensity, 0],
+        opacity: [intensity * 0.3, intensity, intensity * 0.3],
         rotate: [rotate - swing, rotate + swing, rotate - swing],
       }}
       transition={{
         duration,
         repeat: Infinity,
         ease: 'easeInOut',
-        delay,
-        repeatDelay: duration * 0.1,
+        delay: delay * 0.3,
+        repeatDelay: duration * 0.05,
       }}
     />
   )

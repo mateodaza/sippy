@@ -16,6 +16,7 @@ import BlurFade from '@/components/ui/blur-fade'
 import { getRequestLang } from '@/lib/i18n-server'
 import { t } from '@/lib/i18n'
 import { LanguageSwitcher } from '@/components/ui/language-switcher'
+import { LiveStats } from '@/components/ui/live-stats'
 
 const SIPPY_NUMBER = process.env.NEXT_PUBLIC_SIPPY_WHATSAPP_NUMBER || '+1 (472) 226-1449'
 
@@ -136,6 +137,13 @@ export default async function HomePage() {
                 </BlurFade>
               ))}
             </div>
+
+            {/* Live stats readout */}
+            <BlurFade delay={1.1} yOffset={4}>
+              <div className="mt-4 sm:mt-6 flex justify-center">
+                <LiveStats />
+              </div>
+            </BlurFade>
           </div>
         </section>
 
