@@ -20,6 +20,7 @@ const DebugController = () => import('#controllers/debug_controller')
 const EmbeddedWalletController = () => import('#controllers/embedded_wallet_controller')
 const AuthApiController = () => import('#controllers/auth_api_controller')
 const SupportController = () => import('#controllers/support_controller')
+const WebhookAlchemyController = () => import('#controllers/webhook_alchemy_controller')
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
@@ -29,6 +30,9 @@ router.get('/health', [HealthController, 'health'])
 // ── WhatsApp webhook (exact paths registered in Meta) ───────────────────────
 router.get('/webhook/whatsapp', [WebhookController, 'verify'])
 router.post('/webhook/whatsapp', [WebhookController, 'handle'])
+
+// ── Alchemy webhook (HMAC-verified, no session auth) ────────────────────
+router.post('/webhook/alchemy/address-activity', [WebhookAlchemyController, 'handle'])
 
 // ── Public resolution (IP-throttled, privacy-aware) ─────────────────────────
 router.get('/resolve-phone', [ResolveController, 'byPhone']).use(middleware.ipThrottle())

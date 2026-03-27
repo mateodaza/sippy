@@ -9,18 +9,18 @@
 
 ## M1 Deliverables (from approved proposal)
 
-| # | Deliverable | Status | Phase |
-|---|------------|--------|-------|
-| 1 | Onramp integration (API, testing, user flow) | Blocked (waiting on Maash) | P6 |
-| 2 | Non-custodial wallet refinements | 100% | P1, P2, Sweep+Wallet, custom auth, dual-wallet web UI, web send hardened — all done |
-| 3 | Security hardening (rate limits, tx checks, error handling) | 100% | SH (phone sanitization), TX (confirmation, self-send, velocity, amount hardening), EL (tiered limits), AU (audit), AC (block/unblock, global pause), web send guards — all done |
-| 4 | Dual currency display (USD + local) | 100% | P3 (26 LATAM currencies, 24h cache) |
-| 5 | Privacy controls + Email Recovery | 100% | PV (phone visibility toggle, profile masking, WhatsApp command), email recovery — all done |
-| 6 | User settings (daily limits via settings page) | 100% | LN (language auto-detect + selector), EL (tiered limit display), PV (privacy toggle) — all done |
-| 7 | Monitoring infrastructure (error tracking, uptime) | 100% | MO (Sentry backend+frontend, health endpoint), PostHog analytics, indexer, admin dashboard — all done |
-| 8 | Legal entity establishment | External | — |
-| 9 | WhatsApp production number active | 100% | Done |
-| 10 | Closed beta: 50 testers + onramp | 0% | P8 (E2E test matrix done, beta onboarding pending) |
+| #   | Deliverable                                                 | Status                     | Phase                                                                                                                                                                           |
+| --- | ----------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Onramp integration (API, testing, user flow)                | Blocked (waiting on Maash) | P6                                                                                                                                                                              |
+| 2   | Non-custodial wallet refinements                            | 100%                       | P1, P2, Sweep+Wallet, custom auth, unified wallet UI (Free gas + Direct modes), web send hardened — all done                                                                    |
+| 3   | Security hardening (rate limits, tx checks, error handling) | 100%                       | SH (phone sanitization), TX (confirmation, self-send, velocity, amount hardening), EL (tiered limits), AU (audit), AC (block/unblock, global pause), web send guards — all done |
+| 4   | Dual currency display (USD + local)                         | 100%                       | P3 (26 LATAM currencies, 24h cache)                                                                                                                                             |
+| 5   | Privacy controls + Email Recovery                           | 100%                       | PV (phone visibility toggle, profile masking, WhatsApp command), email recovery — all done                                                                                      |
+| 6   | User settings (daily limits via settings page)              | 100%                       | LN (language auto-detect + selector), EL (tiered limit display), PV (privacy toggle) — all done                                                                                 |
+| 7   | Monitoring infrastructure (error tracking, uptime)          | 100%                       | MO (Sentry backend+frontend, health endpoint), PostHog analytics, indexer, admin dashboard — all done                                                                           |
+| 8   | Legal entity establishment                                  | External                   | —                                                                                                                                                                               |
+| 9   | WhatsApp production number active                           | 100%                       | Done                                                                                                                                                                            |
+| 10  | Closed beta: 50 testers + onramp                            | 0%                         | P8 (E2E test matrix done, beta onboarding pending)                                                                                                                              |
 
 **KPIs:** Security features tested, dual currency live, monitoring dashboard active, 50 beta testers, $10K+ USDC volume.
 
@@ -37,6 +37,7 @@
 **Our users are regular people — not crypto natives.** Every auth flow, recovery path, and error message must assume zero blockchain knowledge. If a flow would confuse your mom, simplify it. No jargon, no hex addresses in error messages, no "transaction reverted." Say "something went wrong, try again" and log the details server-side.
 
 **Key architecture context:**
+
 - CDP Embedded Wallets are non-custodial. Users never see private keys unless they export on `/settings`
 - Smart accounts (ERC-4337) hold the USDC. The EOA is the signer but holds no funds by default
 - `useSendUserOperation` always requires `evmSmartAccountObjects` — never fall back to `evmAccounts`
@@ -48,6 +49,7 @@
 ### Carlos Handoff (updated Mar 6, 2026)
 
 **What's done and deployed:**
+
 - AdonisJS backend (173 tests passing) — `apps/backend/`
 - Ponder indexer with wallet-scoped USDC filter — `apps/indexer/`
 - Admin panel fully working:
@@ -59,17 +61,19 @@
 - Railway services: `sippy-backend`, `sippy-indexer`, shared Postgres
 
 **What to pick up next (priority order):**
+
 1. ~~**P4.6: Custom Auth — Sippy-branded OTP (CRITICAL PATH)**~~ **DONE (Mar 12, 2026)**
    - OTP service (Twilio), JWT service (RS256), JWKS endpoint live at `https://backend.sippy.lat/api/auth/.well-known/jwks.json`
    - CDP portal configured with custom auth (JWKS URL + issuer `https://backend.sippy.lat`)
    - All web pages (`/setup`, `/settings`, `/wallet`) migrated to `useAuthenticateWithJWT`
-   - Dual-wallet web UI shipped: WhatsApp wallet (EOA) + Web wallet (smart account), `POST /api/send` for EOA sends
+   - Unified wallet UI shipped: single wallet balance with two send modes -- "Free gas" (spender, daily limit) and "Direct" (user gas, no limit via sendUserOperation)
 2. **P4.7: Web Wallet Session Robustness** — JWT TTL is 1h (upgrade from 15 min spec); inline re-auth on expiry pending
 3. **P2: Onboarding Tightening** — quick wins, improves beta experience
 4. **P4.1-4.2: Tx Confirmation + Webhook Security** — needed before beta
 5. **Fix indexer restart mechanism** — replace `process.exit(0)` with Railway API redeploy (see Indexer Known Issues #1)
 
 **Key files to know:**
+
 - `apps/indexer/src/api/index.ts` — Hono API routes, `writeDb` for offchain writes, backfill logic
 - `apps/indexer/ponder.config.ts` — wallet filter loading, `pollingInterval: 20_000`
 - `apps/backend/app/services/indexer.service.ts` — `syncAllWalletsWithIndexer()` retry logic
@@ -77,6 +81,7 @@
 - `apps/backend/app/controllers/admin/analytics_controller.ts` — admin dashboard queries
 
 **Railway access:**
+
 - Both services share `crossover.proxy.rlwy.net:43347/railway`
 - Indexer URL: `sippy-indexer-production.up.railway.app` (has `x-indexer-secret` auth)
 - Backend env vars `INDEXER_DB_*` point to the shared DB
@@ -85,20 +90,20 @@
 **Path mapping — Express → AdonisJS:**
 Phases 2-8 were written before the AdonisJS migration (Feb 28). File paths reference the old Express monolith structure. Use this table to find the actual files:
 
-| Express path (in plan) | AdonisJS path (actual) |
-|------------------------|----------------------|
-| `backend/server.ts` | Logic split: `apps/backend/app/controllers/webhook_controller.ts` (WhatsApp handler), `apps/backend/start/routes.ts` (route defs), `apps/backend/app/middleware/` (IP throttle, auth) |
-| `backend/src/commands/send.command.ts` | Send logic in `apps/backend/app/controllers/webhook_controller.ts` + `apps/backend/app/services/` |
-| `backend/src/commands/balance.command.ts` | Same — command logic lives in controllers/services, no `commands/` dir |
-| `backend/src/commands/start.command.ts` | Same pattern |
-| `backend/src/services/*.ts` | `apps/backend/app/services/*.ts` (same names: `db.ts`, `llm.service.ts`, `whatsapp.service.ts`, etc.) |
-| `backend/src/utils/*.ts` | `apps/backend/app/utils/*.ts` (same names but snake_case: `message_parser.ts`, `messages.ts`, `errors.ts`, etc.) |
-| `backend/src/types/*.ts` | `apps/backend/app/types/*.ts` |
-| `backend/src/routes/embedded-wallet.routes.ts` | `apps/backend/app/controllers/embedded_wallet_controller.ts` + routes in `apps/backend/start/routes.ts` |
-| `frontend/app/*.tsx` | `apps/web/app/*.tsx` |
-| `frontend/lib/*.ts` | `apps/web/lib/*.ts` |
-| `frontend/package.json` | `apps/web/package.json` |
-| `backend/package.json` | `apps/backend/package.json` |
+| Express path (in plan)                         | AdonisJS path (actual)                                                                                                                                                                |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend/server.ts`                            | Logic split: `apps/backend/app/controllers/webhook_controller.ts` (WhatsApp handler), `apps/backend/start/routes.ts` (route defs), `apps/backend/app/middleware/` (IP throttle, auth) |
+| `backend/src/commands/send.command.ts`         | Send logic in `apps/backend/app/controllers/webhook_controller.ts` + `apps/backend/app/services/`                                                                                     |
+| `backend/src/commands/balance.command.ts`      | Same — command logic lives in controllers/services, no `commands/` dir                                                                                                                |
+| `backend/src/commands/start.command.ts`        | Same pattern                                                                                                                                                                          |
+| `backend/src/services/*.ts`                    | `apps/backend/app/services/*.ts` (same names: `db.ts`, `llm.service.ts`, `whatsapp.service.ts`, etc.)                                                                                 |
+| `backend/src/utils/*.ts`                       | `apps/backend/app/utils/*.ts` (same names but snake_case: `message_parser.ts`, `messages.ts`, `errors.ts`, etc.)                                                                      |
+| `backend/src/types/*.ts`                       | `apps/backend/app/types/*.ts`                                                                                                                                                         |
+| `backend/src/routes/embedded-wallet.routes.ts` | `apps/backend/app/controllers/embedded_wallet_controller.ts` + routes in `apps/backend/start/routes.ts`                                                                               |
+| `frontend/app/*.tsx`                           | `apps/web/app/*.tsx`                                                                                                                                                                  |
+| `frontend/lib/*.ts`                            | `apps/web/lib/*.ts`                                                                                                                                                                   |
+| `frontend/package.json`                        | `apps/web/package.json`                                                                                                                                                               |
+| `backend/package.json`                         | `apps/backend/package.json`                                                                                                                                                           |
 
 Key differences: AdonisJS uses `app/` not `src/`, snake_case filenames (e.g., `messageParser.ts` → `message_parser.ts`), no `commands/` directory (command handling is in `webhook_controller.ts` which calls services), routes defined in `start/routes.ts` not inline in server file.
 
@@ -106,18 +111,18 @@ Key differences: AdonisJS uses `app/` not `src/`, snake_case filenames (e.g., `m
 
 Every deliverable needs binary pass/fail criteria and a proof artifact. Don't submit M1 until every row passes.
 
-| # | Deliverable | Exit Criteria | Proof Artifact |
-|---|------------|---------------|----------------|
-| 1 | Onramp | See Path A / Path B below | Tx screenshot or mock test suite passing |
-| 2 | Wallet refinements | Setup → wallet → permission → send → sweep → export works e2e | Screen recording of full flow on mainnet |
-| 3 | Security hardening | Tx confirmation, velocity limits, webhook validation, admin block all functional | Test matrix checklist (manual), curl proof for admin endpoints |
-| 4 | Dual currency | Balance + send messages show local currency for CO/MX/AR/BR numbers | Screenshots of balance in COP, MXN, ARS, BRL |
-| 5 | Privacy controls | Phone visibility toggle works; profile hides phone when off | Screenshot: profile with visibility off shows masked phone |
-| 6 | User settings | Daily limit, language, privacy toggleable from settings page | Screen recording of each toggle |
-| 7 | Monitoring | `GET /health` returns all green; Sentry captures a test error; pino logs structured JSON | Health endpoint response + Sentry dashboard screenshot |
-| 8 | Legal entity | Entity established | Certificate or registration document |
-| 9 | WhatsApp production | Bot responds on production number | Screenshot of production conversation |
-| 10 | Closed beta | 50 testers onboarded, at least 10 completed a send | DB query: `SELECT COUNT(*) FROM phone_registry` ≥ 50; `parse_log` showing 10+ send commands |
+| #   | Deliverable         | Exit Criteria                                                                            | Proof Artifact                                                                              |
+| --- | ------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 1   | Onramp              | See Path A / Path B below                                                                | Tx screenshot or mock test suite passing                                                    |
+| 2   | Wallet refinements  | Setup → wallet → permission → send → sweep → export works e2e                            | Screen recording of full flow on mainnet                                                    |
+| 3   | Security hardening  | Tx confirmation, velocity limits, webhook validation, admin block all functional         | Test matrix checklist (manual), curl proof for admin endpoints                              |
+| 4   | Dual currency       | Balance + send messages show local currency for CO/MX/AR/BR numbers                      | Screenshots of balance in COP, MXN, ARS, BRL                                                |
+| 5   | Privacy controls    | Phone visibility toggle works; profile hides phone when off                              | Screenshot: profile with visibility off shows masked phone                                  |
+| 6   | User settings       | Daily limit, language, privacy toggleable from settings page                             | Screen recording of each toggle                                                             |
+| 7   | Monitoring          | `GET /health` returns all green; Sentry captures a test error; pino logs structured JSON | Health endpoint response + Sentry dashboard screenshot                                      |
+| 8   | Legal entity        | Entity established                                                                       | Certificate or registration document                                                        |
+| 9   | WhatsApp production | Bot responds on production number                                                        | Screenshot of production conversation                                                       |
+| 10  | Closed beta         | 50 testers onboarded, at least 10 completed a send                                       | DB query: `SELECT COUNT(*) FROM phone_registry` ≥ 50; `parse_log` showing 10+ send commands |
 
 **Path B acceptance for #10:** If onramp is blocked, beta testers use crypto top-up (direct USDC transfer to wallet address) instead of fiat onramp. Acceptance: 50 testers set up, 10+ completed sends via WhatsApp or web wallet. Mock onramp demo shown separately to reviewer.
 
@@ -126,6 +131,7 @@ Every deliverable needs binary pass/fail criteria and a proof artifact. Don't su
 **Decision:** M1 runs as a single Railway instance. All in-memory state (OTP codes, pending tx confirmations, velocity trackers, message dedup, spam protection, activeSends) is acceptable in-memory for a single process.
 
 **What this means:**
+
 - No Redis required for M1
 - Server restart clears all in-memory state — this is acceptable because: OTPs expire in 5 min anyway, pending tx auto-expire in 2 min, dedup misses are rare and harmless (idempotent), velocity limits reset (safe — users just get a fresh window)
 - **Do NOT scale to multiple replicas without migrating in-memory state to Redis first** — this will cause split-brain (user confirms on replica A, pending tx lives on replica B)
@@ -142,6 +148,7 @@ Full e2e: COP deposit via Maash → USDC arrives in user wallet → WhatsApp not
 
 **Path B — Maash still blocked at M1 deadline (fallback):**
 Demonstrate onramp readiness without live Maash integration:
+
 - [ ] `onramp.service.ts` implemented with Maash API client (mock-tested)
 - [ ] Webhook receiver (`POST /webhook/onramp`) with signature validation, idempotency
 - [ ] `onramp_orders` DB table with full status lifecycle
@@ -153,6 +160,7 @@ Demonstrate onramp readiness without live Maash integration:
 This fallback demonstrates that the only missing piece is Maash flipping the API key on — no engineering work remains. To be pre-agreed with Questbook reviewer before M1 submission if Path B is needed.
 
 **Action items:**
+
 - Follow up with Maash weekly (owner: Mateo)
 - If no response by Mar 10, notify Questbook reviewer and request Path B approval
 
@@ -163,6 +171,7 @@ This fallback demonstrates that the only missing piece is Maash flipping the API
 > Regex-first parsing, trilingual support, professional tone, observability.
 
 ### Done
+
 - [x] Invert parsing: regex-first, LLM fallback (messageParser.ts)
 - [x] Send commands regex-only (LLM never triggers money movement)
 - [x] Trilingual regex patterns EN/ES/PT (all commands)
@@ -182,6 +191,7 @@ This fallback demonstrates that the only missing piece is Maash flipping the API
 - [x] 6 security bugs fixed (recipient lang, fund notification lang, dead column, etc.)
 
 ### Files Modified
+
 - `backend/src/utils/messageParser.ts` — regex-first parser
 - `backend/src/utils/messages.ts` — trilingual catalog
 - `backend/src/utils/errors.ts` — trilingual error messages
@@ -286,6 +296,7 @@ This fallback demonstrates that the only missing piece is Maash flipping the API
   - Include settings link
 
 ### Files to Modify
+
 - `backend/src/commands/start.command.ts` — state-aware welcome messages
 - `backend/src/commands/balance.command.ts` — empty balance guidance
 - `backend/src/commands/send.command.ts` — no-permission edge case messaging
@@ -357,9 +368,11 @@ This is zero-friction: users never configure anything, they just see their local
   - For send: also fetch recipient's local currency for their notification
 
 ### Files to Create
+
 - `backend/src/services/exchange-rate.service.ts`
 
 ### Files to Modify
+
 - `backend/src/utils/messages.ts` — dual amount formatting in all money-related templates
 - `backend/server.ts` — rate fetching before handleCommand
 - `backend/src/commands/send.command.ts` — pass rate to formatters
@@ -379,8 +392,8 @@ This is zero-friction: users never configure anything, they just see their local
 ### 4.1 Transaction Confirmation Flow
 
 - [ ] **Confirmation prompt before every send**
-  - Before executing, reply: "Send $10.00 to +57***4567? Reply YES to confirm or NO to cancel."
-  - Trilingual: "Enviar $10.00 a +57***4567? Responde SI para confirmar o NO para cancelar."
+  - Before executing, reply: "Send $10.00 to +57\*\*\*4567? Reply YES to confirm or NO to cancel."
+  - Trilingual: "Enviar $10.00 a +57\*\*\*4567? Responde SI para confirmar o NO para cancelar."
   - Store pending tx: `Map<phoneNumber, { amount, recipient, timestamp, lang }>`
   - Auto-expire after 2 minutes (cleanup on interval)
   - Only ONE pending tx per user at a time — new send replaces old pending
@@ -532,8 +545,9 @@ This is zero-friction: users never configure anything, they just see their local
   - `lib/auth.ts`: `sendOtp`, `verifyOtp`, `storeToken`, `getFreshToken` (expiry-aware)
   - `lib/usdc-transfer.ts` uses stored JWT for `ensureGas` + `resolve-phone`
 
-- [x] **Web wallet dual-wallet UI** (Mar 12, 2026)
-  - WhatsApp Wallet (EOA) + Web Wallet (smart account) shown as selectable cards
+- [x] **Web wallet unified UI** (Mar 12 → Mar 26, 2026)
+  - Single wallet balance with two send modes: "Free gas" (spender + daily limit) and "Direct" (user gas, no limit)
+  - Resolved CDP dual-user drift from SMS→JWT auth migration (see docs/WALLET-ARCHITECTURE.md)
   - EOA send: `POST /api/send` (SpendPermission, same flow as WhatsApp)
   - Smart account send: UserOps (existing)
   - Auto-selects wallet with funds on load
@@ -618,12 +632,14 @@ This is zero-friction: users never configure anything, they just see their local
 **Estimate:** 4-6h (audit only — fixes may add more)
 
 ### Files to Create
+
 - `backend/src/services/velocity.service.ts` — send rate limiting + fraud checks
 - `backend/src/services/otp.service.ts` — Twilio OTP send/verify
 - `backend/src/services/jwt.service.ts` — RS256 JWT issuer + JWKS endpoint
 - `frontend/lib/useSessionGuard.ts` — session state hook for all authenticated pages
 
 ### Files to Modify
+
 - `backend/src/commands/send.command.ts` — confirmation flow, self-send, concurrent protection
 - `backend/src/utils/messageParser.ts` — confirm/cancel/yes/no regex + wallet command
 - `backend/src/utils/messages.ts` — confirmation prompts, velocity messages, blocked messages, wallet link
@@ -653,7 +669,7 @@ This is zero-friction: users never configure anything, they just see their local
 
 - [ ] **5.2 Profile page respects visibility** — frontend
   - `frontend/app/profile/[phone]/page.tsx` — check visibility before showing
-  - If phone_visible=false: show masked phone (***1234) + "Private account"
+  - If phone_visible=false: show masked phone (\*\*\*1234) + "Private account"
   - Wallet address still visible (public blockchain data)
 
 - [ ] **5.3 Language preference UI** — frontend settings
@@ -675,11 +691,11 @@ This is zero-friction: users never configure anything, they just see their local
 
   > **Context:** Our users are regular people, not crypto natives. They lose phones, forget passwords, share devices. Recovery must be as simple as the signup. This is also the second factor that protects sensitive operations (key export, permission revoke) from SIM-swap attacks. Phase 4.6 (custom auth) handles primary auth (phone + OTP). This phase adds the safety net.
 
-  ---
+  ***
 
   **M1 SCOPE LOCK:** Only 5.6.1 (recovery email) and 5.6.3 (design doc) ship in M1. Passkeys (5.6.2) are **out of M1 scope** — do not start implementation. If you're reading this and thinking "passkeys would be quick to add," stop. Ship email recovery first, validate with real users, then build passkeys in M2.
 
-  ---
+  ***
 
   **5.6.1 Recovery email** (M1 — ship this)
   - Collect email during `/setup` onboarding (after SMS verify): "Add a recovery email (recommended)"
@@ -692,6 +708,7 @@ This is zero-friction: users never configure anything, they just see their local
   - Threat mitigated: SIM-swapper can intercept OTP but can't access email inbox
 
   **Email data model:**
+
   ```
   user_preferences table additions:
     email_encrypted  TEXT      -- AES-256-GCM encrypted email (for sending codes)
@@ -699,6 +716,7 @@ This is zero-friction: users never configure anything, they just see their local
     email_verified   BOOLEAN   DEFAULT false
     email_verified_at TIMESTAMPTZ
   ```
+
   - Normalize before hashing: `trim().toLowerCase()`
   - Encrypt at rest with `EMAIL_ENCRYPTION_KEY` env var (AES-256-GCM, unique IV per row)
   - Decrypt only when sending a code — never return plaintext email in API responses
@@ -743,10 +761,12 @@ This is zero-friction: users never configure anything, they just see their local
   - "Recover access" info box removed from wallet security section — will re-add when email recovery (5.6) ships
 
 ### Files Created (5.7)
+
 - `frontend/lib/usdc-transfer.ts` — shared USDC transfer encoding + gas helper
 - `frontend/app/wallet/page.tsx` — webapp fallback wallet page
 
 ### Files Modified (5.7)
+
 - `backend/src/types/schemas.ts` — `swept` event + `webSendEventSchema`
 - `backend/src/services/db.ts` — `web_send_log` table + `logWebSend()` helper
 - `backend/src/routes/embedded-wallet.routes.ts` — `POST /api/resolve-phone` + `POST /api/log-web-send`
@@ -755,9 +775,11 @@ This is zero-friction: users never configure anything, they just see their local
 - `frontend/app/settings/page.tsx` — sweep-to-EOA flow + /wallet nav link
 
 ### Files to Create (remaining)
+
 - `backend/src/services/email.service.ts` — Resend integration + code generation/verification
 
 ### Files to Modify (remaining)
+
 - `backend/src/services/db.ts` — phone_visible column + helpers, verified_email column + helpers
 - `backend/src/routes/embedded-wallet.routes.ts` — new API routes (privacy, email verify, email confirm)
 - `backend/src/utils/messageParser.ts` — privacy command regex
@@ -778,6 +800,7 @@ This is zero-friction: users never configure anything, they just see their local
 > Deliverable #1. **BLOCKED: waiting on Maash API response.**
 
 ### Status
+
 - Partner: Maash (identified, agreement in place)
 - Blocker: Waiting on API docs + credentials from Maash
 - Action: Follow up weekly. Everything else in M1 can ship independently.
@@ -823,9 +846,11 @@ This is zero-friction: users never configure anything, they just see their local
   - Update all UI text
 
 ### Files to Create
+
 - `backend/src/services/onramp.service.ts`
 
 ### Files to Modify
+
 - `backend/server.ts` — onramp webhook endpoint, fund command handler
 - `backend/src/services/db.ts` — onramp_orders table
 - `backend/src/utils/messageParser.ts` — fund command regex
@@ -887,10 +912,12 @@ This is zero-friction: users never configure anything, they just see their local
   - **Known issues — see "Indexer Known Issues" section below**
 
 ### Files to Create
+
 - `backend/src/utils/logger.ts` — pino logger wrapper
 - `apps/indexer/` — Ponder on-chain indexer (USDC transfers + GasRefuel events)
 
 ### Files to Modify
+
 - `backend/server.ts` — Sentry init, health endpoint, replace console.log
 - `backend/package.json` — add @sentry/node, pino
 - `backend/src/commands/*.ts` — replace console.log with logger
@@ -905,36 +932,43 @@ This is zero-friction: users never configure anything, they just see their local
 > These were discovered during Railway deployment on Mar 5, 2026. The indexer is live and indexing, but these need fixing before beta.
 
 **1. `process.exit(0)` restart mechanism is broken**
+
 - The `scheduleRestart()` function in `apps/indexer/src/api/index.ts` calls `process.exit(0)` after 60s to reload the wallet filter when new wallets register.
 - Ponder uses PostgreSQL advisory locks. `process.exit(0)` doesn't cleanly release them, causing `"Schema is locked by a different Ponder app"` crash loops on Railway.
 - **Current workaround**: New wallets require manual Railway redeploy (Dashboard → sippy-indexer → Redeploy).
 - **Fix needed**: Replace `process.exit(0)` with a Railway API redeploy trigger, or use Ponder's built-in config reload if available. Alternatively, use `railway service redeploy` via Railway CLI or their REST API (`POST /v2/deployments` with service ID).
 
 **2. Ponder `db` from `ponder:api` is strictly read-only**
+
 - ALL tables (onchain AND offchain) are read-only through the `db` object Ponder provides to API handlers.
 - **Already fixed**: Added `writeDb` (separate `pg.Pool` + Drizzle connection) for offchain writes (wallet register, sync, deactivate).
 - Backfill writes to Ponder-managed tables (`transfer`, `account`, `daily_volume`) will fail silently — this is acceptable because Ponder re-indexes natively after restart.
 
 **3. `offchain` schema must be manually created on new DB**
+
 - Ponder only manages its own `ponder` schema. The `offchain.sippy_wallet` table is not auto-created.
 - On fresh Railway DB: run `CREATE SCHEMA IF NOT EXISTS offchain; CREATE TABLE IF NOT EXISTS offchain.sippy_wallet (address TEXT PRIMARY KEY, phone_hash TEXT, registered_at INTEGER NOT NULL, is_active BOOLEAN NOT NULL DEFAULT true);`
 - Consider adding a migration script or startup check.
 
 **4. Config changes require schema drop**
+
 - Any change to `ponder.config.ts` (filter, pollingInterval, contracts) changes Ponder's app fingerprint.
 - This causes `MigrationError: Schema "ponder" was previously used by a different Ponder app`.
 - **Fix**: `DROP SCHEMA ponder CASCADE; DROP SCHEMA ponder_sync CASCADE;` on Railway DB, then redeploy. Ponder re-indexes from `startBlock`.
 
 **5. Admin analytics `searchPath` fix not yet deployed**
+
 - `apps/backend/config/database.ts` was updated to add `searchPath: ['ponder', 'offchain', 'public']` for the indexer DB connection.
 - This is committed (`0b9cbae`) but Carlos should verify the admin analytics page (`/admin/analytics`) works after deploy.
 - Required Railway env vars on `sippy-backend`: `INDEXER_DB_HOST`, `INDEXER_DB_PORT`, `INDEXER_DB_USER`, `INDEXER_DB_PASSWORD`, `INDEXER_DB_DATABASE` — these were already set to `crossover.proxy.rlwy.net:43347/railway`.
 
 **6. Alchemy CU budget monitoring**
+
 - `pollingInterval: 20_000` (20s) targets ~27M CU/month out of 30M free tier.
 - Monitor Alchemy dashboard for 24h after any redeploy. If pace exceeds 28M/month, bump to `pollingInterval: 30_000` in `ponder.config.ts` (will require schema drop — see #4).
 
 **7. Indexer public domain exposure**
+
 - `sippy-indexer-production.up.railway.app` was created for testing. Consider removing the public domain if not needed — it exposes `/wallets/register`, `/wallets/sync`, etc. These are protected by `x-indexer-secret` header but minimizing attack surface is better.
 
 ---
@@ -1046,6 +1080,7 @@ EL, LN, PV, WS, MO can parallelize.
 **Who decides:** Mateo (final call), Carlos (engineering readiness input)
 
 **Go criteria — all must be true:**
+
 - [ ] Exit checklist: all deliverables pass or have approved Path B fallback
 - [ ] No open P0 findings in `docs/AUDIT-M1.md`
 - [ ] All P1 findings either fixed or have documented workaround
@@ -1054,6 +1089,7 @@ EL, LN, PV, WS, MO can parallelize.
 - [ ] At least 1 successful mainnet send via WhatsApp + 1 via web wallet in last 48h
 
 **No-Go triggers (any one blocks submission):**
+
 - Open P0 audit finding with no fix
 - Backend crash loop on production
 - Custom auth (4.6) not functional — users still see "Coinbase" in OTP
@@ -1063,15 +1099,16 @@ EL, LN, PV, WS, MO can parallelize.
 
 ## Escalation SLA
 
-| Severity | Example | Who Gets Paged | Response Target |
-|----------|---------|----------------|-----------------|
-| P0 — Service down | Backend crash, all sends failing, GasRefuel empty | Mateo (WhatsApp) + Carlos (WhatsApp) | 30 min |
-| P0 — Money at risk | Tx sent to wrong address, double-send, funds stuck | Mateo (WhatsApp + call) | 15 min |
-| P1 — Degraded | Blockscout down (stale balances), LLM timeout, slow sends | Carlos (WhatsApp) | 2 hours |
-| P1 — Security | Suspicious activity, velocity limit hit, blocked user appeal | Mateo (WhatsApp) | 1 hour |
-| P2 — Minor | Formatting bug, wrong language in edge case, UI glitch | Carlos (async, Telegram) | Next working day |
+| Severity           | Example                                                      | Who Gets Paged                       | Response Target  |
+| ------------------ | ------------------------------------------------------------ | ------------------------------------ | ---------------- |
+| P0 — Service down  | Backend crash, all sends failing, GasRefuel empty            | Mateo (WhatsApp) + Carlos (WhatsApp) | 30 min           |
+| P0 — Money at risk | Tx sent to wrong address, double-send, funds stuck           | Mateo (WhatsApp + call)              | 15 min           |
+| P1 — Degraded      | Blockscout down (stale balances), LLM timeout, slow sends    | Carlos (WhatsApp)                    | 2 hours          |
+| P1 — Security      | Suspicious activity, velocity limit hit, blocked user appeal | Mateo (WhatsApp)                     | 1 hour           |
+| P2 — Minor         | Formatting bug, wrong language in edge case, UI glitch       | Carlos (async, Telegram)             | Next working day |
 
 **During beta (Week 5+):**
+
 - Mateo monitors WhatsApp support channel daily
 - Carlos monitors Railway logs + Sentry alerts
 - Both check GasRefuel ETH balance weekly (alert threshold: < 0.01 ETH)
@@ -1080,14 +1117,14 @@ EL, LN, PV, WS, MO can parallelize.
 
 ## Risk Register
 
-| Risk | Impact | Likelihood | Mitigation |
-|------|--------|-----------|------------|
-| Maash API not ready by M1 | High | Medium | Fallback Path B: mock-tested integration + readiness checklist (see Onramp Acceptance Criteria). Pre-agree with Questbook if needed by Mar 10. |
-| Exchange rate API limits | Low | Low | 15-min cache, fallback to last known, multiple providers |
-| WhatsApp rate limits during beta | Medium | Low | Already approved 2K bot-initiated/day + unlimited user-initiated |
-| GasRefuel runs low during beta | Medium | Low | Health endpoint monitors balance, alert on low |
-| Confirmation flow adds friction | Medium | Low | Skip for amounts ≤ $5, keep it fast for micro-payments |
-| LLM costs spike | Low | Low | Regex handles 80%+ of messages (zero LLM cost). Remaining ~20% go to Groq free tier (Llama 3.3 70B). If rate limits hit, LLM degrades gracefully to regex-only. |
+| Risk                             | Impact | Likelihood | Mitigation                                                                                                                                                      |
+| -------------------------------- | ------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Maash API not ready by M1        | High   | Medium     | Fallback Path B: mock-tested integration + readiness checklist (see Onramp Acceptance Criteria). Pre-agree with Questbook if needed by Mar 10.                  |
+| Exchange rate API limits         | Low    | Low        | 15-min cache, fallback to last known, multiple providers                                                                                                        |
+| WhatsApp rate limits during beta | Medium | Low        | Already approved 2K bot-initiated/day + unlimited user-initiated                                                                                                |
+| GasRefuel runs low during beta   | Medium | Low        | Health endpoint monitors balance, alert on low                                                                                                                  |
+| Confirmation flow adds friction  | Medium | Low        | Skip for amounts ≤ $5, keep it fast for micro-payments                                                                                                          |
+| LLM costs spike                  | Low    | Low        | Regex handles 80%+ of messages (zero LLM cost). Remaining ~20% go to Groq free tier (Llama 3.3 70B). If rate limits hit, LLM degrades gracefully to regex-only. |
 
 ---
 

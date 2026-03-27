@@ -1,0 +1,95 @@
+---
+title: Send money
+description: Send digital dollars through WhatsApp or the web wallet. Multiple languages, two send modes, confirmations built in.
+---
+
+## Two ways to send
+
+You can send money through **WhatsApp** (just message Sippy) or the **web wallet**
+at [sippy.lat/wallet](https://www.sippy.lat/wallet). Both move real USDC -- same
+money, same speed, same recipient.
+
+---
+
+## Sending via WhatsApp
+
+Open your chat with Sippy and type what you want to send. Sippy understands
+natural language in English, Spanish, and Portuguese.
+
+### Examples
+
+**English:**
+> send 10 to +573001234567
+
+**Spanish:**
+> enviar 10 a +573001234567
+
+**Portuguese:**
+> enviar 10 para +573001234567
+
+You can also send just part of the info and Sippy will ask for the rest:
+
+> send 25
+
+Sippy will reply: "Who do you want to send it to?"
+
+> +573001234567
+
+And it continues from there.
+
+### Confirmation
+
+For any send above $5, Sippy asks you to confirm before executing. You'll see
+the amount, the recipient's phone number, and a "yes or no?" prompt. Nothing
+moves until you confirm.
+
+Sends of $5 or less execute right away to keep small transfers fast.
+
+### What the recipient sees
+
+The recipient gets a WhatsApp message from Sippy telling them they received money.
+The message includes the amount and a link to their wallet. If the recipient isn't
+on Sippy yet, see [Invite someone](/docs/using-sippy/invite-someone) for what happens.
+
+### Gas fees
+
+Sippy covers the network fee (gas) for all WhatsApp sends. You send $10, the
+recipient gets $10. The gas cost comes from Sippy, not your balance.
+
+---
+
+## Sending via web wallet
+
+Go to [sippy.lat/wallet](https://www.sippy.lat/wallet) and tap **Send**. Enter the
+recipient's phone number and the amount.
+
+You'll see two modes:
+
+### Free gas mode
+
+Sippy submits the transaction and covers the gas fee -- same as WhatsApp. This
+counts toward your [daily limit](/docs/using-sippy/limits).
+
+### Direct mode
+
+You submit the transaction yourself using your connected wallet. You pay a small
+gas fee (typically less than $0.01 on Arbitrum). This does **not** count toward
+your daily limit, so there's no cap.
+
+Direct mode is useful when you've hit your daily limit or want to send larger
+amounts without restrictions.
+
+---
+
+## Quick reference
+
+| Method | Gas fee | Daily limit applies? |
+|---|---|---|
+| WhatsApp | Sippy pays | Yes |
+| Web -- Free gas | Sippy pays | Yes |
+| Web -- Direct | You pay (< $0.01) | No |
+
+## What's next?
+
+- [Invite someone](/docs/using-sippy/invite-someone) -- what happens when you send to a person not yet on Sippy
+- [Understand your limits](/docs/using-sippy/limits) -- daily caps and how to increase them

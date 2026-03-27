@@ -1,7 +1,6 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
 import { query } from '#services/db'
-import GasRefuelStatus from '#models/indexer/gas_refuel_status'
 import { getRefuelService } from '#services/refuel.service'
 import { getSippySpenderAccount } from '#services/embedded_wallet.service'
 import { getRpcUrl } from '#config/network'
@@ -10,7 +9,6 @@ import { ethers } from 'ethers'
 export default class AnalyticsController {
   async index({ inertia }: HttpContext) {
     const todayUnix = Math.floor(new Date().setHours(0, 0, 0, 0) / 1000)
-    const idx = db.connection('indexer')
 
     const [
       totalVolumeRow,
@@ -22,31 +20,36 @@ export default class AnalyticsController {
       dailyVolumes,
     ] = await Promise.all([
       // 1. Total USDC volume (all-time)
-      idx
-        .from('daily_volume')
+      db
+        .from('onchain.daily_volume')
         .select(db.raw('COALESCE(SUM(total_usdc_volume), 0)::text as total'))
         .first(),
 
-      // 2. Registered users count (from backend DB, same source as dashboard)
+      // 2. Registered users count
       db.from('phone_registry').whereNotNull('wallet_address').count('* as total').first(),
 
       // 3. Active users in last 24h
-      idx
-        .from('transfer')
+      db
+        .from('onchain.transfer')
         .where('timestamp', '>=', todayUnix - 86400)
         .select(
           db.raw(`COUNT(DISTINCT CASE
-              WHEN "from" IN (SELECT address FROM offchain.sippy_wallet) THEN "from"
-              WHEN "to" IN (SELECT address FROM offchain.sippy_wallet) THEN "to"
+              WHEN "from" IN (SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL UNION SELECT address FROM wallet_aliases) THEN "from"
+              WHEN "to" IN (SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL UNION SELECT address FROM wallet_aliases) THEN "to"
             END) as total`)
         )
         .first(),
 
       // 4. Gas refuel status singleton
-      GasRefuelStatus.first(),
+      db.from('onchain.gas_refuel_status').where('id', 'singleton').first(),
 
-      // 5. Fund flow classification
-      idx.rawQuery(`
+      // 5. Fund flow classification (registered wallets + legacy aliases)
+      db.rawQuery(`
+          WITH sippy_wallets AS (
+            SELECT LOWER(wallet_address) as address FROM phone_registry WHERE wallet_address IS NOT NULL
+            UNION
+            SELECT address FROM wallet_aliases
+          )
           SELECT
             CASE
               WHEN sf.address IS NOT NULL AND st.address IS NOT NULL THEN 'internal'
@@ -55,18 +58,24 @@ export default class AnalyticsController {
             END as flow_type,
             COALESCE(SUM(t.amount), 0)::text as volume,
             COUNT(*)::text as tx_count
-          FROM transfer t
-          LEFT JOIN offchain.sippy_wallet sf ON t."from" = sf.address
-          LEFT JOIN offchain.sippy_wallet st ON t."to" = st.address
+          FROM onchain.transfer t
+          LEFT JOIN sippy_wallets sf ON t."from" = sf.address
+          LEFT JOIN sippy_wallets st ON t."to" = st.address
           WHERE sf.address IS NOT NULL OR st.address IS NOT NULL
           GROUP BY flow_type
           ORDER BY volume DESC
         `),
 
-      // 6. Top users by volume (only sippy wallets, ranked by total volume)
-      idx
-        .from('account')
-        .whereIn('address', idx.from('offchain.sippy_wallet').select('address'))
+      // 6. Top users by volume (only registered wallets)
+      db
+        .from('onchain.account')
+        .whereIn(
+          'address',
+          db.raw(`
+            SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL
+            UNION SELECT address FROM wallet_aliases
+          `)
+        )
         .select(
           'address',
           db.raw('total_sent::text as "totalSent"'),
@@ -78,8 +87,8 @@ export default class AnalyticsController {
         .limit(10),
 
       // 7. Daily volumes (last 30 days)
-      idx
-        .from('daily_volume')
+      db
+        .from('onchain.daily_volume')
         .select(
           'date',
           db.raw('total_usdc_volume::text as "totalUsdcVolume"'),
@@ -110,9 +119,9 @@ export default class AnalyticsController {
     // Serialize for Inertia
     const gasStatusData = gasStatus
       ? {
-          totalRefuels: gasStatus.totalRefuels,
-          totalEthSpent: String(gasStatus.totalEthSpent),
-          isPaused: gasStatus.isPaused,
+          totalRefuels: gasStatus.total_refuels,
+          totalEthSpent: String(gasStatus.total_eth_spent),
+          isPaused: gasStatus.is_paused,
           contractBalance: contractBalanceEth,
           spenderBalance: spenderBalanceEth,
           spenderAddress,
@@ -166,12 +175,6 @@ export default class AnalyticsController {
 
   /**
    * GET /admin/parse-patterns
-   *
-   * Returns the top 50 scrubbed phrases that the LLM successfully classified,
-   * grouped by intent and language. Use this to find recurring patterns that
-   * should be promoted to regex rules.
-   *
-   * Protected by admin session auth (same as other /admin routes).
    */
   async parsePatterns({ response }: HttpContext) {
     const result = await query<{

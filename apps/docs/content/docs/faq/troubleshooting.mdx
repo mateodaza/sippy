@@ -1,0 +1,52 @@
+---
+title: Troubleshooting
+description: Solutions for common issues when using Sippy.
+---
+
+## Sippy is not responding on WhatsApp
+
+Start with the basics:
+
+1. **Check the phone number** -- make sure you are messaging the correct Sippy number with the right country code format (e.g., +1 for US, +57 for Colombia)
+2. **Include the country code** -- WhatsApp requires the full international format. A message to a number without the country prefix will not reach Sippy
+3. **Try a simple message** -- send "hi" or "hola" to see if Sippy replies. If you sent a complex message, the system may not have recognized the intent
+4. **Wait a moment** -- during high-traffic periods, responses may take a few seconds longer than usual
+
+If none of this works, Sippy may be undergoing maintenance. Wait a few minutes and try again.
+
+## My transaction is stuck
+
+Transactions on Arbitrum typically confirm in under a second. If yours appears stuck:
+
+1. **Check the transaction on Blockscout** -- go to [arbiscan.io](https://arbiscan.io) or [Blockscout](https://arbitrum.blockscout.com) and search your wallet address. If the transaction shows as confirmed there, the issue is a display delay, not a stuck transaction
+2. **Refresh the web wallet** -- the balance display polls every 30 seconds. A manual page refresh will trigger an immediate update
+3. **Wait briefly** -- in rare cases of network congestion on Arbitrum, confirmation can take a few extra seconds. This is uncommon but not a cause for concern
+
+If the transaction does not appear on-chain at all after several minutes, contact support.
+
+## "Daily limit reached" error
+
+This means you have hit your spending cap for the current day. You have three options:
+
+- **Send a smaller amount** -- if you're close to the limit, a smaller send may still go through
+- **Wait for the reset** -- your daily limit resets at midnight UTC each day
+- **Use Direct mode on the web wallet** -- open [sippy.lat/wallet](https://www.sippy.lat/wallet), select "Directo" / "Direct", and send with no daily limit. You'll need a small amount of ETH in your wallet for gas (Direct mode is only available on the web wallet, not via WhatsApp)
+
+## My balance is not updating
+
+The web wallet refreshes your balance every 30 seconds. If a recent transaction is not reflected:
+
+1. **Refresh the page** -- this forces an immediate balance check
+2. **Check the transaction status** -- if the transaction is still pending (rare on Arbitrum), the balance will update once it confirms
+3. **Clear your browser cache** -- in unusual cases, stale cached data can show an outdated balance
+
+If your balance still looks wrong after confirming the transaction on-chain, reach out to support with your wallet address and the transaction hash.
+
+## I cannot select Direct mode
+
+Direct mode requires a small amount of ETH on Arbitrum in your wallet to pay for gas fees. If the option is unavailable or greyed out:
+
+1. **Check your ETH balance** -- you need ETH on Arbitrum (not mainnet Ethereum). Even a fraction of a dollar in ETH is enough for many transactions
+2. **Bridge or deposit ETH** -- send ETH on the Arbitrum network to your Sippy wallet address. You can find your address in the web wallet or by asking Sippy "what is my address"
+
+Once your wallet holds ETH on Arbitrum, Direct mode becomes available.

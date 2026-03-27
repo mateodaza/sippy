@@ -1,0 +1,103 @@
+---
+title: Account recovery
+description: What happens if you lose your phone, how to recover your account, and what Sippy can and can't help with.
+---
+
+## The short version
+
+If you lose your phone, your money is still safe. It's in your wallet on
+Arbitrum -- not on the phone. But you need a way to prove you're you so Sippy
+can reconnect you. That's what your recovery email is for.
+
+---
+
+## If you lose your phone
+
+Your funds don't live on your device. They live in a smart contract wallet on
+Arbitrum. Losing your phone doesn't mean losing your money. It means losing
+your current way to interact with it.
+
+Here's what to do:
+
+### 1. Get WhatsApp back on a new device
+
+Restore your WhatsApp account on a new phone using the same phone number. WhatsApp
+has its own recovery process for this -- Sippy doesn't control that step.
+
+Once you have WhatsApp working on the same number, message Sippy. Your account
+will reconnect automatically because your identity in Sippy is tied to your phone
+number.
+
+### 2. If you lost access to your phone number
+
+This is the harder scenario. Today, Sippy ties your wallet to your phone number.
+If you permanently lose that number, your options are:
+
+- **Use your private key backup** to access your wallet directly from MetaMask or
+  any Ethereum-compatible wallet. This is why exporting your key matters.
+- **Contact support** -- we may be able to help verify your identity if you have a
+  recovery email on file, but we cannot guarantee account recovery in all cases.
+
+A recovery email makes it easier for support to help, but the most reliable backup
+is always your exported private key.
+
+We're working on an admin-assisted relink flow for future releases.
+
+---
+
+## Private key backup
+
+Your smart contract wallet has an underlying private key. This is the ultimate
+backup -- the mathematical proof that you own the wallet. With it, you can
+access your funds from any compatible wallet app (like MetaMask or Rabby),
+completely independent of Sippy.
+
+You can export your private key from [Settings](https://www.sippy.lat/settings).
+
+**Store it somewhere safe and offline.** Write it on paper and keep it in a
+secure place, or use a password manager. Never share it with anyone. Never send
+it over WhatsApp, email, or any messaging app.
+
+If someone gets your private key, they can take everything in your wallet. There
+is no way to reverse that.
+
+---
+
+## What Sippy can help with
+
+- **Reconnecting your wallet after a phone change** -- if you keep the same number,
+  it's automatic
+- **Helping with identity verification** -- if you have a recovery email, support
+  has more to work with (full relink coming in a future update)
+- **Showing you how to export your private key** -- so you have a backup before
+  you need it
+
+## What Sippy can't help with
+
+- **Reversing a transaction.** Once a transfer is confirmed on the blockchain, it's
+  permanent. No one can undo it -- not Sippy, not Arbitrum, not anyone.
+- **Recovering a lost private key.** Sippy doesn't store your private key. If you
+  lose it and lose all other access methods, the funds in that wallet may be
+  permanently inaccessible.
+- **Recovering funds sent to the wrong address.** If you send money to the wrong
+  phone number and the recipient doesn't return it, the money is gone.
+
+These aren't limitations of Sippy specifically. They're how blockchain works.
+The same properties that prevent anyone from seizing your money also prevent
+anyone from reversing your mistakes.
+
+---
+
+## The best thing you can do right now
+
+1. [Add a recovery email](/docs/using-sippy/recovery-email) -- takes 30 seconds
+2. Export and safely store your private key from
+   [Settings](https://www.sippy.lat/settings)
+3. Double-check phone numbers before confirming sends
+
+These three steps cover nearly every recovery scenario.
+
+## What's next?
+
+- [Security model](/docs/trust/security) -- daily limits, confirmations, and other protections
+- [Recovery email setup](/docs/using-sippy/recovery-email) -- step-by-step instructions

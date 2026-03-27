@@ -1,0 +1,36 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+:root {
+  --fd-primary: 191 100% 42%;
+  --fd-primary-foreground: 0 0% 100%;
+  --fd-ring: 191 100% 42%;
+  --font-sans: var(--font-chakra-petch), system-ui, sans-serif;
+  --font-mono: var(--font-space-mono), monospace;
+}
+
+.dark {
+  --fd-primary: 191 100% 50%;
+  --fd-primary-foreground: 0 0% 100%;
+  --fd-ring: 191 100% 50%;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-electrolize), var(--font-sans);
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+}

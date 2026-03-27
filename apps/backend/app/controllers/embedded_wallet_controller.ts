@@ -28,7 +28,7 @@ import {
   getSecurityLimitStatus,
 } from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
-import { registerWalletWithIndexer } from '#services/indexer.service'
+import { registerWalletWithAlchemy } from '#services/alchemy.service'
 import { exportEventSchema, webSendEventSchema, sendFromWebBodySchema } from '#types/schemas'
 import { NETWORK, USDC_ADDRESSES, USDC_DECIMALS } from '#config/network'
 import UserPreference from '#models/user_preference'
@@ -135,9 +135,9 @@ export default class EmbeddedWalletController {
         logger.warn('Refuel service not available - user will need ETH for gas')
       }
 
-      // Register with indexer (fire-and-forget — never blocks signup)
-      registerWalletWithIndexer(walletAddress, canonicalPhone).catch((err) =>
-        logger.warn('Indexer registration failed (non-blocking): %o', err)
+      // Register with Alchemy webhook (fire-and-forget — never blocks signup)
+      registerWalletWithAlchemy(walletAddress).catch((err) =>
+        logger.warn('Alchemy registration failed (non-blocking): %o', err)
       )
 
       return response.json({ success: true, network: NETWORK })
@@ -794,7 +794,11 @@ export default class EmbeddedWalletController {
     } catch (error) {
       logger.error('sendFromWeb error: %o', error)
       const msg = error instanceof Error ? error.message : ''
-      const safeMessages = ['Insufficient balance', 'Amount has too many decimal places']
+      const safeMessages = [
+        'Insufficient balance',
+        'Amount has too many decimal places',
+        'Insufficient allowance',
+      ]
       const userMsg = safeMessages.some((s) => msg.includes(s)) ? msg : 'Internal server error'
       return response.status(500).json({ error: userMsg })
     } finally {
