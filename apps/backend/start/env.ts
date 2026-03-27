@@ -92,15 +92,6 @@ export default await Env.create(new URL('../', import.meta.url), {
   DEMO_SHOW_REFUEL: Env.schema.string.optional(),
   CONFIRM_THRESHOLD: Env.schema.number.optional(),
 
-  // Indexer (legacy — kept during Alchemy migration parallel run)
-  INDEXER_URL: Env.schema.string.optional(),
-  INDEXER_API_SECRET: Env.schema.string.optional(),
-  INDEXER_DB_HOST: Env.schema.string.optional(),
-  INDEXER_DB_PORT: Env.schema.number.optional(),
-  INDEXER_DB_USER: Env.schema.string.optional(),
-  INDEXER_DB_PASSWORD: Env.schema.string.optional(),
-  INDEXER_DB_DATABASE: Env.schema.string.optional(),
-
   // Alchemy Webhooks
   ALCHEMY_WEBHOOK_ID: Env.schema.string.optional(),
   ALCHEMY_AUTH_TOKEN: Env.schema.string.optional(),
