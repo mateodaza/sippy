@@ -173,6 +173,10 @@ export async function listContacts(ownerPhone: string): Promise<SavedContact[]> 
   return result.rows
 }
 
+/**
+ * Exact alias match (DB lookup). Used for delete, partial-send follow-ups,
+ * and as the first step before smart resolution.
+ */
 export async function resolveAlias(ownerPhone: string, rawAlias: string): Promise<string | null> {
   const alias = sanitizeAlias(rawAlias)
   if (!alias) return null
@@ -184,46 +188,139 @@ export async function resolveAlias(ownerPhone: string, rawAlias: string): Promis
   return result.rows[0]?.target_phone ?? null
 }
 
+export interface AliasMatch {
+  aliasDisplay: string
+  targetPhone: string
+  /** Lower = better. 0 = exact, 1 = prefix/word, 2 = contains, 3 = typo (Levenshtein) */
+  confidence: number
+}
+
 /**
- * Fuzzy match: returns ALL contacts within Levenshtein distance <= 2.
- * If exactly one match -> suggest with confirmation.
- * If multiple matches at same distance -> force disambiguation (list all).
- * Returns empty array if no close matches.
+ * Multi-strategy alias resolver — tries strategies in priority order:
+ *
+ * 1. Exact match (confidence 0): "carlos quintero" === "carlos quintero"
+ * 2. Prefix match (confidence 1): "carlos" is prefix of "carlos quintero"
+ * 3. Any-word exact (confidence 1): "quintero" matches a word in "carlos quintero"
+ * 4. Contains (confidence 2): "carl" is substring of "carlos quintero"
+ * 5. Word-level Levenshtein (confidence 3): "cralos" is distance 1 from "carlos"
+ *
+ * Returns matches grouped by best confidence level.
+ * Single match at any level → caller should confirm with user.
+ * Multiple matches at same level → caller should disambiguate.
+ * Empty → no match found.
+ *
+ * All strategies run against at most 50 contacts in memory — zero LLM cost.
+ * Accent stripping ensures "mamá" matches alias stored as "mama" and vice versa.
  */
-export async function fuzzyResolveAlias(
+export async function smartResolveAlias(
   ownerPhone: string,
   rawAlias: string
-): Promise<Array<{ aliasDisplay: string; targetPhone: string; distance: number }>> {
+): Promise<AliasMatch[]> {
   const alias = sanitizeAlias(rawAlias)
   if (!alias) return []
 
   const contacts = await listContacts(ownerPhone)
-  const normalized = normalizeAlias(alias)
+  if (contacts.length === 0) return []
 
-  // Scale max distance by alias length: short aliases (<=3 chars) get distance 1 only
-  // to prevent dangerously broad matches in a financial app (e.g. "ana" matching "ali")
-  const maxDistance = normalized.length <= 3 ? 1 : 2
+  const input = stripAccents(normalizeAlias(alias))
 
-  const matches: Array<{ aliasDisplay: string; targetPhone: string; distance: number }> = []
+  // Strategy 1: exact match
+  const exact = contacts.filter((c) => stripAccents(c.alias) === input)
+  if (exact.length > 0) {
+    return exact.map((c) => ({
+      aliasDisplay: c.aliasDisplay,
+      targetPhone: c.targetPhone,
+      confidence: 0,
+    }))
+  }
+
+  // Strategy 2: prefix match — "carlos" matches "carlos quintero"
+  const prefixMatches = contacts.filter((c) => stripAccents(c.alias).startsWith(input))
+
+  // Strategy 3: any-word exact — "quintero" matches a word in "carlos quintero"
+  const wordMatches = contacts.filter((c) => {
+    if (prefixMatches.includes(c)) return false // avoid duplicates
+    const words = stripAccents(c.alias).split(/\s+/)
+    return words.some((w) => w === input)
+  })
+
+  const level1 = [...prefixMatches, ...wordMatches]
+  if (level1.length > 0) {
+    return dedup(level1).map((c) => ({
+      aliasDisplay: c.aliasDisplay,
+      targetPhone: c.targetPhone,
+      confidence: 1,
+    }))
+  }
+
+  // Strategy 4: contains — "carl" is substring of "carlos quintero"
+  // Only for inputs >= 3 chars to avoid matching everything
+  if (input.length >= 3) {
+    const containsMatches = contacts.filter((c) => stripAccents(c.alias).includes(input))
+    if (containsMatches.length > 0) {
+      return containsMatches.map((c) => ({
+        aliasDisplay: c.aliasDisplay,
+        targetPhone: c.targetPhone,
+        confidence: 2,
+      }))
+    }
+  }
+
+  // Strategy 5: word-level Levenshtein — "cralos" is distance 1 from "carlos"
+  // Check input against each individual word in the stored alias
+  const maxDist = input.length <= 3 ? 1 : 2
+  const typoMatches: Array<AliasMatch & { dist: number }> = []
   for (const contact of contacts) {
-    const d = levenshtein(normalized, contact.alias)
-    if (d > 0 && d <= maxDistance) {
-      matches.push({
+    const words = stripAccents(contact.alias).split(/\s+/)
+    let bestWordDist = Infinity
+    for (const word of words) {
+      const d = levenshtein(input, word)
+      if (d > 0 && d <= maxDist && d < bestWordDist) {
+        bestWordDist = d
+      }
+    }
+    // Also check full alias for short stored names
+    const fullDist = levenshtein(input, stripAccents(contact.alias))
+    if (fullDist > 0 && fullDist <= maxDist && fullDist < bestWordDist) {
+      bestWordDist = fullDist
+    }
+    if (bestWordDist <= maxDist) {
+      typoMatches.push({
         aliasDisplay: contact.aliasDisplay,
         targetPhone: contact.targetPhone,
-        distance: d,
+        confidence: 3,
+        dist: bestWordDist,
       })
     }
   }
 
-  // Sort by distance, then alphabetically for determinism
-  matches.sort((a, b) => a.distance - b.distance || a.aliasDisplay.localeCompare(b.aliasDisplay))
+  // Sort by distance, then alphabetically
+  typoMatches.sort((a, b) => a.dist - b.dist || a.aliasDisplay.localeCompare(b.aliasDisplay))
 
-  // If best distance has multiple ties, return all ties (force disambiguation)
-  if (matches.length <= 1) return matches
-  const bestDist = matches[0].distance
-  const ties = matches.filter((m) => m.distance === bestDist)
-  return ties.length > 1 ? ties : [matches[0]]
+  // Return best tier only
+  if (typoMatches.length === 0) return []
+  const bestDist = typoMatches[0].dist
+  const best = typoMatches.filter((m) => m.dist === bestDist)
+  return best.map(({ aliasDisplay, targetPhone, confidence }) => ({
+    aliasDisplay,
+    targetPhone,
+    confidence,
+  }))
+}
+
+/** Strip accents for matching: "mamá" → "mama", "María" → "maria" */
+function stripAccents(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
+/** Deduplicate contacts by targetPhone */
+function dedup(contacts: SavedContact[]): SavedContact[] {
+  const seen = new Set<string>()
+  return contacts.filter((c) => {
+    if (seen.has(c.targetPhone)) return false
+    seen.add(c.targetPhone)
+    return true
+  })
 }
 
 /**

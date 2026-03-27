@@ -1,10 +1,10 @@
 /**
- * Address Book — contact.service input validation + fuzzyResolveAlias tests
+ * Address Book — contact.service tests
  *
  * Groups:
  * A — saveContact input validation (no DB needed)
  * B — updateContact input validation (no DB needed)
- * C — fuzzyResolveAlias / Levenshtein correctness (mocked listContacts via DB)
+ * C — smartResolveAlias input validation + DB error propagation
  *
  * NOTE: saveContact/updateContact DB-dependent branches (overwrite_conflict,
  * limit_reached, race read-back) are tested at the controller level in
@@ -12,7 +12,7 @@
  */
 
 import { test } from '@japa/runner'
-import { saveContact, updateContact } from '#services/contact.service'
+import { saveContact, updateContact, smartResolveAlias } from '#services/contact.service'
 
 // ── Group A: saveContact input validation ───────────────────────────────────
 // These branches return before hitting the DB, so no mock needed.
@@ -91,5 +91,31 @@ test.group('B | updateContact — input validation', () => {
     const r = await updateContact('+573116613414', 'me', '573116613414')
     assert.isFalse(r.success)
     if (!r.success) assert.equal(r.error, 'self_contact')
+  })
+})
+
+// ── Group C: smartResolveAlias ──────────────────────────────────────────────
+
+test.group('C | smartResolveAlias — input validation + error propagation', () => {
+  test('C-01: invalid alias (symbols) → empty array, no DB call', async ({ assert }) => {
+    const r = await smartResolveAlias('+573116613414', '!@#$')
+    assert.deepEqual(r, [])
+  })
+
+  test('C-02: empty alias → empty array', async ({ assert }) => {
+    const r = await smartResolveAlias('+573116613414', '')
+    assert.deepEqual(r, [])
+  })
+
+  test('C-03: valid alias throws on DB error (propagates, not swallowed)', async ({ assert }) => {
+    // smartResolveAlias calls listContacts → query() → ECONNREFUSED in test env.
+    // Proves the webhook controller try-catch is necessary.
+    let threw = false
+    try {
+      await smartResolveAlias('+573116613414', 'carlos')
+    } catch {
+      threw = true
+    }
+    assert.isTrue(threw, 'should propagate DB error')
   })
 })

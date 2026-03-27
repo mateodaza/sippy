@@ -84,7 +84,7 @@ import { getIsPaused } from '#controllers/admin/moderation_controller'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { getDialect, dialectHint, type Dialect } from '#utils/dialect'
 import { validateLLMResponse } from '#services/llm_validator.service'
-import { resolveAlias, fuzzyResolveAlias, updateContact } from '#services/contact.service'
+import { resolveAlias, smartResolveAlias, updateContact } from '#services/contact.service'
 import { sanitizeAlias } from '#utils/contact_sanitizer'
 import {
   handleSaveContact,
@@ -361,55 +361,47 @@ export async function routeCommand(
         }
 
         // ── Alias resolution: recipientRaw present but no canonical phone ──
+        // Uses multi-strategy resolver: exact → prefix → word → contains → typo.
+        // Single match at any confidence → ask confirmation (shows name + phone).
+        // Multiple matches → disambiguate. None → invalid phone.
         if (!command.recipient && command.recipientRaw && command.amount) {
-          // 1. Exact alias match
-          const exactPhone = await resolveAlias(phoneNumber, command.recipientRaw)
-          if (exactPhone) {
-            command.recipient = exactPhone
-            // Falls through to normal send handling below
-          } else {
-            // 2. Fuzzy match
-            const fuzzyMatches = await fuzzyResolveAlias(phoneNumber, command.recipientRaw)
+          const matches = await smartResolveAlias(phoneNumber, command.recipientRaw)
 
-            if (fuzzyMatches.length === 1) {
-              // Single close match — ask confirmation via pendingTransactions
-              const match = fuzzyMatches[0]
-              pendingTxs.set(phoneNumber, {
-                amount: command.amount,
-                recipient: match.targetPhone,
-                timestamp: Date.now(),
-                lang,
-              })
-              const fuzzyMsg = {
-                en: `Did you mean ${match.aliasDisplay} (${match.targetPhone})? Send $${command.amount}? Reply YES to confirm.`,
-                es: `\u00bfQuisiste decir ${match.aliasDisplay} (${match.targetPhone})? \u00bfEnviar $${command.amount}? Responde S\u00cd para confirmar.`,
-                pt: `Quis dizer ${match.aliasDisplay} (${match.targetPhone})? Enviar $${command.amount}? Responda SIM para confirmar.`,
-              }
-              await sendMessageFn(phoneNumber, fuzzyMsg[lang], lang)
-              return
-            } else if (fuzzyMatches.length > 1) {
-              // Multiple ties — store partial send so follow-up alias resolves
-              partialSends.set(phoneNumber, {
-                amount: command.amount,
-                timestamp: Date.now(),
-                lang,
-              })
-              const safeRaw =
-                sanitizeAlias(command.recipientRaw) ?? command.recipientRaw.slice(0, 30)
-              const lines = fuzzyMatches.map(
-                (m, i) => `${i + 1}. ${m.aliasDisplay} (${m.targetPhone})`
-              )
-              const disambigMsg = {
-                en: `Multiple contacts match "${safeRaw}":\n${lines.join('\n')}\nReply with the exact contact name.`,
-                es: `Varios contactos coinciden con "${safeRaw}":\n${lines.join('\n')}\nResponde con el nombre exacto del contacto.`,
-                pt: `V\u00e1rios contatos correspondem a "${safeRaw}":\n${lines.join('\n')}\nResponda com o nome exato do contato.`,
-              }
-              await sendMessageFn(phoneNumber, disambigMsg[lang], lang)
-              return
-            } else {
-              // No match at all — treat as invalid phone
-              command.recipientError = 'INVALID_PHONE'
+          if (matches.length === 1) {
+            // Single match — always confirm (even on exact match) so user sees the phone
+            const match = matches[0]
+            pendingTxs.set(phoneNumber, {
+              amount: command.amount,
+              recipient: match.targetPhone,
+              timestamp: Date.now(),
+              lang,
+            })
+            const confirmMsg = {
+              en: `Send $${command.amount} to ${match.aliasDisplay} (${match.targetPhone})? Reply YES to confirm.`,
+              es: `\u00bfEnviar $${command.amount} a ${match.aliasDisplay} (${match.targetPhone})? Responde S\u00cd para confirmar.`,
+              pt: `Enviar $${command.amount} para ${match.aliasDisplay} (${match.targetPhone})? Responda SIM para confirmar.`,
             }
+            await sendMessageFn(phoneNumber, confirmMsg[lang], lang)
+            return
+          } else if (matches.length > 1) {
+            // Multiple matches — store partial send so follow-up alias resolves
+            partialSends.set(phoneNumber, {
+              amount: command.amount,
+              timestamp: Date.now(),
+              lang,
+            })
+            const safeRaw = sanitizeAlias(command.recipientRaw) ?? command.recipientRaw.slice(0, 30)
+            const lines = matches.map((m, i) => `${i + 1}. ${m.aliasDisplay} (${m.targetPhone})`)
+            const disambigMsg = {
+              en: `Multiple contacts match "${safeRaw}":\n${lines.join('\n')}\nReply with the exact contact name.`,
+              es: `Varios contactos coinciden con "${safeRaw}":\n${lines.join('\n')}\nResponde con el nombre exacto del contacto.`,
+              pt: `V\u00e1rios contatos correspondem a "${safeRaw}":\n${lines.join('\n')}\nResponda com o nome exato do contato.`,
+            }
+            await sendMessageFn(phoneNumber, disambigMsg[lang], lang)
+            return
+          } else {
+            // No match at all — treat as invalid phone
+            command.recipientError = 'INVALID_PHONE'
           }
         }
 
