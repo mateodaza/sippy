@@ -248,6 +248,8 @@ export async function handleSendCommand(
       senderPhone: fromPhoneNumber,
       txHash: result.transactionHash,
       lang: recipientLang,
+      localRate: recipientRate,
+      localCurrency: recipientCurrency,
     })
 
     await sendButtonMessage(
@@ -301,8 +303,8 @@ async function handleEmbeddedSend(
   lang: Lang,
   senderRate: number | null,
   senderCurrency: string | null,
-  _recipientRate: number | null,
-  _recipientCurrency: string | null
+  recipientRate: number | null,
+  recipientCurrency: string | null
 ): Promise<boolean> {
   if (!senderWallet.spendPermissionHash) {
     await sendTextMessage(fromPhoneNumber, formatSetupRequiredMessage(fromPhoneNumber, lang), lang)
@@ -454,6 +456,8 @@ async function handleEmbeddedSend(
         senderPhone: fromPhoneNumber,
         txHash: result.transactionHash,
         lang: recipientLang,
+        localRate: recipientRate,
+        localCurrency: recipientCurrency,
       })
     } catch (notifyError) {
       logger.error('Failed to send notification to recipient: %o', notifyError)

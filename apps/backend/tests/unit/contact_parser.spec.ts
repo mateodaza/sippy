@@ -280,3 +280,54 @@ test.group('F | local currency detection in send', () => {
     assert.equal(r.recipientRaw, 'carlos')
   })
 })
+
+// ── Group G: "mil" shorthand expansion ──────────────────────────────────────
+
+test.group('G | mil shorthand expansion', () => {
+  test('G-01: "enviar 2mil pesos a +573001234567" → amount=2000', ({ assert }) => {
+    const r = parseMessageWithRegex('enviar 2mil pesos a +573001234567')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 2000)
+    assert.equal(r.localCurrency, 'LOCAL')
+  })
+
+  test('G-02: "mandale 5mil a carlos" → amount=5000', ({ assert }) => {
+    const r = parseMessageWithRegex('mandale 5mil a carlos')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 5000)
+  })
+
+  test('G-03: "send 10mil to +573001234567" → amount=10000', ({ assert }) => {
+    const r = parseMessageWithRegex('send 10mil to +573001234567')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 10000)
+  })
+
+  test('G-04: "enviar 2 mil pesos a +573001234567" → amount=2000 (space before mil)', ({
+    assert,
+  }) => {
+    const r = parseMessageWithRegex('enviar 2 mil pesos a +573001234567')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 2000)
+    assert.equal(r.localCurrency, 'LOCAL')
+  })
+
+  test('G-05: "enviar 5 a +573001234567" → amount=5 (no mil, unchanged)', ({ assert }) => {
+    const r = parseMessageWithRegex('enviar 5 a +573001234567')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 5)
+  })
+
+  test('G-06: "send 2k to +573001234567" → amount=2000', ({ assert }) => {
+    const r = parseMessageWithRegex('send 2k to +573001234567')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 2000)
+  })
+
+  test('G-07: "mandale 5k pesos a carlos" → amount=5000 + LOCAL', ({ assert }) => {
+    const r = parseMessageWithRegex('mandale 5k pesos a carlos')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 5000)
+    assert.equal(r.localCurrency, 'LOCAL')
+  })
+})

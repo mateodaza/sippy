@@ -282,7 +282,11 @@ const SEND_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
  * This is the primary parser — handles 80%+ of messages at zero cost.
  */
 export function parseMessageWithRegex(text: string): ParsedCommand {
-  const normalizedText = text.trim().toLowerCase()
+  // Expand "mil"/"k" shorthand: "2mil" → "2000", "5k" → "5000"
+  const expandedText = text
+    .replace(/(\d+)\s*mil\b/gi, (_m, d) => String(Number.parseInt(d, 10) * 1000))
+    .replace(/(\d+)\s*k\b/gi, (_m, d) => String(Number.parseInt(d, 10) * 1000))
+  const normalizedText = expandedText.trim().toLowerCase()
   // Accent-stripped version for send pattern matching: "Mándale" → "mandale", "Envíale" → "enviale"
   // JS /i flag doesn't fold Unicode accents, and Spanish imperatives shift accents
   // to different syllables (mándale vs mandá), so we strip all combining marks.

@@ -48,15 +48,24 @@ export async function notifyPaymentReceived(opts: {
   senderPhone: string
   txHash: string
   lang: string
+  localRate?: number | null
+  localCurrency?: string | null
 }): Promise<void> {
-  const { recipientPhone, amount, asset, senderPhone, txHash, lang } = opts
+  const { recipientPhone, amount, asset, senderPhone, txHash, lang, localRate, localCurrency } =
+    opts
   const templateLang = TEMPLATE_LANG_MAP[lang] || 'en'
 
   // Mask sender phone for privacy: +573001234567 → +57***4567
   const masked =
     senderPhone.length > 4 ? `${senderPhone.slice(0, 3)}***${senderPhone.slice(-4)}` : senderPhone
 
-  const amountWithAsset = `${amount} ${asset.toUpperCase()}`
+  // Include local currency equivalent: "0.54 USDC (~2,000 COP)"
+  let amountWithAsset = `${amount} ${asset.toUpperCase()}`
+  if (localRate && localRate > 0 && localCurrency) {
+    const localAmount = Math.round(Number.parseFloat(amount) * localRate)
+    const localStr = localAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })
+    amountWithAsset += ` (~${localStr} ${localCurrency})`
+  }
 
   try {
     const result = await sendTemplateMessage(
