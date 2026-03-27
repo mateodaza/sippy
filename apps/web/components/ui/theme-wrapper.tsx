@@ -9,6 +9,7 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <ThemeProvider
+      key={supportsTheme ? 'themed' : 'light'}
       attribute="class"
       defaultTheme={supportsTheme ? 'system' : 'light'}
       enableSystem={supportsTheme}

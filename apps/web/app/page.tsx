@@ -84,9 +84,9 @@ export default async function HomePage() {
         {/* ── Hero ── */}
         <section className="relative h-screen max-h-[900px] pt-16 sm:pt-20 pb-8 sm:pb-12 overflow-hidden flex flex-col justify-center items-center bg-[var(--bg-primary)] px-2 sm:px-6 lg:px-8 registration-marks">
           {/* Triple nested border frames — rounded outer, echoing equipment housing */}
-          <div className="absolute inset-2 sm:inset-8 lg:inset-10 pointer-events-none border border-brand-primary/30 dark:border-brand-primary/[0.12] z-0 rounded-xl sm:rounded-2xl" />
-          <div className="absolute inset-3 sm:inset-9 lg:inset-11 pointer-events-none border border-brand-primary/50 dark:border-brand-primary/[0.20] z-0 rounded-[0.7rem] sm:rounded-[1.35rem]" />
-          <div className="absolute inset-4 sm:inset-10 lg:inset-12 pointer-events-none border border-brand-primary/80 dark:border-brand-primary/[0.30] z-0 rounded-[0.6rem] sm:rounded-[1.2rem]" />
+          <div className="absolute inset-2 sm:inset-8 lg:inset-10 pointer-events-none border border-brand-primary/30 z-0 rounded-xl sm:rounded-2xl" />
+          <div className="absolute inset-3 sm:inset-9 lg:inset-11 pointer-events-none border border-brand-primary/50 z-0 rounded-[0.7rem] sm:rounded-[1.35rem]" />
+          <div className="absolute inset-4 sm:inset-10 lg:inset-12 pointer-events-none border border-brand-primary/80 z-0 rounded-[0.6rem] sm:rounded-[1.2rem]" />
 
           {/* Status indicator */}
           <div className="absolute bottom-14 right-14 hidden lg:block z-20">
@@ -351,19 +351,19 @@ export default async function HomePage() {
             {/* Gradient border frame — many lines fading outward */}
             <div className="relative">
               {/* Outermost — barely visible, wide on mobile */}
-              <div className="absolute inset-x-1 inset-y-0 sm:-inset-[40px] pointer-events-none border border-brand-primary/[0.03] dark:border-brand-primary/[0.03] rounded-[0.6rem] sm:rounded-[2.8rem]" />
-              <div className="absolute inset-x-1.5 inset-y-[2px] sm:-inset-[34px] pointer-events-none border border-brand-primary/[0.05] dark:border-brand-primary/[0.04] rounded-[0.55rem] sm:rounded-[2.6rem]" />
-              <div className="absolute inset-x-2 inset-y-1 sm:-inset-[28px] pointer-events-none border border-brand-primary/[0.07] dark:border-brand-primary/[0.06] rounded-[0.5rem] sm:rounded-[2.4rem]" />
-              <div className="absolute inset-x-2.5 inset-y-1.5 sm:-inset-[22px] pointer-events-none border border-brand-primary/[0.10] dark:border-brand-primary/[0.07] rounded-[0.45rem] sm:rounded-[2.2rem]" />
-              <div className="absolute inset-x-3 inset-y-2 sm:-inset-[16px] pointer-events-none border border-brand-primary/[0.14] dark:border-brand-primary/[0.10] rounded-[0.4rem] sm:rounded-[2rem]" />
-              <div className="absolute inset-x-3.5 inset-y-2.5 sm:-inset-[10px] pointer-events-none border border-brand-primary/[0.18] dark:border-brand-primary/[0.13] rounded-[0.35rem] sm:rounded-[1.8rem]" />
-              <div className="absolute inset-x-4 inset-y-3 sm:-inset-[5px] pointer-events-none border border-brand-primary/[0.24] dark:border-brand-primary/[0.16] rounded-[0.3rem] sm:rounded-[1.6rem]" />
-              <div className="absolute inset-x-[18px] inset-y-3.5 sm:inset-0 pointer-events-none border border-brand-primary/30 dark:border-brand-primary/20 rounded-[0.25rem] sm:rounded-[1.4rem]" />
-              <div className="absolute inset-x-5 inset-y-4 sm:inset-[5px] pointer-events-none border border-brand-primary/40 dark:border-brand-primary/25 rounded-[0.2rem] sm:rounded-[1.2rem]" />
-              <div className="absolute inset-x-[22px] inset-y-[18px] sm:inset-[10px] pointer-events-none border border-brand-primary/50 dark:border-brand-primary/30 rounded-[0.15rem] sm:rounded-[1rem]" />
-              <div className="absolute inset-x-6 inset-y-5 sm:inset-[15px] pointer-events-none border border-brand-primary/65 dark:border-brand-primary/40 rounded-[0.1rem] sm:rounded-[0.8rem]" />
+              <div className="absolute inset-x-1 inset-y-0 sm:-inset-[40px] pointer-events-none border border-brand-primary/[0.03] rounded-[0.6rem] sm:rounded-[2.8rem]" />
+              <div className="absolute inset-x-1.5 inset-y-[2px] sm:-inset-[34px] pointer-events-none border border-brand-primary/[0.05] rounded-[0.55rem] sm:rounded-[2.6rem]" />
+              <div className="absolute inset-x-2 inset-y-1 sm:-inset-[28px] pointer-events-none border border-brand-primary/[0.07] rounded-[0.5rem] sm:rounded-[2.4rem]" />
+              <div className="absolute inset-x-2.5 inset-y-1.5 sm:-inset-[22px] pointer-events-none border border-brand-primary/[0.10] rounded-[0.45rem] sm:rounded-[2.2rem]" />
+              <div className="absolute inset-x-3 inset-y-2 sm:-inset-[16px] pointer-events-none border border-brand-primary/[0.14] rounded-[0.4rem] sm:rounded-[2rem]" />
+              <div className="absolute inset-x-3.5 inset-y-2.5 sm:-inset-[10px] pointer-events-none border border-brand-primary/[0.18] rounded-[0.35rem] sm:rounded-[1.8rem]" />
+              <div className="absolute inset-x-4 inset-y-3 sm:-inset-[5px] pointer-events-none border border-brand-primary/[0.24] rounded-[0.3rem] sm:rounded-[1.6rem]" />
+              <div className="absolute inset-x-[18px] inset-y-3.5 sm:inset-0 pointer-events-none border border-brand-primary/30 rounded-[0.25rem] sm:rounded-[1.4rem]" />
+              <div className="absolute inset-x-5 inset-y-4 sm:inset-[5px] pointer-events-none border border-brand-primary/40 rounded-[0.2rem] sm:rounded-[1.2rem]" />
+              <div className="absolute inset-x-[22px] inset-y-[18px] sm:inset-[10px] pointer-events-none border border-brand-primary/50 rounded-[0.15rem] sm:rounded-[1rem]" />
+              <div className="absolute inset-x-6 inset-y-5 sm:inset-[15px] pointer-events-none border border-brand-primary/65 rounded-[0.1rem] sm:rounded-[0.8rem]" />
               {/* Innermost — strongest, hugs close to content */}
-              <div className="absolute inset-x-[26px] inset-y-[22px] sm:inset-[20px] pointer-events-none border border-brand-primary/80 dark:border-brand-primary/50 rounded-[0.05rem] sm:rounded-[0.6rem]" />
+              <div className="absolute inset-x-[26px] inset-y-[22px] sm:inset-[20px] pointer-events-none border border-brand-primary/80 rounded-[0.05rem] sm:rounded-[0.6rem]" />
 
               {/* Ruled grid lines inside the frame */}
               <div className="absolute inset-x-[26px] inset-y-[22px] sm:inset-[20px] pointer-events-none rounded-[0.05rem] sm:rounded-[0.6rem] overflow-hidden grid-overlay-lg" />
