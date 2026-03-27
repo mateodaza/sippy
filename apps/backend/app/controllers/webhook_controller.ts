@@ -62,6 +62,7 @@ import {
   formatInviteAlreadyOnSippy,
   formatEmailNudge,
   formatInsufficientBalanceMessage,
+  formatContactNotFound,
 } from '#utils/messages'
 
 import { DateTime } from 'luxon'
@@ -141,6 +142,23 @@ async function generateFundUrl(phoneNumber: string): Promise<string> {
     logger.warn('Fund token generation failed, falling back to base URL: %o', err)
   }
   return FUND_URL
+}
+
+/**
+ * Format amount string with optional local currency equivalent.
+ * "$2.70 (~10,000 COP)" when converted from local, or just "$5" when in USD.
+ */
+function formatAmountWithLocal(
+  usdcAmount: number,
+  localAmount?: number,
+  localCurrency?: string,
+  senderCurrency?: string | null
+): string {
+  const usdcStr = `$${usdcAmount}`
+  if (!localAmount || !localCurrency) return usdcStr
+  const currency = localCurrency === 'LOCAL' ? (senderCurrency ?? '') : localCurrency
+  const localStr = localAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  return `${usdcStr} (~${localStr} ${currency})`
 }
 
 const CONFIRM_THRESHOLD_DEFAULT = 5
@@ -360,15 +378,39 @@ export async function routeCommand(
           return
         }
 
+        // ── Local currency conversion: "10000 pesos" → USDC equivalent ──
+        if (command.localCurrency && command.amount && command.localAmount) {
+          let currencyCode = command.localCurrency
+          if (currencyCode === 'LOCAL') {
+            currencyCode = rateCtx.senderCurrency ?? ''
+          }
+          if (currencyCode) {
+            const rate = await exchangeRateService.getLocalRate(currencyCode)
+            if (rate && rate > 0) {
+              const usdcAmount = Math.round((command.localAmount / rate) * 100) / 100
+              if (usdcAmount < 0.1) {
+                await sendMessageFn(phoneNumber, formatAmountError('TOO_SMALL', lang), lang)
+                return
+              }
+              command.amount = usdcAmount
+              command.isLargeAmount = usdcAmount > 500
+            } else {
+              const noRateMsg = {
+                en: `Can't convert ${currencyCode} right now. Try in dollars: "send 5 to ..."`,
+                es: `No puedo convertir ${currencyCode} ahora. Intenta en dolares: "enviar 5 a ..."`,
+                pt: `Nao consigo converter ${currencyCode} agora. Tenta em dolares: "enviar 5 para ..."`,
+              }
+              await sendMessageFn(phoneNumber, noRateMsg[lang], lang)
+              return
+            }
+          }
+        }
+
         // ── Alias resolution: recipientRaw present but no canonical phone ──
-        // Uses multi-strategy resolver: exact → prefix → word → contains → typo.
-        // Single match at any confidence → ask confirmation (shows name + phone).
-        // Multiple matches → disambiguate. None → invalid phone.
         if (!command.recipient && command.recipientRaw && command.amount) {
           const matches = await smartResolveAlias(phoneNumber, command.recipientRaw)
 
           if (matches.length === 1) {
-            // Single match — always confirm (even on exact match) so user sees the phone
             const match = matches[0]
             pendingTxs.set(phoneNumber, {
               amount: command.amount,
@@ -376,15 +418,20 @@ export async function routeCommand(
               timestamp: Date.now(),
               lang,
             })
+            const amtStr = formatAmountWithLocal(
+              command.amount,
+              command.localAmount,
+              command.localCurrency,
+              rateCtx.senderCurrency
+            )
             const confirmMsg = {
-              en: `Send $${command.amount} to ${match.aliasDisplay} (${match.targetPhone})? Reply YES to confirm.`,
-              es: `\u00bfEnviar $${command.amount} a ${match.aliasDisplay} (${match.targetPhone})? Responde S\u00cd para confirmar.`,
-              pt: `Enviar $${command.amount} para ${match.aliasDisplay} (${match.targetPhone})? Responda SIM para confirmar.`,
+              en: `Send ${amtStr} to ${match.aliasDisplay} (${match.targetPhone})? Reply YES to confirm.`,
+              es: `\u00bfEnviar ${amtStr} a ${match.aliasDisplay} (${match.targetPhone})? Responde S\u00cd para confirmar.`,
+              pt: `Enviar ${amtStr} para ${match.aliasDisplay} (${match.targetPhone})? Responda SIM para confirmar.`,
             }
             await sendMessageFn(phoneNumber, confirmMsg[lang], lang)
             return
           } else if (matches.length > 1) {
-            // Multiple matches — store partial send so follow-up alias resolves
             partialSends.set(phoneNumber, {
               amount: command.amount,
               timestamp: Date.now(),
@@ -400,12 +447,14 @@ export async function routeCommand(
             await sendMessageFn(phoneNumber, disambigMsg[lang], lang)
             return
           } else {
-            // No match at all — treat as invalid phone
-            command.recipientError = 'INVALID_PHONE'
+            // No match at all — show "contact not found" with save hint
+            const safeRaw = sanitizeAlias(command.recipientRaw) ?? command.recipientRaw.slice(0, 30)
+            await sendMessageFn(phoneNumber, formatContactNotFound(safeRaw, lang), lang)
+            return
           }
         }
 
-        // Phone canonicalization failed and alias resolution didn't help — bail
+        // Phone canonicalization failed (no recipientRaw = raw phone that didn't parse) — bail
         if (command.recipientError === 'INVALID_PHONE') {
           await sendMessageFn(phoneNumber, formatInvalidPhoneNumberMessage(lang), lang)
           return

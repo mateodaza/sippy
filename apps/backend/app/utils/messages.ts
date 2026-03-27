@@ -1150,6 +1150,17 @@ export function formatInvalidPhoneNumberMessage(lang: Lang): string {
   return m[lang]()
 }
 
+export function formatContactNotFound(name: string, lang: Lang): string {
+  const m = {
+    en: () => `No contact "${name}" found. You can save it:\n"save contact ${name} +573001234567"`,
+    es: () =>
+      `No encontre a "${name}" en tus contactos. Puedes guardarlo:\n"guardar contacto ${name} +573001234567"`,
+    pt: () =>
+      `Nao encontrei "${name}" nos seus contatos. Pode salvar:\n"salvar contato ${name} +5511999887766"`,
+  }
+  return m[lang]()
+}
+
 export function formatAmountError(code: AmountErrorCode, lang: Lang): string {
   switch (code) {
     case 'ZERO':

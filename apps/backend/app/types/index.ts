@@ -90,6 +90,8 @@ export interface ParsedCommand {
   amountError?: AmountErrorCode // set when send regex matched but amount is invalid
   recipientError?: 'INVALID_PHONE' // set when amount is valid but phone canonicalization fails
   isLargeAmount?: boolean // true iff amount > 500 and no amountError
+  localCurrency?: string // currency word detected in send (e.g. "pesos" → used for conversion)
+  localAmount?: number // original amount in local currency before USDC conversion
 }
 
 export interface WalletInfo {

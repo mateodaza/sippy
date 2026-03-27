@@ -178,8 +178,35 @@ const INVITE_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
   { pattern: /^convid[aá]r?\s+(?:(?:o|a)\s+)?(.+)$/i, lang: 'pt' },
 ]
 
-// Optional currency word after amount: "1 dólar", "5 dolares", "10 pesos", "20 dollars"
-const CURRENCY_WORD = `(?:\\s+(?:d[oó]lar(?:es)?|dollars?|pesos?|usd|plata))?`
+// Optional currency word after amount: "1 dólar", "5 dolares", "10 pesos", "20 reais"
+// Capturing group so parseSendMatch can detect local currency sends.
+const CURRENCY_WORD = `(?:\\s+(d[oó]lar(?:es)?|dollars?|pesos?|usd|plata|rea(?:is|l)|soles?|lempiras?|quetzales?|colone?s?|bol[ií]vares?|guaranie?s?))?`
+
+/** Map currency words (accent-stripped, lowercase) to ISO currency codes */
+const CURRENCY_WORD_MAP: Record<string, string | null> = {
+  dollar: null,
+  dollars: null,
+  dolar: null,
+  dolares: null,
+  usd: null,
+  plata: null,
+  peso: 'LOCAL',
+  pesos: 'LOCAL',
+  real: 'BRL',
+  reais: 'BRL',
+  sol: 'PEN',
+  soles: 'PEN',
+  lempira: 'HNL',
+  lempiras: 'HNL',
+  quetzal: 'GTQ',
+  quetzales: 'GTQ',
+  colon: 'CRC',
+  colones: 'CRC',
+  bolivar: 'VES',
+  bolivares: 'VES',
+  guarani: 'PYG',
+  guaranies: 'PYG',
+}
 
 /** Trilingual send patterns — strict format, must extract amount + recipient */
 const SEND_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
@@ -558,33 +585,45 @@ function parseSendMatch(
   lang: 'en' | 'es' | 'pt'
 ): ParsedCommand {
   const rawAmount = match[1] // literal text from regex, e.g. "10,50" or "1.000"
+  const rawCurrency = match[2] // optional: "pesos", "dolares", "reais", etc.
+  const rawRecipient = match[3] // recipient text (phone or alias name)
+
   const result = parseAndValidateAmount(rawAmount)
 
   if (result.errorCode !== null) {
-    // Amount is invalid — carry error to controller for a specific reply
     return { command: 'send', amountError: result.errorCode, detectedLanguage: lang, originalText }
   }
 
-  const rawRecipient = match[2].trim()
-  const canonicalRecipient = canonicalizePhone(rawRecipient)
-  if (!canonicalRecipient) {
-    // Amount is valid but phone is bad — preserve raw text for alias resolution
-    return {
-      command: 'send',
-      amount: result.value!,
-      recipientRaw: rawRecipient,
-      detectedLanguage: lang,
-      originalText,
-    }
-  }
+  // Detect local currency from the currency word
+  const stripped = rawCurrency
+    ? rawCurrency
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+    : undefined
+  const currencyCode = stripped ? CURRENCY_WORD_MAP[stripped] : undefined
+  const localCurrency = currencyCode === null ? undefined : currencyCode
 
-  return {
+  const base: ParsedCommand = {
     command: 'send',
     amount: result.value!,
-    recipient: canonicalRecipient,
     isLargeAmount: result.isLarge,
     detectedLanguage: lang,
+    ...(localCurrency ? { localCurrency, localAmount: result.value! } : {}),
   }
+
+  if (!rawRecipient) {
+    return { ...base, originalText }
+  }
+
+  const trimmedRecipient = rawRecipient.trim()
+  const canonicalRecipient = canonicalizePhone(trimmedRecipient)
+  if (!canonicalRecipient) {
+    return { ...base, recipientRaw: trimmedRecipient, originalText }
+  }
+
+  return { ...base, recipient: canonicalRecipient }
 }
 
 // ============================================================================

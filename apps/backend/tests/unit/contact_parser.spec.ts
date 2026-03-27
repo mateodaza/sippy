@@ -217,3 +217,66 @@ test.group('E | save_contact takes priority over send', () => {
     assert.equal(r.command, 'save_contact')
   })
 })
+
+// ── Group F: local currency detection ───────────────────────────────────────
+
+test.group('F | local currency detection in send', () => {
+  test('F-01: "enviar 10000 pesos a +573001234567" → localCurrency=LOCAL', ({ assert }) => {
+    const r = parseMessageWithRegex('enviar 10000 pesos a +573001234567')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 10000)
+    assert.equal(r.localCurrency, 'LOCAL')
+    assert.equal(r.localAmount, 10000)
+    assert.isDefined(r.recipient)
+  })
+
+  test('F-02: "send 50 reais para +5511999887766" → localCurrency=BRL', ({ assert }) => {
+    const r = parseMessageWithRegex('send 50 reais para +5511999887766')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 50)
+    assert.equal(r.localCurrency, 'BRL')
+  })
+
+  test('F-03: "mandale 5000 pesos a carlos" → localCurrency=LOCAL + recipientRaw', ({ assert }) => {
+    const r = parseMessageWithRegex('mandale 5000 pesos a carlos')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 5000)
+    assert.equal(r.localCurrency, 'LOCAL')
+    assert.equal(r.recipientRaw, 'carlos')
+  })
+
+  test('F-04: "enviar 10 dolares a +573001234567" → no localCurrency (USD)', ({ assert }) => {
+    const r = parseMessageWithRegex('enviar 10 dolares a +573001234567')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 10)
+    assert.isUndefined(r.localCurrency)
+  })
+
+  test('F-05: "send 5 dollars to +573001234567" → no localCurrency (USD)', ({ assert }) => {
+    const r = parseMessageWithRegex('send 5 dollars to +573001234567')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 5)
+    assert.isUndefined(r.localCurrency)
+  })
+
+  test('F-06: "send 5 to +573001234567" → no localCurrency (no currency word)', ({ assert }) => {
+    const r = parseMessageWithRegex('send 5 to +573001234567')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 5)
+    assert.isUndefined(r.localCurrency)
+  })
+
+  test('F-07: "enviar 100 soles a +51999887766" → localCurrency=PEN', ({ assert }) => {
+    const r = parseMessageWithRegex('enviar 100 soles a +51999887766')
+    assert.equal(r.command, 'send')
+    assert.equal(r.localCurrency, 'PEN')
+  })
+
+  test('F-08: "Mándale 10000 pesos a Carlos" → accent fix + currency', ({ assert }) => {
+    const r = parseMessageWithRegex('Mándale 10000 pesos a Carlos')
+    assert.equal(r.command, 'send')
+    assert.equal(r.amount, 10000)
+    assert.equal(r.localCurrency, 'LOCAL')
+    assert.equal(r.recipientRaw, 'carlos')
+  })
+})
