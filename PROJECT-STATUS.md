@@ -1,6 +1,6 @@
 # Project Status — Sippy
 
-**Last Updated:** March 24, 2026
+**Last Updated:** March 27, 2026
 **Current Milestone:** M1 — Production Ready (deadline Mar 26, 2026)
 **Detailed Plan:** [M1_PLAN.md](./M1_PLAN.md)
 **Task Queue:** [TASK_QUEUE.md](./TASK_QUEUE.md)
@@ -9,28 +9,28 @@
 
 ## M1 Deliverable Progress
 
-| #   | Deliverable                         | Status   | Notes                                                                                                                                                                                                                                                             |
-| --- | ----------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Onramp integration                  | Blocked  | Waiting on Maash API response                                                                                                                                                                                                                                     |
-| 2   | Non-custodial wallet refinements    | 100%     | CDP Embedded Wallets, sweep-to-EOA, unified wallet UI (Free gas + Direct modes), custom auth, web send hardened, drift detection                                                                                                                                  |
-| 3   | Security hardening                  | 100%     | Phone sanitization (SH), tx confirmation + self-send block + concurrent protection (TX), velocity limiter, tiered limits (EL), amount hardening, backend audit (AU), admin block/unblock + global pause (AC), web send guards (self-send, velocity, daily limits) |
-| 4   | Dual currency display (USD + local) | 100%     | 26 LATAM currencies, phone prefix mapping, 24h cache, all separators                                                                                                                                                                                              |
-| 5   | Privacy controls + Email Recovery   | 100%     | Phone visibility toggle (settings + WhatsApp command), profile masking, email recovery                                                                                                                                                                            |
-| 6   | User settings                       | 100%     | Language auto-detect + selector (LN), tiered limit display (EL), privacy toggle (PV), email management, key export                                                                                                                                                |
-| 7   | Monitoring infrastructure           | 100%     | Sentry (backend + frontend), health endpoint, PostHog analytics, indexer, admin dashboard                                                                                                                                                                         |
-| 8   | Legal entity                        | External | In progress separately                                                                                                                                                                                                                                            |
-| 9   | WhatsApp production number          | 100%     | Active, approved                                                                                                                                                                                                                                                  |
-| 10  | Closed beta: 50 testers             | 0%       | E2E test matrix done, beta onboarding pending                                                                                                                                                                                                                     |
+| #   | Deliverable                         | Status  | Notes                                                                                                                                                                                                                                                             |
+| --- | ----------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Onramp integration                  | Blocked | Transak + TransFi KYB submitted Mar 23 for Colombia COP. Coinbase Onramp live for non-CO countries.                                                                                                                                                               |
+| 2   | Non-custodial wallet refinements    | 100%    | CDP Embedded Wallets, sweep-to-EOA, unified wallet UI (Free gas + Direct modes), custom auth, web send hardened                                                                                                                                                   |
+| 3   | Security hardening                  | 100%    | Phone sanitization (SH), tx confirmation + self-send block + concurrent protection (TX), velocity limiter, tiered limits (EL), amount hardening, backend audit (AU), admin block/unblock + global pause (AC), web send guards (self-send, velocity, daily limits) |
+| 4   | Dual currency display (USD + local) | 100%    | 26 LATAM currencies, phone prefix mapping, 24h cache, local currency sends ("2mil pesos" auto-converts)                                                                                                                                                           |
+| 5   | Privacy controls + Email Recovery   | 100%    | Phone visibility toggle (settings + WhatsApp command), profile masking, email recovery                                                                                                                                                                            |
+| 6   | User settings                       | 100%    | Language auto-detect + selector (LN), tiered limit display (EL), privacy toggle (PV), email management, key export                                                                                                                                                |
+| 7   | Monitoring infrastructure           | 100%    | Sentry (backend + frontend), health endpoint, PostHog analytics, indexer, admin dashboard                                                                                                                                                                         |
+| 8   | Legal entity                        | 100%    | SIPPY, S.A. DE C.V. incorporated in El Salvador (Mar 20, 2026)                                                                                                                                                                                                    |
+| 9   | WhatsApp production number          | 100%    | Active, approved                                                                                                                                                                                                                                                  |
+| 10  | Closed beta: 50 testers             | 90%     | 45 users onboarded, $4K+ USDC volume                                                                                                                                                                                                                              |
 
 ---
 
-## Current Focus: Beta Launch Prep (Week 5)
+## Current Focus: Beta Live + Onramp
 
-All security, privacy, language, and monitoring tasks are complete. Remaining work:
+Beta is live with 45 users and $4K+ volume. Remaining work:
 
-1. **BP-002 — Beta tester onboarding (50 users):** Manual — WhatsApp broadcast
-2. **BP-003 — Onramp integration (Maash):** Blocked — waiting on API. Path B fallback if still blocked at deadline
-3. **Legal entity:** External — in progress separately
+1. **Onramp integration:** Transak + TransFi KYB submitted for Colombia COP. Coinbase Onramp live for non-CO countries.
+2. **Reach 50 testers:** 5 more users needed to close M1 deliverable #10
+3. **Public analytics dashboard:** expose indexer stats for transparency
 
 ---
 
@@ -53,6 +53,11 @@ All security, privacy, language, and monitoring tasks are complete. Remaining wo
 - Message deduplication (webhook replay protection)
 - Privacy command: `privacy on/off` (trilingual)
 - Admin controls: user block/unblock, global pause/resume
+- Address book: save/delete/list contacts, vCard import, smart alias resolution (5 strategies)
+- Local currency sends: "2mil pesos", "50 reais", "100 soles" auto-convert to USDC
+- mil/k shorthand: "2mil" and "2k" expand to 2000
+- Contact-not-found stores partial send so user can reply with phone or corrected name
+- OTP via SMS and WhatsApp (dual channel)
 
 ### Wallets — Production
 
@@ -72,8 +77,9 @@ All security, privacy, language, and monitoring tasks are complete. Remaining wo
 - Concurrent send protection (one in-flight per user)
 - Velocity limiter: 5 sends/10min, $500/hour, 3 new recipients/hour
 - Amount hardening: $10K cap, decimal validation, ambiguous separator detection
-- Recipient notifications in recipient's language
+- Recipient notifications in recipient's language (with local currency equivalent)
 - Transaction receipts with shareable links
+- Send by alias: "send 5 to mom" resolves saved contacts with confirmation
 
 ### Frontend — Production
 
@@ -115,7 +121,7 @@ All security, privacy, language, and monitoring tasks are complete. Remaining wo
 ### Database — Production
 
 - PostgreSQL on Railway (shared between backend + indexer)
-- Tables: `phone_registry`, `user_preferences`, `parse_log`, `export_audit_log`, `web_send_log`
+- Tables: `phone_registry`, `user_preferences`, `parse_log`, `export_audit_log`, `web_send_log`, `user_contacts`
 - Indexer tables: `account`, `transfer`, `refuel_event`, `gas_refuel_status`, `daily_volume`, `offchain.sippy_wallet`
 - Language preference persistence
 - Parse observability data
@@ -124,9 +130,8 @@ All security, privacy, language, and monitoring tasks are complete. Remaining wo
 
 ## Known Issues
 
-- **Onramp blocked:** Waiting on Maash API. Fallback Path B documented in M1_PLAN.md
+- **Onramp for Colombia:** Transak + TransFi KYB submitted Mar 23. Coinbase Onramp live for non-CO countries.
 - **Web send error messages:** Backend returns safe error allowlist but wallet UI collapses all failures to generic "Send failed" via `localizeError`. Follow-up: wire specific errors through to UI
-- **SH-003 dual-format phone lookup:** 6 call sites still do canonical + bare-digit fallback during migration transition. Extract shared helper post-M1
 
 ---
 
@@ -160,12 +165,13 @@ sippy/                      ← Turborepo + pnpm workspaces
 | User-facing strings   | 35+ (all trilingual)                        |
 | WhatsApp capacity     | 2K bot-initiated + unlimited user-initiated |
 | Smart contract        | GasRefuel.sol deployed on Arbitrum One      |
-| Backend tests         | 500+ passing (unit + functional)            |
+| Backend tests         | 1090+ passing (unit + functional)           |
 
 ---
 
 ## Recent Changes
 
+**Mar 27** — Address book shipped: save/delete/list contacts, vCard import, smart alias resolver (5 strategies: exact, prefix, any-word, contains, word-level Levenshtein), accent-aware parser for Spanish imperatives. Local currency sends: "2mil pesos", "50 reais", "100 soles" auto-convert to USDC via sender phone prefix. mil/k shorthand expansion. Recipient notifications show local equivalent. Contact-not-found stores partial send for follow-up. Delete contact requires keyword to prevent command hijacking. Confirm priority fix (money transfer wins over contact overwrite). 1090 tests passing.
 **Mar 24** — Zoho Desk support ticketing integration: backend service (`zoho_desk.service.ts`) with OAuth2 refresh-token flow and in-memory token caching, support controller with public (IP-throttled) and authenticated endpoints, `SupportForm` component on landing page and settings page, 19 i18n keys in EN/ES/PT. Zoho Desk free plan (3 agents, 5K API credits/day). Pending: end-to-end testing with live Zoho API.
 **Mar 13** — Merged `develop` into `main`: all SH, TX, EL, LN, PV, AU, MO, AC, WS, BP-001 tasks complete. PostHog migration. Web send hardened (self-send block for phone + address, velocity checks, tiered daily limits, safe error allowlist). Privacy fallback fixed. Moderation uses SH-003-safe `resolveUserPrefKey`. Silent catch blocks now log. Deliverables 2, 3, 5, 6, 7 moved to 100%.
 **Mar 12** — Task queue restructured: completed tasks archived to `COMPLETED_TASK_QUEUES.md`, new TASK_QUEUE.md with SH (phone sanitization), TX (tx security), EL (tiered limits), LN (language detection), PV (phone visibility), AU (audit), MO (monitoring), AC (admin controls), WS (session robustness), BP (beta prep). M1_PLAN timeline updated for weeks 4-5.
@@ -181,19 +187,19 @@ sippy/                      ← Turborepo + pnpm workspaces
 
 ## Environment
 
-| Service           | Provider               | Status                     |
-| ----------------- | ---------------------- | -------------------------- |
-| Backend hosting   | Railway                | Active                     |
-| Database          | Railway PostgreSQL     | Active                     |
-| Blockchain        | Arbitrum One           | Active                     |
-| Wallets           | Coinbase CDP Embedded  | Active                     |
-| Messaging         | WhatsApp Business API  | Active (production number) |
-| LLM               | Groq (free tier)       | Active                     |
-| Smart contract    | GasRefuel.sol          | Deployed                   |
-| Domain            | sippy.lat              | Active                     |
-| On-chain indexer  | Ponder v0.15 + Railway | Deployed                   |
-| SMS OTP           | Twilio (raw SMS API)   | Configured                 |
-| Email delivery    | Resend                 | Configured                 |
-| Exchange rates    | open.er-api.com (free) | Active                     |
-| Onramp            | Maash                  | Blocked (waiting on API)   |
-| Support ticketing | Zoho Desk (free plan)  | Configured — testing       |
+| Service           | Provider                                            | Status                     |
+| ----------------- | --------------------------------------------------- | -------------------------- |
+| Backend hosting   | Railway                                             | Active                     |
+| Database          | Railway PostgreSQL                                  | Active                     |
+| Blockchain        | Arbitrum One                                        | Active                     |
+| Wallets           | Coinbase CDP Embedded                               | Active                     |
+| Messaging         | WhatsApp Business API                               | Active (production number) |
+| LLM               | Groq (free tier)                                    | Active                     |
+| Smart contract    | GasRefuel.sol                                       | Deployed                   |
+| Domain            | sippy.lat                                           | Active                     |
+| On-chain indexer  | Ponder v0.15 + Railway                              | Deployed                   |
+| SMS OTP           | Twilio (raw SMS API)                                | Configured                 |
+| Email delivery    | Resend                                              | Configured                 |
+| Exchange rates    | open.er-api.com (free)                              | Active                     |
+| Onramp            | Coinbase (non-CO), Transak/TransFi (CO KYB pending) | Partially live             |
+| Support ticketing | Zoho Desk (free plan)                               | Configured — testing       |

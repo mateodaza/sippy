@@ -1,6 +1,6 @@
 import { Link } from '@adonisjs/inertia/react'
-import { usePage } from '@inertiajs/react'
-import type { ReactNode } from 'react'
+import { router, usePage } from '@inertiajs/react'
+import { type ReactNode, useState } from 'react'
 
 interface AuthUser {
   id: number
@@ -15,13 +15,15 @@ interface FlashMessages {
   error?: string
 }
 
-function timeAgo(ts: number): string {
-  const seconds = Math.floor((Date.now() - ts) / 1000)
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  return `${hours}h ago`
+interface IndexerStatus {
+  pollerAgo: number | null // seconds since last poller tick
+  webhookAgo: number | null // seconds since last webhook delivery
+}
+
+function formatAge(secs: number): string {
+  if (secs < 60) return `${secs}s ago`
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`
+  return `${Math.floor(secs / 3600)}h ago`
 }
 
 const navItems = [
@@ -103,11 +105,74 @@ const navItems = [
   },
 ]
 
+function PollerStatus({
+  indexerStatus,
+  isAdmin,
+}: {
+  indexerStatus: IndexerStatus
+  isAdmin: boolean
+}) {
+  const [restarting, setRestarting] = useState(false)
+  const pollerStuck = indexerStatus.pollerAgo !== null && indexerStatus.pollerAgo > 120
+
+  function handleRestart() {
+    setRestarting(true)
+    router.post(
+      '/admin/restart-poller',
+      {},
+      {
+        preserveScroll: true,
+        onFinish: () => setRestarting(false),
+      }
+    )
+  }
+
+  return (
+    <div className="mt-auto space-y-1 px-3 pb-3">
+      <div className="flex items-center gap-2 text-[11px] text-gray-400">
+        <span
+          className={`h-1.5 w-1.5 rounded-full ${
+            indexerStatus.pollerAgo === null
+              ? 'bg-gray-300'
+              : pollerStuck
+                ? 'bg-red-400'
+                : 'bg-sippy'
+          }`}
+        />
+        {indexerStatus.pollerAgo === null
+          ? 'Poller not started'
+          : pollerStuck
+            ? `Poller stuck (${formatAge(indexerStatus.pollerAgo)})`
+            : `Poller healthy (${formatAge(indexerStatus.pollerAgo)})`}
+      </div>
+      {pollerStuck && isAdmin && (
+        <button
+          onClick={handleRestart}
+          disabled={restarting}
+          className="ml-3.5 rounded bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+        >
+          {restarting ? 'Restarting...' : 'Restart poller'}
+        </button>
+      )}
+      <div className="flex items-center gap-2 text-[11px] text-gray-400">
+        <span
+          className={`h-1.5 w-1.5 rounded-full ${
+            indexerStatus.webhookAgo === null ? 'bg-gray-300' : 'bg-sippy'
+          }`}
+        />
+        {indexerStatus.webhookAgo === null
+          ? 'No webhooks yet'
+          : `Last webhook ${formatAge(indexerStatus.webhookAgo)}`}
+      </div>
+    </div>
+  )
+}
+
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const { auth, flash, indexerHeartbeat } = usePage().props as {
+  const { auth, flash, indexerStatus } = usePage().props as {
     auth: AuthUser | null
     flash: FlashMessages
-    indexerHeartbeat: number | null
+    indexerStatus: IndexerStatus | null
   }
   const currentPath = usePage().url
 
@@ -164,17 +229,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </div>
 
         {/* Indexer status */}
-        {indexerHeartbeat && (
-          <div className="mt-auto px-3 pb-3">
-            <div className="flex items-center gap-2 text-[11px] text-gray-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-sippy" />
-              Indexer synced {timeAgo(indexerHeartbeat)}
-            </div>
-          </div>
+        {indexerStatus && (
+          <PollerStatus indexerStatus={indexerStatus} isAdmin={auth?.role === 'admin'} />
         )}
 
         {/* User footer */}
-        <div className={`${indexerHeartbeat ? '' : 'mt-auto '}border-t border-gray-100 pt-4`}>
+        <div className={`${indexerStatus ? '' : 'mt-auto '}border-t border-gray-100 pt-4`}>
           {auth && (
             <div className="rounded-xl bg-gray-50 p-3">
               <div className="mb-3 flex items-center gap-3">

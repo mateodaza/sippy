@@ -3,6 +3,7 @@ import logger from '@adonisjs/core/services/logger'
 import UserPreference from '#models/user_preference'
 import { canonicalizePhone } from '#utils/phone'
 import { resolveUserPrefKey } from '#utils/user_pref_lookup'
+import { stopGasRefuelPoller, startGasRefuelPoller } from '#services/gas_refuel_poller.service'
 
 /**
  * In-memory global pause flag.
@@ -95,5 +96,16 @@ export default class ModerationController {
     isPaused = false
     logger.info('Global pause deactivated')
     return response.status(200).json({ success: true, paused: false })
+  }
+
+  /**
+   * POST /admin/restart-poller
+   * Stops and restarts the GasRefuel log poller.
+   */
+  async restartPoller({ response }: HttpContext) {
+    stopGasRefuelPoller()
+    startGasRefuelPoller()
+    logger.info('GasRefuel poller restarted via admin')
+    return response.status(200).json({ success: true })
   }
 }

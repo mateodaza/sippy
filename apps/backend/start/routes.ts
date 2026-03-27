@@ -128,6 +128,9 @@ router
       .post('/backfill-onchain', [WebhookAlchemyController, 'backfill'])
       .use(middleware.adminRole({ role: 'admin' }))
     router
+      .post('/restart-poller', [ModerationController, 'restartPoller'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
       .post('/pause', [ModerationController, 'pause'])
       .use(middleware.adminRole({ role: 'admin' }))
     router
