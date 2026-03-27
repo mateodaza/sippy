@@ -10,26 +10,25 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
     let indexerHeartbeat: number | null = null
     if (ctx.request.url().startsWith('/admin')) {
       try {
-        // Discover Ponder's active schema dynamically so we survive version upgrades
-        const schemaRow = await db
-          .connection('indexer')
-          .from('information_schema.tables')
-          .where('table_name', '_ponder_meta')
-          .whereILike('table_schema', 'ponder%')
-          .select('table_schema')
+        // Check when the last webhook delivery or poller update arrived
+        const row = await db
+          .from('onchain.webhook_delivery_log')
+          .where('status', 'ok')
+          .select(db.raw('EXTRACT(EPOCH FROM MAX(received_at))::bigint * 1000 as heartbeat'))
           .first()
-        if (schemaRow?.table_schema) {
-          const schema = schemaRow.table_schema
-          const row = await db
-            .connection('indexer')
-            .from(`${schema}._ponder_meta`)
-            .where('key', 'app')
-            .select(db.raw("(value->>'heartbeat_at')::bigint as heartbeat"))
+
+        if (row?.heartbeat) {
+          indexerHeartbeat = Number(row.heartbeat)
+        } else {
+          // No webhook deliveries yet — check poller cursor as fallback
+          const cursor = await db
+            .from('onchain.poller_cursor')
+            .select(db.raw('EXTRACT(EPOCH FROM MAX(updated_at))::bigint * 1000 as heartbeat'))
             .first()
-          indexerHeartbeat = row?.heartbeat ? Number(row.heartbeat) : null
+          indexerHeartbeat = cursor?.heartbeat ? Number(cursor.heartbeat) : null
         }
-      } catch (err) {
-        console.warn('Failed to query indexer heartbeat:', (err as Error).message)
+      } catch {
+        // onchain tables may not exist yet
       }
     }
 

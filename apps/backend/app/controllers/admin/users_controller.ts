@@ -10,8 +10,7 @@ export default class UsersController {
       .orderBy('last_activity', 'desc')
       .paginate(page, 20)
 
-    // Enrich with on-chain data from indexer DB
-    const idx = db.connection('indexer')
+    // Enrich with on-chain data from onchain.account
     const walletAddresses = users
       .all()
       .map((u) => u.wallet_address?.toLowerCase())
@@ -23,8 +22,8 @@ export default class UsersController {
     > = {}
     if (walletAddresses.length > 0) {
       try {
-        const accounts = await idx
-          .from('account')
+        const accounts = await db
+          .from('onchain.account')
           .whereIn('address', walletAddresses)
           .select(
             'address',
@@ -43,7 +42,7 @@ export default class UsersController {
           }
         }
       } catch {
-        // Indexer DB may not be available — graceful fallback
+        // onchain tables may not be available — graceful fallback
       }
     }
 
@@ -73,9 +72,8 @@ export default class UsersController {
     let onchain = null
     if (user.wallet_address) {
       try {
-        const idx = db.connection('indexer')
-        onchain = await idx
-          .from('account')
+        onchain = await db
+          .from('onchain.account')
           .where('address', user.wallet_address.toLowerCase())
           .select(
             'address',
@@ -86,7 +84,7 @@ export default class UsersController {
           )
           .first()
       } catch {
-        // Indexer DB may not be available
+        // onchain tables may not be available
       }
     }
 
