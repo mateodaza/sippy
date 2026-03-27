@@ -34,8 +34,8 @@ export default class AnalyticsController {
         .where('timestamp', '>=', todayUnix - 86400)
         .select(
           db.raw(`COUNT(DISTINCT CASE
-              WHEN "from" IN (SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL) THEN "from"
-              WHEN "to" IN (SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL) THEN "to"
+              WHEN "from" IN (SELECT address FROM onchain.account) THEN "from"
+              WHEN "to" IN (SELECT address FROM onchain.account) THEN "to"
             END) as total`)
         )
         .first(),
@@ -47,16 +47,16 @@ export default class AnalyticsController {
       db.rawQuery(`
           SELECT
             CASE
-              WHEN pr_f.wallet_address IS NOT NULL AND pr_t.wallet_address IS NOT NULL THEN 'internal'
-              WHEN pr_f.wallet_address IS NULL AND pr_t.wallet_address IS NOT NULL THEN 'inbound'
-              WHEN pr_f.wallet_address IS NOT NULL AND pr_t.wallet_address IS NULL THEN 'outbound'
+              WHEN af.address IS NOT NULL AND at.address IS NOT NULL THEN 'internal'
+              WHEN af.address IS NULL AND at.address IS NOT NULL THEN 'inbound'
+              WHEN af.address IS NOT NULL AND at.address IS NULL THEN 'outbound'
             END as flow_type,
             COALESCE(SUM(t.amount), 0)::text as volume,
             COUNT(*)::text as tx_count
           FROM onchain.transfer t
-          LEFT JOIN phone_registry pr_f ON t."from" = LOWER(pr_f.wallet_address)
-          LEFT JOIN phone_registry pr_t ON t."to" = LOWER(pr_t.wallet_address)
-          WHERE pr_f.wallet_address IS NOT NULL OR pr_t.wallet_address IS NOT NULL
+          LEFT JOIN onchain.account af ON t."from" = af.address
+          LEFT JOIN onchain.account at ON t."to" = at.address
+          WHERE af.address IS NOT NULL OR at.address IS NOT NULL
           GROUP BY flow_type
           ORDER BY volume DESC
         `),
@@ -64,13 +64,7 @@ export default class AnalyticsController {
       // 6. Top users by volume (only registered wallets)
       db
         .from('onchain.account')
-        .whereIn(
-          'address',
-          db
-            .from('phone_registry')
-            .select(db.raw('LOWER(wallet_address)'))
-            .whereNotNull('wallet_address')
-        )
+        .where('tx_count', '>', 0)
         .select(
           'address',
           db.raw('total_sent::text as "totalSent"'),
