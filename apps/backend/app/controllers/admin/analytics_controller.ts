@@ -34,8 +34,8 @@ export default class AnalyticsController {
         .where('timestamp', '>=', todayUnix - 86400)
         .select(
           db.raw(`COUNT(DISTINCT CASE
-              WHEN "from" IN (SELECT address FROM onchain.account) THEN "from"
-              WHEN "to" IN (SELECT address FROM onchain.account) THEN "to"
+              WHEN "from" IN (SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL) THEN "from"
+              WHEN "to" IN (SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL) THEN "to"
             END) as total`)
         )
         .first(),
@@ -43,20 +43,20 @@ export default class AnalyticsController {
       // 4. Gas refuel status singleton
       db.from('onchain.gas_refuel_status').where('id', 'singleton').first(),
 
-      // 5. Fund flow classification
+      // 5. Fund flow classification (join against phone_registry to identify real Sippy users)
       db.rawQuery(`
           SELECT
             CASE
-              WHEN af.address IS NOT NULL AND at.address IS NOT NULL THEN 'internal'
-              WHEN af.address IS NULL AND at.address IS NOT NULL THEN 'inbound'
-              WHEN af.address IS NOT NULL AND at.address IS NULL THEN 'outbound'
+              WHEN pf.wallet_address IS NOT NULL AND pt.wallet_address IS NOT NULL THEN 'internal'
+              WHEN pf.wallet_address IS NULL AND pt.wallet_address IS NOT NULL THEN 'inbound'
+              WHEN pf.wallet_address IS NOT NULL AND pt.wallet_address IS NULL THEN 'outbound'
             END as flow_type,
             COALESCE(SUM(t.amount), 0)::text as volume,
             COUNT(*)::text as tx_count
           FROM onchain.transfer t
-          LEFT JOIN onchain.account af ON t."from" = af.address
-          LEFT JOIN onchain.account at ON t."to" = at.address
-          WHERE af.address IS NOT NULL OR at.address IS NOT NULL
+          LEFT JOIN phone_registry pf ON t."from" = LOWER(pf.wallet_address)
+          LEFT JOIN phone_registry pt ON t."to" = LOWER(pt.wallet_address)
+          WHERE pf.wallet_address IS NOT NULL OR pt.wallet_address IS NOT NULL
           GROUP BY flow_type
           ORDER BY volume DESC
         `),
@@ -64,7 +64,13 @@ export default class AnalyticsController {
       // 6. Top users by volume (only registered wallets)
       db
         .from('onchain.account')
-        .where('tx_count', '>', 0)
+        .whereIn(
+          'address',
+          db
+            .from('phone_registry')
+            .select(db.raw('LOWER(wallet_address)'))
+            .whereNotNull('wallet_address')
+        )
         .select(
           'address',
           db.raw('total_sent::text as "totalSent"'),
