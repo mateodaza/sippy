@@ -1,13 +1,21 @@
 /**
- * Indexer Wallet Sync — Preload
+ * Wallet Sync + Onchain Poller — Preload
  *
- * Runs once on backend boot to backfill all existing wallets
- * from phone_registry into the Ponder indexer's offchain registry.
+ * Runs once on backend boot:
+ * 1. Sync wallets to Ponder indexer (legacy, kept during migration)
+ * 2. Sync wallets to Alchemy webhook (new)
+ * 3. Start GasRefuel log poller (new)
  *
- * This is fire-and-forget — if the indexer is down, the backend
- * still boots normally. Wallets will be synced on next restart.
+ * All fire-and-forget — failures don't block boot.
  */
 
 import { syncAllWalletsWithIndexer } from '#services/indexer.service'
+import { syncAllWalletsWithAlchemy } from '#services/alchemy.service'
+import { startGasRefuelPoller } from '#services/gas_refuel_poller.service'
 
+// Dual-write during parallel run
 syncAllWalletsWithIndexer().catch(() => {})
+syncAllWalletsWithAlchemy().catch(() => {})
+
+// Start durable GasRefuel poller
+startGasRefuelPoller()

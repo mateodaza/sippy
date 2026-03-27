@@ -11,6 +11,7 @@ import { ethers } from 'ethers'
 import { type UserWallet, type SecurityLimits, type TransferResult } from '#types/index'
 import { query } from '#services/db'
 import { registerWalletWithIndexer } from '#services/indexer.service'
+import { registerWalletWithAlchemy } from '#services/alchemy.service'
 import { getRpcUrl } from '#config/network'
 import { maskPhone } from '#utils/phone'
 
@@ -126,9 +127,12 @@ export async function createUserWallet(phoneNumber: string): Promise<UserWallet>
 
     logger.info(`User wallet registered in database for ${maskPhone(phoneNumber)}`)
 
-    // Register with indexer (fire-and-forget — never blocks wallet creation)
+    // Register with indexer + Alchemy (fire-and-forget — never blocks wallet creation)
     registerWalletWithIndexer(walletAddress, phoneNumber).catch((err) =>
       logger.warn('Indexer registration failed (non-blocking): %o', err)
+    )
+    registerWalletWithAlchemy(walletAddress).catch((err) =>
+      logger.warn('Alchemy registration failed (non-blocking): %o', err)
     )
 
     return userWallet
