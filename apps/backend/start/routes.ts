@@ -125,6 +125,9 @@ router
       .post('/unblock-user', [ModerationController, 'unblockUser'])
       .use(middleware.adminRole({ role: 'admin' }))
     router
+      .post('/backfill-onchain', [WebhookAlchemyController, 'backfill'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
       .post('/pause', [ModerationController, 'pause'])
       .use(middleware.adminRole({ role: 'admin' }))
     router

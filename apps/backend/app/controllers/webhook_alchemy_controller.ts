@@ -181,6 +181,136 @@ export default class WebhookAlchemyController {
     }
   }
 
+  /**
+   * POST /admin/backfill-onchain
+   * Scan RPC for USDC transfers involving registered wallets since last indexed block.
+   * Idempotent — safe to run multiple times.
+   */
+  async backfill({ response }: HttpContext) {
+    const provider = new ethers.providers.JsonRpcProvider(getRpcUrl())
+    const USDC_TRANSFER_TOPIC = ethers.utils.id('Transfer(address,address,uint256)')
+    const CHUNK = 50_000
+    const CONCURRENCY = 10
+
+    // Get all registered wallet addresses
+    const walletRows = await db.rawQuery(`
+      SELECT LOWER(wallet_address) as address FROM phone_registry WHERE wallet_address IS NOT NULL
+      UNION SELECT address FROM wallet_aliases
+    `)
+    const wallets = walletRows.rows.map((r: any) => r.address)
+    if (wallets.length === 0) {
+      return response.json({ ok: true, message: 'No wallets to scan' })
+    }
+
+    // Get scan range
+    const lastBlock = await db.rawQuery(
+      'SELECT COALESCE(MAX(block_number), 437000000) as last FROM onchain.transfer'
+    )
+    const fromBlock = Number(lastBlock.rows[0].last) + 1
+    const headBlock = await provider.getBlockNumber()
+
+    if (fromBlock >= headBlock) {
+      return response.json({ ok: true, message: 'Already up to date', lastBlock: fromBlock })
+    }
+
+    logger.info(
+      `Backfill: scanning blocks ${fromBlock} to ${headBlock} for ${wallets.length} wallets`
+    )
+
+    // Pad wallet addresses to 32-byte topics
+    const paddedWallets = wallets.map((w: string) => '0x' + w.slice(2).padStart(64, '0'))
+
+    let totalProcessed = 0
+    let totalLogs = 0
+
+    for (let start = fromBlock; start <= headBlock; start += CHUNK) {
+      const end = Math.min(start + CHUNK - 1, headBlock)
+
+      // Fetch logs where from OR to is a registered wallet
+      const [fromLogs, toLogs] = await Promise.all([
+        provider.getLogs({
+          fromBlock: start,
+          toBlock: end,
+          address: USDC_ADDRESS,
+          topics: [USDC_TRANSFER_TOPIC, paddedWallets],
+        }),
+        provider.getLogs({
+          fromBlock: start,
+          toBlock: end,
+          address: USDC_ADDRESS,
+          topics: [USDC_TRANSFER_TOPIC, null, paddedWallets],
+        }),
+      ])
+
+      // Dedupe by transactionHash + logIndex
+      const seen = new Set<string>()
+      const allLogs = [...fromLogs, ...toLogs].filter((log) => {
+        const key = `${log.transactionHash}-${log.logIndex}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+
+      totalLogs += allLogs.length
+
+      // Fetch timestamps for unique blocks
+      const uniqueBlocks = [...new Set(allLogs.map((l) => l.blockNumber))]
+      const blockTimestamps = new Map<number, number>()
+      for (let i = 0; i < uniqueBlocks.length; i += CONCURRENCY) {
+        const batch = uniqueBlocks.slice(i, i + CONCURRENCY)
+        const results = await Promise.allSettled(
+          batch.map(async (bn) => {
+            const block = await provider.getBlock(bn)
+            return { bn, ts: block?.timestamp || 0 }
+          })
+        )
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value.ts > 0) {
+            blockTimestamps.set(r.value.bn, r.value.ts)
+          }
+        }
+      }
+
+      // Process each log
+      const iface = new ethers.utils.Interface([
+        'event Transfer(address indexed from, address indexed to, uint256 value)',
+      ])
+      for (const log of allLogs) {
+        const timestamp = blockTimestamps.get(log.blockNumber)
+        if (!timestamp) continue
+
+        const parsed = iface.parseLog(log)
+        const id = `${log.transactionHash.toLowerCase()}-${log.logIndex}`
+        const inserted = await processTransfer({
+          id,
+          from: parsed.args.from.toLowerCase(),
+          to: parsed.args.to.toLowerCase(),
+          amount: parsed.args.value.toString(),
+          timestamp,
+          blockNumber: log.blockNumber,
+          txHash: log.transactionHash.toLowerCase(),
+        })
+        if (inserted) totalProcessed++
+      }
+
+      logger.info(
+        `Backfill: scanned ${start}-${end}, ${allLogs.length} logs, ${totalProcessed} new`
+      )
+    }
+
+    // Recompute aggregates after backfill
+    if (totalProcessed > 0) {
+      await recomputeAggregates()
+    }
+
+    return response.json({
+      ok: true,
+      scanned: { from: fromBlock, to: headBlock },
+      logsFound: totalLogs,
+      newTransfers: totalProcessed,
+    })
+  }
+
   private async logDelivery(
     eventId: string,
     webhookId: string,
