@@ -1,6 +1,19 @@
 # Address Book — Implementation Plan
 
+> **Status: SHIPPED (March 27, 2026)**
+> All features below are implemented and live. See `contact.service.ts`, `contact_command.ts`, and the smart alias resolver in the webhook controller.
+
 Contacts/alias system for the WhatsApp bot. Users save nicknames for phone numbers, then use them in sends.
+
+## What shipped beyond the original plan
+
+- **Smart alias resolver** (5 strategies): exact, prefix, any-word, contains, word-level Levenshtein -- all run against max 50 contacts in memory, zero LLM cost
+- **Accent-aware matching**: NFD stripping so "mama" matches "mamá"
+- **Local currency sends**: "2mil pesos", "50 reais", "100 soles" -- auto-converts to USDC using sender's phone prefix for currency detection
+- **mil/k shorthand**: "2mil" and "2k" expand to 2000
+- **vCard import**: forward a WhatsApp contact card to save it
+- **Contact-not-found UX**: stores partial send so user can reply with a phone number or corrected name
+- **All alias-resolved sends go through confirmation** showing name + phone -- safety net for fuzzy matches
 
 ---
 

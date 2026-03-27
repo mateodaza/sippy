@@ -10,10 +10,13 @@ Built on Arbitrum. Funded by a Questbook Arbitrum grant ($25K).
 
 Anyone with a phone number can:
 
-- **Send dollars** — `send 5 to +573001234567`
-- **Check balance** — `balance` / `saldo`
-- **Add funds** — fiat onramp (COP → USDC) or crypto top-up
-- **View history** — transaction explorer with shareable receipts
+- **Send dollars** -- `send 5 to +573001234567`
+- **Send in local currency** -- `mandale 2mil pesos a carlos` (auto-converts to USDC)
+- **Save contacts** -- `save contact mom +573001234567` or forward a WhatsApp contact card
+- **Send by name** -- `send 5 to mom` (smart alias resolution: prefix, word, fuzzy match)
+- **Check balance** -- `balance` / `saldo`
+- **Add funds** -- fiat onramp (COP -> USDC) or crypto top-up
+- **View history** -- transaction explorer with shareable receipts
 
 No app to install. No seed phrases. No gas fees. Just WhatsApp.
 
@@ -71,9 +74,21 @@ WhatsApp message
 **Transfers**
 
 - USDC peer-to-peer on Arbitrum
-- Gasless — GasRefuel contract auto-funds gas before each transfer
+- Gasless -- GasRefuel contract auto-funds gas before each transfer
+- Local currency sends -- "2mil pesos", "50 reais", "100 soles" auto-convert to USDC
+- mil/k shorthand -- "2mil" and "2k" expand to 2000
 - Daily spending limits (configurable per user)
-- Recipient notifications via WhatsApp
+- Recipient notifications via WhatsApp (with local currency equivalent)
+
+**Address Book**
+
+- Save contacts: `save contact mom +573001234567` or forward a WhatsApp contact card
+- Smart alias resolution (5 strategies): exact, prefix, any-word, contains, word-level Levenshtein
+- Accent-aware matching: "mama" finds "mamá"
+- All alias-resolved sends go through confirmation (name + phone shown)
+- Contact-not-found stores partial send -- reply with phone or corrected name to complete
+- 50-contact limit enforced at DB level via trigger
+- Trilingual: EN/ES/PT for all contact commands and messages
 
 **Frontend**
 

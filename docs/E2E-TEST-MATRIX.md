@@ -93,6 +93,38 @@
 
 ## 3. Edge Cases
 
+### 2.5 Address Book / Contacts
+
+- [ ] Share a WhatsApp contact card -- bot saves it ("Contacto(s) guardado(s): Name -> +57...")
+- [ ] Send "save contact mom +573001234567" -- bot confirms save
+- [ ] Send "guardar contacto papa +573009999999" -- bot confirms save (ES)
+- [ ] Send "salvar contato mae +5511999887766" -- bot confirms save (PT)
+- [ ] Send "my contacts" / "mis contactos" / "meus contatos" -- lists saved contacts
+- [ ] Send "delete contact mom" / "borrar contacto mama" -- deletes contact
+- [ ] Send "send 5 to mom" -- resolves alias, shows confirmation with name + phone
+- [ ] Send "mandale 5 a [first name only]" -- prefix match resolves full name
+- [ ] Send "mandale 5 a [typo]" -- Levenshtein match suggests closest contact
+- [ ] Multiple contacts match -- disambiguation list shown
+- [ ] No contact match -- "No encontre a X. Responde con el numero..." + stores partial send
+- [ ] Reply with phone number after not-found -- completes the send
+- [ ] Save contact with own phone number -- "No puedes guardarte a ti mismo"
+- [ ] Save 51st contact -- "Alcanzaste el limite de contactos (50)"
+- [ ] Send "borrar historial" -- shows history (NOT delete contact -- requires keyword)
+
+### 2.6 Local Currency Sends
+
+- [ ] Send "enviar 2000 pesos a +573001234567" -- converts COP to USDC, shows both in confirmation
+- [ ] Send "enviar 2mil pesos a carlos" -- "mil" expands to 2000, converts, confirms with alias
+- [ ] Send "send 2k to +573001234567" -- "k" expands to 2000
+- [ ] Send "enviar 50 reais para +5511999887766" -- converts BRL to USDC
+- [ ] Send "enviar 100 soles a +51999887766" -- converts PEN to USDC
+- [ ] Send "enviar 5 dolares a +573001234567" -- no conversion (already USD)
+- [ ] Recipient notification shows local equivalent: "0.54 USDC (~2,000 COP)"
+
+---
+
+## 3. Edge Cases
+
 ### 3.1 Wrong Format / Invalid Input
 
 - [ ] Send "send" with no amount or recipient — bot asks for clarification
