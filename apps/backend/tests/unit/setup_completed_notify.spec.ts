@@ -105,10 +105,13 @@ test.group('Setup notify | first-time setup', (group) => {
     assert.equal(sendCount, 1, 'notification should not fire twice')
   })
 
-  test('A-04: uses "en" as default when getUserLanguage returns null', async ({ assert }) => {
+  test('A-04: falls back to phone-based language when getUserLanguage returns null', async ({
+    assert,
+  }) => {
     const pref = makePref()
     let usedLang: string | undefined
 
+    // PHONE is +57 (Colombia) → getLanguageForPhone returns 'es'
     await maybeNotifySetupCompleted(PHONE, {
       resolveUserPrefKey: async () => PREF_KEY,
       findPref: async () => pref,
@@ -119,7 +122,7 @@ test.group('Setup notify | first-time setup', (group) => {
       now: () => ({ toISO: () => '2026-03-24T00:00:00' }) as any,
     })
 
-    assert.equal(usedLang, 'en')
+    assert.equal(usedLang, 'es')
   })
 })
 

@@ -87,7 +87,7 @@ test.group('formatTieredDailyLimitExceededMessage | English', () => {
   test('TC-EL-09: verified EN → no upsell', ({ assert }) => {
     const msg = formatTieredDailyLimitExceededMessage(500, '+573001234567', 'en', true)
     assert.include(msg, "You've reached your daily limit of $500")
-    assert.include(msg, 'Try again tomorrow')
+    assert.include(msg, 'resets tomorrow')
     assert.notInclude(msg, 'sippy.lat/settings')
   })
 })
@@ -103,7 +103,7 @@ test.group('formatTieredDailyLimitExceededMessage | Spanish', () => {
 
   test('TC-EL-12: verified ES → no upsell', ({ assert }) => {
     const msg = formatTieredDailyLimitExceededMessage(500, '+573001234567', 'es', true)
-    assert.include(msg, 'Has alcanzado tu limite diario de $500')
+    assert.include(msg, 'Llegaste a tu limite diario de $500')
     assert.include(msg, 'manana')
     assert.notInclude(msg, 'sippy.lat/settings')
   })
