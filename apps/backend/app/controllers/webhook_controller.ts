@@ -79,7 +79,7 @@ import {
   getEmbeddedBalance,
 } from '#services/embedded_wallet.service'
 import { exchangeRateService } from '#services/exchange_rate_service'
-import { canonicalizePhone, maskPhone } from '#utils/phone'
+import { canonicalizePhone, getLanguageForPhone, maskPhone } from '#utils/phone'
 import { getIsPaused } from '#controllers/admin/moderation_controller'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { getDialect, dialectHint, type Dialect } from '#utils/dialect'
@@ -1059,7 +1059,7 @@ export default class WebhookController {
 
     // ── Global pause check ──────────────────────────────────────────
     if (getIsPaused()) {
-      const pauseLang = (await getUserLanguage(from)) || 'en'
+      const pauseLang = (await getUserLanguage(from)) || getLanguageForPhone(from)
       await sendTextMessage(from, formatMaintenanceMessage(pauseLang), pauseLang)
       rateLimitService.markProcessed(messageId)
       return
@@ -1069,7 +1069,9 @@ export default class WebhookController {
     const blockedPref = await findUserPrefByPhone(from)
     if (blockedPref?.blocked) {
       const blockedLang: Lang =
-        (blockedPref.preferredLanguage as Lang) || (await getUserLanguage(from)) || 'en'
+        (blockedPref.preferredLanguage as Lang) ||
+        (await getUserLanguage(from)) ||
+        getLanguageForPhone(from)
       await sendTextMessage(from, formatAccountSuspendedMessage(blockedLang), blockedLang)
       rateLimitService.markProcessed(messageId)
       return
@@ -1087,7 +1089,7 @@ export default class WebhookController {
       pendingContactOverwrites.delete(from)
       partialSends.delete(from)
 
-      const contactLang: Lang = (await getUserLanguage(from)) || 'en'
+      const contactLang: Lang = (await getUserLanguage(from)) || getLanguageForPhone(from)
       const response = await handleContactCard(from, message.contacts, contactLang)
       await sendTextMessage(from, response, contactLang)
       rateLimitService.markProcessed(messageId)
@@ -1097,7 +1099,7 @@ export default class WebhookController {
     // ── Non-text messages (image, audio, sticker, video, location) ────
     if (!text && message.type && message.type !== 'text' && message.type !== 'interactive') {
       logger.info('Non-text message (%s) from %s', message.type, maskPhone(from))
-      const mediaLang = (await getUserLanguage(from)) || 'en'
+      const mediaLang = (await getUserLanguage(from)) || getLanguageForPhone(from)
       await sendTextMessage(from, formatTextOnlyMessage(mediaLang), mediaLang)
       rateLimitService.markProcessed(messageId)
       return
@@ -1129,7 +1131,8 @@ export default class WebhookController {
           originalText: text,
         }
         // Language, rate context, and routing — same path as normal sends
-        const lang: Lang = (await getUserLanguage(from)) || partial.lang || 'en'
+        const lang: Lang =
+          (await getUserLanguage(from)) || partial.lang || getLanguageForPhone(from)
         clearPendingIfUnrelated(from, command, pendingTransactions)
         const rateCtx = await fetchRateContext(from, resolved.recipient)
         try {
@@ -1225,7 +1228,7 @@ export default class WebhookController {
     const rateCtx = await fetchRateContext(from, recipientPhone)
 
     // ── Route to command handler ──────────────────────────────────────
-    const lang: Lang = userLang || 'en'
+    const lang: Lang = userLang || getLanguageForPhone(from)
     try {
       await this.handleCommand(from, command, lang, rateCtx, context)
       logger.info('Message %s processed successfully', messageId)

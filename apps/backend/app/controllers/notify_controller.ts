@@ -12,7 +12,7 @@ import env from '#start/env'
 import { getUserLanguage } from '#services/db'
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { notifyFundReceived } from '#services/notification.service'
-import { canonicalizePhone, maskPhone } from '#utils/phone'
+import { canonicalizePhone, getLanguageForPhone, maskPhone } from '#utils/phone'
 
 export default class NotifyController {
   /**
@@ -78,7 +78,8 @@ export default class NotifyController {
       }
 
       // Send WhatsApp template notification (works outside 24h session window)
-      const fundLang = (await getUserLanguage(canonicalPhone)) || 'en'
+      const fundLang =
+        (await getUserLanguage(canonicalPhone)) || getLanguageForPhone(canonicalPhone)
       await notifyFundReceived({
         recipientPhone: canonicalPhone,
         amount,

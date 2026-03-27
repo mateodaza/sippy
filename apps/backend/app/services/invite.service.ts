@@ -9,6 +9,7 @@
 import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import { query as _query, getUserLanguage as _getUserLanguage } from '#services/db'
+import { getLanguageForPhone } from '#utils/phone'
 
 const INVITE_WHITELIST = new Set(
   (env.get('VELOCITY_WHITELIST', '') as string)
@@ -145,7 +146,8 @@ export async function checkAndNotifySender(recipientPhone: string): Promise<void
     // 2. For each claimed invite: notify sender, then mark completed or revert
     for (const row of claimed.rows) {
       try {
-        const lang = (await deps.getUserLanguage(row.sender_phone)) ?? 'en'
+        const lang =
+          (await deps.getUserLanguage(row.sender_phone)) ?? getLanguageForPhone(row.sender_phone)
         await deps.notifyInviteCompleted({
           senderPhone: row.sender_phone,
           recipientPhone,

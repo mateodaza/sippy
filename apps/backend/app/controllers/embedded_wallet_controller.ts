@@ -34,7 +34,7 @@ import { NETWORK, USDC_ADDRESSES, USDC_DECIMALS } from '#config/network'
 import UserPreference from '#models/user_preference'
 import { emailService } from '#services/email_service'
 import { DateTime } from 'luxon'
-import { canonicalizePhone, maskPhone } from '#utils/phone'
+import { canonicalizePhone, getLanguageForPhone, maskPhone } from '#utils/phone'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { velocityService } from '#services/velocity_service'
 import { GAS_MIN_BALANCE_ETH } from '@sippy/shared'
@@ -991,7 +991,7 @@ export async function maybeNotifySetupCompleted(
   if (pref && !pref.setupNotifiedAt) {
     pref.setupNotifiedAt = deps.now()
     await pref.save()
-    const lang = (await deps.getUserLanguage(canonicalPhone)) ?? 'en'
+    const lang = (await deps.getUserLanguage(canonicalPhone)) ?? getLanguageForPhone(canonicalPhone)
     await deps.notifySetupCompleted({ phone: canonicalPhone, lang })
     return true
   }
