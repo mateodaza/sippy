@@ -320,9 +320,11 @@ export async function sendWithSpendPermission(
 
     logger.info(`Executing batched spend + transfer in one transaction...`)
 
-    // Ensure spender smart account has ETH for gas (Arbitrum requires it)
+    // Ensure spender smart account is allowlisted and has ETH for gas
     const refuelService = getRefuelService()
     if (refuelService.isAvailable()) {
+      // Allowlist spender if not already (no-op view call when already listed)
+      await refuelService.registerWallet(spenderAccount.address)
       const refuelResult = await refuelService.checkAndRefuel(spenderAccount.address)
       if (refuelResult.success) {
         logger.info(`Spender gas refueled: ${refuelResult.txHash}`)

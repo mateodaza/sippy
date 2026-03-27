@@ -1,36 +1,38 @@
-import { ethers } from "hardhat";
+import { ethers } from 'hardhat'
 
 async function main() {
-  const contractAddress = "0xE4e5474E97E89d990082505fC5708A6a11849936";
-  const fundAmount = "0.002"; // 0.002 ETH - enough for 20 refuels
+  const contractAddress = process.env.REFUEL_CONTRACT_ADDRESS
+  const fundAmount = process.env.FUND_AMOUNT || '0.002'
 
-  console.log("💰 Funding GasRefuel contract...\n");
-  console.log("Contract:", contractAddress);
-  console.log("Amount:", fundAmount, "ETH");
+  if (!contractAddress) {
+    console.error('Set REFUEL_CONTRACT_ADDRESS in .env')
+    process.exit(1)
+  }
 
-  const [signer] = await ethers.getSigners();
-  const balance = await ethers.provider.getBalance(signer.address);
-  console.log("\nSigner balance:", ethers.formatEther(balance), "ETH");
+  console.log('Funding GasRefuelV2...\n')
+  console.log('Contract:', contractAddress)
+  console.log('Amount:', fundAmount, 'ETH')
 
-  // Send ETH to contract
-  console.log("\n⏳ Sending ETH...");
+  const [signer] = await ethers.getSigners()
+  const balance = await ethers.provider.getBalance(signer.address)
+  console.log('Signer balance:', ethers.formatEther(balance), 'ETH\n')
+
   const tx = await signer.sendTransaction({
     to: contractAddress,
     value: ethers.parseEther(fundAmount),
-  });
-  console.log("Transaction hash:", tx.hash);
+  })
+  console.log('Transaction hash:', tx.hash)
 
-  await tx.wait();
-  console.log("✅ Transaction confirmed!");
+  await tx.wait()
+  console.log('Confirmed!')
 
-  // Check contract balance
-  const contractBalance = await ethers.provider.getBalance(contractAddress);
-  console.log("\n📊 Contract balance:", ethers.formatEther(contractBalance), "ETH");
+  const contractBalance = await ethers.provider.getBalance(contractAddress)
+  console.log('Contract balance:', ethers.formatEther(contractBalance), 'ETH')
 }
 
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
+    console.error(error)
+    process.exit(1)
+  })

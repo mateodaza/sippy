@@ -16,8 +16,8 @@ interface FlashMessages {
 }
 
 interface IndexerStatus {
-  pollerAgo: number | null // seconds since last poller tick
-  webhookAgo: number | null // seconds since last webhook delivery
+  pollerAgo: number | null
+  webhookAgo: number | null
 }
 
 function formatAge(secs: number): string {
@@ -29,10 +29,10 @@ function formatAge(secs: number): string {
 const navItems = [
   {
     href: '/admin',
-    label: 'Dashboard',
+    label: 'DASHBOARD',
     icon: (
       <svg
-        className="h-5 w-5"
+        className="h-4 w-4"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -49,10 +49,10 @@ const navItems = [
   },
   {
     href: '/admin/users',
-    label: 'Users',
+    label: 'USERS',
     icon: (
       <svg
-        className="h-5 w-5"
+        className="h-4 w-4"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -69,10 +69,10 @@ const navItems = [
   },
   {
     href: '/admin/analytics',
-    label: 'Analytics',
+    label: 'ANALYTICS',
     icon: (
       <svg
-        className="h-5 w-5"
+        className="h-4 w-4"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -88,10 +88,10 @@ const navItems = [
   },
   {
     href: '/admin/roles',
-    label: 'Roles',
+    label: 'ROLES',
     icon: (
       <svg
-        className="h-5 w-5"
+        className="h-4 w-4"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -128,41 +128,41 @@ function PollerStatus({
   }
 
   return (
-    <div className="mt-auto space-y-1 px-3 pb-3">
-      <div className="flex items-center gap-2 text-[11px] text-gray-400">
+    <div className="mt-auto space-y-2 border-t border-brand/10 px-4 pt-4 pb-4">
+      <div className="flex items-center gap-2 font-mono text-[10px] tracking-wider uppercase text-brand-dark/50">
         <span
-          className={`h-1.5 w-1.5 rounded-full ${
+          className={`indicator-dot ${
             indexerStatus.pollerAgo === null
-              ? 'bg-gray-300'
+              ? 'indicator-dot-muted'
               : pollerStuck
-                ? 'bg-red-400'
-                : 'bg-sippy'
+                ? 'indicator-dot-danger'
+                : 'indicator-dot-active'
           }`}
         />
         {indexerStatus.pollerAgo === null
-          ? 'Poller not started'
+          ? 'Poller off'
           : pollerStuck
             ? `Poller stuck (${formatAge(indexerStatus.pollerAgo)})`
-            : `Poller healthy (${formatAge(indexerStatus.pollerAgo)})`}
+            : `Poller OK (${formatAge(indexerStatus.pollerAgo)})`}
       </div>
       {pollerStuck && isAdmin && (
         <button
           onClick={handleRestart}
           disabled={restarting}
-          className="ml-3.5 rounded bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+          className="ml-4 font-mono text-[10px] tracking-wider uppercase text-danger hover:underline disabled:opacity-50"
         >
-          {restarting ? 'Restarting...' : 'Restart poller'}
+          {restarting ? 'Restarting...' : 'Restart'}
         </button>
       )}
-      <div className="flex items-center gap-2 text-[11px] text-gray-400">
+      <div className="flex items-center gap-2 font-mono text-[10px] tracking-wider uppercase text-brand-dark/50">
         <span
-          className={`h-1.5 w-1.5 rounded-full ${
-            indexerStatus.webhookAgo === null ? 'bg-gray-300' : 'bg-sippy'
+          className={`indicator-dot ${
+            indexerStatus.webhookAgo === null ? 'indicator-dot-muted' : 'indicator-dot-active'
           }`}
         />
         {indexerStatus.webhookAgo === null
-          ? 'No webhooks yet'
-          : `Last webhook ${formatAge(indexerStatus.webhookAgo)}`}
+          ? 'No webhooks'
+          : `Webhook ${formatAge(indexerStatus.webhookAgo)}`}
       </div>
     </div>
   )
@@ -182,45 +182,32 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-br from-white via-[#eefaf4] to-[#f8fbff] font-sans">
+    <div className="flex min-h-screen bg-white font-sans">
       {/* Sidebar */}
-      <nav className="flex w-[260px] flex-col border-r border-gray-100 bg-white/80 px-4 py-6 backdrop-blur-xl">
+      <nav className="flex w-[240px] flex-col border-r border-brand/15 bg-white">
         {/* Brand */}
-        <div className="mb-8 flex items-center gap-3 px-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sippy to-sippy-dark shadow-[0_8px_32px_-8px_rgba(16,185,129,0.3)]">
-            <svg
-              className="h-5 w-5 text-white"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
+        <div className="border-b border-brand/10 px-5 py-5">
+          <div className="font-sans text-lg font-bold uppercase tracking-[0.1em] text-brand-dark">
+            Sippy
           </div>
-          <div>
-            <div className="text-lg font-bold tracking-[-0.025em] text-slate-900">Sippy</div>
-            <div className="text-xs font-medium text-gray-400">Admin Panel</div>
+          <div className="spec-label mt-0.5" style={{ color: 'rgba(0, 175, 215, 0.5)' }}>
+            ADMIN PANEL
           </div>
         </div>
 
         {/* Navigation */}
-        <div className="space-y-1">
+        <div className="space-y-0.5 px-3 py-4">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+              className={`flex items-center gap-3 rounded px-3 py-2.5 font-mono text-[11px] font-bold tracking-[0.12em] transition-colors ${
                 isActive(item.href)
-                  ? 'bg-sippy-lightest text-sippy-darker shadow-sm'
-                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                  ? 'bg-brand-light text-brand'
+                  : 'text-brand-dark/50 hover:bg-brand-light/50 hover:text-brand'
               }`}
             >
-              <span className={isActive(item.href) ? 'text-sippy' : 'text-gray-400'}>
+              <span className={isActive(item.href) ? 'text-brand' : 'text-brand-dark/40'}>
                 {item.icon}
               </span>
               {item.label}
@@ -234,19 +221,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         )}
 
         {/* User footer */}
-        <div className={`${indexerStatus ? '' : 'mt-auto '}border-t border-gray-100 pt-4`}>
+        <div className={`${indexerStatus ? '' : 'mt-auto '}border-t border-brand/10 px-4 py-4`}>
           {auth && (
-            <div className="rounded-xl bg-gray-50 p-3">
-              <div className="mb-3 flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sippy-lighter text-xs font-bold text-sippy-darker">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded border border-brand/20 font-mono text-[10px] font-bold tracking-wider text-brand">
                   {auth.initials}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-slate-900">
+                  <div className="truncate text-sm font-medium text-brand-dark">
                     {auth.fullName || auth.email}
                   </div>
-                  <div className="inline-flex items-center rounded-full bg-sippy-lightest px-2 py-0.5 text-xs font-medium capitalize text-sippy-darker">
-                    {auth.role}
+                  <div className="spec-label" style={{ color: 'rgba(0, 175, 215, 0.5)' }}>
+                    {auth.role.toUpperCase()}
                   </div>
                 </div>
               </div>
@@ -254,9 +241,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 href="/admin/logout"
                 method="post"
                 as="button"
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-600 transition-all duration-200 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900"
+                className="w-full rounded border border-brand/15 px-3 py-2 font-mono text-[10px] font-bold tracking-[0.12em] uppercase text-brand-dark/50 transition-colors hover:border-brand/30 hover:text-brand"
               >
-                Sign out
+                SIGN OUT
               </Link>
             </div>
           )}
@@ -264,41 +251,22 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       </nav>
 
       {/* Main content */}
-      <main className="flex-1 p-8">
+      <main className="flex-1 grid-bg p-8">
         {/* Flash messages */}
         {flash?.success && (
-          <div className="mb-6 flex items-center gap-2 rounded-xl border border-[#bbf7d0] bg-gradient-to-r from-[#f0fdf4] to-sippy-lightest p-4">
-            <svg
-              className="h-5 w-5 flex-shrink-0 text-sippy"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-              <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-            <p className="text-sm font-medium text-[#15803d]">{flash.success}</p>
+          <div className="mb-6 flex items-center gap-3 border border-crypto/30 bg-crypto-light px-5 py-4">
+            <span className="indicator-dot indicator-dot-active" />
+            <p className="font-mono text-xs font-bold tracking-wider uppercase text-crypto-hover">
+              {flash.success}
+            </p>
           </div>
         )}
         {flash?.error && (
-          <div className="mb-6 flex items-center gap-2 rounded-xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-100 p-4">
-            <svg
-              className="h-5 w-5 flex-shrink-0 text-red-500"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            <p className="text-sm font-medium text-red-700">{flash.error}</p>
+          <div className="mb-6 flex items-center gap-3 border border-danger/30 bg-danger-light px-5 py-4">
+            <span className="indicator-dot indicator-dot-danger" />
+            <p className="font-mono text-xs font-bold tracking-wider uppercase text-danger">
+              {flash.error}
+            </p>
           </div>
         )}
         {children}

@@ -12,6 +12,7 @@ import router from '@adonisjs/core/services/router'
 import app from '@adonisjs/core/services/app'
 import { middleware } from '#start/kernel'
 
+const PublicStatsController = () => import('#controllers/public_stats_controller')
 const HealthController = () => import('#controllers/health_controller')
 const WebhookController = () => import('#controllers/webhook_controller')
 const ResolveController = () => import('#controllers/resolve_controller')
@@ -40,6 +41,9 @@ router.get('/resolve-address', [ResolveController, 'byAddress']).use(middleware.
 
 // ── Notifications (require shared secret) ───────────────────────────────────
 router.post('/notify-fund', [NotifyController, 'fund'])
+
+// ── Public stats (aggregate-only, no PII) ────────────────────────────────────
+router.get('/api/stats', [PublicStatsController, 'index']).use(middleware.ipThrottle())
 
 // ── Public support (IP-throttled) ────────────────────────────────────────────
 router

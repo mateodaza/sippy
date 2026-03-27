@@ -1,80 +1,62 @@
-import { ethers } from "hardhat";
+import { ethers } from 'hardhat'
 
 async function main() {
-  const contractAddress = process.env.REFUEL_CONTRACT_ADDRESS;
+  const contractAddress = process.env.REFUEL_CONTRACT_ADDRESS
 
   if (!contractAddress) {
-    console.error('❌ Please set REFUEL_CONTRACT_ADDRESS in .env');
-    process.exit(1);
+    console.error('Set REFUEL_CONTRACT_ADDRESS in .env')
+    process.exit(1)
   }
 
-  console.log('🔍 Checking GasRefuel contract at:', contractAddress);
-  console.log('');
+  console.log('Checking GasRefuelV2 at:', contractAddress, '\n')
 
-  const GasRefuel = await ethers.getContractFactory("GasRefuel");
-  const gasRefuel = GasRefuel.attach(contractAddress);
+  const GasRefuelV2 = await ethers.getContractFactory('GasRefuelV2')
+  const gasRefuel = GasRefuelV2.attach(contractAddress)
 
   try {
-    // Basic info
-    console.log('📋 Contract Status:');
-    const owner = await gasRefuel.owner();
-    const paused = await gasRefuel.paused();
-    const balance = await gasRefuel.contractBalance();
+    const owner = await gasRefuel.owner()
+    const paused = await gasRefuel.paused()
+    const balance = await gasRefuel.contractBalance()
+    const allowlistCount = await gasRefuel.allowlistCount()
 
-    console.log('  • Owner:', owner);
-    console.log('  • Paused:', paused ? '⏸️  Yes' : '▶️  No');
-    console.log('  • Balance:', ethers.formatEther(balance), 'ETH');
-    console.log('');
+    console.log('Status:')
+    console.log('  Owner:', owner)
+    console.log('  Paused:', paused)
+    console.log('  Balance:', ethers.formatEther(balance), 'ETH')
+    console.log('  Allowlisted wallets:', allowlistCount.toString())
+    console.log('')
 
-    // Constants
-    console.log('⚙️  Configuration:');
-    const minBalance = await gasRefuel.MIN_BALANCE();
-    const refuelAmount = await gasRefuel.REFUEL_AMOUNT();
-    const maxDaily = await gasRefuel.MAX_DAILY_REFUELS();
-    const cooldown = await gasRefuel.REFUEL_COOLDOWN();
+    const minBalance = await gasRefuel.minBalance()
+    const refuelAmount = await gasRefuel.refuelAmount()
+    const maxDaily = await gasRefuel.maxDailyRefuels()
+    const cooldown = await gasRefuel.refuelCooldown()
 
-    console.log('  • MIN_BALANCE:', ethers.formatEther(minBalance), 'ETH');
-    console.log('  • REFUEL_AMOUNT:', ethers.formatEther(refuelAmount), 'ETH');
-    console.log('  • MAX_DAILY_REFUELS:', maxDaily.toString());
-    console.log('  • REFUEL_COOLDOWN:', cooldown.toString(), 'seconds');
-    console.log('');
+    console.log('Configuration:')
+    console.log('  minBalance:', ethers.formatEther(minBalance), 'ETH')
+    console.log('  refuelAmount:', ethers.formatEther(refuelAmount), 'ETH')
+    console.log('  maxDailyRefuels:', maxDaily.toString())
+    console.log('  refuelCooldown:', cooldown.toString(), 'seconds')
+    console.log('')
 
-    // Estimate capacity
-    const balanceNum = Number(ethers.formatEther(balance));
-    const refuelNum = Number(ethers.formatEther(refuelAmount));
-    const capacity = refuelNum > 0 ? Math.floor(balanceNum / refuelNum) : 0;
+    const balanceNum = Number(ethers.formatEther(balance))
+    const refuelNum = Number(ethers.formatEther(refuelAmount))
+    const capacity = refuelNum > 0 ? Math.floor(balanceNum / refuelNum) : 0
 
-    console.log('📊 Capacity:');
-    console.log('  • Refuels remaining:', capacity);
-    console.log('  • Users serviceable:', capacity);
-    console.log('');
+    console.log('Capacity:', capacity, 'refuels remaining')
 
-    // Warnings
-    if (paused) {
-      console.log('⚠️  WARNING: Contract is PAUSED. Run unpause() to activate.');
-    }
-
-    if (balanceNum < 0.01) {
-      console.log('⚠️  WARNING: Low balance. Consider adding more ETH.');
-    }
-
-    if (balanceNum === 0) {
-      console.log('❌ ERROR: Contract has no ETH. Send ETH before unpausing.');
-    }
-
-    console.log('');
-    console.log('✅ Contract check complete!');
-
+    if (paused) console.log('\nWARNING: Contract is PAUSED.')
+    if (balanceNum < 0.001) console.log('\nWARNING: Low balance.')
+    if (Number(allowlistCount) === 0)
+      console.log('\nWARNING: Allowlist is empty. Run migrate-allowlist.ts.')
   } catch (error: any) {
-    console.error('❌ Error checking contract:', error.message);
-    process.exit(1);
+    console.error('Error:', error.message)
+    process.exit(1)
   }
 }
 
 main()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error(error);
-    process.exit(1);
-  });
-
+    console.error(error)
+    process.exit(1)
+  })

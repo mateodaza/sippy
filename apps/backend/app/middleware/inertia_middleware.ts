@@ -10,7 +10,7 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
     let indexerStatus: { pollerAgo: number | null; webhookAgo: number | null } | null = null
     if (ctx.request.url().startsWith('/admin')) {
       try {
-        const row = await db.raw(`
+        const row = (await db.raw(`
           SELECT
             EXTRACT(EPOCH FROM (NOW() - (
               SELECT MAX(updated_at) FROM onchain.poller_cursor
@@ -18,7 +18,7 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
             EXTRACT(EPOCH FROM (NOW() - (
               SELECT MAX(received_at) FROM onchain.webhook_delivery_log WHERE status = 'ok'
             )))::int AS webhook_age_secs
-        `)
+        `)) as { rows?: { poller_age_secs: number | null; webhook_age_secs: number | null }[] }
         const r = row.rows?.[0]
         indexerStatus = {
           pollerAgo: r?.poller_age_secs ?? null,

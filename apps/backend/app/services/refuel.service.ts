@@ -9,13 +9,20 @@ import logger from '@adonisjs/core/services/logger'
 import { ethers } from 'ethers'
 import { GAS_MIN_BALANCE_ETH } from '@sippy/shared'
 
-// GasRefuel Contract ABI (only the functions we need)
+// GasRefuelV2 Contract ABI (only the functions we need)
 const REFUEL_ABI = [
   'function refuel(address user) external',
   'function canRefuel(address user) external view returns (bool)',
   'function contractBalance() external view returns (uint256)',
   'function paused() external view returns (bool)',
+  'function allowlisted(address) external view returns (bool)',
+  'function allowlistCount() external view returns (uint256)',
+  'function addToAllowlist(address wallet) external',
+  'function removeFromAllowlist(address wallet) external',
+  'function batchAddToAllowlist(address[] wallets) external',
   'event Refueled(address indexed user, uint256 amount, uint256 timestamp)',
+  'event AllowlistAdded(address indexed wallet)',
+  'event AllowlistRemoved(address indexed wallet)',
 ]
 
 export interface RefuelResult {
@@ -148,37 +155,44 @@ class RefuelService {
     }
 
     try {
-      // Check if user can be refueled via contract
-      const canRefuel = await this.contract!.canRefuel(userAddress)
+      let canRefuel = await this.contract!.canRefuel(userAddress)
+
+      // Self-healing: if not allowlisted, auto-register and re-check
+      if (!canRefuel) {
+        const onAllowlist = await this.isAllowlisted(userAddress)
+        if (!onAllowlist) {
+          logger.warn(`Address ${userAddress} not on allowlist, auto-registering...`)
+          const regResult = await this.registerWallet(userAddress)
+          if (!regResult.success) {
+            return {
+              success: false,
+              error: `Not on allowlist and auto-register failed: ${regResult.error}`,
+            }
+          }
+          // Re-check after registration
+          canRefuel = await this.contract!.canRefuel(userAddress)
+        }
+      }
 
       if (!canRefuel) {
-        // Diagnose why
+        // Diagnose why (already allowlisted at this point)
         const isPaused = await this.isPaused()
         if (isPaused) {
-          return {
-            success: false,
-            error: 'Refuel contract is paused',
-          }
+          return { success: false, error: 'Refuel contract is paused' }
         }
 
         const userBalance = await this.getUserBalance(userAddress)
         if (Number.parseFloat(userBalance) >= GAS_MIN_BALANCE_ETH) {
-          return {
-            success: false,
-            error: `User already has sufficient ETH: ${userBalance}`,
-          }
+          return { success: false, error: `User already has sufficient ETH: ${userBalance}` }
         }
 
-        return {
-          success: false,
-          error: 'User cannot be refueled (daily limit or cooldown)',
-        }
+        return { success: false, error: 'User cannot be refueled (daily limit or cooldown)' }
       }
 
-      // Execute refuel via contract
+      // Execute refuel
       logger.info(`Refueling ${userAddress} via contract...`)
       const tx = await this.contract!.refuel(userAddress, {
-        gasLimit: 300000, // Higher gas limit for Smart Account transfers
+        gasLimit: 300000,
       })
 
       const receipt = await tx.wait()
@@ -252,6 +266,49 @@ class RefuelService {
     } catch (error) {
       logger.error('Failed to get user balance: %o', error)
       return '0'
+    }
+  }
+
+  /**
+   * Check if an address is on the contract allowlist
+   */
+  async isAllowlisted(address: string): Promise<boolean> {
+    if (!this.isAvailable()) return false
+    try {
+      return await this.contract!.allowlisted(address)
+    } catch (error) {
+      logger.error('Failed to check allowlist: %o', error)
+      return false
+    }
+  }
+
+  /**
+   * Register a wallet address on the GasRefuelV2 allowlist.
+   * Skips silently if already allowlisted.
+   */
+  async registerWallet(
+    walletAddress: string
+  ): Promise<{ success: boolean; txHash?: string; error?: string }> {
+    if (!this.isAvailable()) {
+      return { success: false, error: 'Refuel service not available' }
+    }
+
+    try {
+      const already = await this.contract!.allowlisted(walletAddress)
+      if (already) {
+        return { success: true }
+      }
+
+      logger.info(`Adding ${walletAddress} to GasRefuel allowlist...`)
+      const tx = await this.contract!.addToAllowlist(walletAddress)
+      const receipt = await tx.wait()
+
+      logger.info(`Allowlisted ${walletAddress} (tx: ${receipt.transactionHash})`)
+      return { success: true, txHash: receipt.transactionHash }
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : String(error)
+      logger.error('Failed to register wallet on allowlist: %s', msg)
+      return { success: false, error: msg }
     }
   }
 }

@@ -121,9 +121,18 @@ export default class EmbeddedWalletController {
         // Non-critical -- wallet registration succeeds regardless
       }
 
-      // Auto-refuel new wallet so user has gas for spend permission creation
+      // Register wallet on GasRefuelV2 allowlist, then auto-refuel
       const refuelService = getRefuelService()
       if (refuelService.isAvailable()) {
+        const regResult = await refuelService.registerWallet(walletAddress)
+        if (regResult.success) {
+          logger.info(
+            `Wallet allowlisted${regResult.txHash ? `: ${regResult.txHash}` : ' (already)'}`
+          )
+        } else {
+          logger.warn(`Allowlist registration failed: ${regResult.error}`)
+        }
+
         logger.info('Checking if wallet needs refuel...')
         const refuelResult = await refuelService.checkAndRefuel(walletAddress)
         if (refuelResult.success) {

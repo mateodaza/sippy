@@ -1,14 +1,82 @@
 @import 'tailwindcss';
 
 @theme {
-  --color-sippy: #059669;
-  --color-sippy-dark: #047857;
-  --color-sippy-darker: #065f46;
-  --color-sippy-light: #10b981;
-  --color-sippy-lighter: #d1fae5;
-  --color-sippy-lightest: #dcfce7;
-  --color-sippy-bg: #eefaf4;
-  --color-sippy-surface: #f8fbff;
+  /* Brand Design System — Cheetah Blue + Electric Green */
+  --color-brand: #00afd7;
+  --color-brand-hover: #0098bd;
+  --color-brand-light: rgba(0, 175, 215, 0.08);
+  --color-brand-muted: rgba(0, 175, 215, 0.15);
+  --color-brand-dark: #0d0d1a;
 
-  --font-sans: 'Inter', system-ui, sans-serif;
+  --color-crypto: #00d796;
+  --color-crypto-hover: #00b87f;
+  --color-crypto-light: rgba(0, 215, 150, 0.08);
+
+  --color-success: #16a34a;
+  --color-success-light: #dcfce7;
+  --color-danger: #dc2626;
+  --color-danger-light: #fee2e2;
+  --color-warning: #d97706;
+  --color-warning-light: #fef3c7;
+
+  --font-sans: 'Chakra Petch', system-ui, sans-serif;
+  --font-mono: 'Space Mono', monospace;
+}
+
+/* Equipment panel frame — double border */
+.panel-frame {
+  border: 1px solid var(--color-brand);
+  position: relative;
+}
+.panel-frame::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid var(--color-brand);
+  pointer-events: none;
+  transition: border-color 0.15s;
+}
+.panel-frame:hover::after {
+  border-color: rgba(0, 175, 215, 0.5);
+}
+
+/* Spec label */
+.spec-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-brand);
+}
+
+/* Grid overlay background */
+.grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(0, 175, 215, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 175, 215, 0.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Indicator dot */
+.indicator-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.indicator-dot-active {
+  background: var(--color-crypto);
+  box-shadow: 0 0 6px rgba(0, 215, 150, 0.5);
+}
+.indicator-dot-warning {
+  background: var(--color-warning);
+  box-shadow: 0 0 6px rgba(217, 119, 6, 0.4);
+}
+.indicator-dot-danger {
+  background: var(--color-danger);
+  box-shadow: 0 0 6px rgba(220, 38, 38, 0.4);
+}
+.indicator-dot-muted {
+  background: #9ca3af;
 }

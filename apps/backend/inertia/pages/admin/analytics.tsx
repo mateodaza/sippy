@@ -26,6 +26,7 @@ interface GasStatus {
   totalEthSpent: string
   isPaused: boolean
   contractBalance?: string
+  contractAddress?: string
   spenderBalance?: string
   spenderAddress?: string
 }
@@ -63,12 +64,11 @@ function truncateAddress(addr: string): string {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`
 }
 
-const FLOW_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: string }> =
-  {
-    inbound: { label: 'Inbound', color: 'bg-sippy', bgColor: 'bg-sippy-lightest', icon: '↓' },
-    outbound: { label: 'Outbound', color: 'bg-red-500', bgColor: 'bg-red-50', icon: '↑' },
-    internal: { label: 'Internal', color: 'bg-blue-500', bgColor: 'bg-blue-50', icon: '↔' },
-  }
+const FLOW_LABELS: Record<string, { label: string; color: string; icon: string }> = {
+  inbound: { label: 'INBOUND', color: 'text-crypto', icon: '↓' },
+  outbound: { label: 'OUTBOUND', color: 'text-danger', icon: '↑' },
+  internal: { label: 'INTERNAL', color: 'text-brand', icon: '↔' },
+}
 
 export default function Analytics({
   totalVolume,
@@ -82,7 +82,6 @@ export default function Analytics({
   const maxVolume = Math.max(...dailyVolumes.map((d) => Number(d.totalUsdcVolume)), 1)
   const totalFlowVolume = fundFlow.reduce((s, r) => s + Number(r.volume), 0)
 
-  // KPI progress
   const contractBalanceNum = gasStatus?.contractBalance
     ? Number.parseFloat(gasStatus.contractBalance)
     : 0
@@ -106,203 +105,138 @@ export default function Analytics({
       <Head title="Analytics" />
 
       <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-[-0.025em] text-slate-900">Analytics</h1>
-        <p className="mt-1 text-sm text-gray-500">On-chain volume, users, and KPI tracking</p>
+        <h1 className="font-sans text-2xl font-bold uppercase tracking-[0.05em] text-brand-dark">
+          Analytics
+        </h1>
+        <p className="spec-label mt-1" style={{ color: 'rgba(0, 175, 215, 0.5)' }}>
+          ON-CHAIN VOLUME // USERS // KPI TRACKING
+        </p>
       </div>
 
       {/* Gas Warnings */}
       {(isEmpty || isLowBalance) && (
         <div
-          className={`mb-6 flex items-center gap-3 rounded-2xl border px-5 py-4 ${
-            isEmpty
-              ? 'border-red-200 bg-red-50 text-red-800'
-              : 'border-amber-200 bg-amber-50 text-amber-800'
+          className={`mb-6 flex items-center gap-3 border px-5 py-4 ${
+            isEmpty ? 'border-danger/30 bg-danger-light' : 'border-warning/30 bg-warning-light'
           }`}
         >
-          <span className="text-xl">{isEmpty ? '!!' : '!'}</span>
+          <span
+            className={`indicator-dot ${isEmpty ? 'indicator-dot-danger' : 'indicator-dot-warning'}`}
+          />
           <div className="flex-1">
-            <p className="text-sm font-semibold">
-              {isEmpty ? 'GasRefuel contract is empty' : 'GasRefuel contract balance is low'}
+            <p className="font-mono text-xs font-bold tracking-wider uppercase text-brand-dark">
+              {isEmpty ? 'GASREFUEL CONTRACT EMPTY' : 'GASREFUEL BALANCE LOW'}
             </p>
-            <p className="mt-0.5 text-xs opacity-80">
+            <p className="mt-1 font-mono text-[10px] tracking-wider text-brand-dark/50">
               {isEmpty
-                ? 'Users cannot receive gas sponsorship. Send ETH to the contract immediately.'
-                : `Balance: ${contractBalanceNum.toFixed(4)} ETH (threshold: ${LOW_BALANCE_THRESHOLD} ETH). Refuel soon to avoid disruptions.`}
+                ? 'Users cannot receive gas sponsorship. Send ETH immediately.'
+                : `Balance: ${contractBalanceNum.toFixed(4)} ETH (threshold: ${LOW_BALANCE_THRESHOLD} ETH)`}
             </p>
-            <p className="mt-1 font-mono text-xs opacity-70">
-              Contract: 0xE4e5474E97E89d990082505fC5708A6a11849936
+            <p className="mt-1 font-mono text-[10px] tracking-wider text-brand-dark/40">
+              Contract: {gasStatus?.contractAddress || 'N/A'}
             </p>
             {gasStatus?.spenderAddress && (
-              <p className="font-mono text-xs opacity-70">Payer: {gasStatus.spenderAddress}</p>
+              <p className="font-mono text-[10px] tracking-wider text-brand-dark/40">
+                Payer: {gasStatus.spenderAddress}
+              </p>
             )}
           </div>
           <span
-            className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-              isEmpty ? 'bg-red-200 text-red-900' : 'bg-amber-200 text-amber-900'
-            }`}
+            className={`font-mono text-[10px] font-bold tracking-[0.15em] uppercase ${isEmpty ? 'text-danger' : 'text-warning'}`}
           >
-            {isEmpty ? 'Critical' : 'Warning'}
+            {isEmpty ? 'CRITICAL' : 'WARNING'}
           </span>
         </div>
       )}
       {isSpenderLow && (
-        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-800">
-          <span className="text-xl">!</span>
+        <div className="mb-6 flex items-center gap-3 border border-warning/30 bg-warning-light px-5 py-4">
+          <span className="indicator-dot indicator-dot-warning" />
           <div className="flex-1">
-            <p className="text-sm font-semibold">Sippy Spender needs gas</p>
-            <p className="mt-0.5 text-xs opacity-80">
-              Balance: {spenderBalanceNum.toFixed(6)} ETH. WhatsApp sends will fail without gas.
+            <p className="font-mono text-xs font-bold tracking-wider uppercase text-brand-dark">
+              SPENDER NEEDS GAS
+            </p>
+            <p className="mt-1 font-mono text-[10px] tracking-wider text-brand-dark/50">
+              Balance: {spenderBalanceNum.toFixed(6)} ETH. Sends will fail without gas.
             </p>
             {gasStatus?.spenderAddress && (
-              <p className="mt-1 font-mono text-xs opacity-70">Payer: {gasStatus.spenderAddress}</p>
+              <p className="mt-1 font-mono text-[10px] tracking-wider text-brand-dark/40">
+                Payer: {gasStatus.spenderAddress}
+              </p>
             )}
           </div>
-          <span className="shrink-0 rounded-full bg-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-900">
-            Warning
+          <span className="font-mono text-[10px] font-bold tracking-[0.15em] uppercase text-warning">
+            WARNING
           </span>
         </div>
       )}
 
       {/* KPI Cards */}
-      <div className="mb-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {/* Total USDC Volume */}
-        <div className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] transition-all duration-300 hover:border-gray-200 hover:shadow-[0_12px_48px_-8px_rgba(0,0,0,0.12)]">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-sippy-lightest text-sippy shadow-inner">
-              <svg
-                className="h-6 w-6"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <line x1="12" y1="1" x2="12" y2="23" />
-                <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
-            </div>
-            <span className="rounded-full bg-sippy-lightest px-2.5 py-0.5 text-xs font-semibold text-sippy-darker">
-              {volumePct}%
-            </span>
-          </div>
-          <div className="text-3xl font-bold tracking-[-0.025em] text-slate-900">
+        <div className="panel-frame p-5">
+          <p className="spec-label mb-3">TOTAL VOLUME</p>
+          <div className="font-sans text-3xl font-bold text-brand-dark">
             {formatUSDC(totalVolume)}
           </div>
-          <div className="mt-1 text-sm font-medium text-gray-500">Total USDC Volume</div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
+          <div className="mt-3 h-1 bg-brand/10">
             <div
-              className="h-full rounded-full bg-sippy transition-all duration-700"
+              className="h-full bg-brand transition-all duration-500"
               style={{ width: `${volumePct}%` }}
             />
           </div>
-          <div className="mt-1.5 text-xs text-gray-400">
-            Target: ${volumeTarget.toLocaleString()}
+          <div className="mt-1.5 flex items-center justify-between font-mono text-[10px] tracking-wider text-brand-dark/40">
+            <span>{volumePct}%</span>
+            <span>TARGET: ${volumeTarget.toLocaleString()}</span>
           </div>
         </div>
 
         {/* Registered Users */}
-        <div className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] transition-all duration-300 hover:border-gray-200 hover:shadow-[0_12px_48px_-8px_rgba(0,0,0,0.12)]">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#dbeafe] text-[#2563eb] shadow-inner">
-              <svg
-                className="h-6 w-6"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
-            </div>
-            <span className="rounded-full bg-[#dbeafe] px-2.5 py-0.5 text-xs font-semibold text-[#1e40af]">
-              {usersPct}%
-            </span>
-          </div>
-          <div className="text-3xl font-bold tracking-[-0.025em] text-slate-900">
-            {registeredUsers}
-          </div>
-          <div className="mt-1 text-sm font-medium text-gray-500">Registered Users</div>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
+        <div className="panel-frame p-5">
+          <p className="spec-label mb-3">REGISTERED USERS</p>
+          <div className="font-sans text-3xl font-bold text-brand-dark">{registeredUsers}</div>
+          <div className="mt-3 h-1 bg-brand/10">
             <div
-              className="h-full rounded-full bg-[#2563eb] transition-all duration-700"
+              className="h-full bg-brand transition-all duration-500"
               style={{ width: `${usersPct}%` }}
             />
           </div>
-          <div className="mt-1.5 text-xs text-gray-400">Target: {usersTarget} testers</div>
+          <div className="mt-1.5 flex items-center justify-between font-mono text-[10px] tracking-wider text-brand-dark/40">
+            <span>{usersPct}%</span>
+            <span>TARGET: {usersTarget}</span>
+          </div>
         </div>
 
         {/* Active Today */}
-        <div className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] transition-all duration-300 hover:border-gray-200 hover:shadow-[0_12px_48px_-8px_rgba(0,0,0,0.12)]">
-          <div className="mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#f3e8ff] text-[#9333ea] shadow-inner">
-              <svg
-                className="h-6 w-6"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-              </svg>
-            </div>
-          </div>
-          <div className="text-3xl font-bold tracking-[-0.025em] text-slate-900">{activeToday}</div>
-          <div className="mt-1 text-sm font-medium text-gray-500">Active Today</div>
-          <div className="mt-1.5 text-xs text-gray-400">Unique wallets (24h)</div>
+        <div className="panel-frame p-5">
+          <p className="spec-label mb-3">ACTIVE TODAY</p>
+          <div className="font-sans text-3xl font-bold text-brand-dark">{activeToday}</div>
+          <p className="mt-3 font-mono text-[10px] tracking-wider text-brand-dark/40">
+            UNIQUE WALLETS (24H)
+          </p>
         </div>
 
-        {/* Gas Sponsored */}
-        <div className="group rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] transition-all duration-300 hover:border-gray-200 hover:shadow-[0_12px_48px_-8px_rgba(0,0,0,0.12)]">
-          <div className="mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#fff7ed] text-[#ea580c] shadow-inner">
-              <svg
-                className="h-6 w-6"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-                <path d="M12 18v-6" />
-                <path d="M9 15l3 3 3-3" />
-              </svg>
-            </div>
-          </div>
-          <div className="text-3xl font-bold tracking-[-0.025em] text-slate-900">
+        {/* Gas Refuels */}
+        <div className="panel-frame p-5">
+          <p className="spec-label mb-3">GAS REFUELS</p>
+          <div className="font-sans text-3xl font-bold text-brand-dark">
             {gasStatus?.totalRefuels ?? 0}
           </div>
-          <div className="mt-1 text-sm font-medium text-gray-500">Gas Refuels</div>
-          <div className="mt-1.5 space-y-0.5 text-xs text-gray-400">
-            <div>
-              {gasStatus ? formatETH(gasStatus.totalEthSpent) : '0 ETH'} spent
-              {gasStatus?.isPaused && (
-                <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-                  Paused
-                </span>
-              )}
+          <div className="mt-3 space-y-1 font-mono text-[10px] tracking-wider text-brand-dark/40">
+            <div className="flex items-center gap-2">
+              <span>{gasStatus ? formatETH(gasStatus.totalEthSpent) : '0 ETH'} SPENT</span>
+              {gasStatus?.isPaused && <span className="font-bold text-danger">PAUSED</span>}
             </div>
             <div>
               <a
-                href="https://arbiscan.io/address/0xE4e5474E97E89d990082505fC5708A6a11849936"
+                href={`https://arbiscan.io/address/${gasStatus?.contractAddress}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline decoration-dotted hover:text-orange-700"
+                className="underline decoration-dotted hover:text-brand"
               >
-                Contract: {contractBalanceNum.toFixed(4)} ETH
+                CONTRACT: {contractBalanceNum.toFixed(4)} ETH
               </a>
-              {isLowBalance && <span className="ml-1 text-amber-600">low</span>}
-              {isEmpty && <span className="ml-1 text-red-600">empty</span>}
+              {isLowBalance && <span className="ml-1 text-warning">LOW</span>}
+              {isEmpty && <span className="ml-1 text-danger">EMPTY</span>}
             </div>
             <div>
               {gasStatus?.spenderAddress ? (
@@ -310,67 +244,65 @@ export default function Analytics({
                   href={`https://arbiscan.io/address/${gasStatus.spenderAddress}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="underline decoration-dotted hover:text-orange-700"
+                  className="underline decoration-dotted hover:text-brand"
                 >
-                  Spender: {spenderBalanceNum.toFixed(6)} ETH
+                  SPENDER: {spenderBalanceNum.toFixed(6)} ETH
                 </a>
               ) : (
-                <>Spender: {spenderBalanceNum.toFixed(6)} ETH</>
+                <>SPENDER: {spenderBalanceNum.toFixed(6)} ETH</>
               )}
-              {isSpenderLow && <span className="ml-1 text-amber-600">low</span>}
+              {isSpenderLow && <span className="ml-1 text-warning">LOW</span>}
             </div>
           </div>
         </div>
       </div>
 
       {/* Row 2: Fund Flow + Top Users */}
-      <div className="mb-6 grid grid-cols-1 gap-6 md:grid-cols-2">
-        {/* Fund Flow Breakdown */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)]">
-          <h2 className="mb-5 text-sm font-semibold uppercase tracking-wider text-gray-500">
-            Fund Flow
-          </h2>
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+        {/* Fund Flow */}
+        <div className="panel-frame p-5">
+          <p className="spec-label mb-5">FUND FLOW</p>
           <div className="space-y-4">
             {fundFlow.length > 0 ? (
               fundFlow.map((row) => {
-                const config = FLOW_CONFIG[row.flowType] ?? FLOW_CONFIG.internal
+                const config = FLOW_LABELS[row.flowType] ?? FLOW_LABELS.internal
                 const vol = Number(row.volume)
                 const pct = totalFlowVolume > 0 ? Math.round((vol / totalFlowVolume) * 100) : 0
                 return (
                   <div key={row.flowType}>
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                        <span
-                          className={`flex h-7 w-7 items-center justify-center rounded-lg ${config.bgColor} text-xs font-bold`}
-                        >
-                          {config.icon}
-                        </span>
-                        {config.label}
-                        <span className="text-xs text-gray-400">({Number(row.txCount)} txs)</span>
+                      <span className="flex items-center gap-2 font-mono text-[11px] font-bold tracking-wider">
+                        <span className={config.color}>{config.icon}</span>
+                        <span className="text-brand-dark">{config.label}</span>
+                        <span className="text-brand-dark/40">({Number(row.txCount)} TXS)</span>
                       </span>
-                      <span className="text-sm font-semibold text-slate-900">
+                      <span className="font-mono text-xs font-bold text-brand-dark">
                         {formatUSDC(row.volume)}
                       </span>
                     </div>
-                    <div className="h-2.5 overflow-hidden rounded-full bg-gray-100">
+                    <div className="h-1 bg-brand/10">
                       <div
-                        className={`h-full rounded-full ${config.color} transition-all duration-500`}
+                        className="h-full bg-brand transition-all duration-500"
                         style={{ width: `${Math.max(pct, 2)}%` }}
                       />
                     </div>
-                    <div className="mt-1 text-right text-xs text-gray-400">{pct}%</div>
+                    <div className="mt-1 text-right font-mono text-[10px] tracking-wider text-brand-dark/40">
+                      {pct}%
+                    </div>
                   </div>
                 )
               })
             ) : (
-              <p className="py-4 text-center text-sm text-gray-400">No data yet</p>
+              <p className="py-4 text-center font-mono text-[10px] tracking-wider text-brand-dark/40">
+                NO DATA YET
+              </p>
             )}
 
             {fundFlow.length > 0 && (
-              <div className="mt-2 border-t border-gray-100 pt-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-gray-500">Total Volume</span>
-                  <span className="font-bold text-slate-900">
+              <div className="mt-2 border-t border-brand/10 pt-3">
+                <div className="flex items-center justify-between font-mono text-xs">
+                  <span className="tracking-wider text-brand-dark/40">TOTAL</span>
+                  <span className="font-bold text-brand-dark">
                     {formatUSDC(String(totalFlowVolume))}
                   </span>
                 </div>
@@ -379,64 +311,64 @@ export default function Analytics({
           </div>
         </div>
 
-        {/* Top Users by Volume */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)]">
-          <h2 className="mb-5 text-sm font-semibold uppercase tracking-wider text-gray-500">
-            Top Users by Volume
-          </h2>
-          <div className="space-y-2.5">
+        {/* Top Users */}
+        <div className="panel-frame p-5">
+          <p className="spec-label mb-5">TOP USERS BY VOLUME</p>
+          <div className="space-y-1">
             {topUsers.length > 0 ? (
               topUsers.map((user, i) => (
                 <div
                   key={user.address}
-                  className="flex items-center justify-between rounded-xl px-3 py-2.5 transition-colors hover:bg-gray-50"
+                  className="flex items-center justify-between px-2 py-2 transition-colors hover:bg-brand-light"
                 >
-                  <span className="flex items-center gap-3 text-sm text-slate-700">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-sippy-lightest text-xs font-bold text-sippy-darker">
-                      {i + 1}
+                  <span className="flex items-center gap-3 font-mono text-[11px] tracking-wider">
+                    <span className="w-5 font-bold text-brand">
+                      {String(i + 1).padStart(2, '0')}
                     </span>
-                    <span className="font-mono text-xs">{truncateAddress(user.address)}</span>
+                    <span className="text-brand-dark/50">{truncateAddress(user.address)}</span>
                   </span>
                   <div className="text-right">
-                    <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-semibold text-gray-600">
+                    <span className="font-mono text-[11px] font-bold tracking-wider text-brand-dark">
                       {formatUSDC(user.totalVolume)}
                     </span>
-                    <div className="mt-0.5 text-[10px] text-gray-400">{user.txCount} txs</div>
+                    <div className="font-mono text-[9px] tracking-wider text-brand-dark/40">
+                      {user.txCount} TXS
+                    </div>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="py-4 text-center text-sm text-gray-400">No data yet</p>
+              <p className="py-4 text-center font-mono text-[10px] tracking-wider text-brand-dark/40">
+                NO DATA YET
+              </p>
             )}
           </div>
         </div>
       </div>
 
       {/* Row 3: Daily Volume Chart */}
-      <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)]">
-        <h2 className="mb-5 text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Daily USDC Volume (Last 30 Days)
-        </h2>
+      <div className="panel-frame p-5">
+        <p className="spec-label mb-5">DAILY USDC VOLUME // LAST 30 DAYS</p>
 
         {dailyVolumes.length > 0 ? (
-          <div className="flex items-end gap-2">
+          <div className="flex items-end gap-[2px]" style={{ height: 180 }}>
             {dailyVolumes.map((row) => {
               const pct = (Number(row.totalUsdcVolume) / maxVolume) * 100
-              const barHeight = Math.max(Math.round((pct / 100) * 180), 8)
+              const barHeight = Math.max(Math.round((pct / 100) * 160), 2)
               return (
                 <div
                   key={row.date}
-                  className="group flex flex-1 flex-col items-center gap-1"
-                  style={{ minWidth: 40, maxWidth: 80 }}
+                  className="group flex flex-1 flex-col items-center justify-end"
+                  style={{ height: '100%' }}
                 >
-                  <span className="text-xs font-semibold text-slate-700 opacity-0 transition-opacity group-hover:opacity-100">
+                  <span className="mb-1 font-mono text-[9px] font-bold text-brand-dark opacity-0 transition-opacity group-hover:opacity-100">
                     {formatUSDC(row.totalUsdcVolume)}
                   </span>
                   <div
-                    className="w-full rounded-t-lg bg-gradient-to-t from-sippy to-sippy-light transition-all duration-300 group-hover:from-sippy-dark group-hover:to-sippy"
+                    className="w-full bg-brand transition-colors group-hover:bg-brand-hover"
                     style={{ height: barHeight }}
                   />
-                  <span className="mt-1 text-[10px] text-gray-400">
+                  <span className="mt-1 font-mono text-[8px] tracking-wider text-brand-dark/40">
                     {new Date(row.date + 'T00:00:00').toLocaleDateString(undefined, {
                       month: 'short',
                       day: 'numeric',
@@ -447,7 +379,9 @@ export default function Analytics({
             })}
           </div>
         ) : (
-          <p className="py-8 text-center text-sm text-gray-400">No data yet</p>
+          <p className="py-8 text-center font-mono text-[10px] tracking-wider text-brand-dark/40">
+            NO DATA YET
+          </p>
         )}
       </div>
     </AdminLayout>

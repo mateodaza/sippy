@@ -571,6 +571,7 @@ These are the items already implied by current project docs and should be treate
 - persistent LLM / rate-limit state
 - removal of single-instance assumptions accepted in M1
 - off-ramp implementation and partner integration
+- deploy GasRefuelV2 with onchain allowlist (code-complete, 38 tests passing, see `contracts/gas-refuel/` and memory file `project_gas_refuel_v2.md` for full deploy checklist)
 
 ---
 

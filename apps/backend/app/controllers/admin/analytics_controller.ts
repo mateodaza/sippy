@@ -5,6 +5,7 @@ import { getRefuelService } from '#services/refuel.service'
 import { getSippySpenderAccount } from '#services/embedded_wallet.service'
 import { getRpcUrl } from '#config/network'
 import { ethers } from 'ethers'
+import env from '#start/env'
 
 export default class AnalyticsController {
   async index({ inertia }: HttpContext) {
@@ -123,6 +124,7 @@ export default class AnalyticsController {
           totalEthSpent: String(gasStatus.total_eth_spent),
           isPaused: gasStatus.is_paused,
           contractBalance: contractBalanceEth,
+          contractAddress: env.get('REFUEL_CONTRACT_ADDRESS', ''),
           spenderBalance: spenderBalanceEth,
           spenderAddress,
         }
