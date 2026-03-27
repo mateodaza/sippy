@@ -85,7 +85,7 @@ import { getIsPaused } from '#controllers/admin/moderation_controller'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { getDialect, dialectHint, type Dialect } from '#utils/dialect'
 import { validateLLMResponse } from '#services/llm_validator.service'
-import { resolveAlias, smartResolveAlias, updateContact } from '#services/contact.service'
+import { smartResolveAlias, updateContact } from '#services/contact.service'
 import { sanitizeAlias } from '#utils/contact_sanitizer'
 import {
   handleSaveContact,
@@ -447,7 +447,12 @@ export async function routeCommand(
             await sendMessageFn(phoneNumber, disambigMsg[lang], lang)
             return
           } else {
-            // No match at all — show "contact not found" with save hint
+            // No match — store partial send so follow-up resolves as recipient
+            partialSends.set(phoneNumber, {
+              amount: command.amount,
+              timestamp: Date.now(),
+              lang,
+            })
             const safeRaw = sanitizeAlias(command.recipientRaw) ?? command.recipientRaw.slice(0, 30)
             await sendMessageFn(phoneNumber, formatContactNotFound(safeRaw, lang), lang)
             return
@@ -963,11 +968,12 @@ async function resolvePartialSend(
     if (phone) {
       return { amount: partial.amount, recipient: phone }
     }
-    // Try alias resolution (for disambiguation follow-ups like "maria garcia")
-    const aliasPhone = await resolveAlias(ownerPhone, trimmed)
-    if (aliasPhone) {
-      return { amount: partial.amount, recipient: aliasPhone }
+    // Try smart alias resolution (prefix, word, contains, typo)
+    const matches = await smartResolveAlias(ownerPhone, trimmed)
+    if (matches.length === 1) {
+      return { amount: partial.amount, recipient: matches[0].targetPhone }
     }
+    // Multiple matches or no match → fall through to normal parsing
   }
 
   return null

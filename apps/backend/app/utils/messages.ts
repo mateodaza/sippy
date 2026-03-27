@@ -1152,11 +1152,12 @@ export function formatInvalidPhoneNumberMessage(lang: Lang): string {
 
 export function formatContactNotFound(name: string, lang: Lang): string {
   const m = {
-    en: () => `No contact "${name}" found. You can save it:\n"save contact ${name} +573001234567"`,
+    en: () =>
+      `No contact "${name}" found. Reply with the phone number, or save it first:\n"save contact ${name} +573001234567"`,
     es: () =>
-      `No encontre a "${name}" en tus contactos. Puedes guardarlo:\n"guardar contacto ${name} +573001234567"`,
+      `No encontre a "${name}". Responde con el numero, o guardalo primero:\n"guardar contacto ${name} +573001234567"`,
     pt: () =>
-      `Nao encontrei "${name}" nos seus contatos. Pode salvar:\n"salvar contato ${name} +5511999887766"`,
+      `Nao encontrei "${name}". Responda com o numero, ou salve primeiro:\n"salvar contato ${name} +5511999887766"`,
   }
   return m[lang]()
 }
