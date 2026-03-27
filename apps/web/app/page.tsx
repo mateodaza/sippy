@@ -36,7 +36,7 @@ export default async function HomePage() {
         <div className="max-w-7xl mx-auto px-3 sm:px-8 lg:px-12 py-3 sm:py-4 flex justify-between items-center gap-2 relative">
           {/* Logo badge — equipment panel style */}
           <a href="/" className="pointer-events-auto flex items-center gap-3 shrink-0">
-            <div className="bg-brand-primary dark:bg-black w-8 h-10 sm:w-10 sm:h-14 flex items-center justify-center dark:border dark:border-white/15">
+            <div className="bg-brand-primary dark:bg-black w-8 h-10 sm:w-10 sm:h-14 flex items-center justify-center dark:border dark:border-brand-primary/20">
               <Image
                 src="/images/logos/sippy-s-mark-white.svg"
                 alt="Sippy"
@@ -71,7 +71,7 @@ export default async function HomePage() {
               href={`https://wa.me/${SIPPY_NUMBER.replace(/\D/g, '')}?text=${encodeURIComponent('Hey Sippy!')}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="shrink-0 border border-brand-primary dark:border-white/20 px-2.5 py-2 sm:px-8 sm:py-3 font-display font-bold text-[9px] sm:text-sm uppercase tracking-wide sm:tracking-widest text-brand-primary dark:text-white hover:bg-brand-primary dark:hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 transition-all bg-[var(--bg-primary)]"
+              className="shrink-0 border border-brand-primary dark:border-brand-primary/25 px-2.5 py-2 sm:px-8 sm:py-3 font-display font-bold text-[9px] sm:text-sm uppercase tracking-wide sm:tracking-widest text-brand-primary dark:text-brand-primary hover:bg-brand-primary dark:hover:bg-brand-primary/10 hover:text-white focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 transition-all bg-[var(--bg-primary)]"
             >
               <span className="sm:hidden">{t('landing.nav.tryIt', lang)}</span>
               <span className="hidden sm:inline">{t('landing.nav.openWhatsapp', lang)}</span>
@@ -241,7 +241,7 @@ export default async function HomePage() {
               {/* Center — modern phone silhouette */}
               <ScrollReveal direction="up" delay={0.15}>
                 <div className="flex flex-col items-center">
-                  <div className="w-32 sm:w-48 aspect-[9/19] border-2 border-[var(--text-primary)] dark:border-white/60 dark:shadow-[0_0_30px_rgba(0,175,215,0.08),0_0_60px_rgba(0,175,215,0.04)] rounded-[2rem] sm:rounded-[3rem] p-1.5 relative animate-float">
+                  <div className="w-32 sm:w-48 aspect-[9/19] border-2 border-[var(--text-primary)] dark:border-brand-primary/60 dark:shadow-[0_0_30px_rgba(0,175,215,0.08),0_0_60px_rgba(0,175,215,0.04)] rounded-[2rem] sm:rounded-[3rem] p-1.5 relative animate-float">
                     {/* Inner screen bezel */}
                     <div className="w-full h-full rounded-[2rem] sm:rounded-[2.5rem] border border-[var(--border-strong)] flex items-center justify-center relative overflow-hidden">
                       {/* Dynamic island */}
@@ -351,19 +351,19 @@ export default async function HomePage() {
             {/* Gradient border frame — many lines fading outward */}
             <div className="relative">
               {/* Outermost — barely visible, wide on mobile */}
-              <div className="absolute inset-x-1 inset-y-0 sm:-inset-[40px] pointer-events-none border border-brand-primary/[0.03] dark:border-white/[0.03] rounded-[0.6rem] sm:rounded-[2.8rem]" />
-              <div className="absolute inset-x-1.5 inset-y-[2px] sm:-inset-[34px] pointer-events-none border border-brand-primary/[0.05] dark:border-white/[0.04] rounded-[0.55rem] sm:rounded-[2.6rem]" />
-              <div className="absolute inset-x-2 inset-y-1 sm:-inset-[28px] pointer-events-none border border-brand-primary/[0.07] dark:border-white/[0.06] rounded-[0.5rem] sm:rounded-[2.4rem]" />
-              <div className="absolute inset-x-2.5 inset-y-1.5 sm:-inset-[22px] pointer-events-none border border-brand-primary/[0.10] dark:border-white/[0.07] rounded-[0.45rem] sm:rounded-[2.2rem]" />
-              <div className="absolute inset-x-3 inset-y-2 sm:-inset-[16px] pointer-events-none border border-brand-primary/[0.14] dark:border-white/[0.10] rounded-[0.4rem] sm:rounded-[2rem]" />
-              <div className="absolute inset-x-3.5 inset-y-2.5 sm:-inset-[10px] pointer-events-none border border-brand-primary/[0.18] dark:border-white/[0.13] rounded-[0.35rem] sm:rounded-[1.8rem]" />
-              <div className="absolute inset-x-4 inset-y-3 sm:-inset-[5px] pointer-events-none border border-brand-primary/[0.24] dark:border-white/[0.16] rounded-[0.3rem] sm:rounded-[1.6rem]" />
-              <div className="absolute inset-x-[18px] inset-y-3.5 sm:inset-0 pointer-events-none border border-brand-primary/30 dark:border-white/20 rounded-[0.25rem] sm:rounded-[1.4rem]" />
-              <div className="absolute inset-x-5 inset-y-4 sm:inset-[5px] pointer-events-none border border-brand-primary/40 dark:border-white/25 rounded-[0.2rem] sm:rounded-[1.2rem]" />
-              <div className="absolute inset-x-[22px] inset-y-[18px] sm:inset-[10px] pointer-events-none border border-brand-primary/50 dark:border-white/30 rounded-[0.15rem] sm:rounded-[1rem]" />
-              <div className="absolute inset-x-6 inset-y-5 sm:inset-[15px] pointer-events-none border border-brand-primary/65 dark:border-white/40 rounded-[0.1rem] sm:rounded-[0.8rem]" />
+              <div className="absolute inset-x-1 inset-y-0 sm:-inset-[40px] pointer-events-none border border-brand-primary/[0.03] dark:border-brand-primary/[0.03] rounded-[0.6rem] sm:rounded-[2.8rem]" />
+              <div className="absolute inset-x-1.5 inset-y-[2px] sm:-inset-[34px] pointer-events-none border border-brand-primary/[0.05] dark:border-brand-primary/[0.04] rounded-[0.55rem] sm:rounded-[2.6rem]" />
+              <div className="absolute inset-x-2 inset-y-1 sm:-inset-[28px] pointer-events-none border border-brand-primary/[0.07] dark:border-brand-primary/[0.06] rounded-[0.5rem] sm:rounded-[2.4rem]" />
+              <div className="absolute inset-x-2.5 inset-y-1.5 sm:-inset-[22px] pointer-events-none border border-brand-primary/[0.10] dark:border-brand-primary/[0.07] rounded-[0.45rem] sm:rounded-[2.2rem]" />
+              <div className="absolute inset-x-3 inset-y-2 sm:-inset-[16px] pointer-events-none border border-brand-primary/[0.14] dark:border-brand-primary/[0.10] rounded-[0.4rem] sm:rounded-[2rem]" />
+              <div className="absolute inset-x-3.5 inset-y-2.5 sm:-inset-[10px] pointer-events-none border border-brand-primary/[0.18] dark:border-brand-primary/[0.13] rounded-[0.35rem] sm:rounded-[1.8rem]" />
+              <div className="absolute inset-x-4 inset-y-3 sm:-inset-[5px] pointer-events-none border border-brand-primary/[0.24] dark:border-brand-primary/[0.16] rounded-[0.3rem] sm:rounded-[1.6rem]" />
+              <div className="absolute inset-x-[18px] inset-y-3.5 sm:inset-0 pointer-events-none border border-brand-primary/30 dark:border-brand-primary/20 rounded-[0.25rem] sm:rounded-[1.4rem]" />
+              <div className="absolute inset-x-5 inset-y-4 sm:inset-[5px] pointer-events-none border border-brand-primary/40 dark:border-brand-primary/25 rounded-[0.2rem] sm:rounded-[1.2rem]" />
+              <div className="absolute inset-x-[22px] inset-y-[18px] sm:inset-[10px] pointer-events-none border border-brand-primary/50 dark:border-brand-primary/30 rounded-[0.15rem] sm:rounded-[1rem]" />
+              <div className="absolute inset-x-6 inset-y-5 sm:inset-[15px] pointer-events-none border border-brand-primary/65 dark:border-brand-primary/40 rounded-[0.1rem] sm:rounded-[0.8rem]" />
               {/* Innermost — strongest, hugs close to content */}
-              <div className="absolute inset-x-[26px] inset-y-[22px] sm:inset-[20px] pointer-events-none border border-brand-primary/80 dark:border-white/50 rounded-[0.05rem] sm:rounded-[0.6rem]" />
+              <div className="absolute inset-x-[26px] inset-y-[22px] sm:inset-[20px] pointer-events-none border border-brand-primary/80 dark:border-brand-primary/50 rounded-[0.05rem] sm:rounded-[0.6rem]" />
 
               {/* Ruled grid lines inside the frame */}
               <div className="absolute inset-x-[26px] inset-y-[22px] sm:inset-[20px] pointer-events-none rounded-[0.05rem] sm:rounded-[0.6rem] overflow-hidden grid-overlay-lg" />
@@ -531,14 +531,14 @@ export default async function HomePage() {
                   </div>
 
                   <div className="flex items-center justify-between mt-2 sm:mt-3 px-2">
-                    <span className="font-mono text-[8px] text-brand-primary/60 dark:text-white/40 tracking-[0.3em] uppercase">
+                    <span className="font-mono text-[8px] text-brand-primary/60 dark:text-brand-primary/50 tracking-[0.3em] uppercase">
                       sippy
                     </span>
                     <div className="flex gap-2 items-center">
-                      <div className="w-3 h-3 rounded-full border border-brand-primary/30 dark:border-white/20" />
-                      <div className="w-3 h-3 rounded-full border border-brand-primary/30 dark:border-white/20" />
-                      <div className="w-3.5 h-3.5 rounded-full border border-brand-primary/30 dark:border-white/20" />
-                      <div className="w-3.5 h-3.5 rounded-full border border-brand-primary/30 dark:border-white/20" />
+                      <div className="w-3 h-3 rounded-full border border-brand-primary/30 dark:border-brand-primary/25" />
+                      <div className="w-3 h-3 rounded-full border border-brand-primary/30 dark:border-brand-primary/25" />
+                      <div className="w-3.5 h-3.5 rounded-full border border-brand-primary/30 dark:border-brand-primary/25" />
+                      <div className="w-3.5 h-3.5 rounded-full border border-brand-primary/30 dark:border-brand-primary/25" />
                     </div>
                   </div>
                 </div>
@@ -550,9 +550,9 @@ export default async function HomePage() {
         {/* ── CTA — Start on WhatsApp ── */}
         <section className="relative py-16 sm:py-32 bg-brand-primary dark:bg-[var(--bg-secondary)] overflow-hidden px-2 sm:px-6 lg:px-8">
           {/* Triple nested border frames — inverse hero (white on blue), tighter to content */}
-          <div className="absolute inset-2 sm:inset-4 lg:inset-6 pointer-events-none border border-white/20 dark:border-white/8 z-0 rounded-xl sm:rounded-2xl" />
-          <div className="absolute inset-3 sm:inset-5 lg:inset-7 pointer-events-none border border-white/35 dark:border-white/12 z-0 rounded-[0.7rem] sm:rounded-[0.85rem]" />
-          <div className="absolute inset-4 sm:inset-6 lg:inset-8 pointer-events-none border border-white/50 dark:border-white/15 z-0 rounded-[0.6rem] sm:rounded-[0.7rem]" />
+          <div className="absolute inset-2 sm:inset-4 lg:inset-6 pointer-events-none border border-white/20 dark:border-brand-primary/10 z-0 rounded-xl sm:rounded-2xl" />
+          <div className="absolute inset-3 sm:inset-5 lg:inset-7 pointer-events-none border border-white/35 dark:border-brand-primary/15 z-0 rounded-[0.7rem] sm:rounded-[0.85rem]" />
+          <div className="absolute inset-4 sm:inset-6 lg:inset-8 pointer-events-none border border-white/50 dark:border-brand-primary/20 z-0 rounded-[0.6rem] sm:rounded-[0.7rem]" />
 
           <div className="max-w-[75vw] sm:max-w-3xl mx-auto text-center relative z-10">
             <ScrollReveal>
@@ -573,7 +573,7 @@ export default async function HomePage() {
                 </svg>
                 {t('landing.cta.button', lang)}
               </a>
-              <p className="mt-3 font-mono text-xs text-white/60 dark:text-white/40 tracking-[0.1em] uppercase">
+              <p className="mt-3 font-mono text-xs text-white/60 dark:text-brand-primary/40 tracking-[0.1em] uppercase">
                 {t('landing.cta.trust', lang)}
               </p>
             </ScrollReveal>
@@ -651,7 +651,7 @@ export default async function HomePage() {
               ] as const
             ).map((spec) => (
               <div key={spec.labelKey}>
-                <span className="font-mono text-xs text-brand-primary dark:text-white/70 tracking-[0.2em] uppercase block mb-1">
+                <span className="font-mono text-xs text-brand-primary dark:text-brand-primary/70 tracking-[0.2em] uppercase block mb-1">
                   {t(spec.labelKey, lang)}
                 </span>
                 <span className="font-mono text-sm text-[var(--text-primary)] tracking-wide">

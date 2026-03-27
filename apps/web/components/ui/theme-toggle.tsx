@@ -1,21 +1,21 @@
-'use client';
+'use client'
 
-import { useTheme } from 'next-themes';
-import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
-import { Sun, Moon } from 'lucide-react';
+import { useTheme } from 'next-themes'
+import { usePathname } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { Sun, Moon } from 'lucide-react'
 
 export function ThemeToggle() {
-  const { resolvedTheme, setTheme } = useTheme();
-  const pathname = usePathname();
-  const [mounted, setMounted] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme()
+  const pathname = usePathname()
+  const [mounted, setMounted] = useState(false)
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => setMounted(true), [])
 
-  // Only show on landing page
-  if (!mounted || pathname !== '/') return null;
+  // Only show on pages with theme support
+  if (!mounted || (pathname !== '/' && pathname !== '/stats')) return null
 
-  const isDark = resolvedTheme === 'dark';
+  const isDark = resolvedTheme === 'dark'
 
   return (
     <button
@@ -33,5 +33,5 @@ export function ThemeToggle() {
     >
       {isDark ? <Sun size={18} strokeWidth={2} /> : <Moon size={18} strokeWidth={2} />}
     </button>
-  );
+  )
 }
