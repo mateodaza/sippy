@@ -77,12 +77,10 @@ export default function Dashboard({ stats }: Props) {
       <Head title="Dashboard" />
 
       <div className="mb-8">
-        <h1 className="font-sans text-2xl font-bold uppercase tracking-[0.05em] text-brand-dark">
+        <h1 className="font-sans text-2xl font-bold uppercase tracking-[0.05em] admin-text">
           Dashboard
         </h1>
-        <p className="spec-label mt-1" style={{ color: 'rgba(0, 175, 215, 0.5)' }}>
-          PLATFORM OVERVIEW
-        </p>
+        <p className="spec-label mt-1">PLATFORM OVERVIEW</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -92,10 +90,10 @@ export default function Dashboard({ stats }: Props) {
               <span className="text-brand">{card.icon}</span>
               <span className="spec-label">{card.label}</span>
             </div>
-            <div className="font-sans text-4xl font-bold text-brand-dark">
+            <div className="font-sans text-4xl font-bold admin-text">
               {stats[card.key].toLocaleString()}
             </div>
-            <p className="mt-2 font-mono text-[10px] tracking-[0.15em] uppercase text-brand-dark/40">
+            <p className="mt-2 font-mono text-[11px] tracking-[0.15em] uppercase admin-text-muted">
               {card.sublabel}
             </p>
           </div>

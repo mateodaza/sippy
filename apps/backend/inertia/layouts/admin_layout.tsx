@@ -1,6 +1,6 @@
 import { Link } from '@adonisjs/inertia/react'
 import { router, usePage } from '@inertiajs/react'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useState, useEffect } from 'react'
 
 interface AuthUser {
   id: number
@@ -105,6 +105,73 @@ const navItems = [
   },
 ]
 
+function ThemeToggle() {
+  const [dark, setDark] = useState(false)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    setDark(document.documentElement.classList.contains('dark'))
+  }, [])
+
+  function toggle() {
+    const next = !dark
+    setDark(next)
+    document.documentElement.classList.toggle('dark', next)
+    localStorage.setItem('admin-theme', next ? 'dark' : 'light')
+  }
+
+  if (!mounted) return <div className="h-7 w-7" />
+
+  return (
+    <button
+      onClick={toggle}
+      className="flex h-7 w-7 items-center justify-center rounded transition-colors focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
+      style={{
+        borderColor: 'var(--admin-border)',
+        color: 'var(--admin-text-muted)',
+        border: '1px solid var(--admin-border)',
+      }}
+      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+      aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+    >
+      {dark ? (
+        <svg
+          className="h-3.5 w-3.5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+      ) : (
+        <svg
+          className="h-3.5 w-3.5"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
 function PollerStatus({
   indexerStatus,
   isAdmin,
@@ -128,8 +195,11 @@ function PollerStatus({
   }
 
   return (
-    <div className="mt-auto space-y-2 border-t border-brand/10 px-4 pt-4 pb-4">
-      <div className="flex items-center gap-2 font-mono text-[10px] tracking-wider uppercase text-brand-dark/50">
+    <div
+      className="mt-auto space-y-2 px-4 pt-4 pb-4"
+      style={{ borderTop: '1px solid var(--admin-border-subtle)' }}
+    >
+      <div className="flex items-center gap-2 font-mono text-[11px] tracking-wider uppercase admin-text-secondary">
         <span
           className={`indicator-dot ${
             indexerStatus.pollerAgo === null
@@ -138,31 +208,37 @@ function PollerStatus({
                 ? 'indicator-dot-danger'
                 : 'indicator-dot-active'
           }`}
+          aria-hidden="true"
         />
-        {indexerStatus.pollerAgo === null
-          ? 'Poller off'
-          : pollerStuck
-            ? `Poller stuck (${formatAge(indexerStatus.pollerAgo)})`
-            : `Poller OK (${formatAge(indexerStatus.pollerAgo)})`}
+        <span>
+          {indexerStatus.pollerAgo === null
+            ? 'Poller off'
+            : pollerStuck
+              ? `Poller stuck (${formatAge(indexerStatus.pollerAgo)})`
+              : `Poller OK (${formatAge(indexerStatus.pollerAgo)})`}
+        </span>
       </div>
       {pollerStuck && isAdmin && (
         <button
           onClick={handleRestart}
           disabled={restarting}
-          className="ml-4 font-mono text-[10px] tracking-wider uppercase text-danger hover:underline disabled:opacity-50"
+          className="ml-4 font-mono text-[11px] tracking-wider uppercase text-danger hover:underline disabled:opacity-50 focus-visible:ring-2 focus-visible:ring-danger/30 focus-visible:outline-none"
         >
           {restarting ? 'Restarting...' : 'Restart'}
         </button>
       )}
-      <div className="flex items-center gap-2 font-mono text-[10px] tracking-wider uppercase text-brand-dark/50">
+      <div className="flex items-center gap-2 font-mono text-[11px] tracking-wider uppercase admin-text-secondary">
         <span
           className={`indicator-dot ${
             indexerStatus.webhookAgo === null ? 'indicator-dot-muted' : 'indicator-dot-active'
           }`}
+          aria-hidden="true"
         />
-        {indexerStatus.webhookAgo === null
-          ? 'No webhooks'
-          : `Webhook ${formatAge(indexerStatus.webhookAgo)}`}
+        <span>
+          {indexerStatus.webhookAgo === null
+            ? 'No webhooks'
+            : `Webhook ${formatAge(indexerStatus.webhookAgo)}`}
+        </span>
       </div>
     </div>
   )
@@ -175,95 +251,195 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     indexerStatus: IndexerStatus | null
   }
   const currentPath = usePage().url
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   function isActive(href: string) {
     if (href === '/admin') return currentPath === '/admin'
     return currentPath.startsWith(href)
   }
 
-  return (
-    <div className="flex min-h-screen bg-white font-sans">
-      {/* Sidebar */}
-      <nav className="flex w-[240px] flex-col border-r border-brand/15 bg-white">
-        {/* Brand */}
-        <div className="border-b border-brand/10 px-5 py-5">
-          <div className="font-sans text-lg font-bold uppercase tracking-[0.1em] text-brand-dark">
+  const sidebarContent = (
+    <>
+      {/* Brand */}
+      <div
+        className="flex items-center justify-between px-5 py-5"
+        style={{ borderBottom: '1px solid var(--admin-border-subtle)' }}
+      >
+        <div>
+          <div className="font-sans text-lg font-bold uppercase tracking-[0.1em] admin-text">
             Sippy
           </div>
-          <div className="spec-label mt-0.5" style={{ color: 'rgba(0, 175, 215, 0.5)' }}>
-            ADMIN PANEL
-          </div>
+          <div className="spec-label mt-0.5">ADMIN PANEL</div>
         </div>
-
-        {/* Navigation */}
-        <div className="space-y-0.5 px-3 py-4">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center gap-3 rounded px-3 py-2.5 font-mono text-[11px] font-bold tracking-[0.12em] transition-colors ${
-                isActive(item.href)
-                  ? 'bg-brand-light text-brand'
-                  : 'text-brand-dark/50 hover:bg-brand-light/50 hover:text-brand'
-              }`}
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          {/* Close button — mobile only */}
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="flex h-7 w-7 items-center justify-center rounded md:hidden focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
+            style={{ border: '1px solid var(--admin-border)', color: 'var(--admin-text-muted)' }}
+            aria-label="Close navigation"
+          >
+            <svg
+              className="h-3.5 w-3.5"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <span className={isActive(item.href) ? 'text-brand' : 'text-brand-dark/40'}>
-                {item.icon}
-              </span>
-              {item.label}
-            </Link>
-          ))}
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
         </div>
+      </div>
 
-        {/* Indexer status */}
-        {indexerStatus && (
-          <PollerStatus indexerStatus={indexerStatus} isAdmin={auth?.role === 'admin'} />
-        )}
+      {/* Navigation */}
+      <div className="space-y-0.5 px-3 py-4">
+        {navItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`flex items-center gap-3 rounded px-3 py-2.5 font-mono text-[11px] font-bold tracking-[0.12em] transition-colors focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none ${
+              isActive(item.href)
+                ? 'bg-brand-light text-brand'
+                : 'admin-text-secondary hover:bg-brand-light/50 hover:text-brand'
+            }`}
+            onClick={() => setSidebarOpen(false)}
+          >
+            <span
+              className={isActive(item.href) ? 'text-brand' : 'admin-text-muted'}
+              aria-hidden="true"
+            >
+              {item.icon}
+            </span>
+            {item.label}
+          </Link>
+        ))}
+      </div>
 
-        {/* User footer */}
-        <div className={`${indexerStatus ? '' : 'mt-auto '}border-t border-brand/10 px-4 py-4`}>
-          {auth && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded border border-brand/20 font-mono text-[10px] font-bold tracking-wider text-brand">
-                  {auth.initials}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-brand-dark">
-                    {auth.fullName || auth.email}
-                  </div>
-                  <div className="spec-label" style={{ color: 'rgba(0, 175, 215, 0.5)' }}>
-                    {auth.role.toUpperCase()}
-                  </div>
-                </div>
-              </div>
-              <Link
-                href="/admin/logout"
-                method="post"
-                as="button"
-                className="w-full rounded border border-brand/15 px-3 py-2 font-mono text-[10px] font-bold tracking-[0.12em] uppercase text-brand-dark/50 transition-colors hover:border-brand/30 hover:text-brand"
+      {/* Indexer status */}
+      {indexerStatus && (
+        <PollerStatus indexerStatus={indexerStatus} isAdmin={auth?.role === 'admin'} />
+      )}
+
+      {/* User footer */}
+      <div
+        className={`${indexerStatus ? '' : 'mt-auto '}px-4 py-4`}
+        style={{ borderTop: '1px solid var(--admin-border-subtle)' }}
+      >
+        {auth && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div
+                className="flex h-8 w-8 items-center justify-center rounded font-mono text-[10px] font-bold tracking-wider text-brand"
+                style={{ border: '1px solid var(--admin-border)' }}
               >
-                SIGN OUT
-              </Link>
+                {auth.initials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium admin-text">
+                  {auth.fullName || auth.email}
+                </div>
+                <div className="spec-label">{auth.role.toUpperCase()}</div>
+              </div>
             </div>
-          )}
-        </div>
+            <Link
+              href="/admin/logout"
+              method="post"
+              as="button"
+              className="w-full rounded px-3 py-2 font-mono text-[11px] font-bold tracking-[0.12em] uppercase admin-text-secondary transition-colors hover:text-brand focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
+              style={{ border: '1px solid var(--admin-border)' }}
+            >
+              SIGN OUT
+            </Link>
+          </div>
+        )}
+      </div>
+    </>
+  )
+
+  return (
+    <div className="flex min-h-screen font-sans" style={{ backgroundColor: 'var(--admin-bg)' }}>
+      {/* Mobile hamburger */}
+      <div
+        className="fixed top-0 left-0 z-40 flex h-14 w-full items-center gap-3 px-4 md:hidden"
+        style={{
+          backgroundColor: 'var(--admin-surface)',
+          borderBottom: '1px solid var(--admin-border-subtle)',
+        }}
+      >
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="flex h-9 w-9 items-center justify-center rounded focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
+          style={{ border: '1px solid var(--admin-border)', color: 'var(--admin-text-muted)' }}
+          aria-label="Open navigation"
+        >
+          <svg
+            className="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <span className="font-sans text-sm font-bold uppercase tracking-[0.1em] admin-text">
+          Sippy
+        </span>
+      </div>
+
+      {/* Mobile sidebar overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+        />
+      )}
+
+      {/* Sidebar */}
+      <nav
+        aria-label="Admin navigation"
+        className={`fixed inset-y-0 left-0 z-50 flex w-[260px] flex-col transition-transform duration-200 md:static md:w-[240px] md:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+        style={{
+          borderRight: '1px solid var(--admin-border)',
+          backgroundColor: 'var(--admin-surface)',
+        }}
+      >
+        {sidebarContent}
       </nav>
 
       {/* Main content */}
-      <main className="flex-1 grid-bg p-8">
+      <main className="flex-1 grid-bg p-4 pt-18 md:p-8 md:pt-8">
         {/* Flash messages */}
         {flash?.success && (
-          <div className="mb-6 flex items-center gap-3 border border-crypto/30 bg-crypto-light px-5 py-4">
-            <span className="indicator-dot indicator-dot-active" />
+          <div
+            className="mb-6 flex items-center gap-3 border border-crypto/30 bg-crypto-light px-5 py-4"
+            role="alert"
+          >
+            <span className="indicator-dot indicator-dot-active" aria-hidden="true" />
             <p className="font-mono text-xs font-bold tracking-wider uppercase text-crypto-hover">
               {flash.success}
             </p>
           </div>
         )}
         {flash?.error && (
-          <div className="mb-6 flex items-center gap-3 border border-danger/30 bg-danger-light px-5 py-4">
-            <span className="indicator-dot indicator-dot-danger" />
+          <div
+            className="mb-6 flex items-center gap-3 border border-danger/30 bg-danger-light px-5 py-4"
+            role="alert"
+          >
+            <span className="indicator-dot indicator-dot-danger" aria-hidden="true" />
             <p className="font-mono text-xs font-bold tracking-wider uppercase text-danger">
               {flash.error}
             </p>

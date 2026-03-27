@@ -23,27 +23,49 @@
   --font-mono: 'Space Mono', monospace;
 }
 
+/* ── Light/dark surface variables ── */
+:root {
+  --admin-bg: #ffffff;
+  --admin-surface: #ffffff;
+  --admin-text: #0d0d1a;
+  --admin-text-secondary: rgba(13, 13, 26, 0.65);
+  --admin-text-muted: rgba(13, 13, 26, 0.45);
+  --admin-border: rgba(0, 175, 215, 0.15);
+  --admin-border-subtle: rgba(0, 175, 215, 0.08);
+}
+
+.dark {
+  --admin-bg: #000000;
+  --admin-surface: #0a0a0f;
+  --admin-text: #ffffff;
+  --admin-text-secondary: rgba(255, 255, 255, 0.7);
+  --admin-text-muted: rgba(255, 255, 255, 0.45);
+  --admin-border: rgba(0, 175, 215, 0.25);
+  --admin-border-subtle: rgba(0, 175, 215, 0.1);
+}
+
 /* Equipment panel frame — double border */
 .panel-frame {
-  border: 1px solid var(--color-brand);
+  border: 1px solid var(--admin-border);
   position: relative;
+  background: var(--admin-surface);
 }
 .panel-frame::after {
   content: '';
   position: absolute;
   inset: 4px;
-  border: 1px solid var(--color-brand);
+  border: 1px solid var(--admin-border);
   pointer-events: none;
   transition: border-color 0.15s;
 }
 .panel-frame:hover::after {
-  border-color: rgba(0, 175, 215, 0.5);
+  border-color: var(--color-brand);
 }
 
 /* Spec label */
 .spec-label {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.15em;
   text-transform: uppercase;
@@ -52,9 +74,10 @@
 
 /* Grid overlay background */
 .grid-bg {
+  background-color: var(--admin-bg);
   background-image:
-    linear-gradient(to right, rgba(0, 175, 215, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 175, 215, 0.04) 1px, transparent 1px);
+    linear-gradient(to right, var(--admin-border-subtle) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--admin-border-subtle) 1px, transparent 1px);
   background-size: 60px 60px;
 }
 
@@ -79,4 +102,28 @@
 }
 .indicator-dot-muted {
   background: #9ca3af;
+}
+
+/* Admin text helpers using CSS variables for dark mode */
+.admin-text {
+  color: var(--admin-text);
+}
+.admin-text-secondary {
+  color: var(--admin-text-secondary);
+}
+.admin-text-muted {
+  color: var(--admin-text-muted);
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

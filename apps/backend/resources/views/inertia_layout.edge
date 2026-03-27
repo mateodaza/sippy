@@ -8,6 +8,9 @@
     @inertiaHead()
     @viteReactRefresh()
     @vite(['inertia/app/app.tsx'])
+    <script>
+      try{var t=localStorage.getItem('admin-theme');if(t==='dark'||(t===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')}catch(e){}
+    </script>
   </head>
   <body>
     @inertia()

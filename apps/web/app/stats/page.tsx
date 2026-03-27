@@ -29,6 +29,7 @@ interface StatsData {
   totalVolume: string
   totalTransfers: number
   activeWallets: number
+  registeredUsers: number
   dailyVolumes: DailyVolume[]
 }
 
@@ -84,6 +85,11 @@ export default async function StatsPage() {
       sublabel: 'USDC ON ARBITRUM',
     },
     {
+      label: 'REGISTERED USERS',
+      value: formatCompact(stats.registeredUsers),
+      sublabel: 'WALLET HOLDERS',
+    },
+    {
       label: 'TRANSFERS',
       value: formatCompact(stats.totalTransfers),
       sublabel: 'ALL-TIME',
@@ -91,7 +97,7 @@ export default async function StatsPage() {
     {
       label: 'ACTIVE WALLETS',
       value: formatCompact(stats.activeWallets),
-      sublabel: 'UNIQUE ADDRESSES',
+      sublabel: 'WITH TRANSACTIONS',
     },
   ]
 
@@ -101,13 +107,13 @@ export default async function StatsPage() {
       <header className="border-b border-[var(--border-default)] px-4 py-6 sm:px-8 sm:py-10">
         <div className="mx-auto max-w-6xl">
           <div className="flex items-center gap-3 mb-2">
-            <span className="indicator-dot indicator-dot-active" />
+            <span className="indicator-dot indicator-dot-active" aria-hidden="true" />
             <span className="spec-label spec-label-muted">LIVE</span>
           </div>
           <h1 className="font-display text-3xl font-bold uppercase tracking-wide text-[var(--text-primary)] sm:text-4xl">
             Network Stats
           </h1>
-          <p className="mt-2 font-mono text-xs tracking-widest uppercase text-[var(--text-muted)]">
+          <p className="mt-2 font-mono text-xs tracking-widest uppercase text-[var(--text-secondary)]">
             SIPPY // ARBITRUM ONE // AGGREGATE DATA
           </p>
         </div>
@@ -115,14 +121,14 @@ export default async function StatsPage() {
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-8 sm:py-12">
         {/* KPI Panels */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 sm:gap-6 mb-8 sm:mb-12">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 sm:gap-6 mb-8 sm:mb-12">
           {kpis.map((kpi) => (
             <div key={kpi.label} className="panel-frame rounded-xl p-6 sm:p-8">
               <p className="spec-label mb-4">{kpi.label}</p>
               <p className="font-display text-4xl font-bold text-[var(--text-primary)] sm:text-5xl">
                 {kpi.value}
               </p>
-              <p className="mt-2 font-mono text-[10px] tracking-[0.2em] uppercase text-[var(--text-muted)]">
+              <p className="mt-2 font-mono text-[11px] tracking-[0.15em] uppercase text-[var(--text-secondary)]">
                 {kpi.sublabel}
               </p>
             </div>
@@ -133,7 +139,7 @@ export default async function StatsPage() {
         <div className="panel-frame rounded-xl p-6 sm:p-8">
           <div className="flex items-center justify-between mb-6">
             <p className="spec-label">DAILY VOLUME</p>
-            <p className="font-mono text-[10px] tracking-[0.15em] uppercase text-[var(--text-muted)]">
+            <p className="font-mono text-[11px] tracking-[0.15em] uppercase text-[var(--text-secondary)]">
               LAST 30 DAYS
             </p>
           </div>
@@ -151,13 +157,19 @@ export default async function StatsPage() {
                       key={row.date}
                       className="group relative flex-1 flex flex-col items-center justify-end"
                       style={{ height: '100%' }}
+                      tabIndex={0}
+                      role="img"
+                      aria-label={`${formatUSDC(row.totalUsdcVolume)}, ${row.transferCount} transfers on ${row.date}`}
                     >
-                      {/* Hover tooltip */}
-                      <div className="pointer-events-none absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 z-10">
-                        <div className="whitespace-nowrap rounded bg-brand-dark px-2 py-1 font-mono text-[10px] text-white dark:bg-white dark:text-brand-dark">
+                      {/* Hover/focus tooltip */}
+                      <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 z-10">
+                        <div
+                          className="whitespace-nowrap rounded-md bg-[var(--text-primary)] px-3 py-1.5 font-mono text-[11px] font-bold shadow-lg"
+                          style={{ color: 'var(--bg-primary)' }}
+                        >
                           {formatUSDC(row.totalUsdcVolume)}
-                          <span className="text-[var(--text-muted)] ml-1">
-                            ({row.transferCount} txs)
+                          <span className="ml-1.5 font-normal opacity-70">
+                            {row.transferCount} txs
                           </span>
                         </div>
                       </div>
@@ -172,7 +184,7 @@ export default async function StatsPage() {
 
               {/* X-axis labels */}
               <div className="flex justify-between">
-                <span className="font-mono text-[9px] tracking-wider text-[var(--text-muted)]">
+                <span className="font-mono text-[11px] tracking-wider text-[var(--text-secondary)]">
                   {stats.dailyVolumes.length > 0
                     ? new Date(stats.dailyVolumes[0].date + 'T00:00:00').toLocaleDateString(
                         'en-US',
@@ -180,7 +192,7 @@ export default async function StatsPage() {
                       )
                     : ''}
                 </span>
-                <span className="font-mono text-[9px] tracking-wider text-[var(--text-muted)]">
+                <span className="font-mono text-[11px] tracking-wider text-[var(--text-secondary)]">
                   {stats.dailyVolumes.length > 0
                     ? new Date(
                         stats.dailyVolumes[stats.dailyVolumes.length - 1].date + 'T00:00:00'
@@ -191,7 +203,7 @@ export default async function StatsPage() {
             </div>
           ) : (
             <div className="flex items-center justify-center py-16">
-              <p className="font-mono text-xs text-[var(--text-muted)]">NO DATA YET</p>
+              <p className="font-mono text-xs text-[var(--text-secondary)]">NO DATA YET</p>
             </div>
           )}
         </div>
@@ -200,14 +212,14 @@ export default async function StatsPage() {
         <div className="mt-8 sm:mt-12 border-t border-[var(--border-default)] pt-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <span className="font-mono text-[9px] tracking-[0.2em] uppercase text-[var(--text-muted)]">
+              <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-[var(--text-secondary)]">
                 NETWORK: ARBITRUM ONE
               </span>
-              <span className="font-mono text-[9px] tracking-[0.2em] uppercase text-[var(--text-muted)]">
+              <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-[var(--text-secondary)]">
                 TOKEN: USDC
               </span>
             </div>
-            <span className="font-mono text-[9px] tracking-[0.2em] uppercase text-[var(--text-muted)]">
+            <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-[var(--text-secondary)]">
               SIPPY.LAT // {new Date().getFullYear()}
             </span>
           </div>
