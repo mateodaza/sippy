@@ -33,24 +33,32 @@ export const landingTranslations: Record<string, string> = {
   'landing.step2.desc': 'Add funds instantly using local payment methods, cards, or crypto.',
   'landing.step3.num': '03',
   'landing.step3.title': 'Send to anyone',
-  'landing.step3.desc': 'Text an amount and a phone number. They receive digital dollars instantly.',
+  'landing.step3.desc':
+    'Text an amount and a phone number. They receive digital dollars instantly.',
   'landing.step1.desc.desktop': 'Open WhatsApp and say hi.\nNo app to download, no bank to visit.',
   'landing.step2.desc.desktop': 'Add funds instantly\nusing local cards, or crypto.',
-  'landing.step3.desc.desktop': 'Text an amount and a phone number.\nThey receive digital dollars instantly.',
-  'landing.step3.note': 'Non-custodial wallets linked to phone numbers.\nSub-second settlement on Arbitrum. No app required.',
+  'landing.step3.desc.desktop':
+    'Text an amount and a phone number.\nThey receive digital dollars instantly.',
+  'landing.step3.note':
+    'Non-custodial wallets linked to phone numbers.\nSub-second settlement on Arbitrum. No app required.',
   'landing.hood.title': 'Under the Hood',
   'landing.hood.desc': 'Built on robust blockchain infrastructure for security and speed.',
   'landing.spec1.title': 'USDC Native',
-  'landing.spec1.desc': 'Transactions settle in USDC, ensuring 1:1 backing with US Dollars. Fully transparent, fully audited, fully liquid.',
+  'landing.spec1.desc':
+    'Transactions settle in USDC, ensuring 1:1 backing with US Dollars. Fully transparent, fully audited, fully liquid.',
   'landing.spec1.tag1': 'AUTO // SETTLE',
   'landing.spec1.tag2': 'STABLE // 1:1',
   'landing.spec2.title': 'Arbitrum L2 Speed',
   'landing.spec2.desc': 'Sub-second transaction finality and near-zero fees on Arbitrum.',
   'landing.spec3.title': 'Non-Custodial',
-  'landing.spec3.desc': 'Smart contract wallets linked securely to your phone number. You own your keys.',
+  'landing.spec3.desc':
+    'Smart contract wallets linked securely to your phone number. You own your keys.',
   'landing.spec4.title': 'Agentic AI',
-  'landing.spec4.desc': 'An AI agent that understands how you talk, not the other way around. Just text what you need.',
+  'landing.spec4.desc':
+    'An AI agent that understands how you talk, not the other way around. Just text what you need.',
   'landing.everyone.title': 'Built for Everyone',
+  'landing.everyone.label': 'USE CASES',
+  'landing.everyone.desc': 'One message to move money. No bank, no app, no borders.',
   'landing.pill.1': 'Remittance',
   'landing.pill.2': 'Freelancer Pay',
   'landing.pill.3': 'Splitting Bills',
@@ -58,6 +66,7 @@ export const landingTranslations: Record<string, string> = {
   'landing.pill.5': 'Cross-border Trade',
   'landing.pill.6': 'Family Support',
   'landing.crt.footer': "whatsapp this number. that's it.",
+  'landing.cta.label': 'GET STARTED',
   'landing.cta.title': 'Get Started',
   'landing.cta.desc': 'Open WhatsApp, say hi, and start moving money in seconds.',
   'landing.cta.button': 'Start on WhatsApp',
@@ -105,27 +114,38 @@ export const landingTranslations: Record<string, string> = {
   'es.landing.step1.desc': 'Abre WhatsApp y saluda. Sin descargar apps, sin ir al banco.',
   'es.landing.step2.num': '02',
   'es.landing.step2.title': 'Fondea tu billetera',
-  'es.landing.step2.desc': 'Agrega fondos al instante con m\u00e9todos de pago locales, tarjetas o crypto.',
+  'es.landing.step2.desc':
+    'Agrega fondos al instante con m\u00e9todos de pago locales, tarjetas o crypto.',
   'es.landing.step3.num': '03',
   'es.landing.step3.title': 'Env\u00eda a cualquiera',
-  'es.landing.step3.desc': 'Manda un monto y un n\u00famero de tel\u00e9fono. Reciben d\u00f3lares digitales al instante.',
+  'es.landing.step3.desc':
+    'Manda un monto y un n\u00famero de tel\u00e9fono. Reciben d\u00f3lares digitales al instante.',
   'es.landing.step1.desc.desktop': 'Abre WhatsApp y saluda.\nSin descargar apps, sin ir al banco.',
   'es.landing.step2.desc.desktop': 'Agrega fondos al instante\ncon tarjetas locales o crypto.',
-  'es.landing.step3.desc.desktop': 'Manda un monto y un n\u00famero de tel\u00e9fono.\nReciben d\u00f3lares digitales al instante.',
-  'es.landing.step3.note': 'Billeteras non-custodial vinculadas a n\u00fameros de tel\u00e9fono.\nLiquidaci\u00f3n en menos de un segundo en Arbitrum. Sin app.',
+  'es.landing.step3.desc.desktop':
+    'Manda un monto y un n\u00famero de tel\u00e9fono.\nReciben d\u00f3lares digitales al instante.',
+  'es.landing.step3.note':
+    'Billeteras non-custodial vinculadas a n\u00fameros de tel\u00e9fono.\nLiquidaci\u00f3n en menos de un segundo en Arbitrum. Sin app.',
   'es.landing.hood.title': 'Por Dentro',
-  'es.landing.hood.desc': 'Construido sobre infraestructura blockchain robusta para seguridad y velocidad.',
+  'es.landing.hood.desc':
+    'Construido sobre infraestructura blockchain robusta para seguridad y velocidad.',
   'es.landing.spec1.title': 'USDC Nativo',
-  'es.landing.spec1.desc': 'Las transacciones liquidan en USDC, con respaldo 1:1 en d\u00f3lares estadounidenses. Totalmente transparente, auditado y l\u00edquido.',
+  'es.landing.spec1.desc':
+    'Las transacciones liquidan en USDC, con respaldo 1:1 en d\u00f3lares estadounidenses. Totalmente transparente, auditado y l\u00edquido.',
   'es.landing.spec1.tag1': 'AUTO // LIQUIDAR',
   'es.landing.spec1.tag2': 'ESTABLE // 1:1',
   'es.landing.spec2.title': 'Velocidad Arbitrum L2',
-  'es.landing.spec2.desc': 'Finalidad de transacci\u00f3n en menos de un segundo y comisiones casi nulas en Arbitrum.',
+  'es.landing.spec2.desc':
+    'Finalidad de transacci\u00f3n en menos de un segundo y comisiones casi nulas en Arbitrum.',
   'es.landing.spec3.title': 'Non-Custodial',
-  'es.landing.spec3.desc': 'Billeteras de contrato inteligente vinculadas de forma segura a tu n\u00famero. T\u00fa controlas tus llaves.',
+  'es.landing.spec3.desc':
+    'Billeteras de contrato inteligente vinculadas de forma segura a tu n\u00famero. T\u00fa controlas tus llaves.',
   'es.landing.spec4.title': 'IA Agente',
-  'es.landing.spec4.desc': 'Un agente de IA que entiende c\u00f3mo hablas, no al rev\u00e9s. Solo manda un mensaje con lo que necesitas.',
+  'es.landing.spec4.desc':
+    'Un agente de IA que entiende c\u00f3mo hablas, no al rev\u00e9s. Solo manda un mensaje con lo que necesitas.',
   'es.landing.everyone.title': 'Hecho para Todos',
+  'es.landing.everyone.label': 'CASOS DE USO',
+  'es.landing.everyone.desc': 'Un mensaje para mover plata. Sin banco, sin app, sin fronteras.',
   'es.landing.pill.1': 'Remesas',
   'es.landing.pill.2': 'Pago Freelance',
   'es.landing.pill.3': 'Dividir Cuentas',
@@ -133,10 +153,12 @@ export const landingTranslations: Record<string, string> = {
   'es.landing.pill.5': 'Comercio Transfronterizo',
   'es.landing.pill.6': 'Apoyo Familiar',
   'es.landing.crt.footer': 'manda WhatsApp a este n\u00famero. eso es todo.',
+  'es.landing.cta.label': 'EMPIEZA',
   'es.landing.cta.title': 'Empieza Ya',
   'es.landing.cta.desc': 'Abre WhatsApp, saluda y empieza a mover plata en segundos.',
   'es.landing.cta.button': 'Empezar en WhatsApp',
-  'es.landing.footer.desc': 'Agente de d\u00f3lares digitales nativo de WhatsApp\npara Latinoam\u00e9rica',
+  'es.landing.footer.desc':
+    'Agente de d\u00f3lares digitales nativo de WhatsApp\npara Latinoam\u00e9rica',
   'es.landing.footer.features': '/funciones',
   'es.landing.footer.fund': '/fondear',
   'es.landing.footer.about': '/nosotros',
@@ -180,27 +202,40 @@ export const landingTranslations: Record<string, string> = {
   'pt.landing.step1.desc': 'Abra o WhatsApp e mande um oi. Sem baixar app, sem ir ao banco.',
   'pt.landing.step2.num': '02',
   'pt.landing.step2.title': 'Carregue sua carteira',
-  'pt.landing.step2.desc': 'Adicione fundos na hora com m\u00e9todos de pagamento locais, cart\u00f5es ou crypto.',
+  'pt.landing.step2.desc':
+    'Adicione fundos na hora com m\u00e9todos de pagamento locais, cart\u00f5es ou crypto.',
   'pt.landing.step3.num': '03',
   'pt.landing.step3.title': 'Envie pra qualquer pessoa',
-  'pt.landing.step3.desc': 'Mande um valor e um n\u00famero de telefone. A pessoa recebe d\u00f3lares digitais na hora.',
-  'pt.landing.step1.desc.desktop': 'Abra o WhatsApp e mande um oi.\nSem baixar app, sem ir ao banco.',
+  'pt.landing.step3.desc':
+    'Mande um valor e um n\u00famero de telefone. A pessoa recebe d\u00f3lares digitais na hora.',
+  'pt.landing.step1.desc.desktop':
+    'Abra o WhatsApp e mande um oi.\nSem baixar app, sem ir ao banco.',
   'pt.landing.step2.desc.desktop': 'Adicione fundos na hora\ncom cart\u00f5es locais ou crypto.',
-  'pt.landing.step3.desc.desktop': 'Mande um valor e um n\u00famero de telefone.\nA pessoa recebe d\u00f3lares digitais na hora.',
-  'pt.landing.step3.note': 'Carteiras non-custodial vinculadas a n\u00fameros de telefone.\nLiquida\u00e7\u00e3o em menos de um segundo na Arbitrum. Sem app.',
+  'pt.landing.step3.desc.desktop':
+    'Mande um valor e um n\u00famero de telefone.\nA pessoa recebe d\u00f3lares digitais na hora.',
+  'pt.landing.step3.note':
+    'Carteiras non-custodial vinculadas a n\u00fameros de telefone.\nLiquida\u00e7\u00e3o em menos de um segundo na Arbitrum. Sem app.',
   'pt.landing.hood.title': 'Por Dentro',
-  'pt.landing.hood.desc': 'Constru\u00eddo sobre infraestrutura blockchain robusta para seguran\u00e7a e velocidade.',
+  'pt.landing.hood.desc':
+    'Constru\u00eddo sobre infraestrutura blockchain robusta para seguran\u00e7a e velocidade.',
   'pt.landing.spec1.title': 'USDC Nativo',
-  'pt.landing.spec1.desc': 'Transa\u00e7\u00f5es liquidam em USDC, garantindo lastro 1:1 com d\u00f3lares americanos. Totalmente transparente, auditado e l\u00edquido.',
+  'pt.landing.spec1.desc':
+    'Transa\u00e7\u00f5es liquidam em USDC, garantindo lastro 1:1 com d\u00f3lares americanos. Totalmente transparente, auditado e l\u00edquido.',
   'pt.landing.spec1.tag1': 'AUTO // LIQUIDAR',
   'pt.landing.spec1.tag2': 'EST\u00c1VEL // 1:1',
   'pt.landing.spec2.title': 'Velocidade Arbitrum L2',
-  'pt.landing.spec2.desc': 'Finalidade de transa\u00e7\u00e3o em menos de um segundo e taxas quase zero na Arbitrum.',
+  'pt.landing.spec2.desc':
+    'Finalidade de transa\u00e7\u00e3o em menos de um segundo e taxas quase zero na Arbitrum.',
   'pt.landing.spec3.title': 'Non-Custodial',
-  'pt.landing.spec3.desc': 'Carteiras de contrato inteligente vinculadas com seguran\u00e7a ao seu n\u00famero. Voc\u00ea controla suas chaves.',
+  'pt.landing.spec3.desc':
+    'Carteiras de contrato inteligente vinculadas com seguran\u00e7a ao seu n\u00famero. Voc\u00ea controla suas chaves.',
   'pt.landing.spec4.title': 'IA Agente',
-  'pt.landing.spec4.desc': 'Um agente de IA que entende como voc\u00ea fala, n\u00e3o o contr\u00e1rio. S\u00f3 mande uma mensagem com o que precisa.',
+  'pt.landing.spec4.desc':
+    'Um agente de IA que entende como voc\u00ea fala, n\u00e3o o contr\u00e1rio. S\u00f3 mande uma mensagem com o que precisa.',
   'pt.landing.everyone.title': 'Feito pra Todo Mundo',
+  'pt.landing.everyone.label': 'CASOS DE USO',
+  'pt.landing.everyone.desc':
+    'Uma mensagem pra mover dinheiro. Sem banco, sem app, sem fronteiras.',
   'pt.landing.pill.1': 'Remessas',
   'pt.landing.pill.2': 'Pagamento Freelancer',
   'pt.landing.pill.3': 'Rachar Contas',
@@ -208,10 +243,12 @@ export const landingTranslations: Record<string, string> = {
   'pt.landing.pill.5': 'Com\u00e9rcio Internacional',
   'pt.landing.pill.6': 'Apoio Familiar',
   'pt.landing.crt.footer': 'manda WhatsApp pra esse n\u00famero. s\u00f3 isso.',
+  'pt.landing.cta.label': 'COMECE',
   'pt.landing.cta.title': 'Comece Agora',
   'pt.landing.cta.desc': 'Abra o WhatsApp, mande um oi e comece a movimentar dinheiro em segundos.',
   'pt.landing.cta.button': 'Comece no WhatsApp',
-  'pt.landing.footer.desc': 'Agente de d\u00f3lares digitais nativo do WhatsApp\npara a Am\u00e9rica Latina',
+  'pt.landing.footer.desc':
+    'Agente de d\u00f3lares digitais nativo do WhatsApp\npara a Am\u00e9rica Latina',
   'pt.landing.footer.features': '/recursos',
   'pt.landing.footer.fund': '/financiar',
   'pt.landing.footer.about': '/sobre',
@@ -228,4 +265,4 @@ export const landingTranslations: Record<string, string> = {
   'pt.landing.footer.terms': 'Termos',
   'pt.landing.footer.privacy': 'Privacidade',
   'pt.landing.footer.version': 'v0.1.0 // LATAM // 2026',
-};
+}

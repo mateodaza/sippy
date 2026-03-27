@@ -1,13 +1,18 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Sippy Stats - Live On-Chain Analytics',
+  title: 'Sippy Stats — Live On-Chain Analytics',
   description:
     'Real-time aggregate statistics for the Sippy network: USDC volume, transfers, and active wallets on Arbitrum.',
   openGraph: {
-    title: 'Sippy Stats - Live On-Chain Analytics',
-    description: 'Real-time aggregate statistics for the Sippy network on Arbitrum.',
+    title: 'Sippy Stats — Live On-Chain Analytics',
+    description: 'Live aggregate data: USDC volume, transfers, and active wallets on Arbitrum.',
     type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Sippy Stats — Live On-Chain Analytics',
+    description: 'Live aggregate data: USDC volume, transfers, and active wallets on Arbitrum.',
   },
 }
 

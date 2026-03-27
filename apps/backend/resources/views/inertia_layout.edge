@@ -1,15 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title inertia>Sippy Admin</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title inertia>
+      Sippy Admin
+    </title>
 
     @inertiaHead()
     @viteReactRefresh()
     @vite(['inertia/app/app.tsx'])
     <script>
-      try{var t=localStorage.getItem('admin-theme');if(t==='dark'||(t===null&&matchMedia('(prefers-color-scheme:dark)').matches))document.documentElement.classList.add('dark')}catch(e){}
+      try {
+        var t = localStorage.getItem("admin-theme");
+        if (t === "dark" || t === null && matchMedia("(prefers-color-scheme:dark)").matches) document.documentElement.classList.add("dark");
+      } catch (e) {}
     </script>
   </head>
   <body>

@@ -34,18 +34,16 @@ export default async function HomePage() {
       {/* ── Floating Nav ── */}
       <ScrollNav>
         <div className="max-w-7xl mx-auto px-3 sm:px-8 lg:px-12 py-3 sm:py-4 flex justify-between items-center gap-2 relative">
-          {/* Logo badge — equipment panel style */}
+          {/* Logo S-mark */}
           <a href="/" className="pointer-events-auto flex items-center gap-3 shrink-0">
-            <div className="bg-brand-primary dark:bg-black w-8 h-10 sm:w-10 sm:h-14 flex items-center justify-center dark:border dark:border-brand-primary/20">
-              <Image
-                src="/images/logos/sippy-s-mark-white.svg"
-                alt="Sippy"
-                width={18}
-                height={32}
-                className="w-3.5 sm:w-[18px] h-auto"
-                priority
-              />
-            </div>
+            <Image
+              src="/images/logos/sippy-s-mark-cheetah.svg"
+              alt="Sippy"
+              width={18}
+              height={32}
+              className="w-4 sm:w-5 h-auto"
+              priority
+            />
           </a>
           {/* Centered wordmark — absolute center on viewport */}
           <div className="pointer-events-auto absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-1 bg-[var(--bg-wordmark-blur)] backdrop-blur-md group-data-[scrolled]/nav:bg-transparent group-data-[scrolled]/nav:backdrop-blur-none transition-all duration-300">
@@ -54,15 +52,7 @@ export default async function HomePage() {
               alt="Sippy"
               width={120}
               height={34}
-              className="w-[72px] sm:w-[120px] h-auto dark:hidden"
-              priority
-            />
-            <Image
-              src="/images/logos/sippy-wordmark-white.svg"
-              alt="Sippy"
-              width={120}
-              height={34}
-              className="w-[72px] sm:w-[120px] h-auto hidden dark:block"
+              className="w-[72px] sm:w-[120px] h-auto"
               priority
             />
           </div>
@@ -84,9 +74,9 @@ export default async function HomePage() {
         {/* ── Hero ── */}
         <section className="relative h-screen max-h-[900px] pt-16 sm:pt-20 pb-8 sm:pb-12 overflow-hidden flex flex-col justify-center items-center bg-[var(--bg-primary)] px-2 sm:px-6 lg:px-8 registration-marks">
           {/* Triple nested border frames — rounded outer, echoing equipment housing */}
-          <div className="absolute inset-2 sm:inset-8 lg:inset-10 pointer-events-none border border-brand-primary/30 z-0 rounded-xl sm:rounded-2xl" />
-          <div className="absolute inset-3 sm:inset-9 lg:inset-11 pointer-events-none border border-brand-primary/50 z-0 rounded-[0.7rem] sm:rounded-[1.35rem]" />
-          <div className="absolute inset-4 sm:inset-10 lg:inset-12 pointer-events-none border border-brand-primary/80 z-0 rounded-[0.6rem] sm:rounded-[1.2rem]" />
+          <div className="absolute inset-2 sm:inset-8 lg:inset-10 pointer-events-none border border-brand-primary/30 dark:border-brand-primary/15 z-0 rounded-xl sm:rounded-2xl" />
+          <div className="absolute inset-3 sm:inset-9 lg:inset-11 pointer-events-none border border-brand-primary/50 dark:border-brand-primary/25 z-0 rounded-[0.7rem] sm:rounded-[1.35rem]" />
+          <div className="absolute inset-4 sm:inset-10 lg:inset-12 pointer-events-none border border-brand-primary/80 dark:border-brand-primary/40 z-0 rounded-[0.6rem] sm:rounded-[1.2rem]" />
 
           {/* Status indicator */}
           <div className="absolute bottom-14 right-14 hidden lg:block z-20">
@@ -96,19 +86,18 @@ export default async function HomePage() {
             </span>
           </div>
 
-          {/* Hero content */}
+          {/* Hero content — animated gradient streaks */}
           <div className="relative z-10 w-full max-w-[75vw] sm:max-w-none sm:px-14 lg:px-16 mx-auto flex flex-col items-center text-center">
-            {/* Main hero panel — analog tape effect */}
             <div className="w-full relative p-1 min-h-[70vh] sm:min-h-0 flex flex-col dark:shadow-[0_0_80px_rgba(0,175,215,0.15),0_0_160px_rgba(0,175,215,0.08)]">
               <HeroGradient />
-              <div className="w-full relative z-10 border border-white/30 dark:border-brand-primary/40 px-6 py-10 sm:px-14 sm:py-12 lg:px-20 lg:py-14 flex-1 flex flex-col justify-center">
+              <div className="w-full relative z-10 border border-brand-primary/30 dark:border-brand-primary/40 px-6 py-10 sm:px-14 sm:py-12 lg:px-20 lg:py-14 flex-1 flex flex-col justify-center">
                 <BlurFade delay={0.1} yOffset={12}>
-                  <h1 className="font-display font-bold text-[2.5rem] sm:text-6xl lg:text-8xl tracking-[-0.04em] text-white mb-4 sm:mb-6 leading-[0.9]">
+                  <h1 className="font-display font-bold text-[2.5rem] sm:text-7xl lg:text-8xl tracking-[-0.04em] text-[var(--text-primary)] mb-4 sm:mb-6 leading-[0.9]">
                     {t('landing.hero.line1', lang)} <br /> {t('landing.hero.line2', lang)}
                   </h1>
                 </BlurFade>
                 <BlurFade delay={0.3} yOffset={8}>
-                  <p className="text-white/90 text-base sm:text-xl md:text-2xl font-light mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed">
+                  <p className="text-[var(--text-secondary)] text-lg sm:text-2xl md:text-3xl font-light mb-6 sm:mb-8 max-w-2xl mx-auto leading-relaxed">
                     {t('landing.hero.sub1', lang)}
                     <br />
                     {t('landing.hero.sub2', lang)}
@@ -120,13 +109,13 @@ export default async function HomePage() {
                       href={`https://wa.me/${SIPPY_NUMBER.replace(/\D/g, '')}?text=${encodeURIComponent('Hey Sippy!')}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="bg-white text-brand-primary dark:text-black px-6 py-3.5 sm:px-8 sm:py-4 font-bold text-base sm:text-lg hover:bg-brand-primary-light dark:hover:bg-white/90 transition-all border border-white/30 dark:shadow-[0_0_24px_rgba(255,255,255,0.08)] focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-primary text-center"
+                      className="bg-brand-primary text-white px-6 py-3.5 sm:px-8 sm:py-4 font-bold text-lg sm:text-xl hover:bg-brand-primary-hover transition-all focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)] text-center"
                     >
                       {t('landing.hero.openWhatsapp', lang)}
                     </a>
                     <a
                       href="https://fund.sippy.lat"
-                      className="bg-transparent border-2 border-white text-white px-6 py-3.5 sm:px-8 sm:py-4 font-bold text-base sm:text-lg hover:bg-white/10 transition-all focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-primary text-center"
+                      className="bg-transparent border-2 border-brand-primary text-brand-primary px-6 py-3.5 sm:px-8 sm:py-4 font-bold text-lg sm:text-xl hover:bg-brand-primary/10 transition-all focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)] text-center"
                     >
                       {t('landing.hero.fundPhone', lang)}
                     </a>
@@ -150,12 +139,14 @@ export default async function HomePage() {
           </div>
         </section>
 
-        {/* ── Marquee Band ── */}
+        {/* ── Marquee Band — equipment spec readout style ── */}
+        {/* REVERT: To restore the blue marquee, replace with: bg-brand-primary text-white border-y border-white/30 */}
         <div
-          className="bg-brand-primary dark:bg-[#0a0a0a] text-white py-3 sm:py-6 border-y border-white/30 dark:border-brand-primary/25 dark:shadow-[0_0_40px_rgba(0,175,215,0.10),inset_0_1px_0_rgba(0,175,215,0.15),inset_0_-1px_0_rgba(0,175,215,0.15)] relative z-20"
+          className="bg-[var(--bg-primary)] text-[var(--text-primary)] py-3 sm:py-6 relative z-20 grid-overlay"
           aria-hidden="true"
         >
-          <Marquee className="[--duration:40s] [--gap:2rem] sm:[--gap:4rem]">
+          <div className="panel-seam" />
+          <Marquee className="[--duration:40s] [--gap:2rem] sm:[--gap:4rem] py-3 sm:py-5">
             {(
               [
                 'landing.marquee.1',
@@ -166,18 +157,19 @@ export default async function HomePage() {
             ).map((key, i) => (
               <span
                 key={i}
-                className="inline-block border border-white/40 dark:border-brand-primary/30 dark:shadow-[0_0_16px_rgba(0,175,215,0.08)] px-3 py-1 sm:px-4 sm:py-1.5 font-mono text-[10px] sm:text-xs tracking-[0.15em] sm:tracking-[0.2em] uppercase whitespace-nowrap"
+                className="inline-block border border-brand-primary/40 px-3 py-1 sm:px-4 sm:py-1.5 font-mono text-[10px] sm:text-xs tracking-[0.15em] sm:tracking-[0.2em] uppercase whitespace-nowrap"
               >
-                <span className="text-white/60 dark:text-brand-primary mr-2">/</span>
+                <span className="text-brand-primary mr-2">/</span>
                 {t(key, lang)}
               </span>
             ))}
           </Marquee>
+          <div className="panel-seam" />
         </div>
 
         {/* ── How It Works ── */}
         <section
-          className="py-12 sm:py-24 relative overflow-hidden bg-[var(--bg-primary)]"
+          className="py-10 sm:py-16 relative overflow-hidden bg-[var(--bg-primary)]"
           id="how-it-works"
         >
           <div className="max-w-[75vw] sm:max-w-7xl mx-auto sm:px-6 lg:px-8">
@@ -186,7 +178,7 @@ export default async function HomePage() {
                 <span className="spec-label block mb-3 sm:mb-4">
                   {t('landing.process.label', lang)}
                 </span>
-                <h2 className="font-display font-bold text-3xl sm:text-5xl lg:text-6xl text-[var(--text-primary)] uppercase">
+                <h2 className="font-display font-bold text-4xl sm:text-6xl lg:text-7xl text-[var(--text-primary)] uppercase">
                   {t('landing.process.title', lang)}
                 </h2>
               </div>
@@ -204,10 +196,10 @@ export default async function HomePage() {
                   <span className="font-mono text-sm text-brand-primary dark:text-brand-primary font-bold tracking-wider">
                     {t('landing.step1.num', lang)}
                   </span>
-                  <h3 className="font-display font-bold text-xl text-[var(--text-primary)] uppercase mt-1 mb-3">
+                  <h3 className="font-display font-bold text-2xl text-[var(--text-primary)] uppercase mt-1 mb-3">
                     {t('landing.step1.title', lang)}
                   </h3>
-                  <p className="text-[var(--text-secondary)] leading-relaxed text-base">
+                  <p className="text-[var(--text-secondary)] leading-relaxed text-lg">
                     {t('landing.step1.desc.desktop', lang)
                       .split('\n')
                       .map((line, i) => (
@@ -222,10 +214,10 @@ export default async function HomePage() {
                   <span className="font-mono text-sm text-brand-primary dark:text-brand-primary font-bold tracking-wider">
                     {t('landing.step2.num', lang)}
                   </span>
-                  <h3 className="font-display font-bold text-xl text-[var(--text-primary)] uppercase mt-1 mb-3">
+                  <h3 className="font-display font-bold text-2xl text-[var(--text-primary)] uppercase mt-1 mb-3">
                     {t('landing.step2.title', lang)}
                   </h3>
-                  <p className="text-[var(--text-secondary)] leading-relaxed text-base">
+                  <p className="text-[var(--text-secondary)] leading-relaxed text-lg">
                     {t('landing.step2.desc.desktop', lang)
                       .split('\n')
                       .map((line, i) => (
@@ -253,14 +245,7 @@ export default async function HomePage() {
                         alt="Sippy"
                         width={50}
                         height={88}
-                        className="w-10 sm:w-12 h-auto opacity-40 dark:hidden"
-                      />
-                      <Image
-                        src="/images/logos/sippy-s-mark-white.svg"
-                        alt="Sippy"
-                        width={50}
-                        height={88}
-                        className="w-10 sm:w-12 h-auto opacity-40 hidden dark:block"
+                        className="w-10 sm:w-12 h-auto opacity-40"
                       />
                     </div>
                   </div>
@@ -278,10 +263,10 @@ export default async function HomePage() {
                   <span className="font-mono text-sm text-brand-primary dark:text-brand-primary font-bold tracking-wider">
                     {t('landing.step3.num', lang)}
                   </span>
-                  <h3 className="font-display font-bold text-xl text-[var(--text-primary)] uppercase mt-1 mb-3">
+                  <h3 className="font-display font-bold text-2xl text-[var(--text-primary)] uppercase mt-1 mb-3">
                     {t('landing.step3.title', lang)}
                   </h3>
-                  <p className="text-[var(--text-secondary)] leading-relaxed text-base">
+                  <p className="text-[var(--text-secondary)] leading-relaxed text-lg">
                     {t('landing.step3.desc.desktop', lang)
                       .split('\n')
                       .map((line, i) => (
@@ -331,10 +316,10 @@ export default async function HomePage() {
                     <span className="font-mono text-sm text-brand-primary dark:text-brand-primary font-bold tracking-wider">
                       {t(s.stepKey, lang)}
                     </span>
-                    <h3 className="font-display font-bold text-xl text-[var(--text-primary)] uppercase mt-1 mb-3">
+                    <h3 className="font-display font-bold text-2xl text-[var(--text-primary)] uppercase mt-1 mb-3">
                       {t(s.titleKey, lang)}
                     </h3>
-                    <p className="text-[var(--text-secondary)] leading-relaxed text-base">
+                    <p className="text-[var(--text-secondary)] leading-relaxed text-lg">
                       {t(s.descKey, lang)}
                     </p>
                   </div>
@@ -345,7 +330,7 @@ export default async function HomePage() {
         </section>
 
         {/* ── Under the Hood (Tech Specs) ── */}
-        <section className="py-12 sm:py-24 bg-[var(--bg-primary)] relative" id="specs">
+        <section className="py-10 sm:py-16 bg-[var(--bg-primary)] relative" id="specs">
           {/* Border frame wrapper — full width, border lines use insets like hero */}
           <div className="relative sm:max-w-[95vw] xl:max-w-[1400px] sm:mx-auto sm:px-6 lg:px-8">
             {/* Gradient border frame — many lines fading outward */}
@@ -371,35 +356,33 @@ export default async function HomePage() {
               <div className="relative z-10 py-12 sm:px-20 sm:py-24 max-w-[75vw] sm:max-w-none mx-auto">
                 <ScrollReveal>
                   <div className="text-center mb-8 sm:mb-16">
-                    <h2 className="font-display font-bold text-2xl sm:text-4xl md:text-5xl text-[var(--text-primary)] mb-4 sm:mb-6 uppercase">
+                    <h2 className="font-display font-bold text-3xl sm:text-5xl md:text-6xl text-[var(--text-primary)] mb-4 sm:mb-6 uppercase">
                       {t('landing.hood.title', lang)}
                     </h2>
-                    <p className="text-[var(--text-secondary)] max-w-2xl mx-auto text-sm sm:text-lg">
+                    <p className="text-[var(--text-secondary)] max-w-2xl mx-auto text-sm sm:text-xl">
                       {t('landing.hood.desc', lang)}
                     </p>
                   </div>
                 </ScrollReveal>
 
                 {/* Asymmetric grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
-                  {/* Large feature — spans 2 rows, brand accent */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-5">
+                  {/* Large feature — spans 2 rows, emphasized panel-frame */}
                   <ScrollReveal delay={0.1} className="lg:row-span-2">
-                    <div className="rounded-xl sm:rounded-2xl bg-brand-primary dark:bg-[var(--bg-secondary)] dark:border dark:border-brand-primary/40 dark:shadow-[0_0_60px_rgba(0,175,215,0.12),0_0_120px_rgba(0,175,215,0.06)] p-1 relative overflow-hidden h-full">
-                      <div className="rounded-lg sm:rounded-xl p-6 sm:p-10 h-full flex flex-col justify-center relative z-10">
-                        <DollarSign className="w-10 h-10 sm:w-14 sm:h-14 text-white/80 dark:text-brand-primary mb-5 sm:mb-8" />
-                        <h3 className="font-display font-bold text-2xl sm:text-3xl mb-3 sm:mb-4 text-white uppercase">
+                    <div className="relative rounded-xl sm:rounded-2xl border-2 border-brand-primary/40 bg-brand-primary/[0.03] dark:bg-brand-primary/[0.06] dark:border-brand-primary/50 overflow-hidden h-full">
+                      {/* Inner double border */}
+                      <div className="absolute inset-[5px] border border-brand-primary/20 dark:border-brand-primary/30 rounded-lg sm:rounded-xl pointer-events-none" />
+                      <div className="rounded-lg sm:rounded-xl p-6 sm:p-8 h-full flex flex-col justify-center relative z-10">
+                        <DollarSign className="w-10 h-10 sm:w-14 sm:h-14 text-brand-primary mb-5 sm:mb-8" />
+                        <h3 className="font-display font-bold text-3xl sm:text-4xl mb-3 sm:mb-4 text-[var(--text-primary)] uppercase">
                           {t('landing.spec1.title', lang)}
                         </h3>
-                        <p className="text-base sm:text-lg text-white/80 leading-relaxed">
+                        <p className="text-lg sm:text-xl text-[var(--text-secondary)] leading-relaxed">
                           {t('landing.spec1.desc', lang)}
                         </p>
-                        <div className="mt-5 pt-5 sm:mt-8 sm:pt-8 border-t border-white/20 flex flex-wrap gap-3 sm:gap-4">
-                          <span className="spec-label spec-label-light">
-                            {t('landing.spec1.tag1', lang)}
-                          </span>
-                          <span className="spec-label spec-label-light">
-                            {t('landing.spec1.tag2', lang)}
-                          </span>
+                        <div className="mt-5 pt-5 sm:mt-8 sm:pt-8 border-t border-brand-primary/15 dark:border-brand-primary/20 flex flex-wrap gap-3 sm:gap-4">
+                          <span className="spec-label">{t('landing.spec1.tag1', lang)}</span>
+                          <span className="spec-label">{t('landing.spec1.tag2', lang)}</span>
                         </div>
                       </div>
                     </div>
@@ -408,12 +391,12 @@ export default async function HomePage() {
                   {/* Arbitrum L2 Speed */}
                   <ScrollReveal delay={0.2} className="h-full">
                     <div className="panel-frame rounded-xl sm:rounded-2xl bg-[var(--bg-primary)] p-1 h-full">
-                      <div className="bg-[var(--bg-secondary)] rounded-lg sm:rounded-xl p-5 sm:p-8 h-full">
+                      <div className="bg-[var(--bg-secondary)] rounded-lg sm:rounded-xl p-5 sm:p-6 h-full">
                         <Zap className="w-8 h-8 sm:w-10 sm:h-10 text-brand-primary dark:text-brand-primary/80 mb-4 sm:mb-6" />
-                        <h3 className="font-display font-bold text-lg sm:text-xl mb-2 sm:mb-3 text-[var(--text-primary)] uppercase">
+                        <h3 className="font-display font-bold text-xl sm:text-2xl mb-2 sm:mb-3 text-[var(--text-primary)] uppercase">
                           {t('landing.spec2.title', lang)}
                         </h3>
-                        <p className="text-[var(--text-secondary)] text-sm sm:text-base">
+                        <p className="text-[var(--text-secondary)] text-sm sm:text-lg">
                           {t('landing.spec2.desc', lang)}
                         </p>
                       </div>
@@ -423,30 +406,45 @@ export default async function HomePage() {
                   {/* Non-Custodial */}
                   <ScrollReveal delay={0.3} className="h-full">
                     <div className="panel-frame rounded-xl sm:rounded-2xl bg-[var(--bg-primary)] p-1 h-full">
-                      <div className="bg-[var(--bg-secondary)] rounded-lg sm:rounded-xl p-5 sm:p-8 h-full">
+                      <div className="bg-[var(--bg-secondary)] rounded-lg sm:rounded-xl p-5 sm:p-6 h-full">
                         <Lock className="w-8 h-8 sm:w-10 sm:h-10 text-brand-primary dark:text-brand-primary/80 mb-4 sm:mb-6" />
-                        <h3 className="font-display font-bold text-lg sm:text-xl mb-2 sm:mb-3 text-[var(--text-primary)] uppercase">
+                        <h3 className="font-display font-bold text-xl sm:text-2xl mb-2 sm:mb-3 text-[var(--text-primary)] uppercase">
                           {t('landing.spec3.title', lang)}
                         </h3>
-                        <p className="text-[var(--text-secondary)] text-sm sm:text-base">
+                        <p className="text-[var(--text-secondary)] text-sm sm:text-lg">
                           {t('landing.spec3.desc', lang)}
                         </p>
                       </div>
                     </div>
                   </ScrollReveal>
 
-                  {/* Agentic AI — spans 2 cols */}
+                  {/* Agentic AI — spans 2 cols, with conversation preview */}
                   <ScrollReveal delay={0.4} className="lg:col-span-2">
                     <div className="panel-frame rounded-xl sm:rounded-2xl bg-[var(--bg-primary)] p-1">
-                      <div className="bg-[var(--bg-secondary)] rounded-lg sm:rounded-xl p-5 sm:p-8 flex flex-col md:flex-row items-start gap-5 sm:gap-8">
-                        <Bot className="w-12 h-12 text-brand-primary dark:text-brand-primary/80 shrink-0" />
-                        <div>
-                          <h3 className="font-display font-bold text-xl mb-2 text-[var(--text-primary)] uppercase">
-                            {t('landing.spec4.title', lang)}
-                          </h3>
-                          <p className="text-[var(--text-secondary)]">
-                            {t('landing.spec4.desc', lang)}
-                          </p>
+                      <div className="bg-[var(--bg-secondary)] rounded-lg sm:rounded-xl p-5 sm:p-6">
+                        <div className="flex flex-col md:flex-row items-start gap-5 sm:gap-6">
+                          <Bot className="w-12 h-12 text-brand-primary dark:text-brand-primary/80 shrink-0" />
+                          <div>
+                            <h3 className="font-display font-bold text-2xl mb-2 text-[var(--text-primary)] uppercase">
+                              {t('landing.spec4.title', lang)}
+                            </h3>
+                            <p className="text-[var(--text-secondary)]">
+                              {t('landing.spec4.desc', lang)}
+                            </p>
+                          </div>
+                        </div>
+                        {/* Simulated conversation */}
+                        <div className="mt-4 pt-4 border-t border-brand-primary/10 font-mono text-sm space-y-2">
+                          <div className="flex items-start gap-2">
+                            <span className="text-brand-primary shrink-0">&gt;</span>
+                            <span className="text-[var(--text-primary)]">envía 10 a mama</span>
+                          </div>
+                          <div className="flex items-start gap-2">
+                            <span className="text-brand-crypto shrink-0">&lt;</span>
+                            <span className="text-[var(--text-secondary)]">
+                              Listo. 10 USDC enviados a +57 312 *** ****
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -458,122 +456,98 @@ export default async function HomePage() {
         </section>
 
         {/* ── Built for Everyone + TV ── */}
-        <section className="py-12 sm:py-24 bg-[var(--bg-primary)]" id="use-cases">
-          <div className="max-w-[75vw] sm:max-w-7xl mx-auto sm:px-6 lg:px-8 relative">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-20 items-center">
-              {/* Left — use case pills */}
-              <ScrollReveal direction="left">
-                <div className="mb-6 sm:mb-12">
-                  <h2 className="font-display font-bold text-2xl sm:text-4xl md:text-5xl text-[var(--text-primary)] mb-4 sm:mb-6 uppercase">
-                    {t('landing.everyone.title', lang)}
-                  </h2>
-                </div>
-                <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2.5 sm:gap-5">
-                  {(
-                    [
-                      'landing.pill.1',
-                      'landing.pill.2',
-                      'landing.pill.3',
-                      'landing.pill.4',
-                      'landing.pill.5',
-                      'landing.pill.6',
-                    ] as const
-                  ).map((key) => (
-                    <div
-                      key={key}
-                      className="panel-frame panel-frame-fill-hover rounded-full px-4 py-2.5 sm:px-10 sm:py-4 text-[var(--text-primary)] font-display font-bold text-xs sm:text-base uppercase transition-all cursor-default text-center dark:hover:shadow-[0_0_20px_rgba(0,175,215,0.1)] dark:hover:border-brand-primary/40"
-                    >
-                      <span className="relative z-10">{t(key, lang)}</span>
-                    </div>
-                  ))}
-                </div>
-              </ScrollReveal>
+        <section className="py-10 sm:py-16 bg-[var(--bg-primary)] relative" id="use-cases">
+          <div className="max-w-[75vw] sm:max-w-5xl mx-auto sm:px-6 lg:px-8 relative">
+            <ScrollReveal>
+              {/* Header */}
+              <div className="mb-8 sm:mb-14 text-center">
+                <span className="spec-label">
+                  {t('landing.everyone.label', lang) || 'USE CASES'}
+                </span>
+                <h2 className="font-display font-bold text-3xl sm:text-5xl md:text-6xl text-[var(--text-primary)] mt-3 sm:mt-4 uppercase">
+                  {t('landing.everyone.title', lang)}
+                </h2>
+                <p className="mt-3 sm:mt-4 text-[var(--text-secondary)] text-sm sm:text-xl max-w-xl mx-auto">
+                  {t('landing.everyone.desc', lang) || ''}
+                </p>
+              </div>
 
-              {/* Right — TV */}
-              <ScrollReveal direction="right" delay={0.2}>
-                <div className="crt-tv max-w-xs sm:max-w-sm mx-auto lg:ml-auto">
-                  <div className="crt-screen relative aspect-[4/3]">
-                    <AnalogGradient variant="dark" />
-                    <div className="analog-band" />
-
-                    <div
-                      className="absolute left-0 right-0 h-[1px] pointer-events-none animate-vhs-flicker-1 z-30"
-                      style={{
-                        background:
-                          'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 20%, rgba(176,175,174,0.2) 50%, rgba(255,255,255,0.12) 80%, transparent 100%)',
-                      }}
-                    />
-                    <div
-                      className="absolute left-0 right-0 h-[1px] pointer-events-none animate-vhs-flicker-2 z-30"
-                      style={{
-                        background:
-                          'linear-gradient(90deg, transparent 5%, rgba(176,175,174,0.1) 25%, rgba(255,255,255,0.15) 50%, rgba(176,175,174,0.1) 75%, transparent 95%)',
-                      }}
-                    />
-
-                    <div className="absolute inset-0 z-10 flex flex-col justify-end p-4 sm:p-6">
-                      <div>
-                        <div
-                          className="crt-fringe font-mono font-black text-xl sm:text-2xl text-white crt-glow tracking-wide mb-2 leading-none whitespace-nowrap"
-                          data-text={SIPPY_NUMBER}
-                        >
-                          {SIPPY_NUMBER}
-                        </div>
-                        <p className="text-white/60 text-[10px] sm:text-xs font-mono tracking-widest uppercase whitespace-nowrap">
-                          {t('landing.crt.footer', lang)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="absolute top-3 right-4 sm:top-4 sm:right-5 z-20">
-                      <LiveClock className="font-mono text-[9px] text-white/50 tracking-widest" />
-                    </div>
+              {/* Pills — centered grid */}
+              <div className="flex flex-wrap justify-center gap-2.5 sm:gap-4">
+                {(
+                  [
+                    'landing.pill.1',
+                    'landing.pill.2',
+                    'landing.pill.3',
+                    'landing.pill.4',
+                    'landing.pill.5',
+                    'landing.pill.6',
+                  ] as const
+                ).map((key) => (
+                  <div
+                    key={key}
+                    className="panel-frame panel-frame-fill-hover rounded-full px-5 py-3 sm:px-10 sm:py-4 text-[var(--text-primary)] font-display font-bold text-xs sm:text-lg uppercase transition-all cursor-default text-center dark:hover:shadow-[0_0_20px_rgba(0,175,215,0.1)] dark:hover:border-brand-primary/40"
+                  >
+                    <span className="relative z-10">{t(key, lang)}</span>
                   </div>
+                ))}
+              </div>
 
-                  <div className="flex items-center justify-between mt-2 sm:mt-3 px-2">
-                    <span className="font-mono text-[8px] text-brand-primary/60 dark:text-brand-primary/50 tracking-[0.3em] uppercase">
-                      sippy
-                    </span>
-                    <div className="flex gap-2 items-center">
-                      <div className="w-3 h-3 rounded-full border border-brand-primary/30 dark:border-brand-primary/25" />
-                      <div className="w-3 h-3 rounded-full border border-brand-primary/30 dark:border-brand-primary/25" />
-                      <div className="w-3.5 h-3.5 rounded-full border border-brand-primary/30 dark:border-brand-primary/25" />
-                      <div className="w-3.5 h-3.5 rounded-full border border-brand-primary/30 dark:border-brand-primary/25" />
-                    </div>
-                  </div>
-                </div>
-              </ScrollReveal>
-            </div>
+              {/* Spec readout — equipment annotation */}
+              <div className="mt-8 sm:mt-12 flex justify-center">
+                <div className="panel-seam w-full max-w-md" />
+              </div>
+              <div className="mt-4 flex justify-center gap-6 sm:gap-10">
+                <span className="spec-label spec-label-muted">WHATSAPP</span>
+                <span className="spec-label spec-label-muted">USDC</span>
+                <span className="spec-label spec-label-muted">ARBITRUM</span>
+                <span className="spec-label spec-label-muted">AI AGENT</span>
+              </div>
+            </ScrollReveal>
           </div>
         </section>
 
         {/* ── CTA — Start on WhatsApp ── */}
-        <section className="relative py-16 sm:py-32 bg-brand-primary dark:bg-[var(--bg-secondary)] overflow-hidden px-2 sm:px-6 lg:px-8">
-          {/* Triple nested border frames — inverse hero (white on blue), tighter to content */}
-          <div className="absolute inset-2 sm:inset-4 lg:inset-6 pointer-events-none border border-white/20 dark:border-brand-primary/10 z-0 rounded-xl sm:rounded-2xl" />
-          <div className="absolute inset-3 sm:inset-5 lg:inset-7 pointer-events-none border border-white/35 dark:border-brand-primary/15 z-0 rounded-[0.7rem] sm:rounded-[0.85rem]" />
-          <div className="absolute inset-4 sm:inset-6 lg:inset-8 pointer-events-none border border-white/50 dark:border-brand-primary/20 z-0 rounded-[0.6rem] sm:rounded-[0.7rem]" />
+        <section className="relative py-16 sm:py-32 bg-[var(--bg-primary)] overflow-hidden px-2 sm:px-6 lg:px-8">
+          {/* Gradient border bloom — TRON-style, capped at inset-6 on mobile */}
+          <div className="absolute inset-0 pointer-events-none border border-brand-primary/[0.02] z-0 rounded-2xl sm:rounded-3xl" />
+          <div className="absolute inset-0.5 sm:inset-1 pointer-events-none border border-brand-primary/[0.03] z-0 rounded-[1.1rem] sm:rounded-[1.4rem]" />
+          <div className="absolute inset-1 sm:inset-2 pointer-events-none border border-brand-primary/[0.05] z-0 rounded-[1rem] sm:rounded-[1.3rem]" />
+          <div className="absolute inset-1.5 sm:inset-3 pointer-events-none border border-brand-primary/[0.08] z-0 rounded-[0.9rem] sm:rounded-[1.2rem]" />
+          <div className="absolute inset-2 sm:inset-4 pointer-events-none border border-brand-primary/[0.12] z-0 rounded-[0.85rem] sm:rounded-[1.1rem]" />
+          <div className="absolute inset-2.5 sm:inset-5 pointer-events-none border border-brand-primary/[0.16] z-0 rounded-[0.8rem] sm:rounded-[1rem]" />
+          <div className="absolute inset-3 sm:inset-6 pointer-events-none border border-brand-primary/[0.22] z-0 rounded-[0.75rem] sm:rounded-[0.95rem]" />
+          <div className="absolute inset-3.5 sm:inset-8 pointer-events-none border border-brand-primary/[0.28] z-0 rounded-[0.7rem] sm:rounded-[0.9rem]" />
+          <div className="absolute inset-4 sm:inset-10 pointer-events-none border border-brand-primary/[0.35] z-0 rounded-[0.65rem] sm:rounded-[0.85rem]" />
+          <div className="absolute inset-4.5 sm:inset-12 pointer-events-none border border-brand-primary/[0.45] z-0 rounded-[0.6rem] sm:rounded-[0.8rem]" />
+          <div className="absolute inset-5 sm:inset-14 pointer-events-none border border-brand-primary/[0.55] z-0 rounded-[0.55rem] sm:rounded-[0.7rem]" />
+          <div className="absolute inset-5.5 sm:inset-16 pointer-events-none border border-brand-primary/[0.65] z-0 rounded-[0.5rem] sm:rounded-[0.6rem]" />
+          <div className="absolute inset-6 sm:inset-[72px] pointer-events-none border border-brand-primary/[0.75] z-0 rounded-[0.45rem] sm:rounded-[0.55rem]" />
+          <div className="hidden sm:block absolute sm:inset-20 pointer-events-none border-2 border-brand-primary/[0.90] z-0 rounded-[0.5rem]" />
 
           <div className="max-w-[75vw] sm:max-w-3xl mx-auto text-center relative z-10">
             <ScrollReveal>
-              <h2 className="font-display font-bold text-3xl sm:text-5xl lg:text-6xl text-white uppercase mb-4 sm:mb-6">
+              <span className="spec-label mb-4 block">
+                {t('landing.cta.label', lang) || 'GET STARTED'}
+              </span>
+              <h2 className="font-display font-bold text-4xl sm:text-6xl lg:text-7xl text-[var(--text-primary)] uppercase mb-4 sm:mb-6">
                 {t('landing.cta.title', lang)}
               </h2>
-              <p className="text-white/70 text-base sm:text-xl mb-8 sm:mb-10 max-w-xl mx-auto">
+              <p className="text-[var(--text-secondary)] text-lg sm:text-2xl mb-8 sm:mb-10 max-w-xl mx-auto">
                 {t('landing.cta.desc', lang)}
               </p>
               <a
                 href="https://wa.me/14722261449"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-3 bg-white text-brand-primary dark:bg-transparent dark:text-white dark:border dark:border-brand-primary/40 dark:shadow-[0_0_20px_rgba(0,175,215,0.08)] px-7 py-4 sm:px-10 sm:py-5 font-display font-bold text-base sm:text-lg uppercase tracking-wider hover:bg-white/90 dark:hover:bg-brand-primary/10 dark:hover:border-brand-primary/60 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-white dark:focus-visible:ring-brand-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-primary dark:focus-visible:ring-offset-black transition-smooth"
+                className="inline-flex items-center gap-3 border-2 border-brand-primary text-brand-primary px-7 py-4 sm:px-10 sm:py-5 font-display font-bold text-lg sm:text-xl uppercase tracking-wider hover:bg-brand-primary hover:text-white active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg-primary)] transition-smooth"
               >
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
                 </svg>
                 {t('landing.cta.button', lang)}
               </a>
-              <p className="mt-3 font-mono text-xs text-white/60 dark:text-brand-primary/40 tracking-[0.1em] uppercase">
+              <p className="mt-4 font-mono text-xs text-[var(--text-muted)] tracking-[0.1em] uppercase">
                 {t('landing.cta.trust', lang)}
               </p>
             </ScrollReveal>
@@ -596,14 +570,7 @@ export default async function HomePage() {
                 alt="Sippy"
                 width={100}
                 height={28}
-                className="mb-3 dark:hidden"
-              />
-              <Image
-                src="/images/logos/sippy-wordmark-white.svg"
-                alt="Sippy"
-                width={100}
-                height={28}
-                className="mb-3 hidden dark:block"
+                className="mb-3"
               />
               <p className="font-mono text-sm text-[var(--text-secondary)] tracking-[0.12em] uppercase leading-relaxed max-w-xs">
                 {t('landing.footer.desc', lang)
