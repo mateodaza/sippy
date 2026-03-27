@@ -114,6 +114,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `💸 *Send money* — just tell me who and how much\n\n` +
       `💰 *Check your balance* — ask me anytime\n\n` +
       `📋 *See your transactions* — ask for your history\n\n` +
+      `📇 *Contacts* — save, delete, or list contacts (e.g. "save mom +573...")\n\n` +
       `👋 *Invite a friend* — give me their number\n\n` +
       `⚙️ *Change settings or limits* — ask for settings\n\n` +
       `🌐 *Switch language* — just tell me which one\n\n` +
@@ -123,6 +124,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `💸 *Enviar dinero* — dime a quien y cuanto\n\n` +
       `💰 *Ver tu saldo* — preguntame cuando quieras\n\n` +
       `📋 *Ver tus transacciones* — pideme tu historial\n\n` +
+      `📇 *Contactos* — guardar, borrar o ver contactos (ej. "guardar mamá +573...")\n\n` +
       `👋 *Invitar a un amigo* — dame su numero\n\n` +
       `⚙️ *Cambiar ajustes o limites* — pideme los ajustes\n\n` +
       `🌐 *Cambiar idioma* — solo dime cual\n\n` +
@@ -132,6 +134,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `💸 *Enviar dinheiro* — me diz pra quem e quanto\n\n` +
       `💰 *Ver seu saldo* — me pergunta quando quiser\n\n` +
       `📋 *Ver suas transacoes* — pede seu historico\n\n` +
+      `📇 *Contatos* — salvar, apagar ou ver contatos (ex. "salvar mãe +5511...")\n\n` +
       `👋 *Convidar um amigo* — me da o numero\n\n` +
       `⚙️ *Mudar ajustes ou limites* — pede os ajustes\n\n` +
       `🌐 *Mudar idioma* — so me diz qual\n\n` +

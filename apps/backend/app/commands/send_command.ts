@@ -40,7 +40,7 @@ import { getUserLanguage } from '#services/db'
 import logger from '@adonisjs/core/services/logger'
 import { velocityService } from '#services/velocity_service'
 import { notifyPaymentReceived } from '#services/notification.service'
-import { maskPhone } from '#utils/phone'
+import { getLanguageForPhone, maskPhone } from '#utils/phone'
 import { createInvite } from '#services/invite.service'
 import {
   formatInviteSentToSender,
@@ -239,7 +239,8 @@ export async function handleSendCommand(
     await sendTextMessage(fromPhoneNumber, successMessage, lang)
 
     // Notify recipient via template message (works outside 24h session window)
-    const recipientLang = (await getUserLanguage(toPhoneNumber)) || 'en'
+    const recipientLang =
+      (await getUserLanguage(toPhoneNumber)) || getLanguageForPhone(toPhoneNumber)
     await notifyPaymentReceived({
       recipientPhone: toPhoneNumber,
       amount: amount.toFixed(2),
@@ -444,7 +445,8 @@ async function handleEmbeddedSend(
 
     // Notify recipient via template message (works outside 24h session window)
     try {
-      const recipientLang = (await getUserLanguage(toPhoneNumber)) || 'en'
+      const recipientLang =
+        (await getUserLanguage(toPhoneNumber)) || getLanguageForPhone(toPhoneNumber)
       await notifyPaymentReceived({
         recipientPhone: toPhoneNumber,
         amount: amount.toFixed(2),

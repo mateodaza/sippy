@@ -147,6 +147,27 @@ const LOOSE_COMMAND_PATTERNS: Array<[string, RegExp]> = [
   ],
 ]
 
+// ── Contact management patterns ────────────────────────────────────────────
+const SAVE_CONTACT_PATTERNS: RegExp[] = [
+  /^(?:save|add)\s+(.{1,30}?)\s+(?:as\s+)?(\+?\d[\d\s\-()]{6,18}\d)$/i,
+  /^(?:guardar|agregar|a[nñ]adir)\s+(.{1,30}?)\s+(?:como\s+)?(\+?\d[\d\s\-()]{6,18}\d)$/i,
+  /^(?:salvar|adicionar)\s+(.{1,30}?)\s+(?:como\s+)?(\+?\d[\d\s\-()]{6,18}\d)$/i,
+]
+
+const DELETE_CONTACT_PATTERNS: RegExp[] = [
+  /^(?:delete|remove)\s+contact\s+(.{1,30})$/i,
+  /^(?:borrar|eliminar|quitar)\s+contacto\s+(.{1,30})$/i,
+  /^(?:apagar|remover|excluir)\s+contato\s+(.{1,30})$/i,
+]
+
+const LIST_CONTACT_PATTERNS: RegExp[] = [
+  /^(?:my\s+)?contacts$/i,
+  /^(?:address\s*book|phonebook)$/i,
+  /^(?:mis\s+)?contactos$/i,
+  /^(?:libreta|agenda)$/i,
+  /^(?:meus\s+)?contatos$/i,
+]
+
 /** Invite patterns: "invitar +573116613414", "invite +57...", "convidar +55..." */
 const INVITE_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
   // EN: "invite +573001234567"
@@ -262,8 +283,30 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
     }
   }
 
-  // Check send patterns (need to extract amount + recipient)
+  // Contact management — check before send patterns to prevent
+  // "save mom +573..." matching as a send command
   const trimmedText = text.trim()
+  for (const pattern of SAVE_CONTACT_PATTERNS) {
+    const match = trimmedText.match(pattern)
+    if (match) {
+      return { command: 'save_contact', alias: match[1].trim(), phone: match[2].trim() }
+    }
+  }
+
+  for (const pattern of DELETE_CONTACT_PATTERNS) {
+    const match = trimmedText.match(pattern)
+    if (match) {
+      return { command: 'delete_contact', alias: match[1].trim() }
+    }
+  }
+
+  for (const pattern of LIST_CONTACT_PATTERNS) {
+    if (pattern.test(normalizedText)) {
+      return { command: 'list_contacts' }
+    }
+  }
+
+  // Check send patterns (need to extract amount + recipient)
   for (const { pattern, lang } of SEND_PATTERNS) {
     const match = trimmedText.match(pattern)
     if (match) {
@@ -488,11 +531,11 @@ function parseSendMatch(
   const rawRecipient = match[2].trim()
   const canonicalRecipient = canonicalizePhone(rawRecipient)
   if (!canonicalRecipient) {
-    // Amount is valid but phone is bad — carry error to controller
+    // Amount is valid but phone is bad — preserve raw text for alias resolution
     return {
       command: 'send',
       amount: result.value!,
-      recipientError: 'INVALID_PHONE',
+      recipientRaw: rawRecipient,
       detectedLanguage: lang,
       originalText,
     }

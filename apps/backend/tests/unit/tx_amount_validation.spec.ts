@@ -259,31 +259,30 @@ test.group('Group D | Send parsing with amount errors (parseMessageWithRegex)', 
     assert.isUndefined(r.amount)
   })
 
-  test('D-06: "send 10 to 0" → command=send, recipientError=INVALID_PHONE, amount=10', ({
-    assert,
-  }) => {
+  test('D-06: "send 10 to 0" → command=send, recipientRaw="0", amount=10', ({ assert }) => {
     const r = parseMessageWithRegex('send 10 to 0')
     assert.equal(r.command, 'send')
     assert.isUndefined(r.amountError)
-    assert.equal(r.recipientError, 'INVALID_PHONE')
+    assert.isUndefined(r.recipientError)
+    assert.equal(r.recipientRaw, '0')
     assert.equal(r.amount, 10)
   })
 
-  test('D-07: "send 10 to 123" → command=send, recipientError=INVALID_PHONE, amount=10', ({
-    assert,
-  }) => {
+  test('D-07: "send 10 to 123" → command=send, recipientRaw="123", amount=10', ({ assert }) => {
     const r = parseMessageWithRegex('send 10 to 123')
     assert.equal(r.command, 'send')
-    assert.equal(r.recipientError, 'INVALID_PHONE')
+    assert.isUndefined(r.recipientError)
+    assert.equal(r.recipientRaw, '123')
     assert.equal(r.amount, 10)
   })
 
-  test('D-08: "send 10 to 12345678901234567" → command=send, recipientError=INVALID_PHONE, amount=10', ({
+  test('D-08: "send 10 to 12345678901234567" → command=send, recipientRaw="12345678901234567", amount=10', ({
     assert,
   }) => {
     const r = parseMessageWithRegex('send 10 to 12345678901234567')
     assert.equal(r.command, 'send')
-    assert.equal(r.recipientError, 'INVALID_PHONE')
+    assert.isUndefined(r.recipientError)
+    assert.equal(r.recipientRaw, '12345678901234567')
     assert.equal(r.amount, 10)
   })
 })
