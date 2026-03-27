@@ -34,8 +34,8 @@ export default class AnalyticsController {
         .where('timestamp', '>=', todayUnix - 86400)
         .select(
           db.raw(`COUNT(DISTINCT CASE
-              WHEN "from" IN (SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL) THEN "from"
-              WHEN "to" IN (SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL) THEN "to"
+              WHEN "from" IN (SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL UNION SELECT address FROM wallet_aliases) THEN "from"
+              WHEN "to" IN (SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL UNION SELECT address FROM wallet_aliases) THEN "to"
             END) as total`)
         )
         .first(),
@@ -43,20 +43,25 @@ export default class AnalyticsController {
       // 4. Gas refuel status singleton
       db.from('onchain.gas_refuel_status').where('id', 'singleton').first(),
 
-      // 5. Fund flow classification (join against phone_registry to identify real Sippy users)
+      // 5. Fund flow classification (registered wallets + legacy aliases)
       db.rawQuery(`
+          WITH sippy_wallets AS (
+            SELECT LOWER(wallet_address) as address FROM phone_registry WHERE wallet_address IS NOT NULL
+            UNION
+            SELECT address FROM wallet_aliases
+          )
           SELECT
             CASE
-              WHEN pf.wallet_address IS NOT NULL AND pt.wallet_address IS NOT NULL THEN 'internal'
-              WHEN pf.wallet_address IS NULL AND pt.wallet_address IS NOT NULL THEN 'inbound'
-              WHEN pf.wallet_address IS NOT NULL AND pt.wallet_address IS NULL THEN 'outbound'
+              WHEN sf.address IS NOT NULL AND st.address IS NOT NULL THEN 'internal'
+              WHEN sf.address IS NULL AND st.address IS NOT NULL THEN 'inbound'
+              WHEN sf.address IS NOT NULL AND st.address IS NULL THEN 'outbound'
             END as flow_type,
             COALESCE(SUM(t.amount), 0)::text as volume,
             COUNT(*)::text as tx_count
           FROM onchain.transfer t
-          LEFT JOIN phone_registry pf ON t."from" = LOWER(pf.wallet_address)
-          LEFT JOIN phone_registry pt ON t."to" = LOWER(pt.wallet_address)
-          WHERE pf.wallet_address IS NOT NULL OR pt.wallet_address IS NOT NULL
+          LEFT JOIN sippy_wallets sf ON t."from" = sf.address
+          LEFT JOIN sippy_wallets st ON t."to" = st.address
+          WHERE sf.address IS NOT NULL OR st.address IS NOT NULL
           GROUP BY flow_type
           ORDER BY volume DESC
         `),
@@ -66,10 +71,10 @@ export default class AnalyticsController {
         .from('onchain.account')
         .whereIn(
           'address',
-          db
-            .from('phone_registry')
-            .select(db.raw('LOWER(wallet_address)'))
-            .whereNotNull('wallet_address')
+          db.raw(`
+            SELECT LOWER(wallet_address) FROM phone_registry WHERE wallet_address IS NOT NULL
+            UNION SELECT address FROM wallet_aliases
+          `)
         )
         .select(
           'address',
