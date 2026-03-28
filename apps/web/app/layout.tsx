@@ -49,12 +49,23 @@ export const metadata: Metadata = {
     locale: 'es_CO',
     alternateLocale: ['en_US', 'pt_BR'],
     type: 'website',
+    images: [
+      {
+        url: '/opengraph-image',
+        width: 1200,
+        height: 630,
+        alt: 'Sippy — Send Dollars via WhatsApp',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Sippy — Send Dollars via WhatsApp',
     description: 'Manda plata por texto. No app, no fees, instant USDC transfers on Arbitrum.',
     creator: '@sippylat',
+    images: [
+      { url: '/twitter-image', width: 1200, height: 600, alt: 'Sippy — Send Dollars via WhatsApp' },
+    ],
   },
   other: {
     'telegram:channel': '@sippylat',
