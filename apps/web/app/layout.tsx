@@ -64,11 +64,6 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://sippy.lat'),
   alternates: {
     canonical: 'https://sippy.lat',
-    languages: {
-      en: 'https://sippy.lat?lang=en',
-      es: 'https://sippy.lat?lang=es',
-      pt: 'https://sippy.lat?lang=pt',
-    },
   },
   openGraph: {
     title: 'Sippy — Send Dollars via WhatsApp',
@@ -212,6 +207,42 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                                 '@type': 'Answer',
                                 'text':
                                   'Sippy uses non-custodial wallets, meaning only you control your funds. Your wallet is linked to your phone number and secured on the Arbitrum blockchain.',
+                              },
+                            },
+                            {
+                              '@type': 'Question',
+                              'name': 'What countries does Sippy support?',
+                              'acceptedAnswer': {
+                                '@type': 'Answer',
+                                'text':
+                                  'Sippy is built for Latin America. Anyone with a phone number and WhatsApp can create a wallet and send or receive USDC.',
+                              },
+                            },
+                            {
+                              '@type': 'Question',
+                              'name': 'Do I need a bank account to use Sippy?',
+                              'acceptedAnswer': {
+                                '@type': 'Answer',
+                                'text':
+                                  'No. Sippy works entirely through WhatsApp. You do not need a bank account, a crypto exchange, or any other app to send and receive digital dollars.',
+                              },
+                            },
+                            {
+                              '@type': 'Question',
+                              'name': 'What is USDC?',
+                              'acceptedAnswer': {
+                                '@type': 'Answer',
+                                'text':
+                                  'USDC is a digital dollar stablecoin issued by Circle. Each USDC is backed 1:1 by US dollars held in reserve. Sippy uses USDC on the Arbitrum network for fast, low-cost transfers.',
+                              },
+                            },
+                            {
+                              '@type': 'Question',
+                              'name': 'How do I send money with Sippy?',
+                              'acceptedAnswer': {
+                                '@type': 'Answer',
+                                'text':
+                                  'Just message Sippy on WhatsApp with something like "send 10 to +57..." or "manda 5 a Maria". Sippy understands natural language in English, Spanish, and Portuguese.',
                               },
                             },
                           ],

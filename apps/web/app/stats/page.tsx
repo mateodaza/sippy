@@ -4,6 +4,9 @@ export const metadata: Metadata = {
   title: 'Sippy Stats — Live On-Chain Analytics',
   description:
     'Real-time aggregate statistics for the Sippy network: USDC volume, transfers, and active wallets on Arbitrum.',
+  alternates: {
+    canonical: 'https://sippy.lat/stats',
+  },
   openGraph: {
     title: 'Sippy Stats — Live On-Chain Analytics',
     description: 'Live aggregate data: USDC volume, transfers, and active wallets on Arbitrum.',

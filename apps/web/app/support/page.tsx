@@ -1,6 +1,21 @@
+import type { Metadata } from 'next'
 import { getRequestLang } from '@/lib/i18n-server'
 import { t } from '@/lib/i18n'
 import { SupportFormLanding } from '@/components/shared/SupportFormLanding'
+
+export const metadata: Metadata = {
+  title: 'Support',
+  description:
+    'Need help with Sippy? Contact our support team for assistance with WhatsApp USDC payments, wallet setup, and transfers on Arbitrum.',
+  alternates: {
+    canonical: 'https://sippy.lat/support',
+  },
+  openGraph: {
+    title: 'Support | Sippy',
+    description: 'Get help with Sippy — WhatsApp USDC payments on Arbitrum for Latin America.',
+    type: 'website',
+  },
+}
 
 export default async function SupportPage() {
   const lang = await getRequestLang()
