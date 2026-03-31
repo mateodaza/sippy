@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sippy — Brochure de la Compañía</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&family=Electrolize&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand-primary: #00AFD7;
+      --brand-primary-hover: #0098BD;
+      --brand-crypto: #00D796;
+      --brand-dark: #0D0D1A;
+      --page-w: 210mm;
+      --page-h: 297mm;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #080810;
+      font-family: 'Chakra Petch', sans-serif;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      padding: 24px 0;
+    }
+    @media print {
+      html, body { background: var(--brand-dark) !important; gap: 0; padding: 0; margin: 0; }
+      .page { box-shadow: none !important; page-break-after: always; page-break-inside: avoid; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .page:last-child { page-break-after: avoid; }
+    }
+    @page { margin: 0; size: A4 portrait; }
+
+    /* ---- PAGE ---- */
+    .page {
+      width: var(--page-w);
+      min-height: var(--page-h);
+      background: var(--brand-dark);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .page-content {
+      position: relative; z-index: 2; flex: 1;
+      display: flex; flex-direction: column;
+      padding: 48px 48px 40px;
+    }
+
+    /* ---- GRID BG ---- */
+    .grid-bg {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,175,215,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,175,215,0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+    }
+
+    /* ---- REG MARKS ---- */
+    .reg-marks::before, .reg-marks::after {
+      content: '+'; position: absolute;
+      font-family: 'Space Mono', monospace; font-size: 12px;
+      color: rgba(0,175,215,0.2); z-index: 1;
+    }
+    .reg-marks::before { top: 14px; left: 18px; }
+    .reg-marks::after { bottom: 14px; right: 18px; }
+
+    /* ---- LABELS ---- */
+    .spec-label {
+      font-family: 'Space Mono', monospace; font-size: 10px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase; color: var(--brand-primary);
+    }
+    .spec-label-dim {
+      font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase; color: rgba(0,175,215,0.35);
+    }
+
+    /* ---- PANEL FRAME ---- */
+    .panel-frame {
+      border: 1px solid rgba(0,175,215,0.3); position: relative;
+    }
+    .panel-frame::after {
+      content: ''; position: absolute; inset: 4px;
+      border: 1px solid rgba(0,175,215,0.15); pointer-events: none;
+    }
+
+    /* ---- TYPOGRAPHY ---- */
+    h1 {
+      font-family: 'Chakra Petch', sans-serif; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.04em; font-size: 36px; color: #fff;
+      line-height: 1.15;
+    }
+    h2 {
+      font-family: 'Chakra Petch', sans-serif; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.04em; font-size: 20px; color: #fff;
+      line-height: 1.2;
+    }
+    h3 {
+      font-family: 'Chakra Petch', sans-serif; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.04em; font-size: 14px; color: var(--brand-primary);
+    }
+    p, li {
+      font-family: 'Chakra Petch', sans-serif; font-weight: 400;
+      font-size: 13px; line-height: 1.65; color: rgba(255,255,255,0.7);
+    }
+
+    /* ---- DATA ---- */
+    .stat-value {
+      font-family: 'Electrolize', sans-serif; font-size: 36px; color: var(--brand-crypto); line-height: 1;
+    }
+    .stat-label {
+      font-family: 'Space Mono', monospace; font-size: 9px; font-weight: 700;
+      letter-spacing: 0.15em; text-transform: uppercase; color: rgba(0,175,215,0.55); margin-top: 6px;
+    }
+
+    /* ---- INDICATOR DOT ---- */
+    .indicator-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--brand-crypto);
+      box-shadow: 0 0 8px rgba(0,215,150,0.5); display: inline-block; flex-shrink: 0;
+    }
+
+    /* ---- STEP NUMBER ---- */
+    .step-number {
+      font-family: 'Electrolize', sans-serif; font-size: 14px;
+      color: var(--brand-dark); background: var(--brand-primary);
+      width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+      font-weight: 700; flex-shrink: 0;
+    }
+
+    /* ---- CODE BAR ---- */
+    .code-bar {
+      background: var(--brand-crypto); padding: 12px 24px;
+      font-family: 'Space Mono', monospace; font-size: 12px;
+      color: var(--brand-dark); font-weight: 700; letter-spacing: 0.02em;
+    }
+
+    /* ---- PAGE FOOTER ---- */
+    .page-footer {
+      position: absolute; bottom: 0; left: 0; right: 0; height: 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 32px; border-top: 1px solid rgba(0,175,215,0.12);
+      background: rgba(13,13,26,0.8); z-index: 10;
+    }
+
+    /* ---- SECTION DIVIDER ---- */
+    .section-divider {
+      border-top: 2px solid var(--brand-primary); padding-top: 20px; margin-top: 20px;
+    }
+    .section-divider-subtle {
+      border-top: 1px solid rgba(0,175,215,0.15); padding-top: 16px; margin-top: 16px;
+    }
+
+    /* ---- LIST ---- */
+    ul { list-style: none; padding: 0; }
+    ul li { position: relative; padding-left: 16px; margin-bottom: 8px; }
+    ul li::before {
+      content: ''; position: absolute; left: 0; top: 8px;
+      width: 5px; height: 5px; background: var(--brand-primary);
+    }
+
+    /* ---- COLS ---- */
+    .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+    /* ---- SOURCE ---- */
+    .source { font-family: 'Space Mono', monospace; font-size: 8px; color: rgba(255,255,255,0.2); }
+
+    /* ---- TEAM CARD ---- */
+    .team-card {
+      border: 1px solid rgba(0,175,215,0.2); padding: 20px; position: relative;
+    }
+    .team-card::after {
+      content: ''; position: absolute; inset: 3px;
+      border: 1px solid rgba(0,175,215,0.1); pointer-events: none;
+    }
+
+  </style>
+</head>
+<body>
+
+<!-- ================================================================
+     PAGE 1: COVER
+     ================================================================ -->
+<div class="page reg-marks">
+  <div class="grid-bg"></div>
+  <div class="page-content" style="justify-content: space-between;">
+
+    <!-- Top bar -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+      <span class="spec-label-dim">&copy; 2026 Sippy</span>
+      <span class="spec-label-dim">sippy.lat</span>
+    </div>
+
+    <!-- Center block -->
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 0 24px;">
+      <!-- Inline S mark -->
+      <div style="margin-bottom: 40px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="72" height="140" viewBox="368 220 288 560" style="opacity: 0.9;">
+          <rect fill="#00AFD7" x="368" y="220" width="288" height="48"/>
+          <rect fill="#00AFD7" x="368" y="316" width="288" height="48"/>
+          <rect fill="#00AFD7" x="608" y="412" width="48" height="368"/>
+          <rect fill="#00AFD7" x="368" y="732" width="288" height="48"/>
+        </svg>
+      </div>
+
+      <!-- Inline wordmark -->
+      <div style="margin-bottom: 48px;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="360" height="36" viewBox="60 360 900 310">
+          <!-- S/5 -->
+          <rect fill="#FFFFFF" x="80" y="376" width="160" height="32"/>
+          <rect fill="#FFFFFF" x="80" y="426" width="160" height="32"/>
+          <rect fill="#FFFFFF" x="208" y="476" width="32" height="172"/>
+          <rect fill="#FFFFFF" x="80" y="616" width="160" height="32"/>
+          <!-- 1/i -->
+          <rect fill="#FFFFFF" x="280" y="376" width="64" height="32"/>
+          <rect fill="#FFFFFF" x="312" y="376" width="32" height="272"/>
+          <!-- P/9 first -->
+          <rect fill="#FFFFFF" x="384" y="376" width="32" height="272"/>
+          <rect fill="#FFFFFF" x="384" y="376" width="160" height="32"/>
+          <rect fill="#FFFFFF" x="512" y="376" width="32" height="160"/>
+          <rect fill="#FFFFFF" x="384" y="512" width="160" height="32"/>
+          <!-- P/9 second -->
+          <rect fill="#FFFFFF" x="584" y="376" width="32" height="272"/>
+          <rect fill="#FFFFFF" x="584" y="376" width="160" height="32"/>
+          <rect fill="#FFFFFF" x="712" y="376" width="32" height="160"/>
+          <rect fill="#FFFFFF" x="584" y="512" width="160" height="32"/>
+          <!-- 4/y -->
+          <rect fill="#FFFFFF" x="784" y="376" width="32" height="160"/>
+          <rect fill="#FFFFFF" x="784" y="512" width="160" height="32"/>
+          <rect fill="#FFFFFF" x="912" y="376" width="32" height="272"/>
+        </svg>
+      </div>
+
+      <div style="border-top: 2px solid var(--brand-primary); padding-top: 32px; max-width: 420px;">
+        <h1 style="font-size: 28px; text-transform: none; margin-bottom: 16px;">
+          Env&iacute;a d&oacute;lares desde WhatsApp.
+        </h1>
+        <p style="font-size: 15px; color: var(--brand-primary);">
+          Sin apps. Sin complicaciones.
+        </p>
+      </div>
+    </div>
+
+    <!-- Bottom info -->
+    <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+      <div>
+        <span class="spec-label" style="display: block; margin-bottom: 4px;">SIPPY, S.A. DE C.V.</span>
+        <span class="spec-label-dim">El Salvador</span>
+      </div>
+      <div style="text-align: right;">
+        <span class="spec-label-dim" style="display: block; margin-bottom: 4px;">hello@sippy.lat</span>
+        <span class="spec-label-dim">sippy.lat</span>
+      </div>
+    </div>
+
+  </div>
+  <div class="page-footer">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">01 / 04</span>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 2: EL PROBLEMA + LA OPORTUNIDAD + QUE ES SIPPY
+     ================================================================ -->
+<div class="page reg-marks">
+  <div class="grid-bg"></div>
+  <div class="page-content">
+
+    <!-- Section: El Problema -->
+    <span class="spec-label" style="margin-bottom: 16px;">01 // El Problema</span>
+    <h2 style="font-size: 22px; text-transform: none; margin-bottom: 12px;">
+      650 millones de personas en LATAM. La mayor&iacute;a sin acceso real a d&oacute;lares.
+    </h2>
+    <p style="margin-bottom: 20px;">
+      Enviar remesas cuesta 6-8%. Abrir una cuenta en d&oacute;lares es lento, caro o directamente imposible. Las apps de crypto piden descargas, claves y verificaciones interminables. Pero la gente ya tiene WhatsApp. Solo falta conectarlo.
+    </p>
+
+    <!-- Stats row -->
+    <div class="cols-3" style="margin-bottom: 28px;">
+      <div class="panel-frame" style="padding: 20px; text-align: center;">
+        <div class="stat-value" style="font-size: 32px;">6.2%</div>
+        <div class="stat-label">Costo promedio remesa LATAM</div>
+        <p class="source" style="margin-top: 6px;">Banco Mundial, 2024</p>
+      </div>
+      <div class="panel-frame" style="padding: 20px; text-align: center;">
+        <div class="stat-value" style="font-size: 32px;">500M+</div>
+        <div class="stat-label">Usuarios WhatsApp en LATAM</div>
+        <p class="source" style="margin-top: 6px;">Meta, 2024</p>
+      </div>
+      <div class="panel-frame" style="padding: 20px; text-align: center;">
+        <div class="stat-value" style="font-size: 32px;">70%</div>
+        <div class="stat-label">Adultos LATAM sin cuenta en USD</div>
+        <p class="source" style="margin-top: 6px;">World Bank Findex, 2024</p>
+      </div>
+    </div>
+
+    <!-- Section: Que es Sippy -->
+    <div class="section-divider">
+      <span class="spec-label" style="margin-bottom: 14px; display: block;">02 // Qu&eacute; es Sippy</span>
+      <h2 style="font-size: 22px; text-transform: none; margin-bottom: 10px;">
+        Sippy hace que enviar y usar d&oacute;lares digitales sea tan simple como chatear.
+      </h2>
+
+      <!-- 3 Steps -->
+      <div style="display: flex; align-items: flex-start; gap: 16px; margin-bottom: 24px;">
+        <div style="flex: 1; display: flex; align-items: flex-start; gap: 10px;">
+          <div class="step-number">01</div>
+          <div>
+            <h3 style="font-size: 13px; margin-bottom: 4px; color: #fff;">Reg&iacute;strate</h3>
+            <p style="font-size: 12px;">Un SMS. 30 segundos. Tienes tu propia cuenta de d&oacute;lares digitales.</p>
+          </div>
+        </div>
+        <div style="color: rgba(0,175,215,0.3); font-size: 18px; display: flex; align-items: center; padding-top: 4px;">&rarr;</div>
+        <div style="flex: 1; display: flex; align-items: flex-start; gap: 10px;">
+          <div class="step-number">02</div>
+          <div>
+            <h3 style="font-size: 13px; margin-bottom: 4px; color: #fff;">Fondea</h3>
+            <p style="font-size: 12px;">Compra d&oacute;lares digitales con pesos, d&oacute;lares o reales.</p>
+          </div>
+        </div>
+        <div style="color: rgba(0,175,215,0.3); font-size: 18px; display: flex; align-items: center; padding-top: 4px;">&rarr;</div>
+        <div style="flex: 1; display: flex; align-items: flex-start; gap: 10px;">
+          <div class="step-number">03</div>
+          <div>
+            <h3 style="font-size: 13px; margin-bottom: 4px; color: #fff;">Env&iacute;a</h3>
+            <p style="font-size: 12px;">Escribe "envia $20 a mama" en WhatsApp. Listo en segundos.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="code-bar">
+        "envia 20 a mama" &nbsp;&rarr;&nbsp; llega en segundos
+      </div>
+    </div>
+
+    <!-- Section: Funcionalidades -->
+    <div class="section-divider" style="margin-top: 24px;">
+      <span class="spec-label" style="margin-bottom: 14px; display: block;">03 // Funcionalidades</span>
+      <div class="cols-2" style="gap: 16px;">
+        <div>
+          <ul>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Env&iacute;os por WhatsApp</span><br>
+              <span style="font-size: 11px;">Por n&uacute;mero de tel&eacute;fono o contacto guardado</span>
+            </li>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Agenda de contactos</span><br>
+              <span style="font-size: 11px;">Guarda contactos y env&iacute;a con solo el nombre</span>
+            </li>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Moneda local</span><br>
+              <span style="font-size: 11px;">"Envia 50mil pesos a Juan" y Sippy hace la conversi&oacute;n</span>
+            </li>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Compra de d&oacute;lares integrada</span><br>
+              <span style="font-size: 11px;">Con tarjeta o transferencia local, directo a tu cuenta</span>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <ul>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Espa&ntilde;ol, ingl&eacute;s y portugu&eacute;s</span><br>
+              <span style="font-size: 11px;">Detecci&oacute;n autom&aacute;tica del idioma</span>
+            </li>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Agente inteligente</span><br>
+              <span style="font-size: 11px;">Entiende jerga: "m&aacute;ndale 20 lukas a la Cami"</span>
+            </li>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Verificaci&oacute;n por c&oacute;digo</span><br>
+              <span style="font-size: 11px;">Confirmaci&oacute;n segura por SMS o WhatsApp antes de cada env&iacute;o</span>
+            </li>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Sin comisiones</span><br>
+              <span style="font-size: 11px;">Sippy cubre los costos de la red. El usuario paga $0</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="page-footer">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">02 / 04</span>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 3: SEGURIDAD + MERCADO
+     ================================================================ -->
+<div class="page reg-marks">
+  <div class="grid-bg"></div>
+  <div class="page-content">
+
+    <!-- Section: Seguridad -->
+    <span class="spec-label" style="margin-bottom: 14px;">04 // Seguridad &amp; Confianza</span>
+    <h2 style="font-size: 20px; text-transform: none; margin-bottom: 20px;">
+      Tu plata est&aacute; segura. As&iacute; funciona.
+    </h2>
+    <div class="cols-3" style="margin-bottom: 24px; gap: 16px;">
+      <div class="panel-frame" style="padding: 20px;">
+        <span class="indicator-dot" style="margin-bottom: 10px; display: block;"></span>
+        <h3 style="font-size: 12px; color: var(--brand-crypto); margin-bottom: 6px;">Tu dinero, tu control</h3>
+        <p style="font-size: 11px;">Tu cuenta es tuya. Sippy no tiene acceso a tus fondos.</p>
+      </div>
+      <div class="panel-frame" style="padding: 20px;">
+        <span class="indicator-dot" style="margin-bottom: 10px; display: block;"></span>
+        <h3 style="font-size: 12px; color: var(--brand-crypto); margin-bottom: 6px;">Confirmaci&oacute;n antes de enviar</h3>
+        <p style="font-size: 11px;">Cada env&iacute;o requiere un c&oacute;digo. Adem&aacute;s, t&uacute; defines tus l&iacute;mites.</p>
+      </div>
+      <div class="panel-frame" style="padding: 20px;">
+        <span class="indicator-dot" style="margin-bottom: 10px; display: block;"></span>
+        <h3 style="font-size: 12px; color: var(--brand-crypto); margin-bottom: 6px;">100% transparente</h3>
+        <p style="font-size: 11px;">Todas las transacciones quedan registradas y se pueden verificar.</p>
+      </div>
+    </div>
+
+    <!-- Section: Mercado -->
+    <div class="section-divider">
+      <span class="spec-label" style="margin-bottom: 14px; display: block;">05 // Mercado Objetivo</span>
+      <h2 style="font-size: 20px; text-transform: none; margin-bottom: 16px;">
+        Empezamos por Latinoam&eacute;rica porque es donde m&aacute;s se necesita.
+      </h2>
+      <div class="cols-2" style="gap: 16px;">
+        <div>
+          <ul>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Freelancers y trabajadores remotos</span><br>
+              <span style="font-size: 11px;">Cobran en USD, necesitan mover dinero r&aacute;pido entre pa&iacute;ses</span>
+            </li>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Familias con remesas</span><br>
+              <span style="font-size: 11px;">Env&iacute;os internacionales sin comisiones bancarias</span>
+            </li>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Peque&ntilde;os comerciantes</span><br>
+              <span style="font-size: 11px;">Aceptar pagos en d&oacute;lares digitales sin infraestructura</span>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <ul>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Ahorradores en econom&iacute;as inestables</span><br>
+              <span style="font-size: 11px;">Protecci&oacute;n contra devaluaci&oacute;n en d&oacute;lares digitales</span>
+            </li>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Primer mercado: Colombia</span><br>
+              <span style="font-size: 11px;">50M de personas, 95% penetraci&oacute;n WhatsApp, alta demanda de USD</span>
+            </li>
+            <li>
+              <span style="color: #fff; font-weight: 600; font-size: 12px;">Expansi&oacute;n: M&eacute;xico, Argentina, Brasil</span><br>
+              <span style="font-size: 11px;">Misma infraestructura, m&uacute;ltiples monedas locales</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <div class="page-footer">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">03 / 04</span>
+  </div>
+</div>
+
+<!-- ================================================================
+     PAGE 4: EQUIPO + ENTIDAD LEGAL + CLOSE
+     ================================================================ -->
+<div class="page reg-marks">
+  <div class="grid-bg"></div>
+  <div class="page-content" style="justify-content: space-between;">
+
+    <!-- Section: Equipo -->
+    <div>
+      <span class="spec-label" style="margin-bottom: 14px; display: block;">06 // Equipo</span>
+      <div class="cols-3" style="gap: 14px; margin-bottom: 20px;">
+        <div class="team-card">
+          <h3 style="font-size: 13px; color: #fff; margin-bottom: 4px;">Mateo Daza</h3>
+          <span class="spec-label" style="font-size: 8px; display: block; margin-bottom: 10px;">Co-Founder // CEO</span>
+          <p style="font-size: 11px;">
+            Ingeniero en Sistemas. Creador original de Sippy. Producto, dise&ntilde;o, estrategia y crecimiento.
+          </p>
+        </div>
+        <div class="team-card">
+          <h3 style="font-size: 13px; color: #fff; margin-bottom: 4px;">Carlos Quintero</h3>
+          <span class="spec-label" style="font-size: 8px; display: block; margin-bottom: 10px;">Co-Founder // CTO</span>
+          <p style="font-size: 11px;">
+            Ingeniero en Sistemas. Arquitectura, infraestructura y desarrollo.
+          </p>
+        </div>
+        <div class="team-card">
+          <h3 style="font-size: 13px; color: #fff; margin-bottom: 4px;">Lina Sandoval</h3>
+          <span class="spec-label" style="font-size: 8px; display: block; margin-bottom: 10px;">Co-Founder // Legal</span>
+          <p style="font-size: 11px;">
+            Regulaci&oacute;n fintech y crypto en LATAM. Marco legal en El Salvador y estructura corporativa.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Entidad Legal -->
+    <div class="section-divider-subtle">
+      <span class="spec-label" style="margin-bottom: 14px; display: block;">07 // Entidad Legal</span>
+      <div class="cols-2" style="gap: 16px; margin-bottom: 24px;">
+        <div>
+          <h2 style="font-size: 18px; text-transform: none; margin-bottom: 10px;">SIPPY, S.A. DE C.V.</h2>
+          <p style="font-size: 12px; margin-bottom: 6px;">
+            Incorporados en El Salvador.
+          </p>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- CLOSE -->
+    <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end;">
+      <div class="panel-frame" style="padding: 40px 36px; text-align: center;">
+        <h1 style="font-size: 30px; text-transform: none; margin-bottom: 20px; line-height: 1.25;">
+          D&oacute;lares digitales por WhatsApp.
+        </h1>
+        <div style="border-top: 2px solid var(--brand-primary); padding-top: 20px; display: flex; gap: 32px; justify-content: center; align-items: center;">
+          <div style="display: flex; flex-direction: column; gap: 10px; align-items: stretch;">
+            <div style="background: var(--brand-primary); padding: 10px 28px;">
+              <span style="font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; color: var(--brand-dark); letter-spacing: 0.05em;">hello@sippy.lat</span>
+            </div>
+            <div style="border: 1px solid rgba(0,215,150,0.4); padding: 10px 28px; text-align: center;">
+              <span style="font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700; color: var(--brand-crypto); letter-spacing: 0.05em;">sippy.lat</span>
+            </div>
+          </div>
+          <div style="width: 1px; height: 60px; background: rgba(0,175,215,0.2);"></div>
+          <div style="text-align: left;">
+            <span class="spec-label" style="font-size: 9px; display: block; margin-bottom: 4px;">WhatsApp</span>
+            <span style="font-family: 'Space Mono', monospace; font-size: 14px; color: var(--brand-crypto); font-weight: 700;">+1 (472) 226-1449</span>
+          </div>
+        </div>
+      </div>
+      <p class="spec-label-dim" style="margin-top: 14px; text-align: center; font-size: 9px;">
+        Colombia &middot; SIPPY, S.A. DE C.V.
+      </p>
+    </div>
+
+  </div>
+  <div class="page-footer">
+    <span class="spec-label-dim">sippy/51994</span>
+    <span class="spec-label-dim">04 / 04</span>
+  </div>
+</div>
+
+</body>
+</html>
