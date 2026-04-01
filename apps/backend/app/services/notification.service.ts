@@ -21,6 +21,49 @@ const TEMPLATE_LANG_MAP: Record<string, string> = {
   pt: 'pt_BR',
 }
 
+// Country codes that should receive invite templates in Spanish.
+const ES_PREFIXES = [
+  '+34', // Spain
+  '+52',
+  '+53',
+  '+54',
+  '+56',
+  '+57',
+  '+58',
+  '+51',
+  '+591',
+  '+593',
+  '+595',
+  '+598',
+  '+502',
+  '+503',
+  '+504',
+  '+505',
+  '+506',
+  '+507',
+  '+509',
+]
+
+// Country codes that should receive invite templates in Portuguese.
+const PT_PREFIXES = [
+  '+55', // Brazil
+  '+351', // Portugal
+]
+
+/**
+ * Pick the WhatsApp template language for an invite based on the recipient's
+ * phone prefix. Spanish-speaking → es, Portuguese-speaking → pt_BR, else → en.
+ */
+function getInviteTemplateLang(phone: string): string {
+  for (const prefix of PT_PREFIXES) {
+    if (phone.startsWith(prefix)) return 'pt_BR'
+  }
+  for (const prefix of ES_PREFIXES) {
+    if (phone.startsWith(prefix)) return 'es'
+  }
+  return 'en'
+}
+
 /**
  * Template names registered in Meta Business Manager.
  * These must be pre-approved before they can be sent.
@@ -152,9 +195,9 @@ export async function notifyInviteRecipient(opts: {
   lang: string
 }): Promise<boolean> {
   const { recipientPhone } = opts
-  // Always send invites in English — the recipient is unknown, and the
-  // 'es' template may not be approved or may not render for non-LATAM locales.
-  const templateLang = 'en'
+  // Derive language from the recipient's phone prefix (not the sender's).
+  // LATAM country codes → es, Brazil → pt, everything else → en.
+  const templateLang = getInviteTemplateLang(recipientPhone)
 
   try {
     const result = await sendTemplateMessage(
