@@ -1067,8 +1067,22 @@ export default class WebhookController {
     const value = changes?.value
     const messages = value?.messages
 
+    // Log delivery status callbacks (sent/delivered/read/failed) from Meta
+    const statuses = value?.statuses
+    if (statuses && statuses.length > 0) {
+      for (const s of statuses) {
+        if (s.status === 'failed') {
+          logger.warn('Message delivery FAILED to %s: %o', s.recipient_id, s.errors)
+        } else {
+          logger.info('Message status: %s → %s', s.recipient_id, s.status)
+        }
+      }
+    }
+
     if (!messages || messages.length === 0) {
-      logger.info('No messages in webhook payload')
+      if (!statuses || statuses.length === 0) {
+        logger.info('No messages in webhook payload')
+      }
       return
     }
 

@@ -153,6 +153,13 @@ export interface WebhookPayload {
           wa_id: string
         }>
         messages?: WhatsAppMessage[]
+        statuses?: Array<{
+          id: string
+          status: string
+          timestamp: string
+          recipient_id: string
+          errors?: Array<{ code: number; title: string; message?: string }>
+        }>
       }
       field: string
     }>
