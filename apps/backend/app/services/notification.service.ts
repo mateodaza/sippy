@@ -151,8 +151,10 @@ export async function notifyInviteRecipient(opts: {
   recipientPhone: string
   lang: string
 }): Promise<boolean> {
-  const { recipientPhone, lang } = opts
-  const templateLang = TEMPLATE_LANG_MAP[lang] || 'en'
+  const { recipientPhone } = opts
+  // Always send invites in English — the recipient is unknown, and the
+  // 'es' template may not be approved or may not render for non-LATAM locales.
+  const templateLang = 'en'
 
   try {
     const result = await sendTemplateMessage(
