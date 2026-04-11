@@ -1,4 +1,11 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
+import { UpdatedTimestamp } from './updated-timestamp'
+
+// Always render on request so stats reflect the latest on-chain data.
+// Backend /api/stats is a direct DB aggregate query with no caching, so
+// every page load gets the current totals.
+export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Sippy Stats — Live On-Chain Analytics',
@@ -33,12 +40,35 @@ interface DailyVolume {
   transferCount: number
 }
 
+interface CountryRow {
+  code: string
+  users: number
+}
+
 interface StatsData {
   totalVolume: string
   totalTransfers: number
   activeWallets: number
   registeredUsers: number
+  usdcOnboarded?: string
+  countries?: CountryRow[]
   dailyVolumes: DailyVolume[]
+}
+
+const COUNTRY_FLAGS: Record<string, string> = {
+  CO: '🇨🇴',
+  MX: '🇲🇽',
+  AR: '🇦🇷',
+  BR: '🇧🇷',
+  PE: '🇵🇪',
+  CL: '🇨🇱',
+  VE: '🇻🇪',
+  EC: '🇪🇨',
+  SV: '🇸🇻',
+  GT: '🇬🇹',
+  ES: '🇪🇸',
+  US: '🇺🇸',
+  OTHER: '🌎',
 }
 
 function formatUSDC(raw: string): string {
@@ -57,7 +87,7 @@ function formatCompact(n: number): string {
 async function fetchStats(): Promise<StatsData | null> {
   try {
     const res = await fetch(`${BACKEND_URL}/api/stats`, {
-      next: { revalidate: 60 },
+      cache: 'no-store',
     })
     if (!res.ok) return null
     return res.json()
@@ -68,6 +98,9 @@ async function fetchStats(): Promise<StatsData | null> {
 
 export default async function StatsPage() {
   const stats = await fetchStats()
+  // Captured at server render time; the UpdatedTimestamp client component
+  // reformats it to the viewer's local timezone on mount.
+  const updatedAtIso = new Date().toISOString()
 
   if (!stats) {
     return (
@@ -86,16 +119,19 @@ export default async function StatsPage() {
 
   const maxVolume = Math.max(...stats.dailyVolumes.map((d) => Number(d.totalUsdcVolume)), 1)
 
+  const activationPct =
+    stats.registeredUsers > 0 ? Math.round((stats.activeWallets / stats.registeredUsers) * 100) : 0
+
   const kpis = [
     {
-      label: 'TOTAL VOLUME',
+      label: 'USDC MOVED',
       value: formatUSDC(stats.totalVolume),
-      sublabel: 'USDC ON ARBITRUM',
+      sublabel: 'DEPOSITS + SENDS',
     },
     {
-      label: 'REGISTERED USERS',
-      value: formatCompact(stats.registeredUsers),
-      sublabel: 'WALLET HOLDERS',
+      label: 'USDC ONBOARDED',
+      value: formatUSDC(stats.usdcOnboarded ?? '0'),
+      sublabel: 'FUNDS ENTERING SIPPY',
     },
     {
       label: 'TRANSFERS',
@@ -103,9 +139,9 @@ export default async function StatsPage() {
       sublabel: 'ALL-TIME',
     },
     {
-      label: 'ACTIVE WALLETS',
-      value: formatCompact(stats.activeWallets),
-      sublabel: 'WITH TRANSACTIONS',
+      label: 'BETA USERS',
+      value: formatCompact(stats.registeredUsers),
+      sublabel: activationPct > 0 ? `${activationPct}% ACTIVATION RATE` : 'REGISTERED',
     },
   ]
 
@@ -117,13 +153,43 @@ export default async function StatsPage() {
           <div className="flex items-center gap-3 mb-2">
             <span className="indicator-dot indicator-dot-active" aria-hidden="true" />
             <span className="spec-label spec-label-muted">LIVE</span>
+            <span className="font-mono text-[11px] tracking-widest uppercase text-[var(--text-secondary)]">
+              · UPDATED <UpdatedTimestamp iso={updatedAtIso} />
+            </span>
           </div>
-          <h1 className="font-display text-3xl font-bold uppercase tracking-wide text-[var(--text-primary)] sm:text-4xl">
-            Network Stats
-          </h1>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Image
+              src="/images/logos/sippy-s-mark-cheetah.svg"
+              alt=""
+              aria-hidden="true"
+              width={56}
+              height={56}
+              priority
+              className="h-10 w-10 sm:h-14 sm:w-14"
+            />
+            <h1 className="font-display text-3xl font-bold uppercase tracking-wide text-[var(--text-primary)] sm:text-4xl">
+              Network Stats
+            </h1>
+          </div>
           <p className="mt-2 font-mono text-xs tracking-widest uppercase text-[var(--text-secondary)]">
-            SIPPY // ARBITRUM ONE // AGGREGATE DATA
+            SIPPY // ARBITRUM ONE // LATAM BETA
           </p>
+          {stats.countries && stats.countries.length > 0 && (
+            <p className="mt-3 font-mono text-xs tracking-widest uppercase text-[var(--text-secondary)]">
+              {stats.countries.map((c, i) => (
+                <span key={c.code}>
+                  {i > 0 && <span className="mx-2 opacity-40">·</span>}
+                  <span className="mr-1.5 text-sm">{COUNTRY_FLAGS[c.code] ?? '🌎'}</span>
+                  <span>{c.users}</span>
+                  {i === 0 && c.code === 'CO' && (
+                    <span className="ml-1.5 rounded-sm border border-[var(--border-default)] px-1 py-[1px] text-[9px] tracking-wider text-[var(--text-secondary)]">
+                      HQ
+                    </span>
+                  )}
+                </span>
+              ))}
+            </p>
+          )}
         </div>
       </header>
 
@@ -133,10 +199,10 @@ export default async function StatsPage() {
           {kpis.map((kpi) => (
             <div key={kpi.label} className="panel-frame rounded-xl p-6 sm:p-8">
               <p className="spec-label mb-4">{kpi.label}</p>
-              <p className="font-display text-4xl font-bold text-[var(--text-primary)] sm:text-5xl">
+              <p className="font-display text-5xl font-bold leading-none text-[var(--text-primary)] sm:text-6xl">
                 {kpi.value}
               </p>
-              <p className="mt-2 font-mono text-[11px] tracking-[0.15em] uppercase text-[var(--text-secondary)]">
+              <p className="mt-4 font-mono text-xs font-semibold tracking-[0.12em] uppercase text-[var(--text-primary)] opacity-80">
                 {kpi.sublabel}
               </p>
             </div>
