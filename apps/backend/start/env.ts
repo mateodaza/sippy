@@ -112,4 +112,26 @@ export default await Env.create(new URL('../', import.meta.url), {
   // Infrastructure
   TRUST_PROXY: Env.schema.string.optional(),
   RAILWAY_ENVIRONMENT: Env.schema.string.optional(),
+
+  // Colurs — fiat rails (onramp + offramp)
+  // sandbox: https://sandbox.colurs.com  |  production: https://api.colurs.com
+  // Confirmed from api-colurs.json OpenAPI spec (servers section).
+  // off_market=false by default → operates Mon–Fri market hours only.
+  // To enable 24/7 (off_market=true) Colurs must enable it on the account first.
+  COLURS_BASE_URL: Env.schema.string.optional(),
+  COLURS_API_KEY: Env.schema.string.optional(),
+  COLURS_USERNAME: Env.schema.string.optional(),
+  COLURS_PASSWORD: Env.schema.string.optional(),
+  COLURS_WEBHOOK_SECRET: Env.schema.string.optional(), // confirm header+algo with Colurs
+  COLURS_USER_PASSWORD_SECRET: Env.schema.string.optional(), // HMAC secret for deriving per-user Colurs passwords
+  COLURS_SOURCE_ACCOUNT_ID: Env.schema.string.optional(), // Sippy USD account in Colurs
+  COLURS_DESTINATION_ACCOUNT_ID: Env.schema.string.optional(), // Sippy COP account in Colurs
+
+  // Sippy ETH mainnet hot wallet (Colurs sends USDT here for onramp bridge)
+  SIPPY_ETH_DEPOSIT_ADDRESS: Env.schema.string.optional(),
+  SIPPY_ETH_DEPOSIT_PRIVATE_KEY: Env.schema.string.optional(),
+  ETH_MAINNET_RPC_URL: Env.schema.string.optional(), // Ethereum mainnet RPC for LiFi bridge signer
+
+  // Onramp bridge flag: true = Colurs sends USDC directly (no LiFi); false = USDT→LiFi→USDC
+  COLURS_DIRECT_USDC: Env.schema.string.optional(),
 })

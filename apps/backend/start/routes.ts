@@ -22,6 +22,9 @@ const EmbeddedWalletController = () => import('#controllers/embedded_wallet_cont
 const AuthApiController = () => import('#controllers/auth_api_controller')
 const SupportController = () => import('#controllers/support_controller')
 const WebhookAlchemyController = () => import('#controllers/webhook_alchemy_controller')
+const WebhookColursController = () => import('#controllers/webhook_colurs_controller')
+const OnrampController = () => import('#controllers/onramp_controller')
+const OfframpController = () => import('#controllers/offramp_controller')
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
@@ -34,6 +37,9 @@ router.post('/webhook/whatsapp', [WebhookController, 'handle'])
 
 // ── Alchemy webhook (HMAC-verified, no session auth) ────────────────────
 router.post('/webhook/alchemy/address-activity', [WebhookAlchemyController, 'handle'])
+
+// ── Colurs webhook (signature-verified, no session auth) ─────────────────
+router.post('/webhook/colurs', [WebhookColursController, 'handle'])
 
 // ── Public resolution (IP-throttled, privacy-aware) ─────────────────────────
 router.get('/resolve-phone', [ResolveController, 'byPhone']).use(middleware.ipThrottle())
@@ -93,6 +99,35 @@ router
     router.get('/tos-status', [EmbeddedWalletController, 'tosStatus'])
     router.get('/profile', [EmbeddedWalletController, 'getProfile'])
     router.post('/support/tickets', [SupportController, 'create'])
+
+    // ── Colurs rails — Colombia (+57) only ───────────────────────────────────
+    router
+      .group(() => {
+        // KYC (one-time Colurs user registration + verification)
+        router.get('/onramp/kyc', [OnrampController, 'kycStatus'])
+        router.post('/onramp/kyc/register', [OnrampController, 'kycRegister'])
+        router.post('/onramp/kyc/send-otp', [OnrampController, 'kycSendOtp'])
+        router.post('/onramp/kyc/verify-phone', [OnrampController, 'kycVerifyPhone'])
+        router.post('/onramp/kyc/verify-email', [OnrampController, 'kycVerifyEmail'])
+        router.post('/onramp/kyc/upload-document', [OnrampController, 'kycUploadDocument'])
+        router.post('/onramp/kyc/refresh-level', [OnrampController, 'kycRefreshLevel'])
+
+        // Onramp (COP → USDC via Colurs R2P)
+        router.post('/onramp/quote', [OnrampController, 'quote'])
+        router.get('/onramp/pse-banks', [OnrampController, 'pseBanks'])
+        router.post('/onramp/initiate', [OnrampController, 'initiate'])
+        router.get('/onramp/status/:orderId', [OnrampController, 'status'])
+
+        // Offramp (USDC → COP via Colurs FX exchange)
+        router.post('/offramp/quote', [OfframpController, 'quote'])
+        router.post('/offramp/initiate', [OfframpController, 'initiate'])
+        router.get('/offramp/status/:orderId', [OfframpController, 'status'])
+        router.get('/offramp/bank-accounts', [OfframpController, 'listBankAccounts'])
+        router.post('/offramp/bank-accounts', [OfframpController, 'addBankAccount'])
+        router.get('/offramp/banks', [OfframpController, 'availableBanks'])
+        router.get('/offramp/document-types', [OfframpController, 'documentTypes'])
+      })
+      .use(middleware.colombiaOnly())
   })
   .prefix('/api')
   .use(middleware.jwtAuth())

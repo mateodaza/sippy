@@ -65,6 +65,7 @@ export interface ParsedCommand {
     | 'save_contact'
     | 'delete_contact'
     | 'list_contacts'
+    | 'withdraw'
     | 'unknown'
   amount?: number
   recipient?: string

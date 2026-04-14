@@ -1,7 +1,7 @@
 # Project Status — Sippy
 
-**Last Updated:** March 27, 2026
-**Current Milestone:** M1 — Production Ready (deadline Mar 26, 2026)
+**Last Updated:** April 14, 2026
+**Current Milestone:** M2 — Colurs Fiat Ramp (COP ↔ USDC)
 **Detailed Plan:** [M1_PLAN.md](./M1_PLAN.md)
 **Task Queue:** [TASK_QUEUE.md](./TASK_QUEUE.md)
 
@@ -128,6 +128,41 @@ Beta is live with 45 users and $4K+ volume. Remaining work:
 
 ---
 
+## Colurs Ramp Implementation — Code Complete, Pending Integration
+
+**Plan:** [docs/COLURS-RAMP-PLAN.md](./docs/COLURS-RAMP-PLAN.md)
+**Started:** Apr 13, 2026
+
+| Phase | Deliverable                                                 | Status  | Notes                                                                                                                                                                                                          |
+| ----- | ----------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | DB migration `0013_colurs_ramp_tables.ts` + env vars        | ✅ Done | 4 tables: onramp_orders, offramp_orders, colurs_bank_accounts, colurs_kyc                                                                                                                                      |
+| 2     | `colurs_auth.service.ts` — JWT token manager                | ✅ Done | Login, auto-refresh, concurrency guard, `colursHeaders()` helper                                                                                                                                               |
+| 3     | `colurs_payment.service.ts` — PSE/Nequi/Bancolombia         | ✅ Done | `createCounterparty`, `initiatePayment` dispatcher, Nequi null link handled                                                                                                                                    |
+| 4     | `OnrampController` + `WebhookColursController` + routes     | ✅ Done | quote/initiate/status endpoints, all 4 Colurs events, bridge stub                                                                                                                                              |
+| 5     | `onramp_bridge.service.ts` — LiFi + COLURS_DIRECT_USDC flag | ✅ Done | ethers v5 signer, @lifi/sdk v3 quote+tx, both paths implemented                                                                                                                                                |
+| 6     | `colurs_fx.service.ts` + `colurs_bank.service.ts`           | ✅ Done | FX quote/initiate/balance; bank register/list/default; account_type 0/1 mapping                                                                                                                                |
+| 7     | `OfframpController` + routes                                | ✅ Done | quote/initiate/status + bank account CRUD + execute() wired                                                                                                                                                    |
+| 8     | WhatsApp commands + notifications                           | ✅ Done | `withdraw`/`retirar` → offramp link; `fund` COP (+57) → onramp link; onramp complete → notifyFundReceived                                                                                                      |
+| 9     | User KYC flow — backend                                     | ✅ Done | `colurs_user.service.ts` + `colurs_kyc.service.ts` (7 endpoints): register → phone OTP → email OTP → doc upload → Level 5 poll. Per-user password derivation via HMAC-SHA256                                   |
+| 10    | Frontend — `/onramp` + `/offramp` + Settings buttons        | ✅ Done | Full multi-step onramp (KYC + PSE/Nequi/Bancolombia + status poll), full offramp (bank setup + quote + confirm + status), fiat ramp buttons in Settings                                                        |
+| 11    | Integration tests — mocked                                  | ✅ Done | 90 tests: pure-function unit (password derivation, idType mapping), controller validation + KYC gate (29), HTTP auth-boundary functional (20), webhook event dispatch (18), offramp validation + status (20)   |
+| 12    | Lucid model migration — all raw SQL → Lucid DSL             | ✅ Done | 4 new models (OnrampOrder, OfframpOrder, ColursKyc, ColursBankAccount); all `db.rawQuery` calls in ramp services + controllers replaced with Lucid `Model.query()`, `Model.create()`, `Model.updateOrCreate()` |
+
+**Remaining before shipping to users:**
+
+- Confirm 3 open questions with Colurs (see below)
+- Run live smoke test against `dev.backend.colurs.co` with a test phone number
+- Set production env vars: `COLURS_USER_PASSWORD_SECRET`, `SIPPY_ETH_DEPOSIT_ADDRESS`, `SIPPY_SPENDER_ADDRESS`, `COLURS_SOURCE_ACCOUNT_ID`, `COLURS_DESTINATION_ACCOUNT_ID`
+- Wire `withdrawal.completed` WhatsApp notification (currently logged but not sent)
+
+**Open questions (need Colurs confirmation before shipping):**
+
+- USDT settlement destination wallet field in R2P API
+- Webhook signature header name + HMAC algorithm
+- Production base URL split (`api.colurs.co` vs `backend.colurs.co`)
+
+---
+
 ## Known Issues
 
 - **Onramp for Colombia:** Transak + TransFi KYB submitted Mar 23. Coinbase Onramp live for non-CO countries.
@@ -165,11 +200,15 @@ sippy/                      ← Turborepo + pnpm workspaces
 | User-facing strings   | 35+ (all trilingual)                        |
 | WhatsApp capacity     | 2K bot-initiated + unlimited user-initiated |
 | Smart contract        | GasRefuel.sol deployed on Arbitrum One      |
-| Backend tests         | 1090+ passing (unit + functional)           |
+| Backend tests         | 1267 passing (unit + functional)            |
 
 ---
 
 ## Recent Changes
+
+**Apr 14** — Colurs ramp: migrated all raw SQL to AdonisJS Lucid DSL. Created 4 Lucid models (`OnrampOrder`, `OfframpOrder`, `ColursKyc`, `ColursBankAccount`). Replaced every `db.rawQuery` / `db.table()` call in onramp/offramp controllers, webhook controller, KYC service, bank service, and bridge service with `Model.query()`, `Model.create()`, `Model.updateOrCreate()`. Added 30 new tests: `webhook_colurs_controller.spec.ts` (18 tests — signature guards + all 4 Colurs event paths including idempotency/bridge-fail recovery), `offramp_controller.spec.ts` (20 tests — quote/initiate validation + status endpoint). Fixed `colurs_user_service.spec.ts` and `onramp_controller.spec.ts` (env var setup). 1267 tests passing.
+
+**Apr 13** — Colurs fiat ramp code complete: full KYC flow (register → phone OTP → email OTP → document upload → Level 5 poll, per-user HMAC-SHA256 password derivation, `colurs_kyc` DB table), `/onramp` and `/offramp` frontend pages (multi-step with KYC gate, PSE/Nequi/Bancolombia, bank account management, quote/confirm/status), fiat ramp buttons in Settings, WhatsApp `withdraw` command + Colombia fund redirect. 60 new tests (pure function, controller validation, auth boundary). Pending: live smoke test + 3 open questions with Colurs.
 
 **Mar 27** — Address book shipped: save/delete/list contacts, vCard import, smart alias resolver (5 strategies: exact, prefix, any-word, contains, word-level Levenshtein), accent-aware parser for Spanish imperatives. Local currency sends: "2mil pesos", "50 reais", "100 soles" auto-convert to USDC via sender phone prefix. mil/k shorthand expansion. Recipient notifications show local equivalent. Contact-not-found stores partial send for follow-up. Delete contact requires keyword to prevent command hijacking. Confirm priority fix (money transfer wins over contact overwrite). 1090 tests passing.
 **Mar 24** — Zoho Desk support ticketing integration: backend service (`zoho_desk.service.ts`) with OAuth2 refresh-token flow and in-memory token caching, support controller with public (IP-throttled) and authenticated endpoints, `SupportForm` component on landing page and settings page, 19 i18n keys in EN/ES/PT. Zoho Desk free plan (3 agents, 5K API credits/day). Pending: end-to-end testing with live Zoho API.
@@ -187,19 +226,20 @@ sippy/                      ← Turborepo + pnpm workspaces
 
 ## Environment
 
-| Service           | Provider                                            | Status                     |
-| ----------------- | --------------------------------------------------- | -------------------------- |
-| Backend hosting   | Railway                                             | Active                     |
-| Database          | Railway PostgreSQL                                  | Active                     |
-| Blockchain        | Arbitrum One                                        | Active                     |
-| Wallets           | Coinbase CDP Embedded                               | Active                     |
-| Messaging         | WhatsApp Business API                               | Active (production number) |
-| LLM               | Groq (free tier)                                    | Active                     |
-| Smart contract    | GasRefuel.sol                                       | Deployed                   |
-| Domain            | sippy.lat                                           | Active                     |
-| On-chain indexer  | Ponder v0.15 + Railway                              | Deployed                   |
-| SMS OTP           | Twilio (raw SMS API)                                | Configured                 |
-| Email delivery    | Resend                                              | Configured                 |
-| Exchange rates    | open.er-api.com (free)                              | Active                     |
-| Onramp            | Coinbase (non-CO), Transak/TransFi (CO KYB pending) | Partially live             |
-| Support ticketing | Zoho Desk (free plan)                               | Configured — testing       |
+| Service             | Provider               | Status                            |
+| ------------------- | ---------------------- | --------------------------------- |
+| Backend hosting     | Railway                | Active                            |
+| Database            | Railway PostgreSQL     | Active                            |
+| Blockchain          | Arbitrum One           | Active                            |
+| Wallets             | Coinbase CDP Embedded  | Active                            |
+| Messaging           | WhatsApp Business API  | Active (production number)        |
+| LLM                 | Groq (free tier)       | Active                            |
+| Smart contract      | GasRefuel.sol          | Deployed                          |
+| Domain              | sippy.lat              | Active                            |
+| On-chain indexer    | Ponder v0.15 + Railway | Deployed                          |
+| SMS OTP             | Twilio (raw SMS API)   | Configured                        |
+| Email delivery      | Resend                 | Configured                        |
+| Exchange rates      | open.er-api.com (free) | Active                            |
+| Onramp (non-CO)     | Coinbase               | Live                              |
+| Onramp/Offramp (CO) | Colurs (COP ↔ USDC)    | Code complete — pending live test |
+| Support ticketing   | Zoho Desk (free plan)  | Configured — testing              |

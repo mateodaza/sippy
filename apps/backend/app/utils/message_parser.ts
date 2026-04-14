@@ -101,6 +101,12 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(i want to|i'd like to) (add funds|add money|deposit|top.?up)/i,
     /^quero (adicionar|depositar|carregar)/i,
   ],
+  withdraw: [
+    /^(withdraw|offramp|cash.?out)$/i,
+    /^(retirar|retirarme|retiro|sacar|cobrar)$/i,
+    /^(retirar|sacar|cobrar)(\s+fondos|\s+plata|\s+dinero)?$/i,
+    /^(sacar|retirar)\s+(?:mi\s+)?(?:plata|dinero|fondos|saldo|usdc)$/i,
+  ],
   social: [
     /^(thanks|thank you|thx|ty|ok|okay|cool|got it|great|nice|perfect|awesome|sure|bye|goodbye|see you|alright|sounds good|noted|understood)$/i,
     /^(gracias|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada|ya|ya vi|entendido|enterado|arre|sale|joya|de una|todo bien|a la orden)$/i,
@@ -127,6 +133,10 @@ const PRIVACY_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
  */
 // Order matters: fund must come before balance so "agregar saldo" matches fund, not balance.
 const LOOSE_COMMAND_PATTERNS: Array<[string, RegExp]> = [
+  [
+    'withdraw',
+    /(?:^|\s)(withdraw|offramp|cash.?out|retirar|retirarme|retiro|sacar|cobrar)(?:\s|$)/i,
+  ],
   [
     'fund',
     /(?:^|\s)(fund|fundear|add funds|add money|deposit|top.?up|agregar (?:fondos|plata|dinero|saldo)|agregar$|recargar|depositar|adicionar (?:fundos|dinheiro|saldo)|cargar|carregar)(?:\s|$)/i,
