@@ -371,6 +371,7 @@ export default class OnrampController {
     // with the persisted paymentLink/trackingKey so the frontend can resume.
     const existing = await OnrampOrder.query()
       .where('idempotencyKey', idempotencyKey as string)
+      .where('phoneNumber', phoneNumber)
       .first()
 
     if (existing) {
@@ -436,6 +437,7 @@ export default class OnrampController {
       if (code === '23505') {
         const winner = await OnrampOrder.query()
           .where('idempotencyKey', idempotencyKey as string)
+          .where('phoneNumber', phoneNumber)
           .first()
         if (winner) {
           // Same in-flight guard as the SELECT path above

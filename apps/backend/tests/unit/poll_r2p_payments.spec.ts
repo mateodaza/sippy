@@ -342,7 +342,7 @@ test.group('pollR2pPayments | succeeded persists amountUsdt', (group) => {
     delete process.env.COLURS_PASSWORD
   })
 
-  test('persists amountUsdt from payment response on succeeded', async ({ assert }) => {
+  test('persists amountUsdt atomically in Phase 1 claim', async ({ assert }) => {
     // Recovery sweep: nothing to recover
     rawQueryResponses.set("status = 'initiating_payment'", { rows: [] })
     rawQueryResponses.set("status IN ('paid', 'initiating_bridge')", { rows: [] })
@@ -361,11 +361,12 @@ test.group('pollR2pPayments | succeeded persists amountUsdt', (group) => {
     })
 
     rawQueryResponses.set('polled_at = now()', { rows: [] })
+    // Phase 1 claim (now raw SQL): status = 'paid' + amount_usdt in one UPDATE
+    rawQueryResponses.set("status = 'paid'", { rows: [{ id: 'order-usdt' }] })
     rawQueryResponses.set("SET status = 'initiating_bridge'", {
       rows: [{ id: 'order-usdt' }],
     })
     rawQueryResponses.set("status = 'bridge_failed'", { rows: [] })
-    fromUpdateResult = [{ id: 'order-usdt' }]
 
     // Mock fetch: Colurs auth (/token/) + payment status
     const jwt = fakeJwt()
@@ -383,12 +384,14 @@ test.group('pollR2pPayments | succeeded persists amountUsdt', (group) => {
 
     await pollR2pPayments()
 
-    const updateCall = onrampQueryCalls.find(
-      (c) => c.method === 'update' && JSON.stringify(c.args).includes('amountUsdt')
+    // The Phase 1 claim now atomically includes the USDT amount in bindings
+    const claimCall = rawQueryCalls.find(
+      (c) => c.sql.includes("status = 'paid'") && c.sql.includes('amount_usdt')
     )
-    assert.exists(updateCall, 'should persist amountUsdt via OnrampOrder.query().update()')
-    const updateData = updateCall!.args[0] as Record<string, unknown>
-    assert.equal(updateData.amountUsdt, '48.75')
+    assert.exists(claimCall, 'Phase 1 claim should include amount_usdt in the same UPDATE')
+    // First binding is the USDT amount (or null), second is the external_id
+    assert.equal(claimCall!.bindings![0], '48.75')
+    assert.equal(claimCall!.bindings![1], 'ext-usdt-1')
   })
 
   test('persists amountUsdt from amount_usd fallback field', async ({ assert }) => {
@@ -408,9 +411,9 @@ test.group('pollR2pPayments | succeeded persists amountUsdt', (group) => {
     })
 
     rawQueryResponses.set('polled_at = now()', { rows: [] })
+    rawQueryResponses.set("status = 'paid'", { rows: [{ id: 'order-usd-fb' }] })
     rawQueryResponses.set("SET status = 'initiating_bridge'", { rows: [{ id: 'order-usd-fb' }] })
     rawQueryResponses.set("status = 'bridge_failed'", { rows: [] })
-    fromUpdateResult = [{ id: 'order-usd-fb' }]
 
     const jwt = fakeJwt()
     global.fetch = makeMockFetch([
@@ -427,12 +430,11 @@ test.group('pollR2pPayments | succeeded persists amountUsdt', (group) => {
 
     await pollR2pPayments()
 
-    const updateCall = onrampQueryCalls.find(
-      (c) => c.method === 'update' && JSON.stringify(c.args).includes('amountUsdt')
+    const claimCall = rawQueryCalls.find(
+      (c) => c.sql.includes("status = 'paid'") && c.sql.includes('amount_usdt')
     )
-    assert.exists(updateCall, 'should persist amountUsdt from amount_usd fallback')
-    const updateData = updateCall!.args[0] as Record<string, unknown>
-    assert.equal(updateData.amountUsdt, '100.5')
+    assert.exists(claimCall, 'Phase 1 claim should include amount_usdt from amount_usd fallback')
+    assert.equal(claimCall!.bindings![0], '100.5')
   })
 })
 
@@ -475,8 +477,8 @@ test.group('pollR2pPayments | already-advanced statuses skip re-processing', (gr
     })
     rawQueryResponses.set('polled_at = now()', { rows: [] })
 
-    // db.from() claim returns empty — order already past pending
-    fromUpdateResult = []
+    // Phase 1 claim returns empty — order already past pending
+    rawQueryResponses.set("status = 'paid'", { rows: [] })
 
     // OnrampOrder.query().where().first() returns a completed order
     onrampQueryFirstResult = {
@@ -528,8 +530,8 @@ test.group('pollR2pPayments | already-advanced statuses skip re-processing', (gr
     })
     rawQueryResponses.set('polled_at = now()', { rows: [] })
 
-    // db.from() claim returns empty — order already past pending
-    fromUpdateResult = []
+    // Phase 1 claim returns empty — order already past pending
+    rawQueryResponses.set("status = 'paid'", { rows: [] })
 
     // OnrampOrder.query().where().first() returns a bridging order with hash
     onrampQueryFirstResult = {

@@ -236,35 +236,40 @@ async function broadcastLiFiBridgeTx(
   // The approval target is quote.estimate.approvalAddress when present,
   // falling back to txReq.to (the LiFi diamond contract).
   //
-  // ⚠ UNKNOWN: confirm that (quote as any).estimate?.approvalAddress is the
-  // correct field. If LiFi SDK types change, this may need updating.
+  // We use MaxUint256 approval (standard pattern for trusted router contracts)
+  // instead of exact-amount approval. This avoids two problems:
+  //   1. USDT quirk: the original USDT contract on Ethereum does not allow
+  //      changing a non-zero allowance directly to another non-zero value.
+  //      With MaxUint256, we only ever need to approve once per spender.
+  //   2. Concurrent bridge calls: if two triggerBridge calls race from the same
+  //      hot wallet, exact-amount approval causes one to revoke the other's
+  //      allowance mid-flight. MaxUint256 is safe for concurrent use.
   //
-  // USDT quirk: the original USDT contract on Ethereum does not allow changing
-  // a non-zero allowance directly to another non-zero value. We must set it to
-  // 0 first if there is an existing allowance that differs from the target.
+  // The spender is LiFi's diamond/router contract — a well-audited, immutable
+  // contract that only transfers the exact amount specified in the route.
   const approvalTarget: string = (quote as any).estimate?.approvalAddress ?? (txReq.to as string)
+  const MAX_UINT256 = ethers.constants.MaxUint256
 
   const usdtContract = new ethers.Contract(USDT_ETH, ERC20_APPROVAL_ABI, wallet)
   const currentAllowance: ethers.BigNumber = await usdtContract.allowance(
     signerAddress,
     approvalTarget
   )
-  const requiredAllowance = ethers.BigNumber.from(amountWei)
 
-  if (!currentAllowance.eq(requiredAllowance)) {
+  if (currentAllowance.lt(amountWei)) {
     if (currentAllowance.gt(0)) {
       // USDT requires reset to 0 before setting a new non-zero value
       logger.info(`onramp_bridge: resetting USDT allowance to 0 for ${approvalTarget}`)
       const resetTx = await usdtContract.approve(approvalTarget, 0)
       await resetTx.wait(1)
     }
-    logger.info(`onramp_bridge: approving ${amountWei} USDT for spender ${approvalTarget}`)
-    const approveTx = await usdtContract.approve(approvalTarget, requiredAllowance)
+    logger.info(`onramp_bridge: approving MaxUint256 USDT for spender ${approvalTarget}`)
+    const approveTx = await usdtContract.approve(approvalTarget, MAX_UINT256)
     await approveTx.wait(1)
   } else {
     logger.info(`onramp_bridge: USDT allowance already sufficient for ${approvalTarget}`)
   }
-  // ── end approval ────────────────────────────────────────────────────────────
+  // ── end approval ──────────────────────────��─────────────────────────────────
 
   logger.info(`onramp_bridge: sending LiFi tx from ${signerAddress}`)
 
@@ -403,8 +408,36 @@ export async function triggerBridge(externalId: string): Promise<void> {
       logger.error({ err }, `onramp_bridge: confirmation failed for ${externalId}`)
       setOrderStatus(externalId, 'bridge_failed', {
         error: err instanceof Error ? err.message : 'Confirmation error',
-      }).catch((e) => {
-        logger.error({ err: e }, `onramp_bridge: failed to persist bridge_failed for ${externalId}`)
+      }).catch(async (e) => {
+        // DB is down — order is stuck in 'bridging' with no way to self-heal.
+        // Alert ops immediately rather than waiting for the 2h recovery sweep.
+        logger.error(
+          { err: e },
+          `onramp_bridge: CRITICAL — failed to persist bridge_failed for ${externalId}, alerting ops`
+        )
+        try {
+          const resendKey = env.get('RESEND_API_KEY', '')
+          if (resendKey) {
+            const resend = new Resend(resendKey)
+            await resend.emails.send({
+              from: 'noreply@sippy.lat',
+              to: 'mateo@sippy.lat',
+              subject: `[SIPPY CRITICAL] Bridge failure not persisted — order ${externalId}`,
+              text: [
+                'A bridge confirmation failed but the bridge_failed status could not be saved to DB.',
+                '',
+                `Order: ${externalId}`,
+                `LiFi tx: ${hash}`,
+                `Confirmation error: ${err instanceof Error ? err.message : String(err)}`,
+                `DB error: ${e instanceof Error ? e.message : String(e)}`,
+                '',
+                'The order is stuck in "bridging" status. Manual intervention required.',
+              ].join('\n'),
+            })
+          }
+        } catch (alertErr) {
+          logger.error({ err: alertErr }, `onramp_bridge: alert send also failed for ${externalId}`)
+        }
       })
     })
 }

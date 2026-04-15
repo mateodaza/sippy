@@ -228,14 +228,27 @@ async function onPaymentSucceeded(
   phoneNumber: string,
   payment: Record<string, unknown>
 ): Promise<void> {
-  // Phase 1 claim: pending / initiating_payment → paid (idempotent)
-  const claimedRows = await db
-    .from('onramp_orders')
-    .where('external_id', externalId)
-    .whereIn('status', ['pending', 'initiating_payment'])
-    .update({ status: 'paid' }, ['id'])
+  // Extract settled USDT amount from the Colurs payment response (multiple field name variants)
+  const settledUsdt =
+    (payment.amount_usdt as number | undefined) ??
+    (payment.amount_usd as number | undefined) ??
+    (payment.usd_amount as number | undefined) ??
+    (payment.usdt_amount as number | undefined)
 
-  if (!claimedRows[0]) {
+  // Phase 1 claim: pending / initiating_payment → paid (idempotent)
+  // Atomically persists settledUsdt in the same UPDATE so a crash between
+  // Phase 1 and Phase 2 never loses the actual USDT amount.
+  const claimResult = await db.rawQuery(
+    `UPDATE onramp_orders
+     SET status = 'paid',
+         amount_usdt = COALESCE($1, amount_usdt),
+         updated_at = now()
+     WHERE external_id = $2 AND status IN ('pending', 'initiating_payment')
+     RETURNING id`,
+    [settledUsdt !== undefined && settledUsdt > 0 ? String(settledUsdt) : null, externalId]
+  )
+
+  if (!claimResult.rows[0]) {
     // Already past pending — check current state
     const existing = await OnrampOrder.query().where('externalId', externalId).first()
     if (!existing) return
@@ -261,19 +274,6 @@ async function onPaymentSucceeded(
     // status === 'paid' && !lifiTxHash → fall through to bridge claim
   }
 
-  // Try to persist the settled USDT amount if Colurs includes it
-  const settledUsdt =
-    (payment.amount_usdt as number | undefined) ??
-    (payment.amount_usd as number | undefined) ??
-    (payment.usd_amount as number | undefined) ??
-    (payment.usdt_amount as number | undefined)
-
-  if (settledUsdt !== undefined && settledUsdt > 0) {
-    await OnrampOrder.query()
-      .where('externalId', externalId)
-      .update({ amountUsdt: String(settledUsdt) })
-  }
-
   // Phase 2 claim: paid → initiating_bridge (prevents duplicate bridge calls)
   const bridgeClaim = await db.rawQuery(
     `UPDATE onramp_orders SET status = 'initiating_bridge', updated_at = now()
@@ -291,6 +291,9 @@ async function onPaymentSucceeded(
   try {
     const { triggerBridge } = await import('#services/onramp_bridge.service')
     await triggerBridge(externalId)
+    logger.info(
+      `poll_r2p_payments: bridge tx broadcast for ${maskPhone(phoneNumber)} — order is bridging`
+    )
   } catch (err) {
     logger.error(
       { err },
@@ -304,8 +307,4 @@ async function onPaymentSucceeded(
         error: err instanceof Error ? err.message : 'Bridge error',
       })
   }
-
-  logger.info(
-    `poll_r2p_payments: bridge tx broadcast for ${maskPhone(phoneNumber)} — order is bridging`
-  )
 }

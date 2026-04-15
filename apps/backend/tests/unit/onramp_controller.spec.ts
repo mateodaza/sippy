@@ -125,11 +125,13 @@ let mockOnrampQueryResult: Record<string, unknown> | null = null
 
 function mockOnrampQuery(row: Record<string, unknown> | null) {
   mockOnrampQueryResult = row
-  ;(OnrampOrder as any).query = () => ({
-    where: () => ({
+  ;(OnrampOrder as any).query = () => {
+    const chain = {
+      where: () => chain,
       first: async () => mockOnrampQueryResult,
-    }),
-  })
+    }
+    return chain
+  }
 }
 
 function restoreModels() {
