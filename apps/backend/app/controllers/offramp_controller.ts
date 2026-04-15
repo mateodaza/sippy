@@ -32,6 +32,7 @@ import {
   getQuote,
   getQuoteRate,
   initiateExchange,
+  executeExchange,
   getUsdBalance,
 } from '#services/colurs_fx.service'
 import {
@@ -67,7 +68,6 @@ export default class OfframpController {
     }
 
     try {
-      // USDC is pegged 1:1 to USD
       const colursQuote = await createQuote(amountUsdc)
 
       return response.json({
@@ -122,7 +122,6 @@ export default class OfframpController {
       return response.status(400).json({ error: 'bankAccountId must be a number' })
     }
 
-    // 1. Re-fetch quote to get amount and verify it's still valid
     let quote: Awaited<ReturnType<typeof getQuote>>
     try {
       quote = await getQuote(quoteId)
@@ -142,7 +141,6 @@ export default class OfframpController {
       return response.status(400).json({ error: `Minimum offramp is $${MIN_OFFRAMP_USD} USDC` })
     }
 
-    // 2. Verify bank account belongs to this user and get Colurs ID
     const accounts = await listBankAccounts(phoneNumber)
     const account = accounts.find((a) => a.id === bankAccountId)
     if (!account) {
@@ -158,13 +156,8 @@ export default class OfframpController {
         .json({ error: 'Bank account configuration error. Please contact support.' })
     }
 
-    // 3. Pre-flight: verify Sippy's Colurs USD balance covers the amount
     try {
-      const balance = await getUsdBalance()
-      // api-colurs.json confirms field is `balance`, not `available`.
-      // ⚠ UNKNOWN: confirm with Colurs whether `balance` or `balance_usd` is the
-      // correct field when filtering by ?currency=USD.
-      const availableBalance = balance.balance
+      const availableBalance = await getUsdBalance()
       if (availableBalance < amountUsdc) {
         logger.error(
           `offramp: insufficient Colurs USD balance (${availableBalance}) for ${amountUsdc}`
@@ -252,15 +245,12 @@ export default class OfframpController {
     const { orderId, externalId } = lockResult
 
     // Tracks whether USDC has left the user's wallet.
-    // Declared before the try so the catch block can read it.
     let pullSucceeded = false
     let pullTxHash: string | null = null
 
     try {
-      // 4. Pull USDC from user wallet → Sippy treasury
       await OfframpOrder.query().where('externalId', externalId).update({ status: 'pulling_usdc' })
 
-      // Throws on failure (insufficient allowance, no permission, etc.)
       const pullResult = await sendWithSpendPermission(phoneNumber, spenderAddress, amountUsdc)
       pullTxHash = pullResult.transactionHash
 
@@ -283,21 +273,14 @@ export default class OfframpController {
 
       logger.info(`offramp: pulled ${amountUsdc} USDC tx=${pullTxHash}`)
 
-      // 5. Initiate Colurs FX exchange
-      // Do NOT mark pending_fx before initiateExchange() returns — a crash between
-      // the status write and the Colurs call would leave the order looking like it
-      // is processing with Colurs when no movement exists. Mark pending_fx and store
-      // the movement ID atomically in one write after the call succeeds.
       const movement = await initiateExchange(quoteId, colursBankAccountId, externalId)
 
+      // Persist movement ID before execute so ops can reconcile if execute throws.
       await OfframpOrder.query()
         .where('externalId', externalId)
         .update({ status: 'pending_fx', colursMovementId: movement.sale_crypto_id })
 
-      // NOTE: /v2/exchange/execute/ is for manual dispersion only (per Colurs spec).
-      // initiateExchange() triggers automatic COP bank payout when Cobre notifies 'completed'.
-      // Do not call executeExchange() here unless Colurs explicitly confirms it is required
-      // for our account configuration.
+      await executeExchange(movement.sale_crypto_id)
 
       logger.info(`offramp: order ${orderId} pending_fx — movement=${movement.sale_crypto_id}`)
 

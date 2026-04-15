@@ -40,6 +40,12 @@ export default class OnrampOrder extends BaseModel {
   @column()
   declare error: string | null
 
+  @column.dateTime()
+  declare polledAt: DateTime | null
+
+  @column()
+  declare pollCount: number
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 

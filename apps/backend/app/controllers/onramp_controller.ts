@@ -332,7 +332,6 @@ export default class OnrampController {
     if (method === 'pse' && !financialInstitutionCode)
       return response.status(400).json({ error: 'financialInstitutionCode required for PSE' })
 
-    // Gate: user must be Level 5 with a counterparty
     const counterpartyId = await getCounterpartyId(phoneNumber)
     if (!counterpartyId) {
       return response.status(400).json({
@@ -363,7 +362,6 @@ export default class OnrampController {
         financialInstitutionCode,
       })
 
-      // Colurs accepted — store payment ID and mark pending atomically
       await OnrampOrder.query()
         .where('externalId', externalId)
         .update({ colursPaymentId: payment.money_movement_id, status: 'pending' })

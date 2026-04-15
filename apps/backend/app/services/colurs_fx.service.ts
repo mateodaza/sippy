@@ -4,20 +4,14 @@
  * Handles the USD → COP foreign exchange flow for offramp.
  *
  * Flow:
- *   1. createQuote()      — get a rate + COP amount (valid 3 minutes)
+ *   1. createQuote()      — get a rate + COP amount (valid ~3 minutes)
  *   2. getQuote()         — re-fetch quote by ID to verify it's still valid before initiating
- *   3. initiateExchange() — lock the rate; Colurs automatically creates a COP bank dispersion
- *                          when the movement reaches 'completed' status (Cobre notifies Colurs)
- *   4. Colurs processes the movement asynchronously
- *   5. webhook withdrawal.completed fires when COP lands in the bank
+ *   3. initiateExchange() — lock the rate; user sends USDT to Colurs wallet
+ *   4. executeExchange()  — required: processes the movement internally
+ *   5. [automatic]        — Colurs disperses COP to the registered bank account
+ *   6. pollColursMovements() polls GET /v2/exchange/movements/{uuid}/ until completed/failed
  *
  * Minimum offramp: $50 USD (enforced by Colurs — reject below that in the controller).
- *
- * Note on /v2/exchange/execute/:
- *   The spec describes execute as "dispersión manual" (manual dispersion). The initiate endpoint
- *   already triggers automatic dispersion to the bank account on completion. Do NOT call execute
- *   in the normal offramp path — it is for special/internal manual cases only.
- *   Confirm with Colurs before enabling it.
  *
  * Note on off_market:
  *   Not set here → defaults to false (operates Mon–Fri market hours only).
@@ -67,15 +61,8 @@ export interface ColursMovement {
 }
 
 export interface ColursBalance {
-  currency: string
-  /**
-   * Confirmed field names from api-colurs.json: `balance` and `balance_usd`.
-   * `available` does not exist — using `balance` as the USD available amount.
-   * ⚠ UNKNOWN: confirm with Colurs which field to use when querying ?currency=USD.
-   */
   balance: number
-  balance_usd?: number
-  [key: string]: unknown
+  balance_usd: number
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -151,21 +138,12 @@ export async function initiateExchange(
   bankAccountId: number,
   externalId: string
 ): Promise<ColursMovement> {
-  const sourceAccountId = env.get('COLURS_SOURCE_ACCOUNT_ID', '')
-  const destinationAccountId = env.get('COLURS_DESTINATION_ACCOUNT_ID', '')
-
-  if (!sourceAccountId || !destinationAccountId) {
-    throw new Error('COLURS_SOURCE_ACCOUNT_ID / COLURS_DESTINATION_ACCOUNT_ID not configured')
-  }
-
   logger.info(
     `colurs_fx: initiating exchange quote=${quoteId} bank=${bankAccountId} ext=${externalId}`
   )
 
   return colursPost<ColursMovement>('/v2/exchange/initiate/', {
     quote_id: quoteId,
-    source_account_id: sourceAccountId,
-    destination_account_id: destinationAccountId,
     bank_account_id: bankAccountId,
     external_id: externalId,
   })
@@ -174,18 +152,30 @@ export async function initiateExchange(
 // ── Execute ───────────────────────────────────────────────────────────────────
 
 /**
- * Execute the FX movement payout.
- * Colurs confirmed this is required after initiate — do not skip.
- * Takes the sale_crypto_id returned by initiateExchange().
- *
- * Note: request body fields are not documented publicly by Colurs.
- * Using sale_crypto_id as the identifier — update if Colurs specifies otherwise.
+ * Execute the FX movement. Required after initiateExchange() — do not skip.
+ * Confirmed by Colurs: uses sales_crypto_id (with 's') from the initiate response.
  */
 export async function executeExchange(saleCryptoId: string): Promise<unknown> {
-  logger.info(`colurs_fx: executing payout for sale_crypto_id=${saleCryptoId}`)
+  logger.info(`colurs_fx: executing movement for sale_crypto_id=${saleCryptoId}`)
   return colursPost<unknown>('/v2/exchange/execute/', {
-    sale_crypto_id: saleCryptoId,
+    sales_crypto_id: saleCryptoId,
   })
+}
+
+// ── Movement status ───────────────────────────────────────────────────────────
+
+export interface ColursMovementStatus {
+  sale_crypto_id: string
+  quote_id: string
+  status: 'initiated' | 'processing' | 'completed' | 'failed' | 'rejected' | string
+}
+
+/**
+ * Fetch current status of an exchange movement.
+ * Used by the polling job — status progression: initiated → processing → completed / failed / rejected
+ */
+export async function getMovement(saleCryptoId: string): Promise<ColursMovementStatus> {
+  return colursGet<ColursMovementStatus>(`/v2/exchange/movements/${saleCryptoId}/`)
 }
 
 // ── Balance ───────────────────────────────────────────────────────────────────
@@ -194,7 +184,11 @@ export async function executeExchange(saleCryptoId: string): Promise<unknown> {
  * Fetch Sippy's USD balance in Colurs.
  * Used for pre-flight checks (ensure prefunded balance covers the offramp)
  * and treasury monitoring (alert ops when balance drops below threshold).
+ *
+ * Returns the USD amount as a number (parsed from the balance string).
+ * Returns 0 if no USD entry is present.
  */
-export async function getUsdBalance(): Promise<ColursBalance> {
-  return colursGet<ColursBalance>('/balance/?currency=USD')
+export async function getUsdBalance(): Promise<number> {
+  const data = await colursGet<ColursBalance>('/balance/?currency=USD')
+  return data.balance ?? 0
 }

@@ -29,6 +29,65 @@ import OnrampOrderModel from '#models/onramp_order'
 import PhoneRegistry from '#models/phone_registry'
 import { createConfig, getQuote } from '@lifi/sdk'
 import { exchangeRateService } from '#services/exchange_rate_service'
+import { Resend } from 'resend'
+
+// ── Admin alert (ETH low gas) ─────────────────────────────────────────────────
+
+const ETH_LOW_BALANCE_THRESHOLD = 0.05 // ETH — alert if hot wallet drops below this
+const LOW_GAS_ALERT_COOLDOWN_MS = 60 * 60 * 1000 // 1 hour between alerts
+let lastLowGasAlertAt = 0
+
+async function sendLowGasAlert(balanceEth: number, walletAddress: string): Promise<void> {
+  const resendKey = env.get('RESEND_API_KEY', '')
+  if (!resendKey) {
+    logger.warn('onramp_bridge: RESEND_API_KEY not set — cannot send low-gas alert')
+    return
+  }
+  const resend = new Resend(resendKey)
+  await resend.emails.send({
+    from: 'noreply@sippy.lat',
+    to: 'mateo@sippy.lat',
+    subject: `[SIPPY ALERT] Hot wallet low on ETH — ${balanceEth.toFixed(4)} ETH remaining`,
+    text: [
+      'The Sippy hot wallet is running low on ETH.',
+      '',
+      `Wallet:  ${walletAddress}`,
+      `Balance: ${balanceEth.toFixed(6)} ETH`,
+      `Threshold: ${ETH_LOW_BALANCE_THRESHOLD} ETH`,
+      '',
+      'Top up the wallet to ensure bridge transactions can be executed.',
+    ].join('\n'),
+  })
+  logger.warn(
+    `onramp_bridge: low-gas alert sent — wallet=${walletAddress} balance=${balanceEth.toFixed(6)} ETH`
+  )
+}
+
+/**
+ * Checks the hot wallet ETH balance and sends an admin alert if it drops
+ * below ETH_LOW_BALANCE_THRESHOLD. Throttled to once per hour.
+ */
+async function checkEthBalanceAndAlert(wallet: ethers.Wallet): Promise<void> {
+  try {
+    const balance = await wallet.getBalance()
+    const balanceEth = Number.parseFloat(ethers.utils.formatEther(balance))
+
+    if (balanceEth < ETH_LOW_BALANCE_THRESHOLD) {
+      const now = Date.now()
+      if (now - lastLowGasAlertAt > LOW_GAS_ALERT_COOLDOWN_MS) {
+        lastLowGasAlertAt = now
+        await sendLowGasAlert(balanceEth, await wallet.getAddress())
+      } else {
+        logger.warn(
+          `onramp_bridge: low ETH balance (${balanceEth.toFixed(4)} ETH) — alert suppressed (cooldown)`
+        )
+      }
+    }
+  } catch (err) {
+    // Non-fatal — don't let alert failure block the bridge
+    logger.error({ err }, 'onramp_bridge: failed to check ETH balance for alert')
+  }
+}
 
 // ── Token addresses ───────────────────────────────────────────────────────────
 
@@ -259,27 +318,75 @@ export async function triggerBridge(externalId: string): Promise<void> {
 
   const amountWei = await resolveUsdtAmountWei(order)
 
-  // Mark 'initiating_bridge' before broadcasting so the webhook recovery path can
-  // distinguish three cases:
+  // Status is already 'initiating_bridge' — the webhook controller atomically claimed
+  // paid → initiating_bridge via db.rawQuery() before calling triggerBridge().
+  // Statuses:
   //   'paid'               — broadcast was never attempted → safe to retry
   //   'initiating_bridge'  — process died between this write and saving the hash
   //                          → broadcast MAY have occurred → manual review only
   //   'bridging' + hash    — broadcast confirmed, hash known → normal confirmation path
-  await setOrderStatus(externalId, 'initiating_bridge')
+
+  // Check ETH balance — fire-and-forget so a slow Resend/RPC call never gates the bridge
+  checkEthBalanceAndAlert(getSigner()).catch((err) => {
+    logger.error({ err }, 'onramp_bridge: ETH balance check failed (non-fatal)')
+  })
 
   const { hash, waitForConfirmation } = await broadcastLiFiBridgeTx(
     amountWei,
     depositAddress,
     userWallet
   )
+
+  // Persist the tx hash before returning — this is the durability marker.
+  // Order is now 'bridging'; if the process restarts here, the hash is recoverable.
   await setOrderStatus(externalId, 'bridging', { lifi_tx_hash: hash })
 
-  const confirmed = await waitForConfirmation()
-  if (!confirmed) {
-    throw new Error(`LiFi tx reverted — hash=${hash}`)
-  }
+  // triggerBridge returns here — the webhook can now acknowledge Colurs with 200.
+  // tx.wait(1) is the slow part (~15-60s) and runs in the background. If this
+  // process dies before confirmation: the hash is in DB and Alchemy webhook detects
+  // USDC landing on Arbitrum for recovery. Notification fires after on-chain confirm.
+  waitForConfirmation()
+    .then(async (confirmed) => {
+      if (!confirmed) {
+        logger.error(
+          `onramp_bridge: LiFi tx reverted on-chain — hash=${hash}, marking bridge_failed`
+        )
+        await setOrderStatus(externalId, 'bridge_failed', {
+          error: `LiFi tx reverted on-chain — hash=${hash}`,
+        })
+        return
+      }
 
-  await setOrderStatus(externalId, 'completed')
+      await setOrderStatus(externalId, 'completed')
+      logger.info(`onramp_bridge: order ${externalId} completed — lifi_tx=${hash} → ${userWallet}`)
 
-  logger.info(`onramp_bridge: order ${externalId} completed — lifi_tx=${hash} → ${userWallet}`)
+      // Notify user once confirmed (non-fatal — order is already completed)
+      try {
+        const { notifyFundReceived } = await import('#services/notification.service')
+        const { getUserLanguage } = await import('#services/db')
+        const { getLanguageForPhone } = await import('#utils/phone')
+        const amountUsdc = order.amountUsdt ? Number.parseFloat(order.amountUsdt).toFixed(2) : null
+        if (amountUsdc) {
+          const lang =
+            (await getUserLanguage(order.phoneNumber)) || getLanguageForPhone(order.phoneNumber)
+          await notifyFundReceived({
+            recipientPhone: order.phoneNumber,
+            amount: amountUsdc,
+            type: 'usdc',
+            txHash: externalId,
+            lang,
+          })
+        }
+      } catch (notifyErr) {
+        logger.error({ err: notifyErr }, `onramp_bridge: notification failed for ${externalId}`)
+      }
+    })
+    .catch((err) => {
+      logger.error({ err }, `onramp_bridge: confirmation failed for ${externalId}`)
+      setOrderStatus(externalId, 'bridge_failed', {
+        error: err instanceof Error ? err.message : 'Confirmation error',
+      }).catch((e) => {
+        logger.error({ err: e }, `onramp_bridge: failed to persist bridge_failed for ${externalId}`)
+      })
+    })
 }

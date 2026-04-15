@@ -58,6 +58,17 @@ function logColursError(path: string, status: number, body: string): void {
   logger.warn({ path, status, errorKeys }, 'colurs_payment: request failed')
 }
 
+async function colursGet<T>(path: string): Promise<T> {
+  const headers = await colursHeaders()
+  const res = await fetch(`${baseUrl()}${path}`, { headers })
+  if (!res.ok) {
+    const text = await res.text()
+    logColursError(path, res.status, text)
+    throw new Error(`Colurs GET ${path} failed (${res.status})`)
+  }
+  return res.json() as Promise<T>
+}
+
 async function colursPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
   const headers = await colursHeaders()
   const res = await fetch(`${baseUrl()}${path}`, {
@@ -161,6 +172,23 @@ export async function initiateBancolombia(
     redirect_url: `${env.get('FRONTEND_URL', 'https://app.sippy.lat')}/onramp/success`,
     fee_mode: 'payer',
   })
+}
+
+// ── Payment status ────────────────────────────────────────────────────────────
+
+export interface ColursPaymentStatus {
+  money_movement_id: string
+  status: 'initiated' | 'pending' | 'processing' | 'succeeded' | 'failed' | 'expired' | string
+  tracking_key?: string
+  [key: string]: unknown
+}
+
+/**
+ * Poll the status of an R2P payment (PSE / Nequi / Bancolombia).
+ * Status progression: initiated → pending → processing → succeeded / failed / expired
+ */
+export async function getPaymentStatus(moneyMovementId: string): Promise<ColursPaymentStatus> {
+  return colursGet<ColursPaymentStatus>(`/api/reload/r2p/status/${moneyMovementId}/`)
 }
 
 // ── Dispatcher ───────────────────────────────────────────────────────────────

@@ -22,7 +22,6 @@ const EmbeddedWalletController = () => import('#controllers/embedded_wallet_cont
 const AuthApiController = () => import('#controllers/auth_api_controller')
 const SupportController = () => import('#controllers/support_controller')
 const WebhookAlchemyController = () => import('#controllers/webhook_alchemy_controller')
-const WebhookColursController = () => import('#controllers/webhook_colurs_controller')
 const OnrampController = () => import('#controllers/onramp_controller')
 const OfframpController = () => import('#controllers/offramp_controller')
 
@@ -37,9 +36,6 @@ router.post('/webhook/whatsapp', [WebhookController, 'handle'])
 
 // ── Alchemy webhook (HMAC-verified, no session auth) ────────────────────
 router.post('/webhook/alchemy/address-activity', [WebhookAlchemyController, 'handle'])
-
-// ── Colurs webhook (signature-verified, no session auth) ─────────────────
-router.post('/webhook/colurs', [WebhookColursController, 'handle'])
 
 // ── Public resolution (IP-throttled, privacy-aware) ─────────────────────────
 router.get('/resolve-phone', [ResolveController, 'byPhone']).use(middleware.ipThrottle())
