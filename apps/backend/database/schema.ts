@@ -210,9 +210,6 @@ export class OnrampOrderSchema extends BaseModel {
     'amountCop',
     'amountUsdt',
     'depositAddress',
-    'idempotencyKey',
-    'paymentLink',
-    'trackingKey',
     'status',
     'lifiTxHash',
     'usdcReceived',
@@ -221,6 +218,9 @@ export class OnrampOrderSchema extends BaseModel {
     'updatedAt',
     'polledAt',
     'pollCount',
+    'idempotencyKey',
+    'paymentLink',
+    'trackingKey',
   ] as const
   $columns = OnrampOrderSchema.$columns
   @column({ isPrimary: true })
@@ -240,12 +240,6 @@ export class OnrampOrderSchema extends BaseModel {
   @column()
   declare depositAddress: string
   @column()
-  declare idempotencyKey: string | null
-  @column()
-  declare paymentLink: string | null
-  @column()
-  declare trackingKey: string | null
-  @column()
   declare status: string
   @column()
   declare lifiTxHash: string | null
@@ -261,6 +255,12 @@ export class OnrampOrderSchema extends BaseModel {
   declare polledAt: DateTime | null
   @column()
   declare pollCount: number
+  @column()
+  declare idempotencyKey: string | null
+  @column()
+  declare paymentLink: string | null
+  @column()
+  declare trackingKey: string | null
 }
 
 export class ParseLogSchema extends BaseModel {
@@ -374,17 +374,6 @@ export class PhoneRegistrySchema extends BaseModel {
   declare permissionCreatedAt: bigint | number | null
 }
 
-export class TransactionSchema extends BaseModel {
-  static $columns = ['id', 'createdAt', 'updatedAt'] as const
-  $columns = TransactionSchema.$columns
-  @column({ isPrimary: true })
-  declare id: number
-  @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime | null
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
-}
-
 export class UserContactSchema extends BaseModel {
   static $columns = [
     'id',
@@ -455,66 +444,6 @@ export class UserPreferenceSchema extends BaseModel {
   declare emailNudgeSentAt: DateTime | null
   @column.dateTime()
   declare setupNotifiedAt: DateTime | null
-}
-
-export class UserSchema extends BaseModel {
-  static $columns = [
-    'id',
-    'phoneNumber',
-    'cdpWalletName',
-    'walletAddress',
-    'status',
-    'kycStatus',
-    'kycLevel',
-    'displayName',
-    'language',
-    'notificationsEnabled',
-    'isPublic',
-    'dailyLimit',
-    'transactionLimit',
-    'dailySpent',
-    'lastResetDate',
-    'createdAt',
-    'updatedAt',
-    'lastActivity',
-  ] as const
-  $columns = UserSchema.$columns
-  @column({ isPrimary: true })
-  declare id: number
-  @column()
-  declare phoneNumber: string
-  @column()
-  declare cdpWalletName: string
-  @column()
-  declare walletAddress: string
-  @column()
-  declare status: string | null
-  @column()
-  declare kycStatus: string | null
-  @column()
-  declare kycLevel: number | null
-  @column()
-  declare displayName: string | null
-  @column()
-  declare language: string | null
-  @column()
-  declare notificationsEnabled: boolean | null
-  @column()
-  declare isPublic: boolean | null
-  @column()
-  declare dailyLimit: string | null
-  @column()
-  declare transactionLimit: string | null
-  @column()
-  declare dailySpent: string | null
-  @column.dateTime()
-  declare lastResetDate: DateTime | null
-  @column.dateTime({ autoCreate: true })
-  declare createdAt: DateTime | null
-  @column.dateTime({ autoCreate: true, autoUpdate: true })
-  declare updatedAt: DateTime | null
-  @column.dateTime()
-  declare lastActivity: DateTime | null
 }
 
 export class WebSendLogSchema extends BaseModel {
