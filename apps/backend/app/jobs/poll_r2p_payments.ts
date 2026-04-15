@@ -25,11 +25,43 @@ let isRunning = false
 /**
  * Recovery sweep — runs once per cron tick before the main poll loop.
  *
+ * initiating_payment (null colurs_payment_id, >2min) → Colurs may have accepted the R2P
+ *   creation but the response/write was lost. We cannot look up by external_id on Colurs
+ *   (their API only accepts money_movement_id), so mark needs_reconciliation for ops.
  * paid            → bridge never attempted; atomically claim → initiating_bridge, then trigger
  * initiating_bridge (no hash) → process died between claim and broadcast → bridge_failed
  * bridging (hash, >2h) → waitForConfirmation() died in memory; no Alchemy webhook recovery → needs_reconciliation
  */
 async function recoverStuckBridgeOrders(): Promise<void> {
+  // ── Orphaned initiating_payment orders ──────────────────────────────────
+  // If the process died after inserting the order but before persisting colurs_payment_id,
+  // the order is invisible to the main poll loop (which requires colurs_payment_id IS NOT NULL).
+  // Mark as needs_reconciliation — ops must check Colurs for a payment matching our external_id.
+  const orphaned = await db.rawQuery<{
+    rows: { id: string; external_id: string }[]
+  }>(
+    `SELECT id, external_id FROM onramp_orders
+     WHERE status = 'initiating_payment'
+       AND colurs_payment_id IS NULL
+       AND updated_at < now() - interval '2 minutes'
+     LIMIT 20`
+  )
+  for (const order of orphaned.rows) {
+    logger.error(
+      `poll_r2p_payments: order ${order.external_id} stuck in initiating_payment with no colurs_payment_id >2m — needs_reconciliation`
+    )
+    await db.rawQuery(
+      `UPDATE onramp_orders SET status = 'needs_reconciliation', error = ?, updated_at = now()
+       WHERE id = ? AND status = 'initiating_payment' AND colurs_payment_id IS NULL`,
+      [
+        'Colurs R2P payment may have been created but colurs_payment_id was not persisted. ' +
+          'Check Colurs for a payment matching this external_id. Manual reconciliation required.',
+        order.id,
+      ]
+    )
+  }
+
+  // ── Stuck bridge orders ─────────────────────────────────────────────────
   const stuck = await db.rawQuery<{
     rows: { external_id: string; status: string; lifi_tx_hash: string | null }[]
   }>(

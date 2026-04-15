@@ -18,20 +18,8 @@
  *   Set off_market=true (requires Colurs enablement) for 24/7 operation.
  */
 
-import env from '#start/env'
 import logger from '@adonisjs/core/services/logger'
-import { colursHeaders } from '#services/colurs_auth.service'
-
-function logColursError(path: string, status: number, body: string): void {
-  let errorKeys: string | undefined
-  try {
-    const parsed = JSON.parse(body) as Record<string, unknown>
-    errorKeys = Object.keys(parsed).join(', ')
-  } catch {
-    /* non-JSON body — omit */
-  }
-  logger.warn({ path, status, errorKeys }, 'colurs_fx: request failed')
-}
+import { colursGet, colursPost } from '#services/colurs_http.service'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,38 +51,6 @@ export interface ColursMovement {
 export interface ColursBalance {
   balance: number
   balance_usd: number
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function baseUrl(): string {
-  return env.get('COLURS_BASE_URL', 'https://sandbox.colurs.com')
-}
-
-async function colursGet<T>(path: string): Promise<T> {
-  const headers = await colursHeaders()
-  const res = await fetch(`${baseUrl()}${path}`, { headers })
-  if (!res.ok) {
-    const text = await res.text()
-    logColursError(path, res.status, text)
-    throw new Error(`Colurs GET ${path} failed (${res.status})`)
-  }
-  return res.json() as Promise<T>
-}
-
-async function colursPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const headers = await colursHeaders()
-  const res = await fetch(`${baseUrl()}${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) {
-    const text = await res.text()
-    logColursError(path, res.status, text)
-    throw new Error(`Colurs POST ${path} failed (${res.status})`)
-  }
-  return res.json() as Promise<T>
 }
 
 // ── FX Quote ─────────────────────────────────────────────────────────────────

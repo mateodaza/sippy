@@ -29,6 +29,15 @@ export default class OnrampOrder extends BaseModel {
   declare depositAddress: string
 
   @column()
+  declare idempotencyKey: string | null
+
+  @column()
+  declare paymentLink: string | null
+
+  @column()
+  declare trackingKey: string | null
+
+  @column()
   declare status: string
 
   @column()

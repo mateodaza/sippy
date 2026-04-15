@@ -226,20 +226,31 @@ test.group('OfframpController | status', (group) => {
     assert.equal(getStatus(), 404)
   })
 
-  test('returns order when found', async ({ assert }) => {
+  test('returns projected order when found (no internal fields)', async ({ assert }) => {
     mockOfframpQuery({
       id: 'order-1',
       phoneNumber: '+573001234567',
       status: 'pending_fx',
       amountUsdc: '100',
       amountCop: '420000',
+      exchangeRate: '4200',
+      createdAt: '2026-04-15T00:00:00Z',
     })
     const { ctx, getBody } = buildCtx({ params: { orderId: 'order-1' } })
     const controller = new OfframpController()
     await controller.status(ctx as any)
-    // response.json() is called directly (no .status(200)), so check body content
-    assert.equal((getBody() as any).status, 'pending_fx')
-    assert.equal((getBody() as any).id, 'order-1')
+    const body = getBody() as any
+    assert.equal(body.status, 'pending_fx')
+    assert.equal(body.orderId, 'order-1')
+    assert.equal(body.amountUsdc, 100)
+    assert.equal(body.amountCop, 420000)
+    // Internal fields must NOT be exposed
+    assert.notProperty(body, 'phoneNumber')
+    assert.notProperty(body, 'externalId')
+    assert.notProperty(body, 'colursQuoteId')
+    assert.notProperty(body, 'colursMovementId')
+    assert.notProperty(body, 'pullTxHash')
+    assert.notProperty(body, 'error')
   })
 })
 

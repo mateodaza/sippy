@@ -102,7 +102,9 @@ router
         // KYC (one-time Colurs user registration + verification)
         router.get('/onramp/kyc', [OnrampController, 'kycStatus'])
         router.post('/onramp/kyc/register', [OnrampController, 'kycRegister'])
-        router.post('/onramp/kyc/send-otp', [OnrampController, 'kycSendOtp'])
+        router
+          .post('/onramp/kyc/send-otp', [OnrampController, 'kycSendOtp'])
+          .use(middleware.ipThrottle())
         router.post('/onramp/kyc/verify-phone', [OnrampController, 'kycVerifyPhone'])
         router.post('/onramp/kyc/verify-email', [OnrampController, 'kycVerifyEmail'])
         router.post('/onramp/kyc/upload-document', [OnrampController, 'kycUploadDocument'])

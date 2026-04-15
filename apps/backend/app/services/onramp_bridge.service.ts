@@ -1,20 +1,25 @@
 /**
  * Onramp Bridge Service
  *
- * Called by WebhookColursController after payment.completed fires.
+ * Called by the R2P poller after a Colurs payment succeeds.
  *
- * COLURS_DIRECT_USDC=false (default)
- *   Colurs sent USDT to SIPPY_ETH_DEPOSIT_ADDRESS on ETH mainnet.
+ * Current path (LiFi bridge — COLURS_DIRECT_USDC=false, default):
+ *   Colurs sends USDT to SIPPY_ETH_DEPOSIT_ADDRESS on ETH mainnet.
  *   This service:
  *     1. Fetches a LiFi quote (USDT ETH mainnet → USDC Arbitrum)
  *     2. Signs and broadcasts the tx using ethers Wallet (backend hot wallet)
- *     3. Marks order as 'bridging' then 'completed' once tx confirms
- *   Alchemy webhook separately credits the user's account when USDC lands.
+ *     3. Marks order as 'completed' once source tx confirms (1 confirmation)
+ *   Alchemy webhook separately credits the user's balance when USDC lands.
  *
- * COLURS_DIRECT_USDC=true (future, when Colurs supports direct USDC)
- *   Colurs sends USDC directly to the user's Arbitrum wallet.
- *   No LiFi step — set order to awaiting_onchain_usdc.
- *   Alchemy webhook picks up USDC arrival and marks the order completed.
+ *   Note: 'completed' is set on source-chain confirmation, not destination
+ *   arrival. This is a known semantic gap — true destination confirmation
+ *   would require correlating Alchemy transfer webhooks back to onramp_orders.
+ *   For now, source confirmation is the best available signal and the Alchemy
+ *   transfer webhook handles the actual balance credit independently.
+ *
+ * Future path (COLURS_DIRECT_USDC=true):
+ *   Blocked at the controller level until a trustworthy completion/correlation
+ *   path is implemented. See the guard in triggerBridge() for details.
  *
  * LiFi integration note:
  *   We use @lifi/sdk's getQuote() for routing, then extract transactionRequest
@@ -29,6 +34,9 @@ import OnrampOrderModel from '#models/onramp_order'
 import PhoneRegistry from '#models/phone_registry'
 import { createConfig, getQuote } from '@lifi/sdk'
 import { exchangeRateService } from '#services/exchange_rate_service'
+import { notifyFundReceived } from '#services/notification.service'
+import { getUserLanguage } from '#services/db'
+import { getLanguageForPhone } from '#utils/phone'
 import { Resend } from 'resend'
 
 // ── Admin alert (ETH low gas) ─────────────────────────────────────────────────
@@ -295,14 +303,21 @@ export async function triggerBridge(externalId: string): Promise<void> {
     throw new Error(`onramp_bridge: order not found for external_id=${externalId}`)
   }
 
-  // ── Direct USDC path (future) ───────────────────────────────────────────────
+  // ── Direct USDC path (future — NOT YET WIRED) ──────────────────────────────
+  // When Colurs supports sending USDC directly to the user's Arbitrum wallet,
+  // this flag will skip the LiFi bridge. Before enabling, you MUST implement a
+  // trustworthy completion/correlation path. Options:
+  //   1. Colurs callback/webhook with our external_id on USDC delivery
+  //   2. Queryable Colurs status API keyed by external_id for USDC settlement
+  //   3. Reconciliation rule: destination wallet + expected amount + time window
+  //      + one-open-order invariant
+  // Without one of these, orders would strand in an intermediate state forever.
   if (env.get('COLURS_DIRECT_USDC') === 'true') {
-    logger.info(
-      `onramp_bridge: COLURS_DIRECT_USDC=true — setting awaiting_onchain_usdc for ${externalId}`
+    throw new Error(
+      'COLURS_DIRECT_USDC=true is not yet supported. ' +
+        'The completion/correlation path for direct USDC delivery has not been implemented. ' +
+        'See onramp_bridge.service.ts for the requirements.'
     )
-    await setOrderStatus(externalId, 'awaiting_onchain_usdc')
-    // Alchemy webhook handles USDC arrival on Arbitrum and marks completed
-    return
   }
 
   // ── LiFi bridge path (default) ──────────────────────────────────────────────
@@ -357,14 +372,17 @@ export async function triggerBridge(externalId: string): Promise<void> {
         return
       }
 
+      // Mark completed: source-chain tx confirmed. This is the best completion
+      // signal available while using the LiFi bridge path. True destination-side
+      // confirmation (USDC landing on Arbitrum) would require an Alchemy webhook
+      // handler that correlates inbound transfers back to onramp_orders — not yet
+      // implemented. For now, source confirmation + Alchemy crediting the user's
+      // balance (via the existing transfer webhook) is the functional equivalent.
       await setOrderStatus(externalId, 'completed')
       logger.info(`onramp_bridge: order ${externalId} completed — lifi_tx=${hash} → ${userWallet}`)
 
-      // Notify user once confirmed (non-fatal — order is already completed)
+      // Notify user (non-fatal — order is already completed)
       try {
-        const { notifyFundReceived } = await import('#services/notification.service')
-        const { getUserLanguage } = await import('#services/db')
-        const { getLanguageForPhone } = await import('#utils/phone')
         const amountUsdc = order.amountUsdt ? Number.parseFloat(order.amountUsdt).toFixed(2) : null
         if (amountUsdc) {
           const lang =

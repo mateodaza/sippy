@@ -29,9 +29,10 @@ export default class extends BaseSchema {
           updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `)
-      // status machine:
-      //   COLURS_DIRECT_USDC=false: pending → paid → bridging → completed | failed
-      //   COLURS_DIRECT_USDC=true:  pending → paid → awaiting_onchain_usdc → completed | failed
+      // status machine (LiFi bridge path):
+      //   initiating_payment → pending → paid → initiating_bridge → bridging → completed | bridge_failed | needs_reconciliation
+      // COLURS_DIRECT_USDC=true is blocked at the controller level until a
+      // trustworthy completion/correlation path is implemented.
 
       await db.rawQuery(
         `CREATE INDEX IF NOT EXISTS idx_onramp_orders_phone ON onramp_orders(phone_number)`

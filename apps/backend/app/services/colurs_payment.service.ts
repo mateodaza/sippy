@@ -12,7 +12,7 @@
 
 import env from '#start/env'
 import logger from '@adonisjs/core/services/logger'
-import { colursHeaders } from '#services/colurs_auth.service'
+import { colursGet, colursPost } from '#services/colurs_http.service'
 import { maskPhone } from '#utils/phone'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -39,51 +39,6 @@ export interface InitiatePaymentParams {
   externalId: string
   /** PSE only — bank institution code */
   financialInstitutionCode?: string
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function baseUrl(): string {
-  return env.get('COLURS_BASE_URL', 'https://sandbox.colurs.com')
-}
-
-function logColursError(path: string, status: number, body: string): void {
-  let errorKeys: string | undefined
-  try {
-    const parsed = JSON.parse(body) as Record<string, unknown>
-    errorKeys = Object.keys(parsed).join(', ')
-  } catch {
-    /* non-JSON body — omit */
-  }
-  logger.warn({ path, status, errorKeys }, 'colurs_payment: request failed')
-}
-
-async function colursGet<T>(path: string): Promise<T> {
-  const headers = await colursHeaders()
-  const res = await fetch(`${baseUrl()}${path}`, { headers })
-  if (!res.ok) {
-    const text = await res.text()
-    logColursError(path, res.status, text)
-    throw new Error(`Colurs GET ${path} failed (${res.status})`)
-  }
-  return res.json() as Promise<T>
-}
-
-async function colursPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const headers = await colursHeaders()
-  const res = await fetch(`${baseUrl()}${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
-
-  if (!res.ok) {
-    const text = await res.text()
-    logColursError(path, res.status, text)
-    throw new Error(`Colurs ${path} failed (${res.status})`)
-  }
-
-  return res.json() as Promise<T>
 }
 
 // ── Counterparty ─────────────────────────────────────────────────────────────

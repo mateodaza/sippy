@@ -134,6 +134,9 @@ function OnrampContent() {
   const [kycLevel, setKycLevel] = useState(0)
 
   // Payment fields
+  // Idempotency key: generated once per payment attempt to prevent double-submission.
+  // Reset when a payment fails so the user can retry with a fresh key.
+  const idempotencyKeyRef = useRef(crypto.randomUUID())
   const [method, setMethod] = useState<'pse' | 'nequi' | 'bancolombia' | null>(null)
   const [pseBanks, setPseBanks] = useState<PseBank[]>([])
   const [selectedBank, setSelectedBank] = useState('')
@@ -307,13 +310,34 @@ function OnrampContent() {
     setError(null)
     setLoading(true)
     try {
-      const body: Record<string, unknown> = { method, amountCop: cop }
+      const body: Record<string, unknown> = {
+        method,
+        amountCop: cop,
+        idempotencyKey: idempotencyKeyRef.current,
+      }
       if (method === 'pse') body.financialInstitutionCode = selectedBank
       const data = await api('POST', '/api/onramp/initiate', body)
+
+      // 202 = first request still in flight, payment details not ready yet.
+      // Wait briefly and retry with the same idempotency key.
+      if (data.retry) {
+        await new Promise((r) => setTimeout(r, 2000))
+        const retryData = await api('POST', '/api/onramp/initiate', body)
+        if (retryData.retry) {
+          setError('Payment is still being created. Please try again in a few seconds.')
+          return
+        }
+        setOrder(retryData)
+        setStep('paying')
+        return
+      }
+
       setOrder(data)
       setStep('paying')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Payment failed')
+      // Generate a fresh key so the user can retry after a genuine failure
+      idempotencyKeyRef.current = crypto.randomUUID()
     } finally {
       setLoading(false)
     }

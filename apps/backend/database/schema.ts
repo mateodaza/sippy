@@ -210,6 +210,9 @@ export class OnrampOrderSchema extends BaseModel {
     'amountCop',
     'amountUsdt',
     'depositAddress',
+    'idempotencyKey',
+    'paymentLink',
+    'trackingKey',
     'status',
     'lifiTxHash',
     'usdcReceived',
@@ -236,6 +239,12 @@ export class OnrampOrderSchema extends BaseModel {
   declare amountUsdt: string | null
   @column()
   declare depositAddress: string
+  @column()
+  declare idempotencyKey: string | null
+  @column()
+  declare paymentLink: string | null
+  @column()
+  declare trackingKey: string | null
   @column()
   declare status: string
   @column()

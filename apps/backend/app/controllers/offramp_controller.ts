@@ -346,7 +346,14 @@ export default class OfframpController {
 
     if (!order) return response.status(404).json({ error: 'Order not found' })
 
-    return response.json(order)
+    return response.json({
+      orderId: order.id,
+      amountUsdc: Number.parseFloat(order.amountUsdc),
+      amountCop: order.amountCop ? Number.parseFloat(order.amountCop) : null,
+      rate: order.exchangeRate ? Number.parseFloat(order.exchangeRate) : null,
+      status: order.status,
+      createdAt: order.createdAt,
+    })
   }
 
   // ── bank accounts ───────────────────────────────────────────────────────────

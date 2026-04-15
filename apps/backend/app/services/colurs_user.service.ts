@@ -22,6 +22,7 @@
 import { createHmac } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
+import { apiKey, baseUrl, logColursError, userGet, userPost } from '#services/colurs_http.service'
 import { maskPhone } from '#utils/phone'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -40,81 +41,11 @@ export interface ColursUserProfile {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function baseUrl(): string {
-  return env.get('COLURS_BASE_URL', 'https://sandbox.colurs.com')
-}
-
-function apiKey(): string {
-  return env.get('COLURS_API_KEY', '')
-}
-
-/**
- * Logs a Colurs error without including field values in the output.
- * Colurs validation responses can echo submitted PII (phone, document number,
- * email) back in field values. We log only the top-level field names so
- * controllers can safely log `{ err }` without PII appearing in logs.
- */
-function logColursError(path: string, status: number, body: string): void {
-  let errorKeys: string | undefined
-  try {
-    const parsed = JSON.parse(body) as Record<string, unknown>
-    errorKeys = Object.keys(parsed).join(', ')
-  } catch {
-    // non-JSON body (e.g. HTML gateway error) — omit entirely
-  }
-  logger.warn({ path, status, errorKeys }, 'colurs_user: request failed')
-}
-
 /** Derive a deterministic password for a Sippy user's Colurs account. */
 export function deriveColursPassword(phoneNumber: string): string {
   const secret = env.get('COLURS_USER_PASSWORD_SECRET', '')
   if (!secret) throw new Error('COLURS_USER_PASSWORD_SECRET is not configured')
   return createHmac('sha256', secret).update(phoneNumber).digest('base64url').slice(0, 32)
-}
-
-async function userPost<T>(
-  path: string,
-  body: Record<string, unknown>,
-  userToken?: string
-): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'x-api-key': apiKey(),
-  }
-  if (userToken) headers['Authorization'] = `Bearer ${userToken}`
-
-  const res = await fetch(`${baseUrl()}${path}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
-
-  if (!res.ok) {
-    const text = await res.text()
-    // Log only error field names (not values) — values may echo PII (phone, document, email).
-    // Body is excluded from the thrown Error so controllers can safely log { err }.
-    logColursError(path, res.status, text)
-    throw new Error(`Colurs ${path} failed (${res.status})`)
-  }
-
-  return res.json() as Promise<T>
-}
-
-async function userGet<T>(path: string, userToken: string): Promise<T> {
-  const res = await fetch(`${baseUrl()}${path}`, {
-    headers: {
-      'x-api-key': apiKey(),
-      'Authorization': `Bearer ${userToken}`,
-    },
-  })
-
-  if (!res.ok) {
-    const text = await res.text()
-    logColursError(path, res.status, text)
-    throw new Error(`Colurs GET ${path} failed (${res.status})`)
-  }
-
-  return res.json() as Promise<T>
 }
 
 // ── Registration ──────────────────────────────────────────────────────────────
