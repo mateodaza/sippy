@@ -52,4 +52,5 @@ export const middleware = router.named({
   ipThrottle: () => import('#middleware/ip_throttle_middleware'),
   jwtAuth: () => import('#middleware/jwt_auth_middleware'),
   adminRole: () => import('#middleware/admin_role_middleware'),
+  colombiaOnly: () => import('#middleware/colombia_only_middleware'),
 })

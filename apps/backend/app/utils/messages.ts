@@ -477,6 +477,34 @@ export function formatFundMessage(fundUrl: string, lang: Lang = 'en'): string {
   return m[lang]()
 }
 
+export function formatOnrampMessage(phoneNumber: string, lang: Lang = 'en'): string {
+  const onrampUrl = `${FRONTEND_URL}/onramp?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () => `Add Colombian pesos (COP) to your wallet here:\n${onrampUrl}`,
+    es: () => `Agrega pesos colombianos (COP) a tu billetera aqui:\n${onrampUrl}`,
+    pt: () => `Adicione pesos colombianos (COP) a sua carteira aqui:\n${onrampUrl}`,
+  }
+  return m[lang]()
+}
+
+export function formatWithdrawMessage(
+  phoneNumber: string,
+  copRate: number | null,
+  lang: Lang = 'en'
+): string {
+  const offrampUrl = `${FRONTEND_URL}/offramp?phone=${encodeURIComponent(phoneNumber)}`
+  const rateInfo = copRate ? ` (1 USD = ${Math.round(copRate).toLocaleString('en-US')} COP)` : ''
+  const m = {
+    en: () =>
+      `Convert USDC to Colombian pesos${rateInfo}. Minimum $50 USDC. To continue, visit:\n${offrampUrl}`,
+    es: () =>
+      `Convierte USDC a pesos colombianos${rateInfo}. Minimo $50 USDC. Para continuar, visita:\n${offrampUrl}`,
+    pt: () =>
+      `Converta USDC para pesos colombianos${rateInfo}. Minimo $50 USDC. Para continuar, acesse:\n${offrampUrl}`,
+  }
+  return m[lang]()
+}
+
 export function formatSessionExpiredMessage(lang: Lang = 'en'): string {
   const m = {
     en: () =>

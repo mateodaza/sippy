@@ -71,6 +71,7 @@ function getInviteTemplateLang(phone: string): string {
 const TEMPLATES = {
   paymentReceived: 'payment_received',
   fundReceived: 'fund_received',
+  offrampCompleted: 'offramp_completed',
   friendInvite: 'friend_invite',
   inviteCompleted: 'invite_completed',
   setupCompleted: 'setup_completed',
@@ -135,7 +136,7 @@ export async function notifyPaymentReceived(opts: {
       )
     }
   } catch (error) {
-    logger.error('Failed to send payment notification to %s: %o', recipientPhone, error)
+    logger.error('Failed to send payment notification to %s: %o', maskPhone(recipientPhone), error)
   }
 }
 
@@ -178,7 +179,7 @@ export async function notifyFundReceived(opts: {
       )
     }
   } catch (error) {
-    logger.error('Failed to send fund notification to %s: %o', recipientPhone, error)
+    logger.error('Failed to send fund notification to %s: %o', maskPhone(recipientPhone), error)
   }
 }
 
@@ -265,6 +266,52 @@ export async function notifyInviteCompleted(opts: {
       maskPhone(senderPhone),
       error
     )
+  }
+}
+
+/**
+ * Notify a user that their COP offramp withdrawal has been sent to their bank.
+ *
+ * Template: offramp_completed
+ * Variables: {{1}} = COP amount (e.g. "207,500"), {{2}} = bank display (e.g. "Bancolombia ****1234")
+ *
+ * Create this template in Meta Business Manager → WhatsApp → Message Templates:
+ *   Category: Utility
+ *   Body (es): "Tu retiro de {{1}} COP fue enviado a tu cuenta {{2}}. Puede tomar 1-3 días hábiles en aparecer."
+ *   Body (en): "Your withdrawal of {{1}} COP was sent to your bank account {{2}}. It may take 1-3 business days to appear."
+ *
+ * Best-effort: logs errors but never throws.
+ */
+export async function notifyOfframpCompleted(opts: {
+  phone: string
+  amountCop: string
+  bankDisplay: string
+  lang: string
+}): Promise<void> {
+  const { phone, amountCop, bankDisplay, lang } = opts
+  const templateLang = TEMPLATE_LANG_MAP[lang] || 'es'
+
+  try {
+    const result = await sendTemplateMessage(phone, TEMPLATES.offrampCompleted, templateLang, [
+      {
+        type: 'body',
+        parameters: [
+          { type: 'text', text: amountCop },
+          { type: 'text', text: bankDisplay },
+        ],
+      },
+    ])
+    if (result) {
+      logger.info(
+        `Offramp notification sent to ${maskPhone(phone)} (${amountCop} COP → ${bankDisplay})`
+      )
+    } else {
+      logger.warn(
+        `Offramp notification failed for ${maskPhone(phone)} — template may not be approved yet`
+      )
+    }
+  } catch (error) {
+    logger.error('Failed to send offramp notification to %s: %o', maskPhone(phone), error)
   }
 }
 

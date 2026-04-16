@@ -55,6 +55,8 @@ import {
   formatGreetingNewUser,
   formatGreetingIncomplete,
   formatFundMessage,
+  formatOnrampMessage,
+  formatWithdrawMessage,
   formatInviteSentToSender,
   formatInviteDeliveryFailed,
   formatInviteAlreadyPending,
@@ -360,6 +362,9 @@ export async function routeCommand(
           await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+        } else if (phoneNumber.startsWith('+57')) {
+          // Colombian users: show Colurs onramp (COP → USDC) instead of Coinbase
+          await sendMessageFn(phoneNumber, formatOnrampMessage(phoneNumber, lang), lang)
         } else {
           const fundUrl = await generateFundUrl(phoneNumber)
           await sendMessageFn(phoneNumber, formatFundMessage(fundUrl, lang), lang)
@@ -834,6 +839,20 @@ export async function routeCommand(
           formatPrivacySetMessage(command.privacyAction!, lang),
           lang
         )
+        break
+      }
+
+      case 'withdraw': {
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+        } else {
+          // Show current COP rate for context, then link to web app offramp
+          const copRate = await exchangeRateService.getLocalRate('COP')
+          await sendMessageFn(phoneNumber, formatWithdrawMessage(phoneNumber, copRate, lang), lang)
+        }
         break
       }
 

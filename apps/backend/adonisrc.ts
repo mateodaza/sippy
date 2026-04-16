@@ -55,6 +55,7 @@ export default defineConfig({
     () => import('@adonisjs/auth/auth_provider'),
     () => import('@adonisjs/vite/vite_provider'),
     () => import('@adonisjs/inertia/inertia_provider'),
+    () => import('#providers/scheduler_provider'),
     () => import('#providers/rate_limit_provider'),
     () => import('#providers/otp_provider'),
     () => import('#providers/email_provider'),
