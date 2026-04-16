@@ -145,12 +145,35 @@ function OnrampContent() {
   const [order, setOrder] = useState<Order | null>(null)
   const [orderStatus, setOrderStatus] = useState<string | null>(null)
 
+  // Country eligibility — resolved from URL param or /api/wallet-status.
+  // null = unknown (still resolving), '' = no phone available.
+  const [userPhone, setUserPhone] = useState<string | null>(phoneFromUrl || null)
+
+  useEffect(() => {
+    if (phoneFromUrl) {
+      setUserPhone(phoneFromUrl)
+      return
+    }
+    if (!isAuthenticated) return
+    ;(async () => {
+      try {
+        const data = await api('GET', '/api/wallet-status')
+        setUserPhone(data.phoneNumber || '')
+      } catch {
+        setUserPhone('')
+      }
+    })()
+  }, [isAuthenticated, phoneFromUrl])
+
+  const isCountryEligible = userPhone == null ? null : userPhone.startsWith('+57')
+
   // ── Boot: check KYC status ─────────────────────────────────────────────────
 
   useEffect(() => {
     if (isCheckingSession || !isAuthenticated) return
+    if (isCountryEligible !== true) return
     checkKyc()
-  }, [isAuthenticated, isCheckingSession]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, isCheckingSession, isCountryEligible]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function checkKyc() {
     try {
@@ -371,6 +394,37 @@ function OnrampContent() {
   if (!isAuthenticated) {
     router.replace(`/setup?phone=${encodeURIComponent(phoneFromUrl)}`)
     return null
+  }
+
+  if (isCountryEligible === null) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
+        <div className="animate-pulse text-[var(--text-secondary)]">Loading...</div>
+      </div>
+    )
+  }
+
+  if (isCountryEligible === false) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-primary)] p-4 flex items-center justify-center">
+        <div className="max-w-md w-full panel-frame rounded-2xl p-8 text-center space-y-4">
+          <div className="text-4xl">🌎</div>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">
+            Only available in Colombia
+          </h1>
+          <p className="text-sm text-[var(--text-secondary)]">
+            COP ↔ USDC ramps currently require a Colombian phone number (+57). Your account isn't
+            eligible.
+          </p>
+          <button
+            onClick={() => router.replace('/settings')}
+            className="w-full py-3 bg-brand-crypto text-white rounded-lg font-semibold hover:bg-brand-crypto/90"
+          >
+            Back to settings
+          </button>
+        </div>
+      </div>
+    )
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────

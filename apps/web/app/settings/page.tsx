@@ -2138,10 +2138,10 @@ function SettingsContent() {
           )}
         </div>
 
-        {/* Fiat ramp — Colombia (+57) only */}
+        {/* Fiat ramp — country eligibility is validated inside /onramp and /offramp */}
         {(() => {
           const rampPhone = phoneFromUrl || walletStatus?.phoneNumber || verifiedPhone || ''
-          if (!rampPhone.startsWith('+57')) return null
+          const qs = rampPhone ? `?phone=${encodeURIComponent(rampPhone)}` : ''
           return (
             <div className="mt-6 pt-6 border-t border-[var(--border-strong)]">
               <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide mb-3">
@@ -2153,7 +2153,7 @@ function SettingsContent() {
               </p>
               <div className="flex gap-3">
                 <a
-                  href={`/onramp?phone=${encodeURIComponent(rampPhone)}`}
+                  href={`/onramp${qs}`}
                   className="flex-1 py-3 bg-brand-crypto text-white rounded-lg font-semibold text-center text-sm hover:bg-brand-crypto/90"
                 >
                   {lang === 'pt'
@@ -2163,7 +2163,7 @@ function SettingsContent() {
                       : 'Agregar COP'}
                 </a>
                 <a
-                  href={`/offramp?phone=${encodeURIComponent(rampPhone)}`}
+                  href={`/offramp${qs}`}
                   className="flex-1 py-3 border border-brand-crypto text-brand-crypto rounded-lg font-semibold text-center text-sm hover:bg-brand-crypto/10"
                 >
                   {lang === 'pt' ? 'Retirar COP' : lang === 'en' ? 'Withdraw (COP)' : 'Retirar COP'}

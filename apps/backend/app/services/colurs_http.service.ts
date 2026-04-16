@@ -29,17 +29,23 @@ export function apiKey(): string {
 /**
  * Logs a Colurs error without including field values in the output.
  * Only top-level field names are logged so controllers can safely log `{ err }`
- * without PII appearing in logs.
+ * without PII appearing in logs. The `message` and `code_transaction` fields
+ * are technical error reasons Colurs returns — non-PII — and are logged
+ * verbatim to aid debugging.
  */
 export function logColursError(path: string, status: number, body: string): void {
   let errorKeys: string | undefined
+  let message: string | undefined
+  let codeTransaction: string | undefined
   try {
     const parsed = JSON.parse(body) as Record<string, unknown>
     errorKeys = Object.keys(parsed).join(', ')
+    if (typeof parsed.message === 'string') message = parsed.message
+    if (typeof parsed.code_transaction === 'string') codeTransaction = parsed.code_transaction
   } catch {
     /* non-JSON body — omit */
   }
-  logger.warn({ path, status, errorKeys }, 'colurs_http: request failed')
+  logger.warn({ path, status, errorKeys, message, codeTransaction }, 'colurs_http: request failed')
 }
 
 // ── Operator-auth helpers ───────────────────────────────────────────────────
