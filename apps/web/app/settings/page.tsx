@@ -2138,6 +2138,37 @@ function SettingsContent() {
           )}
         </div>
 
+        {/* Fiat ramp — Colombia (+57) only */}
+        {phoneFromUrl.startsWith('+57') && (
+          <div className="mt-6 pt-6 border-t border-[var(--border-strong)]">
+            <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wide mb-3">
+              {lang === 'pt'
+                ? 'Pesos colombianos'
+                : lang === 'en'
+                  ? 'Colombian Pesos'
+                  : 'Pesos colombianos'}
+            </p>
+            <div className="flex gap-3">
+              <a
+                href={`/onramp?phone=${encodeURIComponent(phoneFromUrl)}`}
+                className="flex-1 py-3 bg-brand-crypto text-white rounded-lg font-semibold text-center text-sm hover:bg-brand-crypto/90"
+              >
+                {lang === 'pt'
+                  ? 'Adicionar COP'
+                  : lang === 'en'
+                    ? 'Add funds (COP)'
+                    : 'Agregar COP'}
+              </a>
+              <a
+                href={`/offramp?phone=${encodeURIComponent(phoneFromUrl)}`}
+                className="flex-1 py-3 border border-brand-crypto text-brand-crypto rounded-lg font-semibold text-center text-sm hover:bg-brand-crypto/10"
+              >
+                {lang === 'pt' ? 'Retirar COP' : lang === 'en' ? 'Withdraw (COP)' : 'Retirar COP'}
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* Support */}
         <div className="mt-6 pt-6 border-t border-[var(--border-strong)]">
           <a

@@ -34,6 +34,90 @@ export class AdminUserSchema extends BaseModel {
   declare updatedAt: DateTime
 }
 
+export class ColursBankAccountSchema extends BaseModel {
+  static $columns = [
+    'id',
+    'phoneNumber',
+    'colursId',
+    'holderName',
+    'documentType',
+    'documentNumber',
+    'accountNumber',
+    'accountType',
+    'bankId',
+    'bankName',
+    'countryCode',
+    'isDefault',
+    'createdAt',
+  ] as const
+  $columns = ColursBankAccountSchema.$columns
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare phoneNumber: string
+  @column()
+  declare colursId: string
+  @column()
+  declare holderName: string
+  @column()
+  declare documentType: string
+  @column()
+  declare documentNumber: string
+  @column()
+  declare accountNumber: string
+  @column()
+  declare accountType: string
+  @column()
+  declare bankId: number
+  @column()
+  declare bankName: string | null
+  @column()
+  declare countryCode: string
+  @column()
+  declare isDefault: boolean
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+}
+
+export class ColursKycSchema extends BaseModel {
+  static $columns = [
+    'phoneNumber',
+    'fullname',
+    'idType',
+    'idNumber',
+    'email',
+    'colursUserId',
+    'counterpartyId',
+    'kycLevel',
+    'kycStatus',
+    'createdAt',
+    'updatedAt',
+  ] as const
+  $columns = ColursKycSchema.$columns
+  @column()
+  declare phoneNumber: string
+  @column()
+  declare fullname: string | null
+  @column()
+  declare idType: string | null
+  @column()
+  declare idNumber: string | null
+  @column()
+  declare email: string | null
+  @column()
+  declare colursUserId: number | null
+  @column()
+  declare counterpartyId: string | null
+  @column()
+  declare kycLevel: number
+  @column()
+  declare kycStatus: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
 export class ConversationContextSchema extends BaseModel {
   static $columns = ['phoneNumber', 'messages', 'updatedAt'] as const
   $columns = ConversationContextSchema.$columns
@@ -60,6 +144,123 @@ export class ExportAuditLogSchema extends BaseModel {
   declare walletAddress: string
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
+}
+
+export class OfframpOrderSchema extends BaseModel {
+  static $columns = [
+    'id',
+    'phoneNumber',
+    'externalId',
+    'colursQuoteId',
+    'colursMovementId',
+    'bankAccountId',
+    'amountUsdc',
+    'amountCop',
+    'exchangeRate',
+    'status',
+    'error',
+    'createdAt',
+    'updatedAt',
+    'pullTxHash',
+    'polledAt',
+    'pollCount',
+  ] as const
+  $columns = OfframpOrderSchema.$columns
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare phoneNumber: string
+  @column()
+  declare externalId: string
+  @column()
+  declare colursQuoteId: string | null
+  @column()
+  declare colursMovementId: string | null
+  @column()
+  declare bankAccountId: number
+  @column()
+  declare amountUsdc: string
+  @column()
+  declare amountCop: string | null
+  @column()
+  declare exchangeRate: string | null
+  @column()
+  declare status: string
+  @column()
+  declare error: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column()
+  declare pullTxHash: string | null
+  @column.dateTime()
+  declare polledAt: DateTime | null
+  @column()
+  declare pollCount: number
+}
+
+export class OnrampOrderSchema extends BaseModel {
+  static $columns = [
+    'id',
+    'phoneNumber',
+    'externalId',
+    'colursPaymentId',
+    'method',
+    'amountCop',
+    'amountUsdt',
+    'depositAddress',
+    'status',
+    'lifiTxHash',
+    'usdcReceived',
+    'error',
+    'createdAt',
+    'updatedAt',
+    'polledAt',
+    'pollCount',
+    'idempotencyKey',
+    'paymentLink',
+    'trackingKey',
+  ] as const
+  $columns = OnrampOrderSchema.$columns
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare phoneNumber: string
+  @column()
+  declare externalId: string
+  @column()
+  declare colursPaymentId: string | null
+  @column()
+  declare method: string
+  @column()
+  declare amountCop: string
+  @column()
+  declare amountUsdt: string | null
+  @column()
+  declare depositAddress: string
+  @column()
+  declare status: string
+  @column()
+  declare lifiTxHash: string | null
+  @column()
+  declare usdcReceived: string | null
+  @column()
+  declare error: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+  @column.dateTime()
+  declare polledAt: DateTime | null
+  @column()
+  declare pollCount: number
+  @column()
+  declare idempotencyKey: string | null
+  @column()
+  declare paymentLink: string | null
+  @column()
+  declare trackingKey: string | null
 }
 
 export class ParseLogSchema extends BaseModel {
@@ -243,15 +444,6 @@ export class UserPreferenceSchema extends BaseModel {
   declare emailNudgeSentAt: DateTime | null
   @column.dateTime()
   declare setupNotifiedAt: DateTime | null
-}
-
-export class WalletAliasSchema extends BaseModel {
-  static $columns = ['address', 'ownerPhone'] as const
-  $columns = WalletAliasSchema.$columns
-  @column()
-  declare address: string
-  @column()
-  declare ownerPhone: string
 }
 
 export class WebSendLogSchema extends BaseModel {

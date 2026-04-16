@@ -1,0 +1,4515 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Colurs API",
+    "version": "1.0.0",
+    "description": "Referencia de la API Colurs (endpoints documentados en el proyecto)."
+  },
+  "servers": [
+    {
+      "url": "https://api.colurs.com",
+      "description": "Production"
+    },
+    {
+      "url": "https://sandbox.colurs.com",
+      "description": "Sandbox"
+    }
+  ],
+  "paths": {
+    "/api/reload/r2p/bancolombia/": {
+      "post": {
+        "operationId": "api_reload_r2p_bancolombia_create",
+        "description": "\n    Genera un Money Movement con Direct Link para Botón Bancolombia.\n    \n    **Flujo:**\n    1. Crear counterparty R2P (si no existe)\n    2. Llamar a este endpoint con el counterparty_id\n    3. Obtener la URL de pago (payment_link)\n    4. Redirigir al usuario a esa URL\n    5. Usuario completa el pago en Bancolombia\n    6. Consultar el estado con /reload/r2p/status/{id}/\n    \n    **Campos requeridos:**\n    - counterparty_id: ID del counterparty R2P creado previamente\n    - amount: Monto en pesos colombianos (COP) - min: 1,000 COP\n    - external_id: ID único de tu transacción (referencia interna)\n    - description_to_payer: Descripción que verá el cliente al pagar (max 255 chars)\n    - description_to_payee: Descripción interna para Colurs (max 255 chars)\n    - redirect_url: URL donde redirigir después del pago\n    \n    **Nota:** El código de Bancolombia (1007) se envía automáticamente.\n    ",
+        "summary": "Crear Direct Link - Bancolombia",
+        "tags": ["api/reload/r2p"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDirectLinkBancolombia"
+              },
+              "examples": {
+                "RequestExample": {
+                  "value": {
+                    "counterparty_id": "cp_vKXigiCryI",
+                    "amount": 50000,
+                    "external_id": "ORDER_123456",
+                    "description_to_payer": "Recarga Colurs - 50,000 COP",
+                    "description_to_payee": "Recarga recibida de Juan Pérez",
+                    "redirect_url": "https://app.colurs.co/payment/success",
+                    "fee_mode": "payer"
+                  },
+                  "summary": "Request Example"
+                }
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDirectLinkBancolombia"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDirectLinkBancolombia"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoneyMovementResponse"
+                },
+                "examples": {
+                  "SuccessResponse": {
+                    "value": {
+                      "money_movement_id": "mm_gaO1SrCBN92BT5",
+                      "type": "r2p_bancolombia",
+                      "status": "initiated",
+                      "payment_link": "https://sandbox-boton-ou-dev.apps.ambientesbc.com/web/transfer-gateway/checkout/_VIwgp1lQI5",
+                      "tracking_key": "917707780",
+                      "amount": 50000,
+                      "currency": "COP",
+                      "external_id": "ORDER_123456",
+                      "created_at": "2025-11-14T15:44:39Z",
+                      "fee_breakdown": {
+                        "reload_amount": "50000.00",
+                        "fee_colurs": "1000.00",
+                        "fee_iva": "190.00",
+                        "total_fee": "1190.00",
+                        "total_to_pay": "51190.00",
+                        "fee_mode": "payer",
+                        "fee_percentage": "2.00",
+                        "iva_percentage": "19.00"
+                      }
+                    },
+                    "summary": "Success Response"
+                  }
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/reload/r2p/counterparty/": {
+      "post": {
+        "operationId": "api_reload_r2p_counterparty_create",
+        "description": "\n    Crea un counterparty tipo R2P que representa al pagador.\n    Este counterparty se usa como source en los Money Movements de Direct Link.\n    \n    **Campos requeridos:**\n    - fullname: Nombre completo del pagador\n    - id_type: Tipo de documento (cc, nit, ce, pa, etc.)\n    - id_number: Número de documento\n    - phone: Teléfono con código país (+57...)\n    - email: Email del pagador\n    ",
+        "summary": "Crear Counterparty R2P (Pagador)",
+        "tags": ["api/reload/r2p"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCounterpartyR2P"
+              },
+              "examples": {
+                "RequestExample": {
+                  "value": {
+                    "fullname": "Juan Pérez",
+                    "id_type": "cc",
+                    "id_number": "1234567890",
+                    "phone": "+573001234567",
+                    "email": "juan@example.com"
+                  },
+                  "summary": "Request Example"
+                }
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCounterpartyR2P"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCounterpartyR2P"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                "examples": {
+                  "SuccessResponse": {
+                    "value": {
+                      "id": "cp_abc123xyz",
+                      "type": "r2p",
+                      "alias": "colurs_r2p_1234567890",
+                      "geo": "col",
+                      "metadata": {
+                        "counterparty_fullname": "Juan Pérez",
+                        "counterparty_id_type": "cc",
+                        "counterparty_id_number": "1234567890",
+                        "counterparty_phone": "+573001234567",
+                        "counterparty_email": "juan@example.com"
+                      },
+                      "created_at": "2025-11-14T20:00:00Z"
+                    },
+                    "summary": "Success Response"
+                  }
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/reload/r2p/nequi/": {
+      "post": {
+        "operationId": "api_reload_r2p_nequi_create",
+        "description": "\n    Genera un Money Movement con Direct Link para Nequi.\n    \n    **Flujo:**\n    1. Crear counterparty R2P (si no existe)\n    2. Llamar a este endpoint con el counterparty_id\n    3. La respuesta NO incluye payment_link (Nequi no genera URL)\n    4. Usuario debe completar el pago desde su app Nequi\n    5. Consultar estado con /reload/r2p/status/{id}/\n    \n    **Campos requeridos:**\n    - counterparty_id: ID del counterparty R2P\n    - amount: Monto en pesos colombianos (COP) - min: 1,000 COP\n    - external_id: ID único de la transacción\n    - description_to_payer: Descripción que verá el cliente (max 255 chars)\n    - description_to_payee: Descripción interna para Colurs (max 255 chars)\n    - redirect_url: URL donde redirigir después del pago\n    \n    **Importante:** Nequi NO genera payment_link. El usuario completa el pago\n    directamente desde su aplicación Nequi usando el tracking_key.\n    ",
+        "summary": "Crear Direct Link - Nequi",
+        "tags": ["api/reload/r2p"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDirectLinkNequi"
+              },
+              "examples": {
+                "RequestExample": {
+                  "value": {
+                    "counterparty_id": "cp_vKXigiCryI",
+                    "amount": 25000,
+                    "external_id": "ORDER_123458",
+                    "description_to_payer": "Recarga Colurs - 25,000 COP",
+                    "description_to_payee": "Recarga Nequi de Juan Pérez",
+                    "redirect_url": "https://app.colurs.co/payment/success",
+                    "fee_mode": "payer"
+                  },
+                  "summary": "Request Example"
+                }
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDirectLinkNequi"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDirectLinkNequi"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoneyMovementResponse"
+                },
+                "examples": {
+                  "SuccessResponse": {
+                    "value": {
+                      "money_movement_id": "mm_abc123def456",
+                      "type": "r2p_nequi",
+                      "status": "initiated",
+                      "payment_link": null,
+                      "tracking_key": "",
+                      "amount": 25000,
+                      "currency": "COP",
+                      "external_id": "ORDER_123458",
+                      "created_at": "2025-11-14T15:44:41Z",
+                      "note": "El usuario debe completar el pago desde su app Nequi",
+                      "fee_breakdown": {
+                        "reload_amount": "25000.00",
+                        "fee_colurs": "500.00",
+                        "fee_iva": "95.00",
+                        "total_fee": "595.00",
+                        "total_to_pay": "25595.00",
+                        "fee_mode": "payer",
+                        "fee_percentage": "2.00",
+                        "iva_percentage": "19.00"
+                      }
+                    },
+                    "summary": "Success Response"
+                  }
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/reload/r2p/pse/": {
+      "post": {
+        "operationId": "api_reload_r2p_pse_create",
+        "description": "\n    Genera un Money Movement con Direct Link para PSE.\n    \n    **Flujo:**\n    1. Obtener lista de bancos: GET /reload/r2p/pse/banks/\n    2. Mostrar selector de bancos al usuario\n    3. Crear counterparty R2P (si no existe)\n    4. Llamar a este endpoint con counterparty_id y financial_institution_code\n    5. Obtener payment_link y redirigir al usuario\n    6. Usuario completa el pago vía PSE\n    7. Consultar estado con /reload/r2p/status/{id}/\n    \n    **Campos requeridos:**\n    - counterparty_id: ID del counterparty R2P\n    - amount_cop: Monto en pesos colombianos (COP) - min: 1,000 COP\n    - external_id: ID único de la transacción\n    - description_to_payer: Descripción que verá el cliente (max 255 chars)\n    - description_to_payee: Descripción interna para Colurs (max 255 chars)\n    - redirect_url: URL donde redirigir después del pago\n    - financial_institution_code: Código del banco PSE (ej: 1007, 1001, 1051)\n    \n    **Nota:** Usa GET /reload/r2p/pse/banks/ para obtener la lista de bancos.\n    ",
+        "summary": "Crear Direct Link - PSE",
+        "tags": ["api/reload/r2p"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDirectLinkPSE"
+              },
+              "examples": {
+                "RequestExample": {
+                  "value": {
+                    "counterparty_id": "cp_vKXigiCryI",
+                    "amount_cop": 100000,
+                    "external_id": "ORDER_123457",
+                    "description_to_payer": "Recarga Colurs - 100,000 COP",
+                    "description_to_payee": "Recarga PSE de Juan Pérez",
+                    "redirect_url": "https://app.colurs.co/payment/success",
+                    "financial_institution_code": "1007",
+                    "fee_mode": "payer"
+                  },
+                  "summary": "Request Example"
+                }
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDirectLinkPSE"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDirectLinkPSE"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MoneyMovementResponse"
+                },
+                "examples": {
+                  "SuccessResponse": {
+                    "value": {
+                      "money_movement_id": "mm_tjfcYXguVwrNWj",
+                      "type": "r2p_pse",
+                      "status": "initiated",
+                      "payment_link": "https://checkout.cobre.global/pse/mm_tjfcYXguVwrNWj",
+                      "tracking_key": "PSE_917707781",
+                      "amount": 100000,
+                      "currency": "COP",
+                      "external_id": "ORDER_123457",
+                      "financial_institution_code": "1007",
+                      "created_at": "2025-11-14T15:44:40Z",
+                      "fee_breakdown": {
+                        "reload_amount": "100000.00",
+                        "fee_colurs": "2000.00",
+                        "fee_iva": "380.00",
+                        "total_fee": "2380.00",
+                        "total_to_pay": "102380.00",
+                        "fee_mode": "payer",
+                        "fee_percentage": "2.00",
+                        "iva_percentage": "19.00"
+                      }
+                    },
+                    "summary": "Success Response"
+                  }
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/reload/r2p/status/{id}/": {
+      "get": {
+        "operationId": "api_reload_r2p_status_retrieve",
+        "description": "\n    Consulta el estado actual de un Money Movement R2P.\n    \n    **Posibles estados:**\n    - initiated: Pago iniciado, esperando que el usuario pague\n    - pending: Pago pendiente de confirmación\n    - processing: Procesando pago\n    - succeeded: Pago completado exitosamente ✅\n    - failed: Pago fallido ❌\n    - expired: Link expirado\n    \n    **Usar este endpoint para:**\n    - Polling después de redirigir al usuario (cada 5-10 segundos)\n    - Verificar si el pago fue completado\n    - Obtener detalles y tracking_key del Money Movement\n    \n    **Recomendación:** Hacer polling hasta que el estado sea 'succeeded' o 'failed'.\n    ",
+        "summary": "Consultar Estado de Money Movement",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "money_movement_id",
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID del Money Movement (mm_...)",
+            "required": true
+          }
+        ],
+        "tags": ["api/reload/r2p"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                "examples": {
+                  "SuccessResponse-Initiated": {
+                    "value": {
+                      "money_movement_id": "mm_gaO1SrCBN92BT5",
+                      "type": "r2p_bancolombia",
+                      "status": "initiated",
+                      "status_code": "",
+                      "status_description": "",
+                      "payment_link": "https://sandbox-boton-ou-dev.apps.ambientesbc.com/web/transfer-gateway/checkout/_VIwgp1lQI5",
+                      "tracking_key": "917707780",
+                      "amount": 50000,
+                      "currency": "COP",
+                      "external_id": "ORDER_123456",
+                      "created_at": "2025-11-14T15:44:39Z",
+                      "updated_at": "2025-11-14T15:44:39Z"
+                    },
+                    "summary": "Success Response - Initiated"
+                  },
+                  "SuccessResponse-Succeeded": {
+                    "value": {
+                      "money_movement_id": "mm_gaO1SrCBN92BT5",
+                      "type": "r2p_bancolombia",
+                      "status": "succeeded",
+                      "status_code": "PAYMENT_COMPLETED",
+                      "status_description": "Payment completed successfully",
+                      "payment_link": "https://sandbox-boton-ou-dev.apps.ambientesbc.com/web/transfer-gateway/checkout/_VIwgp1lQI5",
+                      "tracking_key": "917707780",
+                      "amount": 50000,
+                      "currency": "COP",
+                      "external_id": "ORDER_123456",
+                      "created_at": "2025-11-14T15:44:39Z",
+                      "updated_at": "2025-11-14T15:50:15Z"
+                    },
+                    "summary": "Success Response - Succeeded"
+                  }
+                }
+              }
+            },
+            "description": ""
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "description": ""
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/balance/": {
+      "get": {
+        "operationId": "balance_retrieve",
+        "description": "This endpoint returns balances\nof the differents currencies that user belongs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "schema": {
+              "type": "string"
+            },
+            "description": "User name parameter",
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "username",
+            "schema": {
+              "type": "string"
+            },
+            "description": "User name parameter"
+          }
+        ],
+        "tags": ["balance"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "balance": {
+                      "type": "number"
+                    },
+                    "balance_usd": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/bank-codes/mxn": {
+      "get": {
+        "operationId": "bank_codes_mxn_retrieve",
+        "description": "Get bank codes for a specific country\nQuery params:\n- country: Country code (e.g., \"mx\", \"br\", \"co\"). Defaults to \"mx\"",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "country",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Country code (e.g., 'mx', 'br', 'co')",
+            "required": true
+          }
+        ],
+        "tags": ["MXN"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/banks/": {
+      "get": {
+        "operationId": "banks_retrieve",
+        "description": "This service return\na list of bank choices",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "country",
+            "schema": {
+              "type": "string"
+            },
+            "description": "country filter",
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            },
+            "description": "search filter to find a specific bank"
+          }
+        ],
+        "tags": ["banks"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "No response body"
+          }
+        }
+      }
+    },
+    "/base/document_type/": {
+      "get": {
+        "operationId": "base_document_type_retrieve",
+        "description": "This service return the list\nwith all the document types by\ncountry",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "country",
+            "schema": {
+              "type": "string"
+            },
+            "description": "country filter",
+            "required": true
+          }
+        ],
+        "tags": ["base"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "No response body"
+          }
+        }
+      }
+    },
+    "/clabe/mxn": {
+      "get": {
+        "operationId": "clabe_mxn_retrieve",
+        "description": "Get user's CLABE accounts",
+        "tags": ["MXN"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "clabe": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "clabe_type": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "clabe_mxn_create",
+        "description": "Create a CLABE account for receiving MXN deposits",
+        "tags": ["MXN"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "clabe": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/create/third_party_withdraw/": {
+      "post": {
+        "operationId": "create_third_party_withdraw_create",
+        "description": "This service allow user to do\none or multiple third party withdraw",
+        "tags": ["create"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateThirdPartyWithdraw"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateThirdPartyWithdraw"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateThirdPartyWithdraw"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "thirdpartywithdraw_id": {
+                          "type": "integer"
+                        },
+                        "sales_crypto_id": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/create_third_party_banks/": {
+      "post": {
+        "operationId": "create_third_party_banks_create",
+        "tags": ["create_third_party_banks"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateThirdPartyWithdrawsBank"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateThirdPartyWithdrawsBank"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateThirdPartyWithdrawsBank"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateThirdPartyWithdrawsBank"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/exchange/conversions": {
+      "get": {
+        "operationId": "exchange_conversions_retrieve",
+        "description": "Lists conversions from local DB only.\nResults are filtered by authenticated user profile.\nSupports cursor pagination using `page_limit` and `pagination_cursor`.\n\nStatus filtering follows ConversionStatus constants.\nAllowed values: ['COMPLETED', 'FAILED', 'INITIATED', 'TERMINATED'].",
+        "summary": "List conversions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "asset",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional asset filter"
+          },
+          {
+            "in": "query",
+            "name": "conversion_state",
+            "schema": {
+              "type": "string",
+              "enum": ["COMPLETED", "FAILED", "INITIATED", "TERMINATED"]
+            },
+            "description": "Filter by ConversionStatus values. Allowed values: ['COMPLETED', 'FAILED', 'INITIATED', 'TERMINATED']."
+          },
+          {
+            "in": "query",
+            "name": "page_limit",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Page size (default 20, max 100)"
+          },
+          {
+            "in": "query",
+            "name": "pagination_cursor",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque cursor returned by previous response"
+          }
+        ],
+        "tags": ["exchange/mxn"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "conversion_items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "profile_uuid": {
+                                "type": "string",
+                                "format": "uuid",
+                                "description": "Owner profile UUID"
+                              },
+                              "conversion_identifier": {
+                                "type": "string",
+                                "description": "Bitso conversion identifier"
+                              },
+                              "from_currency": {
+                                "type": "string"
+                              },
+                              "to_currency": {
+                                "type": "string"
+                              },
+                              "asset": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Asset selected to determine trade direction"
+                              },
+                              "from_amount": {
+                                "type": "string",
+                                "description": "Amount of from_currency"
+                              },
+                              "to_amount": {
+                                "type": "string",
+                                "description": "Amount of to_currency"
+                              },
+                              "quote_identifier": {
+                                "type": "string",
+                                "description": "Bitso RFQ quote identifier"
+                              },
+                              "exchange_rate": {
+                                "type": "string",
+                                "description": "Applied exchange rate for the quote/conversion"
+                              },
+                              "conversion_status": {
+                                "type": "string",
+                                "description": "Allowed values: ['COMPLETED', 'FAILED', 'INITIATED', 'TERMINATED']."
+                              },
+                              "quote_created_at": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Quote creation timestamp (ISO 8601)"
+                              },
+                              "conversion_created_at": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Conversion creation timestamp (ISO 8601)"
+                              },
+                              "conversion_updated_at": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Last conversion update timestamp (ISO 8601)"
+                              },
+                              "conversion_scenario": {
+                                "type": "object",
+                                "properties": {
+                                  "scenario_number": {
+                                    "type": "integer",
+                                    "description": "Allowed values: [1, 2, 3, 4].\n1 = canonical direction + from_amount (sell provided from_currency amount to receive to_currency).\n2 = canonical direction + to_amount (calculate required from_currency to receive provided to_currency).\n3 = reverse direction + from_amount (buy to_currency using provided from_currency amount).\n4 = reverse direction + to_amount (calculate required from_currency to buy provided to_currency)."
+                                  },
+                                  "trade_type": {
+                                    "type": "string",
+                                    "description": "Allowed values: ['BUY', 'SELL']."
+                                  },
+                                  "interpretation": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "description": "Human-readable interpretation for scenario_number"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page_limit": {
+                              "type": "integer",
+                              "description": "Effective page size used in query"
+                            },
+                            "next_cursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Opaque cursor for next page. Null when no more pages"
+                            },
+                            "total_items": {
+                              "type": "integer",
+                              "description": "Total conversions matching current filters"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "exchange_conversions_create",
+        "description": "Converts an existing RFQ quote in Bitso RFQ API using `quote_identifier`, then persists the conversion in local DB for the authenticated user profile.\n\nRequest body accepts optional `scenario_number`; when omitted, backend applies default scenario logic before persistence.\n\nStored scenario metadata uses QuoteScenario and QuoteTradeType constants:\n- Allowed values: [1, 2, 3, 4].\n1 = canonical direction + from_amount (sell provided from_currency amount to receive to_currency).\n2 = canonical direction + to_amount (calculate required from_currency to receive provided to_currency).\n3 = reverse direction + from_amount (buy to_currency using provided from_currency amount).\n4 = reverse direction + to_amount (calculate required from_currency to buy provided to_currency).\n- Allowed values: ['BUY', 'SELL'].",
+        "summary": "Create conversion",
+        "tags": ["exchange/mxn"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertExchangeQuote"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertExchangeQuote"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertExchangeQuote"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "profile_uuid": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Owner profile UUID"
+                        },
+                        "conversion_identifier": {
+                          "type": "string",
+                          "description": "Bitso conversion identifier"
+                        },
+                        "from_currency": {
+                          "type": "string"
+                        },
+                        "to_currency": {
+                          "type": "string"
+                        },
+                        "asset": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Asset selected to determine trade direction"
+                        },
+                        "from_amount": {
+                          "type": "string",
+                          "description": "Amount of from_currency"
+                        },
+                        "to_amount": {
+                          "type": "string",
+                          "description": "Amount of to_currency"
+                        },
+                        "quote_identifier": {
+                          "type": "string",
+                          "description": "Bitso RFQ quote identifier"
+                        },
+                        "exchange_rate": {
+                          "type": "string",
+                          "description": "Applied exchange rate for the quote/conversion"
+                        },
+                        "conversion_status": {
+                          "type": "string",
+                          "description": "Allowed values: ['COMPLETED', 'FAILED', 'INITIATED', 'TERMINATED']."
+                        },
+                        "quote_created_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Quote creation timestamp (ISO 8601)"
+                        },
+                        "conversion_created_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Conversion creation timestamp (ISO 8601)"
+                        },
+                        "conversion_updated_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Last conversion update timestamp (ISO 8601)"
+                        },
+                        "conversion_scenario": {
+                          "type": "object",
+                          "properties": {
+                            "scenario_number": {
+                              "type": "integer",
+                              "description": "Allowed values: [1, 2, 3, 4].\n1 = canonical direction + from_amount (sell provided from_currency amount to receive to_currency).\n2 = canonical direction + to_amount (calculate required from_currency to receive provided to_currency).\n3 = reverse direction + from_amount (buy to_currency using provided from_currency amount).\n4 = reverse direction + to_amount (calculate required from_currency to buy provided to_currency)."
+                            },
+                            "trade_type": {
+                              "type": "string",
+                              "description": "Allowed values: ['BUY', 'SELL']."
+                            },
+                            "interpretation": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Human-readable interpretation for scenario_number"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/exchange/conversions/preview": {
+      "post": {
+        "operationId": "exchange_conversions_preview_create",
+        "description": "Requests an RFQ quote and returns a conversion-shaped preview payload without converting or persisting.",
+        "summary": "Preview conversion",
+        "tags": ["exchange/mxn"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewExchangeConversion"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewExchangeConversion"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewExchangeConversion"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "profile_uuid": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Owner profile UUID"
+                        },
+                        "conversion_identifier": {
+                          "type": "string",
+                          "description": "Bitso conversion identifier"
+                        },
+                        "from_currency": {
+                          "type": "string"
+                        },
+                        "to_currency": {
+                          "type": "string"
+                        },
+                        "asset": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Asset selected to determine trade direction"
+                        },
+                        "from_amount": {
+                          "type": "string",
+                          "description": "Amount of from_currency"
+                        },
+                        "to_amount": {
+                          "type": "string",
+                          "description": "Amount of to_currency"
+                        },
+                        "quote_identifier": {
+                          "type": "string",
+                          "description": "Bitso RFQ quote identifier"
+                        },
+                        "exchange_rate": {
+                          "type": "string",
+                          "description": "Applied exchange rate for the quote/conversion"
+                        },
+                        "conversion_status": {
+                          "type": "string",
+                          "description": "Allowed values: ['COMPLETED', 'FAILED', 'INITIATED', 'TERMINATED']."
+                        },
+                        "quote_created_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Quote creation timestamp (ISO 8601)"
+                        },
+                        "conversion_created_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Conversion creation timestamp (ISO 8601)"
+                        },
+                        "conversion_updated_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Last conversion update timestamp (ISO 8601)"
+                        },
+                        "conversion_scenario": {
+                          "type": "object",
+                          "properties": {
+                            "scenario_number": {
+                              "type": "integer",
+                              "description": "Allowed values: [1, 2, 3, 4].\n1 = canonical direction + from_amount (sell provided from_currency amount to receive to_currency).\n2 = canonical direction + to_amount (calculate required from_currency to receive provided to_currency).\n3 = reverse direction + from_amount (buy to_currency using provided from_currency amount).\n4 = reverse direction + to_amount (calculate required from_currency to buy provided to_currency)."
+                            },
+                            "trade_type": {
+                              "type": "string",
+                              "description": "Allowed values: ['BUY', 'SELL']."
+                            },
+                            "interpretation": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Human-readable interpretation for scenario_number"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/exchange/conversions/user": {
+      "get": {
+        "operationId": "exchange_conversions_user_retrieve",
+        "description": "Lists conversions for authenticated user using only local DB data.\nNo Bitso API fallback is performed in this endpoint.\n\nStatus filtering follows ConversionStatus constants.\nAllowed values: ['COMPLETED', 'FAILED', 'INITIATED', 'TERMINATED'].",
+        "summary": "List user conversions (DB only)",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "asset",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter conversions by asset"
+          },
+          {
+            "in": "query",
+            "name": "conversion_state",
+            "schema": {
+              "type": "string",
+              "enum": ["COMPLETED", "FAILED", "INITIATED", "TERMINATED"]
+            },
+            "description": "Filter by ConversionStatus values. Allowed values: ['COMPLETED', 'FAILED', 'INITIATED', 'TERMINATED']."
+          }
+        ],
+        "tags": ["exchange/mxn"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "conversion_items": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "profile_uuid": {
+                                "type": "string",
+                                "format": "uuid",
+                                "description": "Owner profile UUID"
+                              },
+                              "conversion_identifier": {
+                                "type": "string",
+                                "description": "Bitso conversion identifier"
+                              },
+                              "from_currency": {
+                                "type": "string"
+                              },
+                              "to_currency": {
+                                "type": "string"
+                              },
+                              "asset": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Asset selected to determine trade direction"
+                              },
+                              "from_amount": {
+                                "type": "string",
+                                "description": "Amount of from_currency"
+                              },
+                              "to_amount": {
+                                "type": "string",
+                                "description": "Amount of to_currency"
+                              },
+                              "quote_identifier": {
+                                "type": "string",
+                                "description": "Bitso RFQ quote identifier"
+                              },
+                              "exchange_rate": {
+                                "type": "string",
+                                "description": "Applied exchange rate for the quote/conversion"
+                              },
+                              "conversion_status": {
+                                "type": "string",
+                                "description": "Allowed values: ['COMPLETED', 'FAILED', 'INITIATED', 'TERMINATED']."
+                              },
+                              "quote_created_at": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Quote creation timestamp (ISO 8601)"
+                              },
+                              "conversion_created_at": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Conversion creation timestamp (ISO 8601)"
+                              },
+                              "conversion_updated_at": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Last conversion update timestamp (ISO 8601)"
+                              },
+                              "conversion_scenario": {
+                                "type": "object",
+                                "properties": {
+                                  "scenario_number": {
+                                    "type": "integer",
+                                    "description": "Allowed values: [1, 2, 3, 4].\n1 = canonical direction + from_amount (sell provided from_currency amount to receive to_currency).\n2 = canonical direction + to_amount (calculate required from_currency to receive provided to_currency).\n3 = reverse direction + from_amount (buy to_currency using provided from_currency amount).\n4 = reverse direction + to_amount (calculate required from_currency to buy provided to_currency)."
+                                  },
+                                  "trade_type": {
+                                    "type": "string",
+                                    "description": "Allowed values: ['BUY', 'SELL']."
+                                  },
+                                  "interpretation": {
+                                    "type": "string",
+                                    "nullable": true,
+                                    "description": "Human-readable interpretation for scenario_number"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page_limit": {
+                              "type": "integer",
+                              "description": "Effective page size used in query"
+                            },
+                            "next_cursor": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Opaque cursor for next page. Null when no more pages"
+                            },
+                            "total_items": {
+                              "type": "integer",
+                              "description": "Total conversions matching current filters"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/exchange/conversions/user/{conversion_identifier}": {
+      "get": {
+        "operationId": "exchange_conversions_user_retrieve_2",
+        "description": "Retrieves a conversion by identifier using local DB first (by authenticated profile + conversion_identifier) with Bitso API fallback when not found locally.\n\nResponse may include scenario metadata from QuoteScenario/QuoteTradeType constants:\n- Allowed values: [1, 2, 3, 4].\n1 = canonical direction + from_amount (sell provided from_currency amount to receive to_currency).\n2 = canonical direction + to_amount (calculate required from_currency to receive provided to_currency).\n3 = reverse direction + from_amount (buy to_currency using provided from_currency amount).\n4 = reverse direction + to_amount (calculate required from_currency to buy provided to_currency).\n- Allowed values: ['BUY', 'SELL'].",
+        "summary": "Retrieve conversion",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversion_identifier",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Conversion identifier",
+            "required": true
+          }
+        ],
+        "tags": ["exchange/mxn"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "profile_uuid": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Owner profile UUID"
+                        },
+                        "conversion_identifier": {
+                          "type": "string",
+                          "description": "Bitso conversion identifier"
+                        },
+                        "from_currency": {
+                          "type": "string"
+                        },
+                        "to_currency": {
+                          "type": "string"
+                        },
+                        "asset": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Asset selected to determine trade direction"
+                        },
+                        "from_amount": {
+                          "type": "string",
+                          "description": "Amount of from_currency"
+                        },
+                        "to_amount": {
+                          "type": "string",
+                          "description": "Amount of to_currency"
+                        },
+                        "quote_identifier": {
+                          "type": "string",
+                          "description": "Bitso RFQ quote identifier"
+                        },
+                        "exchange_rate": {
+                          "type": "string",
+                          "description": "Applied exchange rate for the quote/conversion"
+                        },
+                        "conversion_status": {
+                          "type": "string",
+                          "description": "Allowed values: ['COMPLETED', 'FAILED', 'INITIATED', 'TERMINATED']."
+                        },
+                        "quote_created_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Quote creation timestamp (ISO 8601)"
+                        },
+                        "conversion_created_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Conversion creation timestamp (ISO 8601)"
+                        },
+                        "conversion_updated_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Last conversion update timestamp (ISO 8601)"
+                        },
+                        "conversion_scenario": {
+                          "type": "object",
+                          "properties": {
+                            "scenario_number": {
+                              "type": "integer",
+                              "description": "Allowed values: [1, 2, 3, 4].\n1 = canonical direction + from_amount (sell provided from_currency amount to receive to_currency).\n2 = canonical direction + to_amount (calculate required from_currency to receive provided to_currency).\n3 = reverse direction + from_amount (buy to_currency using provided from_currency amount).\n4 = reverse direction + to_amount (calculate required from_currency to buy provided to_currency)."
+                            },
+                            "trade_type": {
+                              "type": "string",
+                              "description": "Allowed values: ['BUY', 'SELL']."
+                            },
+                            "interpretation": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Human-readable interpretation for scenario_number"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "operationId": "exchange_conversions_user_partial_update",
+        "description": "Updates a persisted conversion record in local DB only.\nThis endpoint does not call Bitso API.\n\nOnly `asset` and `trade_type` are accepted in request body. `scenario_number` is recalculated automatically from these values.\n\nFor `trade_type`, use constants from QuoteTradeType:\n- Allowed values: ['BUY', 'SELL'].",
+        "summary": "Patch conversion (DB only)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversion_identifier",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Conversion identifier",
+            "required": true
+          }
+        ],
+        "tags": ["exchange/mxn"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedUpdateExchangeConversion"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedUpdateExchangeConversion"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedUpdateExchangeConversion"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "profile_uuid": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "Owner profile UUID"
+                        },
+                        "conversion_identifier": {
+                          "type": "string",
+                          "description": "Bitso conversion identifier"
+                        },
+                        "from_currency": {
+                          "type": "string"
+                        },
+                        "to_currency": {
+                          "type": "string"
+                        },
+                        "asset": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Asset selected to determine trade direction"
+                        },
+                        "from_amount": {
+                          "type": "string",
+                          "description": "Amount of from_currency"
+                        },
+                        "to_amount": {
+                          "type": "string",
+                          "description": "Amount of to_currency"
+                        },
+                        "quote_identifier": {
+                          "type": "string",
+                          "description": "Bitso RFQ quote identifier"
+                        },
+                        "exchange_rate": {
+                          "type": "string",
+                          "description": "Applied exchange rate for the quote/conversion"
+                        },
+                        "conversion_status": {
+                          "type": "string",
+                          "description": "Allowed values: ['COMPLETED', 'FAILED', 'INITIATED', 'TERMINATED']."
+                        },
+                        "quote_created_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Quote creation timestamp (ISO 8601)"
+                        },
+                        "conversion_created_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Conversion creation timestamp (ISO 8601)"
+                        },
+                        "conversion_updated_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Last conversion update timestamp (ISO 8601)"
+                        },
+                        "conversion_scenario": {
+                          "type": "object",
+                          "properties": {
+                            "scenario_number": {
+                              "type": "integer",
+                              "description": "Allowed values: [1, 2, 3, 4].\n1 = canonical direction + from_amount (sell provided from_currency amount to receive to_currency).\n2 = canonical direction + to_amount (calculate required from_currency to receive provided to_currency).\n3 = reverse direction + from_amount (buy to_currency using provided from_currency amount).\n4 = reverse direction + to_amount (calculate required from_currency to buy provided to_currency)."
+                            },
+                            "trade_type": {
+                              "type": "string",
+                              "description": "Allowed values: ['BUY', 'SELL']."
+                            },
+                            "interpretation": {
+                              "type": "string",
+                              "nullable": true,
+                              "description": "Human-readable interpretation for scenario_number"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "exchange_conversions_user_destroy",
+        "description": "Deletes a persisted conversion record in local DB only. This endpoint does not call Bitso API.",
+        "summary": "Delete conversion (DB only)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversion_identifier",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Conversion identifier",
+            "required": true
+          }
+        ],
+        "tags": ["exchange/mxn"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "conversion_identifier": {
+                          "type": "string",
+                          "description": "Identifier of deleted conversion"
+                        },
+                        "deleted": {
+                          "type": "boolean",
+                          "description": "Deletion result flag"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/exchange/pairs": {
+      "get": {
+        "operationId": "exchange_pairs_retrieve",
+        "description": "Returns available RFQ pairs from Bitso. This endpoint is API-backed and does not use local conversion persistence.",
+        "summary": "List allowed exchange pairs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from_currency",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Source currency/asset filter"
+          },
+          {
+            "in": "query",
+            "name": "to_currency",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Target currency/asset filter"
+          }
+        ],
+        "tags": ["exchange/mxn"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "available_pairs": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "from_currency": {
+                                "type": "string",
+                                "description": "Source currency/asset"
+                              },
+                              "to_currency": {
+                                "type": "string",
+                                "description": "Target currency/asset"
+                              },
+                              "book": {
+                                "type": "string",
+                                "nullable": true,
+                                "description": "Bitso market/book identifier when available"
+                              }
+                            }
+                          },
+                          "description": "Pairs enabled for RFQ in current environment"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/funding-details/mxn": {
+      "get": {
+        "operationId": "funding_details_mxn_retrieve",
+        "description": "Get funding details (instructions for making a deposit)\n\nQuery params:\n- currency: Currency code (required)\n- protocol: Protocol (optional)\n- asset: Asset code (optional)\n- network: Network code (optional)\n- integration: Integration provider (optional)",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "asset",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Asset code (e.g., 'usdt', 'btc')"
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Currency code (e.g., 'usdt', 'btc', 'mxn')",
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "integration",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Integration provider (e.g., 'fblocks-v1')"
+          },
+          {
+            "in": "query",
+            "name": "network",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Network (e.g., 'tron', 'eth', 'spei', 'btc')"
+          },
+          {
+            "in": "query",
+            "name": "protocol",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Protocol (e.g., 'trc20', 'erc20', 'clabe')"
+          }
+        ],
+        "tags": ["MXN"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/funding-methods/mxn": {
+      "get": {
+        "operationId": "funding_methods_mxn_retrieve",
+        "description": "Get available funding methods for a specific currency",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "schema": {
+              "type": "string",
+              "default": "mxn"
+            },
+            "description": "Currency code (default: mxn)"
+          }
+        ],
+        "tags": ["MXN"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/fundings/mxn": {
+      "get": {
+        "operationId": "fundings_mxn_retrieve",
+        "description": "List fundings/deposits received in Bitso account\n\nQuery params:\n- limit: Number of results per page\n- offset: Pagination offset\n- status: Filter by status (pending, complete, etc.)\n- currency: Filter by currency (mxn, btc, usdt, etc.)",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by currency (e.g., 'mxn', 'btc', 'usdt')"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Number of results per page (default: 25, max: 100)"
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Pagination offset"
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by status (e.g., 'pending', 'complete')"
+          }
+        ],
+        "tags": ["MXN"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "array"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/list_third_party_banks/": {
+      "get": {
+        "operationId": "list_third_party_banks_list",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "country",
+            "schema": {
+              "type": "string"
+            },
+            "description": "filter third party banks by country",
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "profile_id",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "third party banks profile_id filter"
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            },
+            "description": "third party banks search filter"
+          }
+        ],
+        "tags": ["list_third_party_banks"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ThirdPartyBankAccountList"
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/mock-deposit/mxn": {
+      "post": {
+        "operationId": "mock_deposit_mxn_create",
+        "description": "Create a mock/fake MXN deposit (Stage Environment Only)\n\nThis endpoint creates a fake deposit for testing purposes.\nIt only works in Bitso's stage environment.",
+        "tags": ["MXN"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "clabe": {
+                    "type": "string",
+                    "description": "CLABE account number to deposit into"
+                  },
+                  "amount": {
+                    "type": "string",
+                    "description": "Amount to deposit (e.g., '1000.00')"
+                  },
+                  "reference": {
+                    "type": "string",
+                    "description": "Optional reference for the deposit"
+                  }
+                },
+                "required": ["clabe", "amount"]
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deposit_id": {
+                          "type": "string"
+                        },
+                        "clabe": {
+                          "type": "string"
+                        },
+                        "amount": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/payment-links": {
+      "post": {
+        "operationId": "payment_links_create",
+        "description": "This endpoint allow user to create\ntheir own payment link and share to other person",
+        "tags": ["payment-links"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentLinkCreate"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentLinkCreate"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentLinkCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentLinkResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/payment-links/{link_uuid}/custom": {
+      "get": {
+        "operationId": "payment_links_custom_retrieve",
+        "description": "This endpoint return all the data\nfor a specific link uuid",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "link_uuid",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "tags": ["payment-links"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentLinkResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "operationId": "payment_links_custom_partial_update",
+        "description": "This endpoint do a partial update\nfor a given payment link uuid",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "link_uuid",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "tags": ["payment-links"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedPaymentLinkMethods"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedPaymentLinkMethods"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedPaymentLinkMethods"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "number"
+                    },
+                    "allowed_methods": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/payment-links/{user_reference}/general": {
+      "get": {
+        "operationId": "payment_links_general_retrieve",
+        "description": "This endpoint return the general payment link\nfor a given user reference (phone or email)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_reference",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "tags": ["payment-links"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentLinkResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/payment-links/{uuid}/deposit": {
+      "post": {
+        "operationId": "payment_links_deposit_create",
+        "description": "This endpoint allow client\nto deposit and pay the total amount\nfor a given payment link",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uuid",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "tags": ["payment-links"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentLinkDeposit"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentLinkDeposit"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentLinkDeposit"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    },
+                    "checkout_url": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/payment-links/methods/options": {
+      "get": {
+        "operationId": "payment_links_methods_options_retrieve",
+        "description": "This endpoint shows all the available\npayment methos for payment link",
+        "tags": ["payment-links"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "No response body"
+          }
+        }
+      }
+    },
+    "/profile/wallet-visibility": {
+      "put": {
+        "operationId": "profile_wallet_visibility_update",
+        "description": "/profile/wallet-visibility\nBody: {\"wallet_info_enabled\": true}",
+        "tags": ["profile"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletVisibility"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletVisibility"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletVisibility"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletVisibility"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "operationId": "profile_wallet_visibility_partial_update",
+        "description": "/profile/wallet-visibility\nBody: {\"wallet_info_enabled\": true}",
+        "tags": ["profile"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedWalletVisibility"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedWalletVisibility"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchedWalletVisibility"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletVisibility"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/quote/": {
+      "post": {
+        "operationId": "quote_create",
+        "description": "This service create a reload based\non the given reload_method",
+        "tags": ["quote"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Quote"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Quote"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Quote"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/recipients/mxn": {
+      "get": {
+        "operationId": "recipients_mxn_retrieve",
+        "description": "Get user's recipient accounts from local DB or Bitso",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Currency code (e.g., 'mxn', 'brl', 'ars'). Defaults to 'mxn'"
+          },
+          {
+            "in": "query",
+            "name": "network",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Network (e.g., 'spei')"
+          },
+          {
+            "in": "query",
+            "name": "protocol",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Protocol (e.g., 'clabe')"
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Data source: 'db' (default) for local database, 'api' for direct Bitso API query with sync"
+          }
+        ],
+        "tags": ["MXN"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "recipient_id": {
+                            "type": "string"
+                          },
+                          "beneficiary_name": {
+                            "type": "string"
+                          },
+                          "account_number": {
+                            "type": "string"
+                          },
+                          "bank_code": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "recipients_mxn_create",
+        "description": "Create a recipient account for MXN withdrawals",
+        "tags": ["MXN"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRecipientAccount"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRecipientAccount"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRecipientAccount"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "recipient_id": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "recipients_mxn_destroy",
+        "description": "Delete a recipient account",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "recipient_id",
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID of the recipient account to delete",
+            "required": true
+          }
+        ],
+        "tags": ["MXN"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/reload/create": {
+      "post": {
+        "operationId": "reload_create_create",
+        "description": "This service create a reload based\non the given reload_method",
+        "tags": ["reload"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reload"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Reload"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Reload"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/request_confirmation/": {
+      "post": {
+        "operationId": "request_confirmation_create",
+        "description": "This service sends an email and sms for user verification",
+        "tags": ["request_confirmation"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmationEmailAndPhone"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmationEmailAndPhone"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmationEmailAndPhone"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/send/": {
+      "get": {
+        "operationId": "send_retrieve",
+        "description": "creates and list of the sends",
+        "tags": ["send"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSend"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "send_create",
+        "description": "creates and list of the sends",
+        "tags": ["send"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSend"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSend"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSend"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "to_user": {
+                      "type": "integer"
+                    },
+                    "from_user": {
+                      "type": "integer"
+                    },
+                    "created": {
+                      "type": "boolean"
+                    },
+                    "pk": {
+                      "type": "integer"
+                    },
+                    "date": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/send/estimate/multiple-user/": {
+      "post": {
+        "operationId": "send_estimate_multiple_user_create",
+        "description": "This method calculate the estimate\nof multiple sending",
+        "tags": ["send"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultipleSend"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/MultipleSend"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/MultipleSend"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number"
+                        },
+                        "fee_iva_amount": {
+                          "type": "number"
+                        },
+                        "fee_amount": {
+                          "type": "number"
+                        },
+                        "payed_amount": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/send/estimate/user/": {
+      "post": {
+        "operationId": "send_estimate_user_create",
+        "description": "This method implement\nfast sending logic",
+        "tags": ["send"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FastSend"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/FastSend"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FastSend"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "amount": {
+                          "type": "number"
+                        },
+                        "fee_iva_amount": {
+                          "type": "number"
+                        },
+                        "fee_amount": {
+                          "type": "number"
+                        },
+                        "payed_amount": {
+                          "type": "number"
+                        },
+                        "full_name": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/send/last_users_sended/": {
+      "get": {
+        "operationId": "send_last_users_sended_list",
+        "description": "Get last users to whom the authenticated user has sent money.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "default": 5
+            },
+            "description": "Number of users to return"
+          },
+          {
+            "in": "query",
+            "name": "type_send",
+            "schema": {
+              "type": "string",
+              "default": "colurs",
+              "maxLength": 50,
+              "minLength": 1
+            },
+            "description": "Type of send: colurs, co, uma"
+          }
+        ],
+        "tags": ["send"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Results"
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/send/multiple-user/": {
+      "post": {
+        "operationId": "send_multiple_user_create",
+        "description": "This method send money to differents\nusers",
+        "tags": ["send"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MultipleSend"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/MultipleSend"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/MultipleSend"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/send/user/": {
+      "post": {
+        "operationId": "send_user_create",
+        "description": "This method implement\nfast sending logic",
+        "tags": ["send"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FastSend"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/FastSend"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FastSend"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "result": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "number"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "fee_amount": {
+                          "type": "number"
+                        },
+                        "payed_amount": {
+                          "type": "number"
+                        },
+                        "fee_iva_amount": {
+                          "type": "number"
+                        },
+                        "amount": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/swap/": {
+      "get": {
+        "operationId": "swap_retrieve",
+        "description": "This service returns a list\nof quotes for a specific profile",
+        "tags": ["swap"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "No response body"
+          }
+        }
+      },
+      "post": {
+        "operationId": "swap_create",
+        "description": "This method confirm a quote and\nthen create a swap",
+        "tags": ["swap"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSwap"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSwap"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSwap"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/thirdpartybank": {
+      "put": {
+        "operationId": "thirdpartybank_update",
+        "description": "This service allow user to update\nalias or state field from bank account",
+        "tags": ["thirdpartybank"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateThirdPartyWithdrawBank"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateThirdPartyWithdrawBank"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateThirdPartyWithdrawBank"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/token/": {
+      "post": {
+        "operationId": "token_create",
+        "description": "Takes a set of user credentials and returns an access and refresh JSON web\ntoken pair to prove the authentication of those credentials.",
+        "tags": ["token"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Login"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/token/refresh/": {
+      "post": {
+        "operationId": "token_refresh_create",
+        "description": "Takes a refresh type JSON web token and returns an access type JSON web\ntoken if the refresh token is valid.",
+        "tags": ["token"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRefresh"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRefresh"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRefresh"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenRefresh"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/usd/user/account": {
+      "get": {
+        "operationId": "usd_user_account_retrieve",
+        "description": "List user accounts",
+        "tags": ["usd"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accounts": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "usd_user_account_create",
+        "description": "This service creates an account\n(zelle, paypal, venmo or ach) for a user in the marketplace",
+        "tags": ["usd"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserAccount"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserAccount"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserAccount"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "result": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/usd/user/wallet": {
+      "get": {
+        "operationId": "usd_user_wallet_retrieve",
+        "description": "This service return the information\nof a user wallet from checkbook marketplace",
+        "tags": ["usd"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "No response body"
+          }
+        }
+      }
+    },
+    "/user/": {
+      "get": {
+        "operationId": "user_retrieve",
+        "description": "This service return the profile or colaborator\ninformation depending on the user",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "lite",
+            "schema": {
+              "type": "string"
+            },
+            "description": "This parameter indicate the response type"
+          }
+        ],
+        "tags": ["user"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      },
+      "post": {
+        "operationId": "user_create",
+        "description": "This service allows to create a new user",
+        "tags": ["user"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/User"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v2/exchange/currency-pairs/": {
+      "get": {
+        "operationId": "v2_exchange_currency_pairs_retrieve",
+        "description": "Retorna la lista de pares de monedas disponibles para cotización.",
+        "summary": "Obtener pares de monedas disponibles",
+        "tags": ["Exchange V2"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrencyPairs"
+                }
+              }
+            },
+            "description": "Lista de pares de monedas"
+          }
+        }
+      }
+    },
+    "/v2/exchange/execute/": {
+      "post": {
+        "operationId": "v2_exchange_execute_create",
+        "description": "Endpoint para crear una dispersión manual para un movimiento transfronterizo.",
+        "summary": "Ejecutar movimiento transfronterizo",
+        "tags": ["Exchange V2 - Movements"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteCrossBorderMovementRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteCrossBorderMovementRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteCrossBorderMovementRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrossBorderMovementResponse"
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v2/exchange/initiate/": {
+      "post": {
+        "operationId": "v2_exchange_initiate_create",
+        "description": "\nCrea un movimiento transfronterizo de dinero utilizando una cotización FX válida.\n\n**Flujo completo:**\n1. Obtener cotización FX con POST /v2/exchange/quotes/\n2. (Opcional) Previsualizar con GET /v2/exchange/quotes/{quote_id}/preview/\n3. Obtener cuenta bancaria del usuario con GET /list_third_party_banks/?country=CO\n4. Ejecutar movimiento con este endpoint\n5. El dinero llega a la cuenta madre de Colurs\n6. Cuando Cobre notifica completed, se crea dispersión automática a la cuenta bancaria\n\n**Requisitos:**\n- La cotización debe estar vigente (no expirada)\n- La cotización debe pertenecer al usuario autenticado\n- La cotización no debe haber sido usada previamente\n- Solo la cotización más reciente puede ser usada\n- La cuenta bancaria (bank_account_id) debe pertenecer al usuario\n\n**Estados del movimiento:**\n- `initiated`: El movimiento ha sido iniciado\n- `processing`: El movimiento está siendo procesado\n- `completed`: El movimiento fue completado → se crea dispersión automática\n- `canceled`: El movimiento fue cancelado\n- `returned`: El movimiento fue devuelto\n- `rejected`: El movimiento fue rechazado\n- `failed`: El movimiento falló\n",
+        "summary": "Crear movimiento transfronterizo",
+        "tags": ["Exchange V2 - Movements"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrossBorderMovementRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CrossBorderMovementRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CrossBorderMovementRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrossBorderMovementResponse"
+                }
+              }
+            },
+            "description": "Movimiento creado exitosamente"
+          },
+          "400": {
+            "description": "Error de validación o cotización inválida"
+          },
+          "404": {
+            "description": "Cotización no encontrada"
+          },
+          "502": {
+            "description": "Error al comunicarse con Cobre API"
+          }
+        }
+      }
+    },
+    "/v2/exchange/quotes/": {
+      "post": {
+        "operationId": "v2_exchange_quotes_create",
+        "description": "\nSolicita una cotización de cambio de divisas a través de Cobre API.\n\n- La cotización generada es válida por 3 minutos.\n- Este endpoint tiene un período de idempotencia de 15 segundos.\n- Solo la cotización más reciente puede ser usada para iniciar un movimiento transfronterizo.\n- El monto mínimo cotizado es $50 USD o equivalente en otras monedas.\n\n**Tipos de cotización:**\n- `source_amount`: Cuánto recibiré en moneda destino por X cantidad en moneda origen.\n- `destination_amount`: Cuánto necesito en moneda origen para recibir X en moneda destino.\n\n**Horarios de operación:**\n- `off_market=false` (default): Opera solo en horarios de mercado (lunes-viernes).\n- `off_market=true`: Opera 24/7, 365 días. Requiere habilitación previa con Cobre.\n",
+        "summary": "Solicitar cotización FX",
+        "tags": ["Exchange V2"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FXQuoteRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/FXQuoteRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FXQuoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FXQuoteResponse"
+                }
+              }
+            },
+            "description": "Cotización creada exitosamente"
+          },
+          "400": {
+            "description": "Error de validación"
+          },
+          "502": {
+            "description": "Error al comunicarse con Cobre API"
+          }
+        }
+      }
+    },
+    "/v2/exchange/quotes/{quote_uuid}/": {
+      "get": {
+        "operationId": "v2_exchange_quotes_retrieve",
+        "description": "Obtiene los detalles de una cotización FX por su UUID.",
+        "summary": "Obtener cotización FX",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "quote_uuid",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": ["Exchange V2"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FXQuoteResponse"
+                }
+              }
+            },
+            "description": "Cotización encontrada"
+          },
+          "404": {
+            "description": "Cotización no encontrada"
+          }
+        }
+      }
+    },
+    "/v2/exchange/quotes/last/": {
+      "get": {
+        "operationId": "v2_exchange_quotes_last_retrieve",
+        "description": "\nObtiene la última cotización válida del usuario que puede ser usada\npara iniciar un movimiento transfronterizo.\n",
+        "summary": "Obtener última cotización válida",
+        "tags": ["Exchange V2"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FXQuoteResponse"
+                }
+              }
+            },
+            "description": "Última cotización válida"
+          },
+          "404": {
+            "description": "No hay cotizaciones válidas"
+          }
+        }
+      }
+    },
+    "/v2/exchange/quotes/list/": {
+      "get": {
+        "operationId": "v2_exchange_quotes_list_retrieve",
+        "description": "Lista las cotizaciones FX recientes del usuario.",
+        "summary": "Listar cotizaciones FX",
+        "tags": ["Exchange V2"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FXQuoteList"
+                  }
+                }
+              }
+            },
+            "description": "Lista de cotizaciones"
+          }
+        }
+      }
+    },
+    "/verify_email/": {
+      "post": {
+        "operationId": "verify_email_create",
+        "description": "Verify email for user, requires authentication",
+        "tags": ["verify_email"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationCode"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationCode"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationCode"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/verify_phone/": {
+      "post": {
+        "operationId": "verify_phone_create",
+        "description": "Verify phone for user, requires authentication",
+        "tags": ["verify_phone"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationCode"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationCode"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationCode"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/withdrawal-methods/mxn": {
+      "get": {
+        "operationId": "withdrawal_methods_mxn_retrieve",
+        "description": "Get withdrawal methods for a specific currency\nQuery params:\n- currency: Currency code (e.g., \"mxn\", \"brl\", \"ars\"). Defaults to \"mxn\"",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Currency code (e.g., 'mxn', 'brl', 'ars'). Defaults to 'mxn'"
+          }
+        ],
+        "tags": ["MXN"],
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "network": {
+                            "type": "string"
+                          },
+                          "protocol": {
+                            "type": "string"
+                          },
+                          "asset": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    },
+    "/withdrawals/mxn/": {
+      "post": {
+        "operationId": "withdrawals_mxn_create",
+        "description": "Create a MXN withdrawal via SPEI",
+        "tags": ["MXN"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMXNWithdrawal"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMXNWithdrawal"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMXNWithdrawal"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "jwtAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "code_transaction": {
+                      "type": "string"
+                    },
+                    "withdraw_id": {
+                      "type": "integer"
+                    },
+                    "wid": {
+                      "type": "string"
+                    },
+                    "amount": {
+                      "type": "string"
+                    },
+                    "fee": {
+                      "type": "string"
+                    },
+                    "total": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            },
+            "description": ""
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "jwtAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Bearer authentication header of the form Bearer <token>, where <token> is your auth token."
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sessionid",
+        "description": "Session cookie authentication."
+      },
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "API Key or Bearer token in Authorization header."
+      }
+    }
+  }
+}
