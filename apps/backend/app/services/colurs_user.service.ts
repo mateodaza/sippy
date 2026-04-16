@@ -88,10 +88,13 @@ export async function registerColursUser(opts: {
     country_code: countryCode,
     first_name: firstName,
     last_name: lastName,
-    document_type: idType.toLowerCase(), // cc, ce, nit, pa
+    // Colurs /user/ docs: uppercase enum, passport is spelled "PASSPORT" not "PA".
+    // Different from /api/reload/r2p/counterparty/ which expects lowercase `id_type`.
+    document_type: idType.toUpperCase() === 'PA' ? 'PASSPORT' : idType.toUpperCase(),
     document_number: idNumber,
     type_person: 1, // NATURAL
-    platform: 'API',
+    // /user/ only accepts APP or PANEL (login /token/ still accepts API).
+    platform: 'APP',
     country: 'CO',
   })
 
@@ -162,8 +165,13 @@ export async function uploadColursDocument(
   const fileName = `${codeName}.${ext}`
 
   formData.append('file', new Blob([blob], { type: mimeType }), fileName)
-  formData.append('file_type', mimeType)
+  // Per docs, file_type is a category string ("documents"), not the MIME type.
+  formData.append('file_type', 'documents')
   formData.append('file_name', fileName)
+  // TODO(colurs): docs list a required `sign` FormData field ("Security signature")
+  // but don't specify how to compute it. Uploads may fail until we get clarification
+  // from Colurs on whether this is HMAC of file bytes, a timestamp, or something else.
+  // formData.append('sign', ???)
 
   const res = await fetch(`${baseUrl()}/base/upload_file/`, {
     method: 'POST',
@@ -217,9 +225,8 @@ export function idTypeToDocumentTypeId(idType: string): number {
 
 /** Fetch the user's current Colurs KYC level (0, 1, 2, or 5). */
 export async function getColursKycLevel(userToken: string): Promise<number> {
-  const profile = await userGet<{ level?: number; kyc_level?: number }>(
-    '/profile_documents/',
-    userToken
-  )
+  // Docs: GET /user/ returns the profile with a `level` field.
+  // Previously polled /profile_documents/ which returned doc review rows, not level.
+  const profile = await userGet<{ level?: number; kyc_level?: number }>('/user/', userToken)
   return profile.level ?? profile.kyc_level ?? 0
 }
