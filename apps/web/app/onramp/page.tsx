@@ -110,10 +110,19 @@ function DocumentCapture({
 
 // ── Main content ───────────────────────────────────────────────────────────────
 
+// Query-string "+" decodes to space per URL spec. Callers that forgot to
+// encodeURIComponent the phone land here with " 573..." — restore the +.
+function normalizePhoneParam(raw: string | null): string {
+  if (!raw) return ''
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  return trimmed.startsWith('+') ? trimmed : `+${trimmed}`
+}
+
 function OnrampContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const phoneFromUrl = searchParams.get('phone') || ''
+  const phoneFromUrl = normalizePhoneParam(searchParams.get('phone'))
 
   const { isAuthenticated, isCheckingSession } = useSessionGuard()
 
