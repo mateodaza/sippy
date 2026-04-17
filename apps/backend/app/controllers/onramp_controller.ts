@@ -139,8 +139,8 @@ export default class OnrampController {
     if (!phoneNumber) return response.status(401).json({ error: 'Unauthorized' })
 
     const { code } = request.body() as { code: unknown }
-    if (!code || typeof code !== 'string' || code.length !== 6)
-      return response.status(400).json({ error: 'code must be a 6-digit string' })
+    if (!code || typeof code !== 'string' || code.length !== 4)
+      return response.status(400).json({ error: 'code must be a 4-digit string' })
 
     try {
       await kycVerifyPhone(phoneNumber, code)
@@ -160,8 +160,8 @@ export default class OnrampController {
     if (!phoneNumber) return response.status(401).json({ error: 'Unauthorized' })
 
     const { code } = request.body() as { code: unknown }
-    if (!code || typeof code !== 'string' || code.length !== 6)
-      return response.status(400).json({ error: 'code must be a 6-digit string' })
+    if (!code || typeof code !== 'string' || code.length !== 4)
+      return response.status(400).json({ error: 'code must be a 4-digit string' })
 
     try {
       await kycVerifyEmail(phoneNumber, code)

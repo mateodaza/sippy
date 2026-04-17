@@ -549,19 +549,19 @@ function OnrampContent() {
                 Verify your phone
               </h2>
               <p className="text-sm text-[var(--text-secondary)]">
-                Enter the 6-digit code sent to {phoneFromUrl} by Colurs.
+                Enter the 4-digit code sent to {phoneFromUrl} by Colurs.
               </p>
             </div>
             <input
               value={phoneOtp}
-              onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="123456"
-              maxLength={6}
+              onChange={(e) => setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder="1234"
+              maxLength={4}
               className="w-full p-3 border rounded-lg text-center text-2xl tracking-widest text-[var(--text-primary)]"
             />
             <button
               onClick={handleVerifyPhone}
-              disabled={loading || phoneOtp.length !== 6}
+              disabled={loading || phoneOtp.length !== 4}
               className="w-full py-3 bg-brand-crypto text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Verifying...' : 'Verify phone'}
@@ -583,19 +583,19 @@ function OnrampContent() {
                 Verify your email
               </h2>
               <p className="text-sm text-[var(--text-secondary)]">
-                Enter the 6-digit code sent to your email by Colurs.
+                Enter the 4-digit code sent to your email by Colurs.
               </p>
             </div>
             <input
               value={emailOtp}
-              onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              placeholder="123456"
-              maxLength={6}
+              onChange={(e) => setEmailOtp(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder="1234"
+              maxLength={4}
               className="w-full p-3 border rounded-lg text-center text-2xl tracking-widest text-[var(--text-primary)]"
             />
             <button
               onClick={handleVerifyEmail}
-              disabled={loading || emailOtp.length !== 6}
+              disabled={loading || emailOtp.length !== 4}
               className="w-full py-3 bg-brand-crypto text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Verifying...' : 'Verify email'}

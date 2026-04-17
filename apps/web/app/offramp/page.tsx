@@ -140,8 +140,8 @@ function OfframpContent() {
         api('GET', '/api/offramp/bank-accounts'),
         api('GET', '/api/offramp/banks'),
       ])
-      const list: BankAccount[] = accountsData.accounts ?? []
-      const bankList: Bank[] = banksData.banks ?? []
+      const list: BankAccount[] = Array.isArray(accountsData?.accounts) ? accountsData.accounts : []
+      const bankList: Bank[] = Array.isArray(banksData?.banks) ? banksData.banks : []
       setAccounts(list)
       setBanks(bankList)
 

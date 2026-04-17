@@ -61,6 +61,23 @@ export interface ColursBankAccount {
   country_registered: string
 }
 
+// ── Response shape helpers ────────────────────────────────────────────────────
+
+/**
+ * Colurs list endpoints have been observed to return either a bare array or a
+ * wrapper like `{results:[...]}` (DRF pagination) / `{data:[...]}`. Normalise so
+ * callers always get an array.
+ */
+function toArray<T>(res: unknown): T[] {
+  if (Array.isArray(res)) return res as T[]
+  if (res && typeof res === 'object') {
+    const r = res as Record<string, unknown>
+    if (Array.isArray(r.results)) return r.results as T[]
+    if (Array.isArray(r.data)) return r.data as T[]
+  }
+  return []
+}
+
 // ── Document type mapping ─────────────────────────────────────────────────────
 
 // In-memory cache — document types rarely change
@@ -68,9 +85,9 @@ let docTypeCache: ColursDocumentType[] | null = null
 
 export async function getDocumentTypes(): Promise<ColursDocumentType[]> {
   if (docTypeCache) return docTypeCache
-  const result = await colursGet<ColursDocumentType[]>('/base/document_type/')
-  docTypeCache = result
-  return result
+  const result = await colursGet<unknown>('/base/document_type/')
+  docTypeCache = toArray<ColursDocumentType>(result)
+  return docTypeCache
 }
 
 /**
@@ -93,15 +110,17 @@ async function resolveDocumentTypeId(displayCode: string): Promise<number> {
 let bankCache: ColursBank[] | null = null
 
 /**
- * List available Colombian banks from Colurs.
+ * List available Colombian banks from Colurs (for the account-registration dropdown).
  * Cached in memory — changes infrequently.
+ *
+ * Docs: GET /banks/?country=CO. Previously called /list_third_party_banks/ which
+ * returns the user's already-registered accounts (wrong endpoint for the dropdown).
  */
 export async function getBanks(): Promise<ColursBank[]> {
   if (bankCache) return bankCache
-  // Docs: GET /list_third_party_banks/?country=CO
-  const result = await colursGet<ColursBank[]>('/list_third_party_banks/?country=CO')
-  bankCache = result
-  return result
+  const result = await colursGet<unknown>('/banks/?country=CO')
+  bankCache = toArray<ColursBank>(result)
+  return bankCache
 }
 
 // ── Account type mapping ──────────────────────────────────────────────────────
