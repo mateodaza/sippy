@@ -49,6 +49,25 @@ export function deriveColursPassword(phoneNumber: string): string {
 }
 
 /**
+ * HMAC-SHA1 signature required by POST /base/upload_file/.
+ * Per Colurs Postman collection: both HMAC key and message embed the same hardcoded
+ * shared secret + today's date (Bogotá) + the file_type string. Server validates on
+ * the same day boundary — Colurs is Colombian, server runs UTC-5.
+ */
+const UPLOAD_HASH_KEY = 'e58a219892b0795a629b84a1279ea4702581c0cacfb1b2432327a080'
+
+function bogotaDateYmd(): string {
+  // en-CA locale with explicit timeZone gives ISO YYYY-MM-DD.
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+}
+
+function computeUploadSign(fileType: string): string {
+  const date = bogotaDateYmd()
+  const message = `${date}-${UPLOAD_HASH_KEY}-${fileType}`
+  return createHmac('sha1', UPLOAD_HASH_KEY).update(message).digest('hex')
+}
+
+/**
  * Colurs document type IDs (per Colurs support, 2026-04-17):
  *   0 = CC   — Cédula de ciudadanía
  *   1 = CE   — Cédula de extranjería
@@ -194,14 +213,11 @@ export async function uploadColursDocument(
   const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png'
   const fileName = `${codeName}.${ext}`
 
+  const fileType = 'documents'
   formData.append('file', new Blob([blob], { type: mimeType }), fileName)
-  // Per docs, file_type is a category string ("documents"), not the MIME type.
-  formData.append('file_type', 'documents')
+  formData.append('file_type', fileType)
   formData.append('file_name', fileName)
-  // TODO(colurs): docs list a required `sign` FormData field ("Security signature")
-  // but don't specify how to compute it. Uploads may fail until we get clarification
-  // from Colurs on whether this is HMAC of file bytes, a timestamp, or something else.
-  // formData.append('sign', ???)
+  formData.append('sign', computeUploadSign(fileType))
 
   const res = await fetch(`${baseUrl()}/base/upload_file/`, {
     method: 'POST',
