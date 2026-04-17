@@ -48,6 +48,34 @@ export function deriveColursPassword(phoneNumber: string): string {
   return createHmac('sha256', secret).update(phoneNumber).digest('base64url').slice(0, 32)
 }
 
+/**
+ * Colurs document type IDs (per Colurs support, 2026-04-17):
+ *   0 = CC   — Cédula de ciudadanía
+ *   1 = CE   — Cédula de extranjería
+ *   2 = TI   — Tarjeta de identidad
+ *   3 = NIT  — Número de identificación tributaria
+ *   4 = PSP  — Pasaporte
+ *   5 = PPT  — Permiso de protección temporal
+ *   6 = PEP  — Permiso especial de permanencia
+ *
+ * Note: Colurs's public docs previously suggested string values like "CC"/"CE"/"PASSPORT".
+ * That was wrong — the API accepts numeric strings ("0".."6") on /user/ and numeric ints on
+ * /profile_documents/ (`type_document_id`). Sippy's internal id_type ("CC"/"CE"/"NIT"/"PA")
+ * maps to Colurs IDs via the table below.
+ */
+const SIPPY_TO_COLURS_DOC_ID: Record<string, number> = {
+  CC: 0,
+  CE: 1,
+  NIT: 3,
+  PA: 4, // Sippy "PA" (passport) → Colurs "PSP"
+}
+
+function colursDocId(idType: string): number {
+  const id = SIPPY_TO_COLURS_DOC_ID[idType.toUpperCase()]
+  if (id === undefined) throw new Error(`Unknown Sippy id_type "${idType}" — no Colurs mapping`)
+  return id
+}
+
 // ── Registration ──────────────────────────────────────────────────────────────
 
 /**
@@ -88,9 +116,11 @@ export async function registerColursUser(opts: {
     country_code: countryCode,
     first_name: firstName,
     last_name: lastName,
-    // Colurs /user/ docs: uppercase enum, passport is spelled "PASSPORT" not "PA".
-    // Different from /api/reload/r2p/counterparty/ which expects lowercase `id_type`.
-    document_type: idType.toUpperCase() === 'PA' ? 'PASSPORT' : idType.toUpperCase(),
+    // Per Colurs support (2026-04-17): document_type on /user/ is a numeric STRING
+    // matching their internal enum (CC=0, CE=1, TI=2, NIT=3, PSP=4, PPT=5, PEP=6).
+    // Public docs saying "CC"/"CE"/"PASSPORT" were incorrect.
+    // /api/reload/r2p/counterparty/ still uses its own lowercase `id_type` ("cc"/"ce"/"nit").
+    document_type: String(colursDocId(idType)),
     document_number: idNumber,
     type_person: 1, // NATURAL
     // /user/ only accepts APP or PANEL (login /token/ still accepts API).
@@ -210,15 +240,13 @@ export async function submitColursProfileDocuments(
   logger.info(`colurs_user: ${documents.length} document(s) submitted for review`)
 }
 
-/** Map Sippy id_type (CC/CE/NIT/PA) to Colurs type_document_id. */
+/**
+ * Map Sippy id_type (CC/CE/NIT/PA) to Colurs `type_document_id` (numeric) for
+ * use on POST /profile_documents/. Uses the same Colurs enum as /user/ (see
+ * SIPPY_TO_COLURS_DOC_ID above) — previously used a wrong 1-based mapping.
+ */
 export function idTypeToDocumentTypeId(idType: string): number {
-  const map: Record<string, number> = {
-    CC: 1, // Cédula de ciudadanía
-    CE: 2, // Cédula de extranjería
-    PA: 3, // Pasaporte
-    NIT: 4, // NIT empresarial
-  }
-  return map[idType.toUpperCase()] ?? 1
+  return colursDocId(idType)
 }
 
 // ── KYC level ─────────────────────────────────────────────────────────────────

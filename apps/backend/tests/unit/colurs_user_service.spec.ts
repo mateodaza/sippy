@@ -51,28 +51,28 @@ test.group('deriveColursPassword', (group) => {
 // ── idTypeToDocumentTypeId ─────────────────────────────────────────────────────
 
 test.group('idTypeToDocumentTypeId', () => {
-  test('CC maps to 1', ({ assert }) => {
-    assert.equal(idTypeToDocumentTypeId('CC'), 1)
+  test('CC maps to 0', ({ assert }) => {
+    assert.equal(idTypeToDocumentTypeId('CC'), 0)
   })
 
-  test('CE maps to 2', ({ assert }) => {
-    assert.equal(idTypeToDocumentTypeId('CE'), 2)
+  test('CE maps to 1', ({ assert }) => {
+    assert.equal(idTypeToDocumentTypeId('CE'), 1)
   })
 
-  test('PA maps to 3', ({ assert }) => {
-    assert.equal(idTypeToDocumentTypeId('PA'), 3)
+  test('NIT maps to 3', ({ assert }) => {
+    assert.equal(idTypeToDocumentTypeId('NIT'), 3)
   })
 
-  test('NIT maps to 4', ({ assert }) => {
-    assert.equal(idTypeToDocumentTypeId('NIT'), 4)
+  test('PA maps to 4 (Colurs PSP)', ({ assert }) => {
+    assert.equal(idTypeToDocumentTypeId('PA'), 4)
   })
 
-  test('unknown type falls back to 1 (CC)', ({ assert }) => {
-    assert.equal(idTypeToDocumentTypeId('UNKNOWN'), 1)
+  test('unknown type throws', ({ assert }) => {
+    assert.throws(() => idTypeToDocumentTypeId('UNKNOWN'))
   })
 
   test('lowercase input is handled', ({ assert }) => {
-    assert.equal(idTypeToDocumentTypeId('cc'), 1)
-    assert.equal(idTypeToDocumentTypeId('ce'), 2)
+    assert.equal(idTypeToDocumentTypeId('cc'), 0)
+    assert.equal(idTypeToDocumentTypeId('ce'), 1)
   })
 })
