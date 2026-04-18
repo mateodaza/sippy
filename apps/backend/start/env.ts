@@ -123,6 +123,7 @@ export default await Env.create(new URL('../', import.meta.url), {
   COLURS_USERNAME: Env.schema.string.optional(),
   COLURS_PASSWORD: Env.schema.string.optional(),
   COLURS_USER_PASSWORD_SECRET: Env.schema.string.optional(), // HMAC secret for deriving per-user Colurs passwords
+  COLURS_UPLOAD_HASH_KEY: Env.schema.string.optional(), // Shared HMAC-SHA1 key used by POST /base/upload_file/ sign field
 
   // Sippy ETH mainnet hot wallet (Colurs sends USDT here for onramp bridge)
   SIPPY_ETH_DEPOSIT_ADDRESS: Env.schema.string.optional(),

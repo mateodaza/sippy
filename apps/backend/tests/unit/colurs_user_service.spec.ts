@@ -5,7 +5,7 @@
  */
 
 import { test } from '@japa/runner'
-import { deriveColursPassword, idTypeToDocumentTypeId } from '#services/colurs_user.service'
+import { deriveColursPassword } from '#services/colurs_user.service'
 
 // ── deriveColursPassword ───────────────────────────────────────────────────────
 
@@ -48,31 +48,6 @@ test.group('deriveColursPassword', (group) => {
   })
 })
 
-// ── idTypeToDocumentTypeId ─────────────────────────────────────────────────────
-
-test.group('idTypeToDocumentTypeId', () => {
-  test('CC maps to 0', ({ assert }) => {
-    assert.equal(idTypeToDocumentTypeId('CC'), 0)
-  })
-
-  test('CE maps to 1', ({ assert }) => {
-    assert.equal(idTypeToDocumentTypeId('CE'), 1)
-  })
-
-  test('NIT maps to 3', ({ assert }) => {
-    assert.equal(idTypeToDocumentTypeId('NIT'), 3)
-  })
-
-  test('PA maps to 4 (Colurs PSP)', ({ assert }) => {
-    assert.equal(idTypeToDocumentTypeId('PA'), 4)
-  })
-
-  test('unknown type throws', ({ assert }) => {
-    assert.throws(() => idTypeToDocumentTypeId('UNKNOWN'))
-  })
-
-  test('lowercase input is handled', ({ assert }) => {
-    assert.equal(idTypeToDocumentTypeId('cc'), 0)
-    assert.equal(idTypeToDocumentTypeId('ce'), 1)
-  })
-})
+// Note: idTypeToDocumentTypeId was removed — /profile_documents/ uses the
+// TypeDocumentProfile.id enum (resolved via GET /type_documents/), not the
+// /user/ document_type enum. See resolveProfileDocumentTypeId.

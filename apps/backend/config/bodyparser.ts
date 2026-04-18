@@ -17,10 +17,16 @@ const bodyParserConfig = defineConfig({
   },
 
   /**
-   * Config for the JSON parser
+   * Config for the JSON parser.
+   *
+   * limit raised from the 1mb default for KYC document uploads. Two base64
+   * images at 14_000_000 chars each (see onramp_controller.kycUploadDocument)
+   * plus JSON envelope overhead ≈ 28 MB worst case. Set 32 MB so the parser
+   * never rejects before the controller's per-side validation runs.
    */
   json: {
     convertEmptyStringsToNull: true,
+    limit: '32mb',
     types: [
       'application/json',
       'application/json-patch+json',

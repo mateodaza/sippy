@@ -41,7 +41,10 @@ import env from '#start/env'
 import { maskPhone } from '#utils/phone'
 
 const VALID_METHODS: OnrampMethod[] = ['pse', 'nequi', 'bancolombia']
-const VALID_ID_TYPES: IdType[] = ['CC', 'CE', 'NIT', 'PA']
+// CC-only in this release. KYC doc upload is hardcoded to national_id_front +
+// national_id_back — re-add CE/PA/NIT once type_documents codes for their pairs
+// are mapped in colurs_kyc.service.kycSubmitDocument.
+const VALID_ID_TYPES: IdType[] = ['CC']
 const DEPOSIT_ADDRESS = () => env.get('SIPPY_ETH_DEPOSIT_ADDRESS', '')
 
 // ~$2,500 USD at current rates. Generous enough for real use, low enough
@@ -175,8 +178,12 @@ export default class OnrampController {
   // ── POST /api/onramp/kyc/upload-document ─────────────────────────────────────
 
   /**
-   * Body: { fileBase64: string, mimeType: 'image/jpeg' | 'image/png' }
-   * Uploads the document photo to Colurs and submits for compliance review.
+   * Body: {
+   *   frontBase64: string, frontMimeType: 'image/jpeg' | 'image/png',
+   *   backBase64:  string, backMimeType:  'image/jpeg' | 'image/png'
+   * }
+   * Colombia CC requires both front and back of the national ID. This endpoint
+   * uploads both sides to Colurs and submits them for compliance review.
    * After this step the user waits for Level 5 approval (async).
    */
   async kycUploadDocument(ctx: HttpContext) {
@@ -184,47 +191,56 @@ export default class OnrampController {
     const phoneNumber = ctx.cdpUser?.phoneNumber
     if (!phoneNumber) return response.status(401).json({ error: 'Unauthorized' })
 
-    const { fileBase64, mimeType } = request.body() as {
-      fileBase64: unknown
-      mimeType: unknown
+    const { frontBase64, frontMimeType, backBase64, backMimeType } = request.body() as {
+      frontBase64: unknown
+      frontMimeType: unknown
+      backBase64: unknown
+      backMimeType: unknown
     }
 
-    if (!fileBase64 || typeof fileBase64 !== 'string')
-      return response.status(400).json({ error: 'fileBase64 is required' })
-    if (mimeType !== 'image/jpeg' && mimeType !== 'image/png')
-      return response.status(400).json({ error: 'mimeType must be image/jpeg or image/png' })
+    const validateSide = (
+      label: 'front' | 'back',
+      b64: unknown,
+      mime: unknown
+    ): { ok: true; bytes: Buffer } | { ok: false; error: string } => {
+      if (!b64 || typeof b64 !== 'string') return { ok: false, error: `${label}Base64 is required` }
+      if (mime !== 'image/jpeg' && mime !== 'image/png')
+        return { ok: false, error: `${label}MimeType must be image/jpeg or image/png` }
+      if (b64.length > 14_000_000)
+        return { ok: false, error: `${label} file too large. Maximum 10MB.` }
 
-    // Basic size guard — base64 of 10MB = ~13.3M chars
-    if (fileBase64.length > 14_000_000)
-      return response.status(400).json({ error: 'File too large. Maximum 10MB.' })
+      let bytes: Buffer
+      try {
+        bytes = Buffer.from(b64, 'base64')
+      } catch {
+        return { ok: false, error: `${label}Base64 is not valid base64` }
+      }
+      if (bytes.length === 0) return { ok: false, error: `${label} file is empty` }
 
-    // Decode and validate: reject invalid base64 and files whose magic bytes
-    // don't match the claimed MIME type.
-    let fileBytes: Buffer
-    try {
-      fileBytes = Buffer.from(fileBase64, 'base64')
-    } catch {
-      return response.status(400).json({ error: 'fileBase64 is not valid base64' })
+      // JPEG magic: FF D8 FF | PNG magic: 89 50 4E 47
+      const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+      const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+
+      if (mime === 'image/jpeg' && !isJpeg)
+        return { ok: false, error: `${label} content does not match image/jpeg` }
+      if (mime === 'image/png' && !isPng)
+        return { ok: false, error: `${label} content does not match image/png` }
+      return { ok: true, bytes }
     }
 
-    if (fileBytes.length === 0) return response.status(400).json({ error: 'File is empty' })
-
-    // JPEG magic: FF D8 FF
-    // PNG magic:  89 50 4E 47 (‌.PNG)
-    const isJpeg = fileBytes[0] === 0xff && fileBytes[1] === 0xd8 && fileBytes[2] === 0xff
-    const isPng =
-      fileBytes[0] === 0x89 &&
-      fileBytes[1] === 0x50 &&
-      fileBytes[2] === 0x4e &&
-      fileBytes[3] === 0x47
-
-    if (mimeType === 'image/jpeg' && !isJpeg)
-      return response.status(400).json({ error: 'File content does not match image/jpeg' })
-    if (mimeType === 'image/png' && !isPng)
-      return response.status(400).json({ error: 'File content does not match image/png' })
+    const front = validateSide('front', frontBase64, frontMimeType)
+    if (!front.ok) return response.status(400).json({ error: front.error })
+    const back = validateSide('back', backBase64, backMimeType)
+    if (!back.ok) return response.status(400).json({ error: back.error })
 
     try {
-      await kycSubmitDocument({ phoneNumber, fileBase64, mimeType })
+      await kycSubmitDocument({
+        phoneNumber,
+        frontBase64: frontBase64 as string,
+        frontMimeType: frontMimeType as 'image/jpeg' | 'image/png',
+        backBase64: backBase64 as string,
+        backMimeType: backMimeType as 'image/jpeg' | 'image/png',
+      })
       return response.json({ ok: true, kycStatus: 'documents_submitted' })
     } catch (err) {
       logger.error({ err }, `onramp/kyc: upload-document failed for ${maskPhone(phoneNumber)}`)

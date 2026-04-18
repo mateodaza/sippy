@@ -50,11 +50,16 @@ export function deriveColursPassword(phoneNumber: string): string {
 
 /**
  * HMAC-SHA1 signature required by POST /base/upload_file/.
- * Per Colurs Postman collection: both HMAC key and message embed the same hardcoded
- * shared secret + today's date (Bogotá) + the file_type string. Server validates on
- * the same day boundary — Colurs is Colombian, server runs UTC-5.
+ * Per Colurs Postman collection: both HMAC key and message embed the same
+ * shared secret + today's date (Bogotá) + the file_type string. Server validates
+ * on the same day boundary — Colurs is Colombian, server runs UTC-5.
+ * The shared key lives in COLURS_UPLOAD_HASH_KEY so it's not committed.
  */
-const UPLOAD_HASH_KEY = 'e58a219892b0795a629b84a1279ea4702581c0cacfb1b2432327a080'
+function uploadHashKey(): string {
+  const key = env.get('COLURS_UPLOAD_HASH_KEY', '')
+  if (!key) throw new Error('COLURS_UPLOAD_HASH_KEY is not configured')
+  return key
+}
 
 function bogotaDateYmd(): string {
   // en-CA locale with explicit timeZone gives ISO YYYY-MM-DD.
@@ -62,9 +67,10 @@ function bogotaDateYmd(): string {
 }
 
 function computeUploadSign(fileType: string): string {
+  const key = uploadHashKey()
   const date = bogotaDateYmd()
-  const message = `${date}-${UPLOAD_HASH_KEY}-${fileType}`
-  return createHmac('sha1', UPLOAD_HASH_KEY).update(message).digest('hex')
+  const message = `${date}-${key}-${fileType}`
+  return createHmac('sha1', key).update(message).digest('hex')
 }
 
 /**
@@ -214,10 +220,18 @@ export async function uploadColursDocument(
   const fileName = `${codeName}.${ext}`
 
   const fileType = 'documents'
+  const sign = computeUploadSign(fileType)
+  // Field order matches Colurs Postman collection exactly (file, sign, file_type, file_name).
+  // Multipart order is semantically insignificant per spec but some strict parsers check it.
   formData.append('file', new Blob([blob], { type: mimeType }), fileName)
+  formData.append('sign', sign)
   formData.append('file_type', fileType)
   formData.append('file_name', fileName)
-  formData.append('sign', computeUploadSign(fileType))
+
+  logger.info(
+    { codeName, file_type: fileType, file_name: fileName, bytes: blob.length, mimeType },
+    'colurs_user: uploading document'
+  )
 
   const res = await fetch(`${baseUrl()}/base/upload_file/`, {
     method: 'POST',
@@ -244,33 +258,113 @@ export async function uploadColursDocument(
 }
 
 /**
+ * Colurs KYC document type metadata returned by GET /type_documents/.
+ * `id` is what `/profile_documents/` expects in the `id` field.
+ * `code` is the semantic identifier ("national_id_front", "national_id_back", etc.).
+ */
+export interface ColursTypeDocument {
+  id: number
+  code: string
+  name?: string
+}
+
+// Cached — the list rarely changes.
+let typeDocumentsCache: ColursTypeDocument[] | null = null
+
+/**
+ * Fetch the KYC document type catalog. Each entry's `id` is used as the
+ * `id` field in POST /profile_documents/. Per Colurs Postman 2.0 this endpoint
+ * requires only x-api-key (no JWT).
+ */
+export async function getColursTypeDocuments(): Promise<ColursTypeDocument[]> {
+  if (typeDocumentsCache) return typeDocumentsCache
+  const res = await fetch(`${baseUrl()}/type_documents/`, {
+    headers: {
+      'x-api-key': apiKey(),
+      'Accept': 'application/json',
+    },
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    logColursError('/type_documents/', res.status, text)
+    throw new Error(`Colurs /type_documents/ failed (${res.status})`)
+  }
+  const body = (await res.json()) as { data?: ColursTypeDocument[] } | ColursTypeDocument[]
+  const list: ColursTypeDocument[] = Array.isArray(body)
+    ? body
+    : Array.isArray(body?.data)
+      ? body.data
+      : []
+  typeDocumentsCache = list
+  return list
+}
+
+/**
+ * Resolve a `code` (e.g. "national_id_front") to the numeric `id` Colurs expects
+ * on POST /profile_documents/. Throws if the code isn't present in the catalog.
+ */
+export async function resolveProfileDocumentTypeId(code: string): Promise<number> {
+  const list = await getColursTypeDocuments()
+  const match = list.find((t) => t.code === code)
+  if (!match) {
+    throw new Error(
+      `Colurs type_documents: no entry for code="${code}". Available: ${list.map((t) => t.code).join(', ')}`
+    )
+  }
+  return match.id
+}
+
+/**
  * Submit uploaded documents to the user's Colurs profile for KYC review.
- * documents: array of { code_name, url, type_document_id }
- * type_document_id 1 = national ID (CC), 2 = foreign ID (CE), 3 = passport (PA), etc.
+ * Body shape per Colurs Postman 2.2: `{ documents: [{ id, url }] }`.
+ *   - `id`  — TypeDocumentProfile.id from GET /type_documents/ (NOT type_document_id, NOT code_name)
+ *   - `url` — exact S3 URL returned by POST /base/upload_file/
  */
 export async function submitColursProfileDocuments(
   userToken: string,
-  documents: Array<{ code_name: string; url: string; type_document_id: number }>
+  documents: Array<{ id: number; url: string }>
 ): Promise<void> {
+  logger.info(
+    { ids: documents.map((d) => d.id), count: documents.length },
+    'colurs_user: submitting profile documents'
+  )
   await userPost<unknown>('/profile_documents/', { documents }, userToken)
   logger.info(`colurs_user: ${documents.length} document(s) submitted for review`)
 }
 
+// ── KYC level / status ───────────────────────────────────────────────────────
+
 /**
- * Map Sippy id_type (CC/CE/NIT/PA) to Colurs `type_document_id` (numeric) for
- * use on POST /profile_documents/. Uses the same Colurs enum as /user/ (see
- * SIPPY_TO_COLURS_DOC_ID above) — previously used a wrong 1-based mapping.
+ * Colurs KYC status per Postman 2.3 (GET /checkbook-kyc/status/).
+ *   pending   — profile exists, docs not yet submitted
+ *   submitted — docs uploaded, under compliance review
+ *   approved  — KYC approved (Level 5 equivalent — R2P counterparty allowed)
+ *   rejected  — docs rejected, user must resubmit
  */
-export function idTypeToDocumentTypeId(idType: string): number {
-  return colursDocId(idType)
-}
+export type ColursKycStatus = 'pending' | 'submitted' | 'approved' | 'rejected'
 
-// ── KYC level ─────────────────────────────────────────────────────────────────
-
-/** Fetch the user's current Colurs KYC level (0, 1, 2, or 5). */
+/**
+ * Fetch the user's current KYC status from Colurs and map it to the numeric
+ * "level" our DB tracks. Mapping:
+ *   pending   → 0
+ *   submitted → 1
+ *   rejected  → 2
+ *   approved  → 5
+ */
 export async function getColursKycLevel(userToken: string): Promise<number> {
-  // Docs: GET /user/ returns the profile with a `level` field.
-  // Previously polled /profile_documents/ which returned doc review rows, not level.
-  const profile = await userGet<{ level?: number; kyc_level?: number }>('/user/', userToken)
-  return profile.level ?? profile.kyc_level ?? 0
+  const res = await userGet<{ status?: ColursKycStatus; kyc_status?: ColursKycStatus }>(
+    '/checkbook-kyc/status/',
+    userToken
+  )
+  const status = res.status ?? res.kyc_status
+  switch (status) {
+    case 'approved':
+      return 5
+    case 'rejected':
+      return 2
+    case 'submitted':
+      return 1
+    default:
+      return 0
+  }
 }

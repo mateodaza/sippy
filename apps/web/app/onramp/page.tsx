@@ -17,6 +17,7 @@ type KycStatus =
   | 'email_verified'
   | 'documents_submitted'
   | 'approved'
+  | 'rejected'
 
 type Step =
   | 'loading'
@@ -137,10 +138,14 @@ function OnrampContent() {
   const [kycEmail, setKycEmail] = useState('')
   const [phoneOtp, setPhoneOtp] = useState('')
   const [emailOtp, setEmailOtp] = useState('')
-  const [docPreview, setDocPreview] = useState<string | null>(null)
-  const [docBase64, setDocBase64] = useState<string | null>(null)
-  const [docMime, setDocMime] = useState<'image/jpeg' | 'image/png'>('image/jpeg')
+  const [frontPreview, setFrontPreview] = useState<string | null>(null)
+  const [frontBase64, setFrontBase64] = useState<string | null>(null)
+  const [frontMime, setFrontMime] = useState<'image/jpeg' | 'image/png'>('image/jpeg')
+  const [backPreview, setBackPreview] = useState<string | null>(null)
+  const [backBase64, setBackBase64] = useState<string | null>(null)
+  const [backMime, setBackMime] = useState<'image/jpeg' | 'image/png'>('image/jpeg')
   const [kycLevel, setKycLevel] = useState(0)
+  const [kycRejected, setKycRejected] = useState(false)
 
   // Payment fields
   // Idempotency key: generated once per payment attempt to prevent double-submission.
@@ -194,6 +199,7 @@ function OnrampContent() {
   }
 
   function advanceFromKycStatus(status: KycStatus, isApproved: boolean) {
+    setKycRejected(status === 'rejected')
     if (isApproved) {
       setStep('method')
       return
@@ -213,6 +219,11 @@ function OnrampContent() {
         break
       case 'documents_submitted':
         setStep('kyc_pending')
+        break
+      case 'rejected':
+        // Rejected by Colurs compliance — send user back to doc upload so they
+        // can resubmit. The banner on kyc_document explains why.
+        setStep('kyc_document')
         break
       default:
         setStep('kyc_info')
@@ -271,14 +282,17 @@ function OnrampContent() {
   // ── KYC Step 4: document upload ───────────────────────────────────────────
 
   async function handleUploadDocument() {
-    if (!docBase64) return
+    if (!frontBase64 || !backBase64) return
     setError(null)
     setLoading(true)
     try {
       await api('POST', '/api/onramp/kyc/upload-document', {
-        fileBase64: docBase64,
-        mimeType: docMime,
+        frontBase64,
+        frontMimeType: frontMime,
+        backBase64,
+        backMimeType: backMime,
       })
+      setKycRejected(false)
       setStep('kyc_pending')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
@@ -295,8 +309,15 @@ function OnrampContent() {
     try {
       const data = await api('POST', '/api/onramp/kyc/refresh-level', {})
       setKycLevel(data.kycLevel)
-      if (data.isApproved) setStep('method')
-      else setError('Not approved yet. Check back in a few hours.')
+      if (data.isApproved) {
+        setKycRejected(false)
+        setStep('method')
+      } else if (data.kycStatus === 'rejected') {
+        setKycRejected(true)
+        setStep('kyc_document')
+      } else {
+        setError('Not approved yet. Check back in a few hours.')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not check status')
     } finally {
@@ -498,10 +519,12 @@ function OnrampContent() {
                   onChange={(e) => setIdType(e.target.value)}
                   className="w-full p-3 border rounded-lg text-[var(--text-primary)] text-sm bg-[var(--bg-primary)]"
                 >
+                  {/*
+                    CC-only in this release. The KYC document upload flow hardcodes
+                    `national_id_front` + `national_id_back`. Re-enable CE/PA/NIT
+                    once the type_documents code mapping covers their doc-type pairs.
+                  */}
                   <option value="CC">Cédula de ciudadanía (CC)</option>
-                  <option value="CE">Cédula de extranjería (CE)</option>
-                  <option value="PA">Pasaporte (PA)</option>
-                  <option value="NIT">NIT</option>
                 </select>
               </div>
 
@@ -609,49 +632,90 @@ function OnrampContent() {
           </div>
         )}
 
-        {/* ── KYC: document upload ── */}
+        {/* ── KYC: document upload (front + back of CC) ── */}
         {step === 'kyc_document' && (
-          <div className="bg-[var(--bg-primary)] panel-frame rounded-2xl p-6 space-y-4">
+          <div className="bg-[var(--bg-primary)] panel-frame rounded-2xl p-6 space-y-6">
             <div>
               <h2 className="text-base font-bold text-[var(--text-primary)] mb-1">
-                Upload your ID
+                Upload your {idType || 'ID'}
               </h2>
               <p className="text-sm text-[var(--text-secondary)]">
-                Take a clear photo of the front of your {idType || 'ID'}. Colurs reviews it to
-                activate your account.
+                Colurs requires both the front and back of your document.
               </p>
             </div>
 
-            {docPreview ? (
-              <div className="space-y-3">
-                <img
-                  src={docPreview}
-                  alt="Document preview"
-                  className="w-full rounded-lg border object-contain max-h-48"
-                />
-                <button
-                  onClick={() => {
-                    setDocPreview(null)
-                    setDocBase64(null)
-                  }}
-                  className="w-full py-2 text-sm text-[var(--text-secondary)]"
-                >
-                  Retake photo
-                </button>
+            {kycRejected && (
+              <div className="rounded-lg border border-red-200 bg-[var(--fill-danger-light)] p-3 text-sm text-red-700">
+                Your previous submission was rejected by Colurs compliance. Please retake clearer
+                photos of both sides of your document and try again.
               </div>
-            ) : (
-              <DocumentCapture
-                onCapture={(b64, mime) => {
-                  setDocBase64(b64)
-                  setDocMime(mime)
-                  setDocPreview(`data:${mime};base64,${b64}`)
-                }}
-              />
             )}
+
+            {/* Front side */}
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Front</p>
+              {frontPreview ? (
+                <div className="space-y-2">
+                  <img
+                    src={frontPreview}
+                    alt="Front preview"
+                    className="w-full rounded-lg border object-contain max-h-48"
+                  />
+                  <button
+                    onClick={() => {
+                      setFrontPreview(null)
+                      setFrontBase64(null)
+                    }}
+                    className="w-full py-2 text-sm text-[var(--text-secondary)]"
+                  >
+                    Retake front
+                  </button>
+                </div>
+              ) : (
+                <DocumentCapture
+                  onCapture={(b64, mime) => {
+                    setFrontBase64(b64)
+                    setFrontMime(mime)
+                    setFrontPreview(`data:${mime};base64,${b64}`)
+                  }}
+                />
+              )}
+            </div>
+
+            {/* Back side */}
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">Back</p>
+              {backPreview ? (
+                <div className="space-y-2">
+                  <img
+                    src={backPreview}
+                    alt="Back preview"
+                    className="w-full rounded-lg border object-contain max-h-48"
+                  />
+                  <button
+                    onClick={() => {
+                      setBackPreview(null)
+                      setBackBase64(null)
+                    }}
+                    className="w-full py-2 text-sm text-[var(--text-secondary)]"
+                  >
+                    Retake back
+                  </button>
+                </div>
+              ) : (
+                <DocumentCapture
+                  onCapture={(b64, mime) => {
+                    setBackBase64(b64)
+                    setBackMime(mime)
+                    setBackPreview(`data:${mime};base64,${b64}`)
+                  }}
+                />
+              )}
+            </div>
 
             <button
               onClick={handleUploadDocument}
-              disabled={loading || !docBase64}
+              disabled={loading || !frontBase64 || !backBase64}
               className="w-full py-3 bg-brand-crypto text-white rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Uploading...' : 'Submit for review'}

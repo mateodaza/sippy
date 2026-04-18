@@ -24,7 +24,7 @@ import {
   verifyColursEmail,
   uploadColursDocument,
   submitColursProfileDocuments,
-  idTypeToDocumentTypeId,
+  resolveProfileDocumentTypeId,
   getColursKycLevel,
 } from '#services/colurs_user.service'
 import { createCounterparty } from '#services/colurs_payment.service'
@@ -38,6 +38,7 @@ export type KycStatus =
   | 'email_verified'
   | 'documents_submitted'
   | 'approved'
+  | 'rejected'
 
 export type IdType = 'CC' | 'CE' | 'NIT' | 'PA'
 
@@ -160,27 +161,41 @@ export async function kycVerifyEmail(phoneNumber: string, code: string): Promise
 }
 
 /**
- * Step 4: Upload identity document and submit for KYC review.
- * fileBase64: base64-encoded document image (front of ID).
+ * Step 4: Upload identity documents and submit for KYC review.
+ *
+ * Colombia CC requires BOTH front and back of the national ID. We upload each
+ * to S3 via /base/upload_file/, resolve each doc type's numeric id via
+ * /type_documents/, and submit both to /profile_documents/ in a single call.
+ *
  * After submission the user waits for Colurs compliance review (async).
  */
 export async function kycSubmitDocument(opts: {
   phoneNumber: string
-  fileBase64: string
-  mimeType: 'image/jpeg' | 'image/png'
+  frontBase64: string
+  frontMimeType: 'image/jpeg' | 'image/png'
+  backBase64: string
+  backMimeType: 'image/jpeg' | 'image/png'
 }): Promise<void> {
   const kyc = await getKyc(opts.phoneNumber)
   if (!kyc?.email || !kyc.idType) throw new Error('KYC record not found')
 
   const tokens = await loginColursUser({ phoneNumber: opts.phoneNumber, email: kyc.email })
 
-  const docTypeId = idTypeToDocumentTypeId(kyc.idType)
-  const codeName = 'national_id_front'
+  // Resolve the TypeDocumentProfile.id for each code in parallel.
+  const [frontTypeId, backTypeId] = await Promise.all([
+    resolveProfileDocumentTypeId('national_id_front'),
+    resolveProfileDocumentTypeId('national_id_back'),
+  ])
 
-  const url = await uploadColursDocument(tokens.access, opts.fileBase64, opts.mimeType, codeName)
+  // Upload each side of the CC to Colurs's S3.
+  const [frontUrl, backUrl] = await Promise.all([
+    uploadColursDocument(tokens.access, opts.frontBase64, opts.frontMimeType, 'national_id_front'),
+    uploadColursDocument(tokens.access, opts.backBase64, opts.backMimeType, 'national_id_back'),
+  ])
 
   await submitColursProfileDocuments(tokens.access, [
-    { code_name: codeName, url, type_document_id: docTypeId },
+    { id: frontTypeId, url: frontUrl },
+    { id: backTypeId, url: backUrl },
   ])
 
   await upsertKyc(opts.phoneNumber, { kycStatus: 'documents_submitted' })
@@ -231,6 +246,11 @@ export async function kycRefreshLevel(
         )
       }
     }
+  } else if (level === 2) {
+    // Colurs mapped "rejected" → level 2 (see getColursKycLevel).
+    // Surface it so the frontend can route the user back to the document step.
+    status = 'rejected'
+    logger.info(`colurs_kyc: documents rejected for ${maskPhone(phoneNumber)} — requires resubmit`)
   }
 
   await upsertKyc(phoneNumber, {
