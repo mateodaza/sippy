@@ -344,27 +344,48 @@ export async function submitColursProfileDocuments(
 export type ColursKycStatus = 'pending' | 'submitted' | 'approved' | 'rejected'
 
 /**
- * Fetch the user's current KYC status from Colurs and map it to the numeric
- * "level" our DB tracks. Mapping:
- *   pending   → 0
- *   submitted → 1
- *   rejected  → 2
- *   approved  → 5
+ * Fetch the user's current KYC level. We read TWO signals and return the max:
+ *   - `/checkbook-kyc/status/` — checkbook queue (status string)
+ *   - `GET /user/`             — profile's numeric `level`
+ * Colurs support has been observed to flip one without the other, so taking
+ * the max avoids "approved but our endpoint still says pending" lockouts.
+ * Status mapping: approved→5, rejected→2, submitted→1, otherwise 0.
  */
 export async function getColursKycLevel(userToken: string): Promise<number> {
-  const res = await userGet<{ status?: ColursKycStatus; kyc_status?: ColursKycStatus }>(
-    '/checkbook-kyc/status/',
-    userToken
+  const [checkbookRaw, profileRaw] = await Promise.all([
+    userGet<Record<string, unknown>>('/checkbook-kyc/status/', userToken).catch((err) => {
+      logger.warn({ err: String(err) }, 'colurs_user: /checkbook-kyc/status/ failed')
+      return {} as Record<string, unknown>
+    }),
+    userGet<Record<string, unknown>>('/user/', userToken).catch((err) => {
+      logger.warn({ err: String(err) }, 'colurs_user: GET /user/ failed')
+      return {} as Record<string, unknown>
+    }),
+  ])
+
+  // TEMP full-body debug — Colurs approval not reflecting in either signal.
+  // Remove once we've confirmed the correct field names / account.
+  logger.info(
+    { checkbookRaw, profileKeys: Object.keys(profileRaw), profileRaw },
+    'colurs_user: KYC level raw bodies'
   )
-  const status = res.status ?? res.kyc_status
-  switch (status) {
-    case 'approved':
-      return 5
-    case 'rejected':
-      return 2
-    case 'submitted':
-      return 1
-    default:
-      return 0
-  }
+
+  const checkbook = checkbookRaw as { status?: ColursKycStatus; kyc_status?: ColursKycStatus }
+  const profile = profileRaw as { level?: number }
+  const status = checkbook.status ?? checkbook.kyc_status
+  const fromCheckbook =
+    status === 'approved' ? 5 : status === 'rejected' ? 2 : status === 'submitted' ? 1 : 0
+  const fromProfile = typeof profile.level === 'number' ? profile.level : 0
+
+  logger.info(
+    {
+      checkbookStatus: status ?? null,
+      profileLevel: profile.level ?? null,
+      fromCheckbook,
+      fromProfile,
+    },
+    'colurs_user: KYC level check'
+  )
+
+  return Math.max(fromCheckbook, fromProfile)
 }

@@ -63,7 +63,7 @@ async function api(method: string, path: string, body?: Record<string, unknown>)
   return data
 }
 
-// ── Camera capture component ───────────────────────────────────────────────────
+// ── Document upload component ──────────────────────────────────────────────────
 
 function DocumentCapture({
   onCapture,
@@ -89,19 +89,18 @@ function DocumentCapture({
   return (
     <div className="space-y-3">
       <p className="text-sm text-[var(--text-secondary)]">
-        Take a clear photo of the front of your ID document. Make sure all text is visible.
+        Upload a clear photo of your ID document. Make sure all text is visible.
       </p>
       <button
         onClick={() => fileRef.current?.click()}
         className="w-full py-3 border-2 border-dashed border-[var(--border-strong)] rounded-lg text-[var(--text-secondary)] text-sm hover:border-brand-crypto hover:text-brand-crypto transition-colors"
       >
-        Take photo / Upload document
+        Upload document
       </button>
       <input
         ref={fileRef}
         type="file"
         accept="image/jpeg,image/png"
-        capture="environment"
         className="hidden"
         onChange={handleFile}
       />

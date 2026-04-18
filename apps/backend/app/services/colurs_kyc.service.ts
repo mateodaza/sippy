@@ -181,16 +181,23 @@ export async function kycSubmitDocument(opts: {
 
   const tokens = await loginColursUser({ phoneNumber: opts.phoneNumber, email: kyc.email })
 
+  // Colurs code names for the CC front/back photos. The Postman's example used
+  // `national_id_front` but the real /type_documents/ catalog exposes these as
+  // `doc_identification_*`. Discovered at runtime from the "Available:" list in
+  // resolveProfileDocumentTypeId's error message.
+  const FRONT_CODE = 'doc_identification_front'
+  const BACK_CODE = 'doc_identification_back'
+
   // Resolve the TypeDocumentProfile.id for each code in parallel.
   const [frontTypeId, backTypeId] = await Promise.all([
-    resolveProfileDocumentTypeId('national_id_front'),
-    resolveProfileDocumentTypeId('national_id_back'),
+    resolveProfileDocumentTypeId(FRONT_CODE),
+    resolveProfileDocumentTypeId(BACK_CODE),
   ])
 
   // Upload each side of the CC to Colurs's S3.
   const [frontUrl, backUrl] = await Promise.all([
-    uploadColursDocument(tokens.access, opts.frontBase64, opts.frontMimeType, 'national_id_front'),
-    uploadColursDocument(tokens.access, opts.backBase64, opts.backMimeType, 'national_id_back'),
+    uploadColursDocument(tokens.access, opts.frontBase64, opts.frontMimeType, FRONT_CODE),
+    uploadColursDocument(tokens.access, opts.backBase64, opts.backMimeType, BACK_CODE),
   ])
 
   await submitColursProfileDocuments(tokens.access, [

@@ -159,15 +159,36 @@ export async function registerBankAccount(params: RegisterBankAccountParams): Pr
   const documentTypeId = await resolveDocumentTypeId(documentType)
   const accountTypeInt = resolveAccountType(accountType)
 
-  const colursResponse = await colursPost<Record<string, unknown>>('/create_third_party_banks/', {
+  const payload = {
     account_holder_name: holderName,
     account_type: accountTypeInt,
     account_holder_document_type: documentTypeId,
     account_holder_document: documentNumber,
     account_number: accountNumber,
-    bank_name: bankId, // numeric bank ID from /banks/
+    bank_name: bankId,
     country_registered: 'CO',
-  })
+  }
+
+  logger.info(
+    {
+      account_holder_name: holderName,
+      account_type: accountTypeInt,
+      account_holder_document_type: documentTypeId,
+      account_holder_document_length: documentNumber.length,
+      account_holder_document_last4: documentNumber.slice(-4),
+      account_number_length: accountNumber.length,
+      account_number_last4: accountNumber.slice(-4),
+      bank_name: bankId,
+      bank_name_display: bankName,
+      country_registered: 'CO',
+    },
+    `colurs_bank: POST /create_third_party_banks/ payload for ${maskPhone(phoneNumber)}`
+  )
+
+  const colursResponse = await colursPost<Record<string, unknown>>(
+    '/create_third_party_banks/',
+    payload
+  )
 
   // ⚠ UNKNOWN: exact response shape not confirmed (schema missing from api-colurs.json).
   // Try top-level `id` first, then `data.id` as fallback for wrapped responses.
