@@ -132,4 +132,10 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // Onramp bridge flag: true = Colurs sends USDC directly (no LiFi); false = USDT→LiFi→USDC
   COLURS_DIRECT_USDC: Env.schema.string.optional(),
+
+  // KYC passthrough: when "true", treat profile.document_status === "APPROVED" as
+  // sufficient to unlock onramp (level bumped to 5 in getColursKycLevel). Colurs dev
+  // confirmed this mapping in sandbox. Keep unset / "false" in production so the
+  // full level>=5 + kyc_approved gate still applies.
+  COLURS_KYC_PASSTHROUGH_ALLOWED: Env.schema.string.optional(),
 })

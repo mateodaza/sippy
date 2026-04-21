@@ -371,21 +371,33 @@ export async function getColursKycLevel(userToken: string): Promise<number> {
   )
 
   const checkbook = checkbookRaw as { status?: ColursKycStatus; kyc_status?: ColursKycStatus }
-  const profile = profileRaw as { level?: number }
+  const profile = profileRaw as { level?: number; document_status?: string }
   const status = checkbook.status ?? checkbook.kyc_status
   const fromCheckbook =
     status === 'approved' ? 5 : status === 'rejected' ? 2 : status === 'submitted' ? 1 : 0
   const fromProfile = typeof profile.level === 'number' ? profile.level : 0
 
+  // Sandbox passthrough: Colurs dev confirmed `document_status === "APPROVED"` is
+  // enough to initiate onramp, even while profile.level stays at 0 and
+  // kyc_approved=false. Gated behind COLURS_KYC_PASSTHROUGH_ALLOWED so production
+  // can still require the strict level>=5 path.
+  const passthroughAllowed =
+    env.get('COLURS_KYC_PASSTHROUGH_ALLOWED', 'false').toLowerCase() === 'true'
+  const documentApproved = profile.document_status === 'APPROVED'
+  const fromPassthrough = passthroughAllowed && documentApproved ? 5 : 0
+
   logger.info(
     {
       checkbookStatus: status ?? null,
       profileLevel: profile.level ?? null,
+      documentStatus: profile.document_status ?? null,
+      passthroughAllowed,
       fromCheckbook,
       fromProfile,
+      fromPassthrough,
     },
     'colurs_user: KYC level check'
   )
 
-  return Math.max(fromCheckbook, fromProfile)
+  return Math.max(fromCheckbook, fromProfile, fromPassthrough)
 }
