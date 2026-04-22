@@ -69,6 +69,10 @@ router
   })
   .prefix('/api/auth')
 
+// Public onramp preview — proxies Colurs's public /api/reload/r2p/preview/{id}/ so
+// post-payment redirect pages can show status even if the Sippy session expired.
+router.get('/api/onramp/preview/:colursPaymentId', [OnrampController, 'preview'])
+
 // ── JWT-authenticated API routes ────────────────────────────────────────────
 router
   .group(() => {

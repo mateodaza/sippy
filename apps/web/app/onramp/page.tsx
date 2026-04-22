@@ -219,6 +219,12 @@ function OnrampContent() {
       case 'documents_submitted':
         setStep('kyc_pending')
         break
+      case 'approved':
+        // Backend reports approved but isApproved is still false (e.g. Colurs
+        // R2P counterparty creation pending). Keep the user on the review
+        // screen rather than resetting them to the registration form.
+        setStep('kyc_pending')
+        break
       case 'rejected':
         // Rejected by Colurs compliance — send user back to doc upload so they
         // can resubmit. The banner on kyc_document explains why.

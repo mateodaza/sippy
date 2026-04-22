@@ -24,7 +24,11 @@ import { randomUUID } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import OnrampOrder from '#models/onramp_order'
 import { exchangeRateService } from '#services/exchange_rate_service'
-import { initiatePayment, type OnrampMethod } from '#services/colurs_payment.service'
+import {
+  initiatePayment,
+  getPaymentPreview,
+  type OnrampMethod,
+} from '#services/colurs_payment.service'
 import { colursHeaders } from '#services/colurs_auth.service'
 import {
   getKyc,
@@ -293,6 +297,34 @@ export default class OnrampController {
       rate: copRate,
       note: 'Indicative quote. Final amount set by Colurs after payment clears.',
     })
+  }
+
+  // ── GET /api/onramp/preview/:colursPaymentId ────────────────────────────────
+  //
+  // Public (no auth) — proxies Colurs's public /api/reload/r2p/preview/{id}/.
+  // Used by post-redirect success pages where the user's Sippy session may have
+  // expired during the bank / Nequi flow.
+
+  async preview(ctx: HttpContext) {
+    const { params, response } = ctx
+    const colursPaymentId = params.colursPaymentId as string | undefined
+    if (!colursPaymentId) return response.status(400).json({ error: 'colursPaymentId required' })
+
+    try {
+      const data = await getPaymentPreview(colursPaymentId)
+      // Return only fields safe for public display — drop any metadata Colurs
+      // might add over time that could leak user info.
+      return response.json({
+        moneyMovementId: data.money_movement_id,
+        status: data.status,
+        statusCode: data.status_code ?? null,
+        statusDescription: data.status_description ?? null,
+        trackingKey: data.tracking_key ?? null,
+      })
+    } catch (err) {
+      logger.error({ err, colursPaymentId }, 'onramp: preview failed')
+      return response.status(502).json({ error: 'Could not load payment status.' })
+    }
   }
 
   // ── GET /api/onramp/pse-banks ────────────────────────────────────────────────

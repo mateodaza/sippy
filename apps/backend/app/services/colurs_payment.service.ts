@@ -44,6 +44,19 @@ export interface InitiatePaymentParams {
 // ── Counterparty ─────────────────────────────────────────────────────────────
 
 /**
+ * Maps Sippy internal id_type codes to the counterparty `id_type` enum
+ * accepted by POST /api/reload/r2p/counterparty/. Per Colurs Recargas y Retiros
+ * Postman: valid values are "cc", "ce", "nit", "passport". Note Sippy's "PA"
+ * must become "passport" (not "pa") — that was the previous bug.
+ */
+const COUNTERPARTY_ID_TYPE_MAP: Record<string, string> = {
+  CC: 'cc',
+  CE: 'ce',
+  NIT: 'nit',
+  PA: 'passport',
+}
+
+/**
  * Creates a Colurs payer counterparty for the user.
  * Requires full KYC data — see colurs_kyc.service.ts for the public API.
  * In the normal onramp flow this is called via saveKycAndCreateCounterparty().
@@ -55,10 +68,14 @@ export async function createCounterparty(opts: {
   idNumber: string
   email: string
 }): Promise<ColursCounterparty> {
+  const idType = COUNTERPARTY_ID_TYPE_MAP[opts.idType.toUpperCase()]
+  if (!idType) {
+    throw new Error(`Unsupported id_type "${opts.idType}" for counterparty creation`)
+  }
   logger.info(`colurs_payment: creating counterparty for ${maskPhone(opts.phoneNumber)}`)
   return colursPost<ColursCounterparty>('/api/reload/r2p/counterparty/', {
     fullname: opts.fullname,
-    id_type: opts.idType.toLowerCase(), // Colurs expects lowercase: cc, ce, nit, pa
+    id_type: idType,
     id_number: opts.idNumber,
     phone: opts.phoneNumber,
     email: opts.email,
@@ -133,7 +150,20 @@ export async function initiateBancolombia(
 
 export interface ColursPaymentStatus {
   money_movement_id: string
-  status: 'initiated' | 'pending' | 'processing' | 'succeeded' | 'failed' | 'expired' | string
+  status:
+    | 'initiated'
+    | 'pending'
+    | 'processing'
+    | 'succeeded'
+    | 'failed'
+    | 'expired'
+    | 'canceled'
+    | 'returned'
+    | string
+  /** Machine-readable short code, e.g. "PAYMENT_COMPLETED", "PAYMENT_PENDING". */
+  status_code?: string
+  /** Human-readable reason string, useful for debugging failures. */
+  status_description?: string
   tracking_key?: string
   [key: string]: unknown
 }
@@ -144,6 +174,15 @@ export interface ColursPaymentStatus {
  */
 export async function getPaymentStatus(moneyMovementId: string): Promise<ColursPaymentStatus> {
   return colursGet<ColursPaymentStatus>(`/api/reload/r2p/status/${moneyMovementId}/`)
+}
+
+/**
+ * Public preview of an R2P payment — same shape as status but no auth required
+ * on Colurs's side. Useful for post-redirect success pages where the user's
+ * Sippy session may have expired during the bank / Nequi flow.
+ */
+export async function getPaymentPreview(moneyMovementId: string): Promise<ColursPaymentStatus> {
+  return colursGet<ColursPaymentStatus>(`/api/reload/r2p/preview/${moneyMovementId}/`)
 }
 
 // ── Dispatcher ───────────────────────────────────────────────────────────────
