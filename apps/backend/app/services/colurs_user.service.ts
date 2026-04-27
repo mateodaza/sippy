@@ -117,7 +117,7 @@ export async function registerColursUser(opts: {
   const { phoneNumber, email, fullname, idType, idNumber } = opts
 
   // Strip leading + and country code for Colurs (they want local number + country_code separately)
-  // e.g. +573001234567 → phone: "3001234567", country_code: "57"
+  // e.g. +573001234567 → phone: "3153007266", country_code: "+57"
   const e164 = phoneNumber.replace(/^\+/, '')
   const countryCode = e164.slice(0, 2) // assume Colombia +57
   const localPhone = e164.slice(2)
@@ -129,32 +129,35 @@ export async function registerColursUser(opts: {
 
   logger.info(`colurs_user: registering ${maskPhone(phoneNumber)} on Colurs`)
 
-  const res = await userPost<{
-    id: number
-    username: string
-    email: string
-  }>('/user/', {
+  // POST /user/ creates the account but its response only echoes the inputs —
+  // it does NOT include `id`. We do a follow-up login + GET /user/ below to read
+  // the assigned profile id. (Verified against prod 2026-04-27.)
+  await userPost<unknown>('/user/', {
     username: email,
     email,
     password,
     phone: localPhone,
-    country_code: countryCode,
+    country_code: `+${countryCode}`, // Postman: "+57", with the leading +
     first_name: firstName,
     last_name: lastName,
-    // Per Colurs support (2026-04-17): document_type on /user/ is a numeric STRING
-    // matching their internal enum (CC=0, CE=1, TI=2, NIT=3, PSP=4, PPT=5, PEP=6).
-    // Public docs saying "CC"/"CE"/"PASSPORT" were incorrect.
-    // /api/reload/r2p/counterparty/ still uses its own lowercase `id_type` ("cc"/"ce"/"nit").
+    // document_type is a numeric STRING per Colurs Recargas y Retiros Postman + the
+    // /base/document_type/?country=CO catalog: CC=0, CE=1, TI=2, NIT=3, PSP=4, PPT=5, PEP=6.
+    // Note this is a different enum than /api/create_third_party_banks/ (1=CC, 2=CE, ...).
     document_type: String(colursDocId(idType)),
     document_number: idNumber,
-    type_person: 1, // NATURAL
-    // /user/ only accepts APP or PANEL (login /token/ still accepts API).
-    platform: 'APP',
-    country: 'CO',
+    type_person: '1', // string CharField (per Postman) — NATURAL=1
+    platform: 'API', // Postman uses "API". "APP" was wrong; prod 400s on it.
   })
 
-  logger.info(`colurs_user: registered id=${res.id} for ${maskPhone(phoneNumber)}`)
-  return res.id
+  // Log in as the just-created user and read profile to obtain the numeric id.
+  const tokens = await loginColursUser({ phoneNumber, email })
+  const profile = await userGet<{ id?: number }>('/user/', tokens.access)
+  if (typeof profile.id !== 'number') {
+    throw new Error('Colurs /user/ did not return a numeric id after registration')
+  }
+
+  logger.info(`colurs_user: registered id=${profile.id} for ${maskPhone(phoneNumber)}`)
+  return profile.id
 }
 
 // ── Login as user ─────────────────────────────────────────────────────────────
