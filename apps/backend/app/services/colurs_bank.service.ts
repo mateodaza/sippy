@@ -196,7 +196,7 @@ export async function registerBankAccount(params: RegisterBankAccountParams): Pr
   )
 
   const colursResponse = await colursPost<Record<string, unknown>>(
-    '/api/create_third_party_banks/',
+    '/create_third_party_banks/',
     payload
   )
 
