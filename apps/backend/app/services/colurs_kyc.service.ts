@@ -101,8 +101,9 @@ async function upsertKyc(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Step 1: Register user on Colurs.
- * Creates their account with basic info and derives a managed password.
+ * Step 1: Register user on Colurs (FULL KYC PATH).
+ * Creates their /user/ account with basic info and derives a managed password.
+ * Used for the upgrade path when a quick-flow user trips the monthly cap.
  */
 export async function kycRegister(opts: {
   phoneNumber: string
@@ -120,6 +121,105 @@ export async function kycRegister(opts: {
     colursUserId,
     kycStatus: 'registered',
   })
+}
+
+/**
+ * Quick-flow alternative to kycRegister.
+ *
+ * Per Colurs: natural persons making small-amount onramps don't require
+ * full KYC. We skip POST /user/ + OTPs + doc upload entirely and just
+ * create the R2P counterparty so the user can immediately generate
+ * payment links.
+ *
+ * Discriminator: colurs_user_id stays NULL. The /initiate gate uses that
+ * to apply the monthly USD cap. Once the user trips the cap, kycRegister
+ * (above) is invoked to fill in colurs_user_id and lift the cap.
+ *
+ * State after this call: { kycStatus: 'approved', kycLevel: 5,
+ *                          counterparty_id: cp_xxx, colurs_user_id: NULL }
+ */
+export async function kycQuickRegister(opts: {
+  phoneNumber: string
+  email: string
+  fullname: string
+  idType: IdType
+  idNumber: string
+}): Promise<string> {
+  logger.info(`colurs_kyc: quick-register for ${maskPhone(opts.phoneNumber)}`)
+
+  const cp = await createCounterparty({
+    phoneNumber: opts.phoneNumber,
+    fullname: opts.fullname,
+    idType: opts.idType,
+    idNumber: opts.idNumber,
+    email: opts.email,
+  })
+
+  // kyc_level = 0 (NOT 5): the user is "approved" for the quick-flow gate
+  // (counterparty + status='approved' is enough), but the monthly cap still
+  // applies until they complete real Colurs KYC review (which sets level to 5
+  // via kycRefreshLevel). This is the correct discriminator for the cap —
+  // colurs_user_id alone is too weak because it gets set when upgrade kicks
+  // off, before any actual verification has happened.
+  await upsertKyc(opts.phoneNumber, {
+    fullname: opts.fullname,
+    idType: opts.idType,
+    idNumber: opts.idNumber,
+    email: opts.email,
+    counterpartyId: cp.id,
+    kycLevel: 0,
+    kycStatus: 'approved',
+  })
+
+  logger.info(
+    `colurs_kyc: quick-register complete for ${maskPhone(opts.phoneNumber)} — cp=${cp.id}`
+  )
+  return cp.id
+}
+
+/**
+ * Escape hatch for users mid-full-KYC who don't want to wait for Colurs's
+ * compliance review. Uses the identity already on the colurs_kyc row to
+ * create a counterparty (if not present) and bumps the row to quick-flow
+ * approved state. Subject to the same monthly cap as fresh quick-flow users.
+ *
+ * Idempotent: returns the existing counterparty_id if one is already set.
+ *
+ * Throws 'MISSING_IDENTITY' if the row doesn't have enough data — caller
+ * should ask the user to register from scratch.
+ */
+export async function kycUseQuickFlow(opts: { phoneNumber: string }): Promise<string> {
+  const kyc = await getKyc(opts.phoneNumber)
+  if (!kyc?.fullname || !kyc.idType || !kyc.idNumber || !kyc.email) {
+    const err = new Error('Identity data missing on colurs_kyc row') as Error & { code?: string }
+    err.code = 'MISSING_IDENTITY'
+    throw err
+  }
+
+  let counterpartyId = kyc.counterpartyId
+  if (!counterpartyId) {
+    const cp = await createCounterparty({
+      phoneNumber: opts.phoneNumber,
+      fullname: kyc.fullname,
+      idType: kyc.idType,
+      idNumber: kyc.idNumber,
+      email: kyc.email,
+    })
+    counterpartyId = cp.id
+  }
+
+  // Don't pass kycLevel — preserve whatever the row has. Mid-full-KYC rows
+  // are at level 0 (correct for cap); already-approved rows would be at 5
+  // (preserved, no cap).
+  await upsertKyc(opts.phoneNumber, {
+    counterpartyId,
+    kycStatus: 'approved',
+  })
+
+  logger.info(
+    `colurs_kyc: switched to quick-flow for ${maskPhone(opts.phoneNumber)} — cp=${counterpartyId}`
+  )
+  return counterpartyId
 }
 
 /**

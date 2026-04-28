@@ -39,6 +39,21 @@ export interface InitiatePaymentParams {
   externalId: string
   /** PSE only — bank institution code */
   financialInstitutionCode?: string
+  /**
+   * Internal Sippy order id — appended to redirect_url so the success page
+   * can poll status by orderId without depending on Colurs's `transferCode` param.
+   */
+  orderId?: string
+}
+
+/**
+ * Build the redirect URL Colurs will send the user to after payment.
+ * Includes our internal orderId so the success page can poll status.
+ */
+function buildRedirectUrl(orderId?: string): string {
+  const base = env.get('FRONTEND_URL', 'https://www.sippy.lat')
+  const url = `${base}/onramp`
+  return orderId ? `${url}?orderId=${encodeURIComponent(orderId)}` : url
 }
 
 // ── Counterparty ─────────────────────────────────────────────────────────────
@@ -100,7 +115,7 @@ export async function initiatePSE(params: InitiatePaymentParams): Promise<Colurs
     external_id: params.externalId,
     description_to_payer: 'Fondear Sippy',
     description_to_payee: 'Recarga usuario',
-    redirect_url: `${env.get('FRONTEND_URL', 'https://app.sippy.lat')}/onramp/success`,
+    redirect_url: buildRedirectUrl(params.orderId),
     financial_institution_code: params.financialInstitutionCode,
     fee_mode: 'payer',
   })
@@ -120,7 +135,7 @@ export async function initiateNequi(params: InitiatePaymentParams): Promise<Colu
     external_id: params.externalId,
     description_to_payer: 'Fondear Sippy',
     description_to_payee: 'Recarga usuario',
-    redirect_url: `${env.get('FRONTEND_URL', 'https://app.sippy.lat')}/onramp/success`,
+    redirect_url: buildRedirectUrl(params.orderId),
     fee_mode: 'payer',
   })
 }
@@ -141,7 +156,7 @@ export async function initiateBancolombia(
     external_id: params.externalId,
     description_to_payer: 'Fondear Sippy',
     description_to_payee: 'Recarga usuario',
-    redirect_url: `${env.get('FRONTEND_URL', 'https://app.sippy.lat')}/onramp/success`,
+    redirect_url: buildRedirectUrl(params.orderId),
     fee_mode: 'payer',
   })
 }

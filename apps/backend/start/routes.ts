@@ -73,6 +73,11 @@ router
 // post-payment redirect pages can show status even if the Sippy session expired.
 router.get('/api/onramp/preview/:colursPaymentId', [OnrampController, 'preview'])
 
+// Public minimal status by our internal orderId — used by /onramp success page
+// when returning from a bank flow whose Sippy session may have expired. Returns
+// only the fields the success page needs (status, amount, method, links).
+router.get('/api/onramp/public-status/:orderId', [OnrampController, 'publicStatus'])
+
 // ── JWT-authenticated API routes ────────────────────────────────────────────
 router
   .group(() => {
@@ -105,7 +110,13 @@ router
       .group(() => {
         // KYC (one-time Colurs user registration + verification)
         router.get('/onramp/kyc', [OnrampController, 'kycStatus'])
+        // Default register = quick flow (counterparty only, no /user/, no OTPs).
         router.post('/onramp/kyc/register', [OnrampController, 'kycRegister'])
+        // Upgrade-to-full-KYC: triggered when a quick-flow user trips the monthly cap.
+        router.post('/onramp/kyc/upgrade-to-full-kyc', [OnrampController, 'kycUpgradeToFullKyc'])
+        // Escape hatch from "Under review" — switch a mid-full-KYC user to
+        // quick-flow approved so they can start onramping small amounts now.
+        router.post('/onramp/kyc/use-quick-flow', [OnrampController, 'kycUseQuickFlow'])
         router
           .post('/onramp/kyc/send-otp', [OnrampController, 'kycSendOtp'])
           .use(middleware.ipThrottle())

@@ -59,7 +59,15 @@ async function api(method: string, path: string, body?: Record<string, unknown>)
     ...(body ? { body: JSON.stringify(body) } : {}),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Request failed')
+  if (!res.ok) {
+    const err = new Error(data.error || 'Request failed') as Error & {
+      code?: string
+      data?: Record<string, unknown>
+    }
+    err.code = data.code
+    err.data = data
+    throw err
+  }
   return data
 }
 
@@ -145,6 +153,9 @@ function OnrampContent() {
   const [backMime, setBackMime] = useState<'image/jpeg' | 'image/png'>('image/jpeg')
   const [kycLevel, setKycLevel] = useState(0)
   const [kycRejected, setKycRejected] = useState(false)
+  // True when /initiate returned KYC_REQUIRED_FOR_AMOUNT (quick-flow user
+  // tripped the monthly cap). Used to surface the "Verify identity" CTA.
+  const [kycCapHit, setKycCapHit] = useState(false)
 
   // Payment fields
   // Idempotency key: generated once per payment attempt to prevent double-submission.
@@ -180,15 +191,66 @@ function OnrampContent() {
 
   const isCountryEligible = userPhone == null ? null : userPhone.startsWith('+57')
 
-  // ── Boot: check KYC status ─────────────────────────────────────────────────
+  // True if we landed via Colurs's post-payment redirect.
+  // /onramp?orderId=…&transferCode=…&transferState=… — user may be unauthenticated
+  // because the Sippy JWT can expire during a 5+ min bank flow.
+  const orderIdParam = searchParams.get('orderId')
+  const hasOrderIdParam = !!orderIdParam
+
+  // ── Boot: post-payment redirect resume (auth-independent) ─────────────────
+  //
+  // Runs regardless of auth state — uses the public-status endpoint so a
+  // session-expired user still sees their result instead of being kicked to /setup.
+  useEffect(() => {
+    if (!hasOrderIdParam || !orderIdParam) return
+    ;(async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/onramp/public-status/${orderIdParam}`)
+        if (res.ok) {
+          const orderData = (await res.json()) as Order
+          setOrder(orderData)
+          setOrderStatus(orderData.status)
+          setStep('status')
+        }
+      } catch {
+        /* fall through; auth-gated checkKyc may handle it if user IS logged in */
+      }
+    })()
+  }, [hasOrderIdParam, orderIdParam])
+
+  // ── Boot: check KYC status (auth-gated) ───────────────────────────────────
 
   useEffect(() => {
     if (isCheckingSession || !isAuthenticated) return
     if (isCountryEligible !== true) return
+    // If we already loaded the order via the public-status path above, skip.
+    if (hasOrderIdParam) return
     checkKyc()
-  }, [isAuthenticated, isCheckingSession, isCountryEligible]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, isCheckingSession, isCountryEligible, hasOrderIdParam]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function checkKyc() {
+    // If we landed via Colurs's redirect after payment, jump straight to status.
+    // Colurs URL shape: /onramp?orderId=<our-orderId>&transferCode=<key>&transferState=<status>
+    //
+    // Use the PUBLIC status endpoint here, not the authed one — Bancolombia /
+    // PSE flows can take 5+ min, and the user's Sippy JWT may have expired by
+    // the time they're redirected back. The public route returns minimal data
+    // (no PII), enough to render the success page.
+    const orderIdParam = searchParams.get('orderId')
+    if (orderIdParam) {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/onramp/public-status/${orderIdParam}`)
+        if (res.ok) {
+          const orderData = (await res.json()) as Order
+          setOrder(orderData)
+          setOrderStatus(orderData.status)
+          setStep('status')
+          return
+        }
+      } catch {
+        // Fall through to normal KYC check if the public status fetch failed.
+      }
+    }
     try {
       const data = await api('GET', '/api/onramp/kyc')
       advanceFromKycStatus(data.kycStatus as KycStatus, data.isApproved)
@@ -241,12 +303,64 @@ function OnrampContent() {
     setError(null)
     setLoading(true)
     try {
-      await api('POST', '/api/onramp/kyc/register', { fullname, idType, idNumber, email: kycEmail })
-      // Request phone OTP immediately
+      // Quick-flow registration: backend creates the Colurs counterparty only,
+      // skipping /user/, OTPs, and doc upload. Returns kycStatus='approved' so
+      // we can jump straight to the method picker. Cap is enforced at /initiate.
+      const data = await api('POST', '/api/onramp/kyc/register', {
+        fullname,
+        idType,
+        idNumber,
+        email: kycEmail,
+      })
+      if (data.isApproved) {
+        setStep('method')
+      } else {
+        // Fallback if backend ever returns false (shouldn't with quick-flow,
+        // but handles future full-KYC default if config changes).
+        await api('POST', '/api/onramp/kyc/send-otp', { type: 'phone' })
+        setStep('kyc_phone_otp')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── Switch from "Under review" wait to quick-flow (capped) ────────────────
+  //
+  // Lets a user mid-full-KYC who's tired of waiting for Colurs's compliance
+  // team start onramping small amounts immediately. Backend creates the
+  // counterparty (if missing) and bumps state to 'approved' with kyc_level=0
+  // so the monthly cap still applies.
+
+  async function handleUseQuickFlow() {
+    setError(null)
+    setLoading(true)
+    try {
+      const data = await api('POST', '/api/onramp/kyc/use-quick-flow')
+      if (data.isApproved) {
+        setStep('method')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not enable quick onramp')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ── KYC upgrade trigger (when user trips the monthly cap) ─────────────────
+
+  async function handleUpgradeToFullKyc() {
+    setError(null)
+    setLoading(true)
+    try {
+      await api('POST', '/api/onramp/kyc/upgrade-to-full-kyc')
+      // Send phone OTP and route into the existing OTP/doc upload flow.
       await api('POST', '/api/onramp/kyc/send-otp', { type: 'phone' })
       setStep('kyc_phone_otp')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed')
+      setError(err instanceof Error ? err.message : 'Could not start identity verification')
     } finally {
       setLoading(false)
     }
@@ -393,7 +507,13 @@ function OnrampContent() {
       setOrder(data)
       setStep('paying')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Payment failed')
+      const e = err as Error & { code?: string }
+      if (e.code === 'KYC_REQUIRED_FOR_AMOUNT') {
+        // Quick-flow user tripped the monthly cap. Surface the upgrade CTA
+        // alongside the error message; the user clicks it to start full KYC.
+        setKycCapHit(true)
+      }
+      setError(e instanceof Error ? e.message : 'Payment failed')
       // Generate a fresh key so the user can retry after a genuine failure
       idempotencyKeyRef.current = crypto.randomUUID()
     } finally {
@@ -401,7 +521,39 @@ function OnrampContent() {
     }
   }
 
-  // ── Poll order status ─────────────────────────────────────────────────────
+  // ── Auto-poll order status while on the status step ──────────────────────
+  //
+  // Polls every 3s until the status reaches a terminal state. Uses the
+  // public-status endpoint so the redirect-resume path keeps working even
+  // when the user's Sippy JWT has expired.
+
+  useEffect(() => {
+    if (step !== 'status' || !order) return
+    const TERMINAL = new Set([
+      'delivered',
+      'failed',
+      'expired',
+      'canceled',
+      'rejected',
+      'needs_reconciliation',
+    ])
+    if (orderStatus && TERMINAL.has(orderStatus)) return
+
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/onramp/public-status/${order.orderId}`)
+        if (res.ok) {
+          const data = (await res.json()) as { status: string }
+          setOrderStatus(data.status)
+        }
+      } catch {
+        /* non-fatal; next tick will retry */
+      }
+    }, 3000)
+    return () => clearInterval(id)
+  }, [step, order, orderStatus])
+
+  // ── Poll order status (manual) ────────────────────────────────────────────
 
   async function handleCheckStatus() {
     if (!order) return
@@ -426,7 +578,10 @@ function OnrampContent() {
     )
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !hasOrderIdParam) {
+    // Redirect-resume path (orderId in URL) renders the status step from the
+    // public endpoint without requiring a Sippy session, so don't bounce
+    // those returners to /setup.
     router.replace(`/setup?phone=${encodeURIComponent(phoneFromUrl)}`)
     return null
   }
@@ -746,6 +901,20 @@ function OnrampContent() {
             >
               {loading ? 'Checking...' : 'Check approval status'}
             </button>
+
+            <div className="border-t border-[var(--border-primary)] pt-4 space-y-2">
+              <p className="text-xs text-[var(--text-muted)] text-center">
+                Don't want to wait? Onramp small amounts now and finish verification later.
+              </p>
+              <button
+                onClick={handleUseQuickFlow}
+                disabled={loading}
+                className="w-full py-2 border border-brand-crypto text-brand-crypto rounded-lg font-semibold text-sm disabled:opacity-50"
+              >
+                {loading ? 'Setting up...' : 'Onramp now (limited)'}
+              </button>
+            </div>
+
             <button
               onClick={() => router.push(`/settings?phone=${encodeURIComponent(phoneFromUrl)}`)}
               className="w-full py-2 text-sm text-[var(--text-secondary)]"
@@ -883,6 +1052,22 @@ function OnrampContent() {
                 </button>
               )}
             </div>
+
+            {kycCapHit && (
+              <div className="p-3 bg-[var(--bg-tertiary)] rounded-lg space-y-2">
+                <p className="text-sm text-[var(--text-secondary)]">
+                  You've reached the monthly limit for unverified accounts. Verify your identity to
+                  keep onramping.
+                </p>
+                <button
+                  onClick={handleUpgradeToFullKyc}
+                  disabled={loading}
+                  className="w-full py-2 border border-brand-crypto text-brand-crypto rounded-lg font-semibold text-sm disabled:opacity-50"
+                >
+                  {loading ? 'Starting...' : 'Verify identity'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
