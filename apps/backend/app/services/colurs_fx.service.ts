@@ -118,6 +118,83 @@ export async function executeExchange(saleCryptoId: string): Promise<unknown> {
   })
 }
 
+// ── Onramp dispersion (COP → USDT) ──────────────────────────────────────────
+//
+// Different shape from offramp:
+//   - currency_pair: 'cop/usd' (reversed)
+//   - source_amount sent as STRING with cents ("200000.00")
+//   - NO `type` field
+//   - Skip Initiate entirely — Quote → Execute directly
+//   - Execute body uses `quote_uuid`, NOT `sales_crypto_id`
+//   - Quote TTL is 1 minute (vs ~3 min for usd/cop)
+//   - Minimum 200,000 COP (Colurs enforces; we still attempt below to capture
+//     the rejection body for debugging)
+
+export interface ColursOnrampQuoteResponse extends ColursQuote {
+  /**
+   * Quote UUID — Postman docs reference jsonData.uuid but the actual response
+   * has no `uuid` field. The canonical Colurs identifier is `cobre_quote_id`
+   * (prefixed `fxq_…`, same pattern as money_movements `mm_…`). Pass that to
+   * /v2/exchange/execute/ as `quote_uuid` — NOT the internal `id` UUID.
+   */
+  uuid?: string
+  /** Canonical Colurs quote identifier — `fxq_…`. THIS is what /execute/ wants. */
+  cobre_quote_id?: string
+}
+
+/** Format a COP amount as the string Colurs expects: integer COP with two-decimal cents. */
+function formatCopAmount(amountCop: number): string {
+  return amountCop.toFixed(2)
+}
+
+/**
+ * Request a COP → USD/USDT FX quote.
+ * Quote is valid for ~1 minute. Call executeOnrampExchange() immediately.
+ *
+ * @param amountCop - Amount in COP (integer pesos). Minimum 200,000 enforced by Colurs.
+ */
+export async function createOnrampQuote(amountCop: number): Promise<ColursOnrampQuoteResponse> {
+  const sourceAmount = formatCopAmount(amountCop)
+  logger.info(
+    `colurs_fx: onramp quote request currency_pair=cop/usd source_amount="${sourceAmount}"`
+  )
+  return colursPost<ColursOnrampQuoteResponse>('/v2/exchange/quotes/', {
+    currency_pair: 'cop/usd',
+    source_amount: sourceAmount,
+  })
+}
+
+export interface ColursOnrampExecuteResponse {
+  /** SalesCrypto pk — used by getMovement() to poll status */
+  sale_crypto_id?: string | number
+  /** Movement id used for /reload/r2p/preview/ lookups */
+  id?: string | number
+  /** Movement UUID used for /v2/exchange/movements/ lookups */
+  uuid?: string
+  status?: string
+  transaction_hash?: string | null
+  [key: string]: unknown
+}
+
+/**
+ * Execute the COP→USDT exchange using a previously-created quote.
+ *
+ * Confirmed working body (Colurs support 2026-04-30):
+ *   POST /v2/exchange/execute/
+ *   { "quote_id": "fxq_…" }   — the cobre_quote_id from the quote response
+ *
+ * The v1 Postman docs labelled the field `quote_uuid` and the value as
+ * `jsonData.uuid` — both wrong. Field is `quote_id`, value is `cobre_quote_id`.
+ */
+export async function executeOnrampExchange(
+  cobreQuoteId: string
+): Promise<ColursOnrampExecuteResponse> {
+  logger.info(`colurs_fx: onramp execute quote_id=${cobreQuoteId}`)
+  return colursPost<ColursOnrampExecuteResponse>('/v2/exchange/execute/', {
+    quote_id: cobreQuoteId,
+  })
+}
+
 // ── Movement status ───────────────────────────────────────────────────────────
 
 export interface ColursMovementStatus {

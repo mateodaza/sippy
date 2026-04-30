@@ -133,6 +133,14 @@ export default await Env.create(new URL('../', import.meta.url), {
   // Onramp bridge flag: true = Colurs sends USDC directly (no LiFi); false = USDT→LiFi→USDC
   COLURS_DIRECT_USDC: Env.schema.string.optional(),
 
+  // Cobre account IDs for COP→USDT dispersion via /v2/exchange/initiate/.
+  // Source = our COP account where R2P payments land.
+  // Destination = our USDT/USD account that receives the converted balance.
+  // Ask Colurs for the right values. Until both are set, the dispersion job
+  // skips `paid` orders (they rest at status='paid' instead of failing).
+  COLURS_DISPERSION_SOURCE_ACCOUNT_ID: Env.schema.string.optional(),
+  COLURS_DISPERSION_DESTINATION_ACCOUNT_ID: Env.schema.string.optional(),
+
   // KYC passthrough: when "true", treat profile.document_status === "APPROVED" as
   // sufficient to unlock onramp (level bumped to 5 in getColursKycLevel). Colurs dev
   // confirmed this mapping in sandbox. Keep unset / "false" in production so the

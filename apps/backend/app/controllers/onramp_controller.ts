@@ -571,7 +571,23 @@ export default class OnrampController {
 
       const sumResult = await OnrampOrder.query()
         .where('phoneNumber', phoneNumber)
-        .whereIn('status', ['pending', 'processing', 'succeeded', 'bridging', 'delivered'])
+        .whereIn('status', [
+          // R2P leg — committed money
+          'pending',
+          'processing',
+          'succeeded',
+          'paid',
+          // COP→USDT dispersion leg — Colurs is moving funds
+          'fx_quoting',
+          'fx_executing',
+          'fx_settling',
+          'usdt_received',
+          // Bridge leg
+          'initiating_bridge',
+          'bridging',
+          'delivered',
+          'completed',
+        ])
         .where('createdAt', '>=', startOfMonth.toISOString())
         .sum('amount_cop as total')
         .first()

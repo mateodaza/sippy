@@ -1137,45 +1137,67 @@ function OnrampContent() {
           <div className="bg-[var(--bg-primary)] panel-frame rounded-2xl p-6 space-y-4">
             <h2 className="text-base font-bold text-[var(--text-primary)]">Order status</h2>
 
-            <div className="p-3 bg-[var(--bg-tertiary)] rounded-lg space-y-1">
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--text-secondary)]">Status</span>
-                <span
-                  className={`font-medium capitalize ${orderStatus === 'completed' ? 'text-green-600' : orderStatus === 'failed' || orderStatus === 'bridge_failed' ? 'text-red-600' : 'text-amber-600'}`}
-                >
-                  {orderStatus ?? order.status}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--text-secondary)]">Amount</span>
-                <span className="font-medium text-[var(--text-primary)]">
-                  ${order.amountCop.toLocaleString()} COP
-                </span>
-              </div>
-            </div>
+            {(() => {
+              const s = orderStatus ?? order.status
+              const SUCCESS_STATES = ['completed', 'usdt_received']
+              const FAILED_STATES = ['failed', 'fx_failed']
+              const RECON_STATES = ['bridge_failed', 'needs_reconciliation']
+              const isSuccess = SUCCESS_STATES.includes(s)
+              const isFailed = FAILED_STATES.includes(s)
+              const isRecon = RECON_STATES.includes(s)
+              const colorClass = isSuccess
+                ? 'text-green-600'
+                : isFailed || isRecon
+                  ? 'text-red-600'
+                  : 'text-amber-600'
+              return (
+                <>
+                  <div className="p-3 bg-[var(--bg-tertiary)] rounded-lg space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[var(--text-secondary)]">Status</span>
+                      <span className={`font-medium capitalize ${colorClass}`}>{s}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[var(--text-secondary)]">Amount</span>
+                      <span className="font-medium text-[var(--text-primary)]">
+                        ${order.amountCop.toLocaleString()} COP
+                      </span>
+                    </div>
+                  </div>
 
-            {orderStatus === 'completed' ? (
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm text-center">
-                Payment received. USDC will appear in your wallet shortly.
-              </div>
-            ) : orderStatus === 'bridge_failed' ? (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm">
-                <p className="font-semibold mb-1">Manual review required</p>
-                <p>
-                  Your COP payment was confirmed but the USDC transfer could not be completed. Our
-                  team has been notified and will resolve this. Please do not retry — contact
-                  support if you need an update after 24 hours.
-                </p>
-              </div>
-            ) : (
-              <button
-                onClick={handleCheckStatus}
-                disabled={loading}
-                className="w-full py-3 bg-brand-crypto text-white rounded-lg font-semibold disabled:opacity-50"
-              >
-                {loading ? 'Refreshing...' : 'Refresh status'}
-              </button>
-            )}
+                  {isSuccess ? (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm text-center">
+                      Payment received. USDC will appear in your wallet shortly.
+                    </div>
+                  ) : isFailed ? (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                      <p className="font-semibold mb-1">Payment couldn’t be completed</p>
+                      <p>
+                        Your COP payment was rejected or the FX conversion failed. No funds were
+                        moved. You can try again with a new order.
+                      </p>
+                    </div>
+                  ) : isRecon ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm">
+                      <p className="font-semibold mb-1">Manual review required</p>
+                      <p>
+                        Your COP payment was confirmed but completion could not be verified
+                        automatically. Our team has been notified and will resolve this. Please do
+                        not retry — contact support if you need an update after 24 hours.
+                      </p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleCheckStatus}
+                      disabled={loading}
+                      className="w-full py-3 bg-brand-crypto text-white rounded-lg font-semibold disabled:opacity-50"
+                    >
+                      {loading ? 'Refreshing...' : 'Refresh status'}
+                    </button>
+                  )}
+                </>
+              )
+            })()}
 
             <button
               onClick={() => router.push(`/settings?phone=${encodeURIComponent(phoneFromUrl)}`)}

@@ -55,6 +55,32 @@ export default class OnrampOrder extends BaseModel {
   @column()
   declare pollCount: number
 
+  // ── COP→USDT dispersion (post R2P, pre LiFi) ──────────────────────────────
+
+  @column()
+  declare colursDispersionQuoteId: string | null
+
+  @column()
+  declare colursDispersionQuoteUuid: string | null
+
+  @column()
+  declare colursDispersionMovementId: string | null
+
+  @column.dateTime()
+  declare dispersionPolledAt: DateTime | null
+
+  @column()
+  declare dispersionPollCount: number
+
+  @column()
+  declare fxRateCopUsd: string | null
+
+  @column()
+  declare usdtAmountReceived: string | null
+
+  @column()
+  declare usdtTxHash: string | null
+
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 
