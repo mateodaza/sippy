@@ -24,6 +24,7 @@ import { randomUUID } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import OnrampOrder from '#models/onramp_order'
 import { exchangeRateService } from '#services/exchange_rate_service'
+import { createOnrampQuote, getQuoteRate } from '#services/colurs_fx.service'
 import {
   initiatePayment,
   getPaymentPreview,
@@ -384,6 +385,15 @@ export default class OnrampController {
   }
 
   // ── POST /api/onramp/quote ───────────────────────────────────────────────────
+  //
+  // Calls Colurs's stateless /v2/exchange/quotes/ endpoint to surface the
+  // real fee breakdown to the user BEFORE they pay. The quote returned here
+  // is a price preview only — nothing is reserved or executed. The dispersion
+  // job re-quotes at execute time so the user-displayed rate may move slightly
+  // by the time the COP actually lands.
+  //
+  // Falls back to the indicative-rate stub if Colurs is unreachable so the UI
+  // doesn't get stuck on amount entry.
 
   async quote({ request, response }: HttpContext) {
     const { amountCop } = request.body() as { amountCop: unknown }
@@ -391,16 +401,67 @@ export default class OnrampController {
     if (!amountCop || typeof amountCop !== 'number' || amountCop <= 0)
       return response.status(400).json({ error: 'amountCop must be a positive number' })
 
-    const copRate = await exchangeRateService.getLocalRate('COP')
-    if (!copRate)
-      return response.status(503).json({ error: 'Exchange rate unavailable, try again shortly' })
+    // Try the real Colurs quote first
+    try {
+      const quote = await createOnrampQuote(amountCop)
+      const rate = getQuoteRate(quote)
+      const previewRaw = (quote as unknown as Record<string, unknown>).preview_comisiones
+      const preview = (
+        typeof previewRaw === 'object' && previewRaw !== null
+          ? (previewRaw as Record<string, unknown>)
+          : {}
+      ) as Record<string, unknown>
+      const feesRaw = (quote as unknown as Record<string, unknown>).fees_breakdown
+      const fees = (
+        typeof feesRaw === 'object' && feesRaw !== null ? (feesRaw as Record<string, unknown>) : {}
+      ) as Record<string, unknown>
 
-    return response.json({
-      amountCop,
-      estimatedUsdc: Number((amountCop / copRate).toFixed(6)),
-      rate: copRate,
-      note: 'Indicative quote. Final amount set by Colurs after payment clears.',
-    })
+      const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v ?? 0)) || 0
+      const costoEnvio = num(preview.costo_envio)
+      const iva = num(preview.iva)
+      const gmf = num(preview.gmf)
+      const spread = num(fees.spread)
+      const destinationAmount = num(quote.destination_amount)
+
+      // For COP→USDC: source_amount converts to destination_amount at the FX
+      // rate, and fees (costo_envio, iva, gmf — all in COP) are charged ON TOP
+      // of source_amount. So:
+      //   - The user RECEIVES destination_amount in USDC.
+      //   - The user PAYS source_amount + sum(COP fees) via R2P.
+      const sourceAmount = num(quote.source_amount) || amountCop
+      const totalCop = sourceAmount + costoEnvio + iva + gmf
+
+      return response.json({
+        amountCop,
+        estimatedUsdc: Number(destinationAmount.toFixed(6)),
+        rate,
+        sourceAmount,
+        totalCop,
+        fees: {
+          costoEnvio,
+          iva,
+          gmf,
+          spread,
+        },
+        validUntil: quote.valid_until ?? quote.expires_at ?? null,
+        note: 'Quote valid for 1 minute. Rate may shift by a fraction of a percent at settlement.',
+      })
+    } catch (err) {
+      logger.warn({ err }, `onramp.quote: Colurs quote failed, falling back to indicative rate`)
+      const copRate = await exchangeRateService.getLocalRate('COP')
+      if (!copRate)
+        return response.status(503).json({ error: 'Exchange rate unavailable, try again shortly' })
+
+      return response.json({
+        amountCop,
+        estimatedUsdc: Number((amountCop / copRate).toFixed(6)),
+        rate: copRate,
+        totalCop: amountCop,
+        fees: null,
+        validUntil: null,
+        note: 'Indicative quote (live FX unavailable). Final amount set by Colurs after payment clears.',
+      })
+    }
   }
 
   // ── GET /api/onramp/preview/:colursPaymentId ────────────────────────────────

@@ -210,11 +210,19 @@ async function disperseOne(order: PaidOrderRow): Promise<void> {
     // Log full response so we see the actual field shape.
     logger.info({ exec }, `disperse_cop_to_usdt: order=${order.id} execute raw response`)
 
-    // Per Postman test script: movement uuid is the polling key.
-    // Falls back to id only if uuid absent — Colurs may name it differently.
+    // Confirmed shape (Colurs response 2026-04-30):
+    //   { id: <uuid>, cobre_movement_id: 'mm_…', amount: <usdt>,
+    //     destination_type: 'USER_CRYPTO_WALLET', status: 'initiated', ... }
+    // Polling key is the `id` UUID. cobre_movement_id is the canonical Cobre
+    // tracking id — useful for ops via /reload/r2p/preview/{mm_id}/.
     const movementUuid = exec.uuid ?? (typeof exec.id === 'string' ? exec.id : undefined)
+    const cobreMovementId =
+      typeof (exec as Record<string, unknown>).cobre_movement_id === 'string'
+        ? ((exec as Record<string, unknown>).cobre_movement_id as string)
+        : null
+    const initialAmount = typeof exec.amount === 'number' ? exec.amount : null
     logger.info(
-      `disperse_cop_to_usdt: order=${order.id} execute success movement_uuid=${movementUuid ?? 'MISSING'} status=${exec.status ?? 'unknown'}`
+      `disperse_cop_to_usdt: order=${order.id} execute success movement_uuid=${movementUuid ?? 'MISSING'} cobre_movement_id=${cobreMovementId ?? 'n/a'} amount=${initialAmount ?? 'n/a'} destination_type=${(exec as Record<string, unknown>).destination_type ?? 'n/a'} status=${exec.status ?? 'unknown'}`
     )
 
     if (!movementUuid) {
@@ -237,10 +245,16 @@ async function disperseOne(order: PaidOrderRow): Promise<void> {
       `UPDATE onramp_orders
        SET colurs_dispersion_movement_id = ?,
            usdt_tx_hash = COALESCE(?, usdt_tx_hash),
+           usdt_amount_received = COALESCE(?, usdt_amount_received),
            status = 'fx_settling',
            updated_at = now()
        WHERE id = ? AND status = 'fx_executing'`,
-      [movementUuid, exec.transaction_hash ?? null, order.id]
+      [
+        movementUuid,
+        exec.transaction_hash ?? null,
+        initialAmount !== null && initialAmount > 0 ? String(initialAmount) : null,
+        order.id,
+      ]
     )
     logger.info(`disperse_cop_to_usdt: order=${order.id} fx_executing → fx_settling`)
   } catch (err) {

@@ -166,6 +166,13 @@ function OnrampContent() {
   const [selectedBank, setSelectedBank] = useState('')
   const [amountCop, setAmountCop] = useState('')
   const [estimatedUsdc, setEstimatedUsdc] = useState<number | null>(null)
+  const [feeBreakdown, setFeeBreakdown] = useState<{
+    costoEnvio: number
+    iva: number
+    gmf: number
+    spread: number
+  } | null>(null)
+  const [totalCop, setTotalCop] = useState<number | null>(null)
   const [order, setOrder] = useState<Order | null>(null)
   const [orderStatus, setOrderStatus] = useState<string | null>(null)
 
@@ -457,6 +464,8 @@ function OnrampContent() {
     try {
       const data = await api('POST', '/api/onramp/quote', { amountCop: cop })
       setEstimatedUsdc(data.estimatedUsdc)
+      setFeeBreakdown(data.fees ?? null)
+      setTotalCop(typeof data.totalCop === 'number' ? data.totalCop : null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not get quote')
     } finally {
@@ -1007,6 +1016,8 @@ function OnrampContent() {
                   onChange={(e) => {
                     setAmountCop(e.target.value)
                     setEstimatedUsdc(null)
+                    setFeeBreakdown(null)
+                    setTotalCop(null)
                   }}
                   placeholder="50000"
                   min="1000"
@@ -1020,16 +1031,71 @@ function OnrampContent() {
             </div>
 
             {estimatedUsdc !== null && (
-              <div className="p-3 bg-[var(--bg-tertiary)] rounded-lg">
-                <p className="text-sm text-[var(--text-secondary)]">
-                  You will receive approximately{' '}
-                  <span className="font-bold text-[var(--text-primary)]">
-                    {estimatedUsdc.toFixed(2)} USDC
-                  </span>
-                </p>
-                <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                  Final amount set by Colurs after payment clears.
-                </p>
+              <div className="p-3 bg-[var(--bg-tertiary)] rounded-lg space-y-2">
+                {feeBreakdown ? (
+                  <>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between text-[var(--text-muted)]">
+                        <span>Amount</span>
+                        <span>${parseFloat(amountCop.replace(/,/g, '')).toLocaleString()} COP</span>
+                      </div>
+                      {feeBreakdown.costoEnvio > 0 && (
+                        <div className="flex justify-between text-[var(--text-muted)]">
+                          <span>+ Network fee</span>
+                          <span>${feeBreakdown.costoEnvio.toLocaleString()} COP</span>
+                        </div>
+                      )}
+                      {feeBreakdown.iva > 0 && (
+                        <div className="flex justify-between text-[var(--text-muted)]">
+                          <span>+ IVA</span>
+                          <span>${feeBreakdown.iva.toLocaleString()} COP</span>
+                        </div>
+                      )}
+                      {feeBreakdown.gmf > 0 && (
+                        <div className="flex justify-between text-[var(--text-muted)]">
+                          <span>+ GMF (4×1000)</span>
+                          <span>${feeBreakdown.gmf.toLocaleString()} COP</span>
+                        </div>
+                      )}
+                      {feeBreakdown.spread > 0 && (
+                        <div className="flex justify-between text-[var(--text-muted)]">
+                          <span>FX spread</span>
+                          <span>{feeBreakdown.spread}%</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="border-t border-[var(--border-strong)] pt-2 space-y-1">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-sm text-[var(--text-secondary)]">Total to pay</span>
+                        <span className="font-bold text-[var(--text-primary)]">
+                          ${(totalCop ?? parseFloat(amountCop.replace(/,/g, ''))).toLocaleString()}{' '}
+                          COP
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-sm text-[var(--text-secondary)]">You receive</span>
+                        <span className="font-bold text-[var(--text-primary)]">
+                          {estimatedUsdc.toFixed(2)} USDC
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                      Rate may shift by a fraction of a percent at settlement.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-[var(--text-secondary)]">
+                      You will receive approximately{' '}
+                      <span className="font-bold text-[var(--text-primary)]">
+                        {estimatedUsdc.toFixed(2)} USDC
+                      </span>
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                      Indicative rate. Final amount set by Colurs after payment clears.
+                    </p>
+                  </>
+                )}
               </div>
             )}
 

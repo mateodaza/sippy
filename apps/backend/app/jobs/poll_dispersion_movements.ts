@@ -121,14 +121,18 @@ async function pollOne(order: SettlingOrderRow): Promise<void> {
       [order.id]
     )
 
-    // Try to extract USDT amount + tx hash if Colurs returns them
+    // Try to extract USDT amount + tx hash if Colurs returns them.
+    // Confirmed payload shape returns `amount` (number) for the USDT amount;
+    // `dispersion_id` carries the on-chain dispersion tx ref.
     const usdtAmount =
+      (movement.amount as number | string | undefined) ??
       (movement.destination_amount as number | string | undefined) ??
       (movement.amount_usdt as number | string | undefined) ??
       (movement.amount_usd as number | string | undefined)
     const txHash =
       (movement.transaction_hash as string | undefined) ??
       (movement.tx_hash as string | undefined) ??
+      (movement.dispersion_id as string | undefined) ??
       null
 
     if (normalized === 'succeeded') {
