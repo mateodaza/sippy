@@ -701,7 +701,7 @@ export default class OnrampController {
       const payment = await initiatePayment(method as OnrampMethod, {
         counterpartyId,
         amountCop: amountCop as number,
-        externalId,
+        externalId: env.get('COLURS_USERNAME') || externalId,
         financialInstitutionCode,
         // Pass our internal orderId so Colurs's redirect URL points back to
         // /onramp?orderId=<id> — the success page polls by that param.
