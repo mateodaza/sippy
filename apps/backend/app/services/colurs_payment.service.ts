@@ -186,15 +186,9 @@ export interface ColursPaymentStatus {
 /**
  * Poll the status of an R2P payment (PSE / Nequi / Bancolombia).
  * Status progression: initiated → pending → processing → succeeded / failed / expired
- */
-export async function getPaymentStatus(moneyMovementId: string): Promise<ColursPaymentStatus> {
-  return colursGet<ColursPaymentStatus>(`/api/reload/r2p/status/${moneyMovementId}/`)
-}
-
-/**
- * Public preview of an R2P payment — same shape as status but no auth required
- * on Colurs's side. Useful for post-redirect success pages where the user's
- * Sippy session may have expired during the bank / Nequi flow.
+ *
+ * Uses the public preview endpoint — same payload as /status/ but reliable on
+ * Colurs's side (the legacy /status/ endpoint has been returning 500s).
  */
 export async function getPaymentPreview(moneyMovementId: string): Promise<ColursPaymentStatus> {
   return colursGet<ColursPaymentStatus>(`/api/reload/r2p/preview/${moneyMovementId}/`)

@@ -43,6 +43,11 @@ import {
   kycRefreshLevel,
   type IdType,
 } from '#services/colurs_kyc.service'
+import {
+  onPaymentSucceeded,
+  TERMINAL_STATUSES,
+  normalizeColursStatus,
+} from '#jobs/poll_r2p_payments'
 import env from '#start/env'
 import { maskPhone } from '#utils/phone'
 
@@ -759,12 +764,56 @@ export default class OnrampController {
     const phoneNumber = ctx.cdpUser?.phoneNumber
     if (!phoneNumber) return response.status(401).json({ error: 'Unauthorized' })
 
-    const order = await OnrampOrder.query()
+    let order = await OnrampOrder.query()
       .where('id', params.orderId)
       .where('phoneNumber', phoneNumber)
       .first()
 
     if (!order) return response.status(404).json({ error: 'Order not found' })
+
+    // Force a fresh Colurs check while still waiting on the user payment.
+    // The background poller does this every ~30s, but the Refresh button on the
+    // success page is meant to feel responsive — so we hit /preview/ inline,
+    // advance the order through the same logic the poller uses, and re-read.
+    if (
+      order.colursPaymentId &&
+      (order.status === 'pending' || order.status === 'initiating_payment')
+    ) {
+      try {
+        const payment = await getPaymentPreview(order.colursPaymentId)
+        const normalized = normalizeColursStatus(payment.status)
+        logger.info(
+          `onramp.status: order ${order.id} colurs status="${payment.status}" code="${payment.status_code ?? ''}" normalized="${normalized}"`
+        )
+        if (TERMINAL_STATUSES.includes(normalized)) {
+          if (normalized === 'succeeded') {
+            await onPaymentSucceeded(
+              order.externalId,
+              phoneNumber,
+              payment as unknown as Record<string, unknown>
+            )
+          } else {
+            await OnrampOrder.query()
+              .where('id', order.id)
+              .whereIn('status', ['pending', 'initiating_payment'])
+              .update({
+                status: 'failed',
+                error: `R2P payment ${normalized} (raw=${payment.status})`,
+              })
+          }
+          // Re-read so the response reflects the advanced state
+          const refreshed = await OnrampOrder.query().where('id', order.id).first()
+          if (refreshed) order = refreshed
+        }
+      } catch (err) {
+        // Non-fatal — fall back to whatever the DB currently has.
+        // Background poller will retry on its next tick.
+        logger.warn(
+          { err, orderId: order.id },
+          'onramp.status: Colurs preview check failed, returning DB state'
+        )
+      }
+    }
 
     return response.json({
       orderId: order.id,

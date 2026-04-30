@@ -2162,12 +2162,6 @@ function SettingsContent() {
                       ? 'Add funds (COP)'
                       : 'Agregar COP'}
                 </a>
-                <a
-                  href={`/offramp${qs}`}
-                  className="flex-1 py-3 border border-brand-crypto text-brand-crypto rounded-lg font-semibold text-center text-sm hover:bg-brand-crypto/10"
-                >
-                  {lang === 'pt' ? 'Retirar COP' : lang === 'en' ? 'Withdraw (COP)' : 'Retirar COP'}
-                </a>
               </div>
             </div>
           )

@@ -6,7 +6,7 @@
  *   - db.rawQuery: patched on the singleton, responses keyed by SQL substring
  *   - db.from():   patched to return a builder chain mock
  *   - OnrampOrder.query(): patched on the class
- *   - global.fetch: replaced to intercept colursGet (used by getPaymentStatus)
+ *   - global.fetch: replaced to intercept colursGet (used by getPaymentPreview)
  *
  * Coverage:
  *  1. Orphaned initiating_payment (null colurs_payment_id, >2min) → needs_reconciliation
@@ -487,7 +487,7 @@ test.group('pollR2pPayments | already-advanced statuses skip re-processing', (gr
       externalId: 'ext-already-done',
     }
 
-    // Mock fetch for getPaymentStatus — returns succeeded
+    // Mock fetch for getPaymentPreview — returns succeeded
     global.fetch = makeMockFetch([
       {
         url: '/reload/r2p/status/mm-done/',
