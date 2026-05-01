@@ -1080,7 +1080,8 @@ function OnrampContent() {
                       </div>
                     </div>
                     <p className="text-[10px] text-[var(--text-muted)]">
-                      Rate may shift by a fraction of a percent at settlement.
+                      Your bank adds GMF tax, IVA, and a processing fee at checkout (typically 2–3%
+                      extra). Final total is shown by your bank before you confirm.
                     </p>
                   </>
                 ) : (

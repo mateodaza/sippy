@@ -58,6 +58,43 @@ async function recoverStuckSettling(): Promise<void> {
   }
 }
 
+/**
+ * Picks up orders that landed at usdt_received but never triggered LiFi —
+ * either because they pre-date the auto-trigger feature, or the trigger
+ * failed before claiming. Atomic claim then fire-and-forget triggerBridge.
+ */
+async function triggerBridgeForUsdtReceived(): Promise<void> {
+  const ready = await db.rawQuery<{
+    rows: { id: string; external_id: string }[]
+  }>(
+    `SELECT id, external_id
+     FROM onramp_orders
+     WHERE status = 'usdt_received'
+     LIMIT 20`
+  )
+
+  for (const order of ready.rows) {
+    const claim = await db.rawQuery<{ rows: { external_id: string }[] }>(
+      `UPDATE onramp_orders SET status = 'initiating_bridge', updated_at = now()
+       WHERE id = ? AND status = 'usdt_received'
+       RETURNING external_id`,
+      [order.id]
+    )
+    if (!claim.rows[0]) continue
+    logger.info(
+      `poll_dispersion_movements: recovering usdt_received order=${order.id} → initiating_bridge`
+    )
+    import('#services/onramp_bridge.service')
+      .then(({ triggerBridge }) => triggerBridge(claim.rows[0].external_id))
+      .catch((err) => {
+        logger.error(
+          { err },
+          `poll_dispersion_movements: triggerBridge failed for order=${order.id}`
+        )
+      })
+  }
+}
+
 export async function pollDispersionMovements(): Promise<void> {
   if (isRunning) {
     logger.warn('poll_dispersion_movements: previous run still in flight, skipping tick')
@@ -67,6 +104,7 @@ export async function pollDispersionMovements(): Promise<void> {
 
   try {
     await recoverStuckSettling()
+    await triggerBridgeForUsdtReceived()
 
     const orders = await db.rawQuery<{ rows: SettlingOrderRow[] }>(
       `SELECT id, external_id, colurs_dispersion_movement_id, phone_number, dispersion_poll_count
@@ -136,19 +174,60 @@ async function pollOne(order: SettlingOrderRow): Promise<void> {
       null
 
     if (normalized === 'succeeded') {
+      // Also write amount_usdt so triggerBridge / notifyFundReceived (which
+      // both read order.amount_usdt) see the actual settled amount, not the
+      // R2P-time estimate.
       await db.rawQuery(
         `UPDATE onramp_orders
          SET status = 'usdt_received',
              usdt_amount_received = COALESCE(?, usdt_amount_received),
+             amount_usdt = COALESCE(?, amount_usdt),
              usdt_tx_hash = COALESCE(?, usdt_tx_hash),
              updated_at = now()
          WHERE id = ? AND status = 'fx_settling'`,
-        [usdtAmount !== undefined ? String(usdtAmount) : null, txHash, order.id]
+        [
+          usdtAmount !== undefined ? String(usdtAmount) : null,
+          usdtAmount !== undefined ? String(usdtAmount) : null,
+          txHash,
+          order.id,
+        ]
       )
       logger.info(
         `poll_dispersion_movements: order=${order.id} fx_settling → usdt_received for ${maskPhone(order.phone_number)}`
       )
-      // LiFi bridge intentionally NOT triggered here. Manual verification first.
+
+      // ── LiFi bridge trigger ──────────────────────────────────────────────
+      // Atomic claim usdt_received → initiating_bridge to prevent duplicate
+      // broadcasts if two cron ticks race. triggerBridge is fire-and-forget:
+      // it writes its own state changes (bridging, completed, bridge_failed)
+      // and runs LiFi confirmation in the background.
+      const claim = await db.rawQuery<{ rows: { external_id: string }[] }>(
+        `UPDATE onramp_orders SET status = 'initiating_bridge', updated_at = now()
+         WHERE id = ? AND status = 'usdt_received'
+         RETURNING external_id`,
+        [order.id]
+      )
+      if (!claim.rows[0]) {
+        logger.info(
+          `poll_dispersion_movements: order=${order.id} bridge already claimed by another tick`
+        )
+        return
+      }
+      const externalId = claim.rows[0].external_id
+      logger.info(
+        `poll_dispersion_movements: order=${order.id} usdt_received → initiating_bridge — triggering LiFi`
+      )
+      // Fire-and-forget — bridge service handles its own state machine.
+      // If it throws, log and let the recovery sweep in poll_r2p_payments
+      // catch stuck initiating_bridge / bridging orders.
+      import('#services/onramp_bridge.service')
+        .then(({ triggerBridge }) => triggerBridge(externalId))
+        .catch((err) => {
+          logger.error(
+            { err },
+            `poll_dispersion_movements: triggerBridge failed for order=${order.id} ext=${externalId}`
+          )
+        })
       return
     }
 
