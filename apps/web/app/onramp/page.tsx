@@ -8,6 +8,10 @@ import { CDPProviderDefault } from '../providers/cdp-provider'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
 
+// Mirror of MIN_ONRAMP_COP in apps/backend/app/controllers/onramp_controller.ts.
+// Below this, fees + bridge gas eat the spread and the order strands.
+const MIN_ONRAMP_COP = 200_000
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type KycStatus =
@@ -455,8 +459,8 @@ function OnrampContent() {
 
   async function handleQuote() {
     const cop = parseFloat(amountCop.replace(/,/g, ''))
-    if (!cop || cop < 1000) {
-      setError('Minimum amount is $1,000 COP')
+    if (!cop || cop < MIN_ONRAMP_COP) {
+      setError(`Minimum amount is $${MIN_ONRAMP_COP.toLocaleString('en-US')} COP`)
       return
     }
     setError(null)
@@ -1019,15 +1023,17 @@ function OnrampContent() {
                     setFeeBreakdown(null)
                     setTotalCop(null)
                   }}
-                  placeholder="50000"
-                  min="1000"
+                  placeholder="200000"
+                  min={MIN_ONRAMP_COP}
                   className="w-full pl-7 pr-3 py-3 border rounded-lg text-[var(--text-primary)] text-sm"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] text-xs">
                   COP
                 </span>
               </div>
-              <p className="text-xs text-[var(--text-muted)] mt-1">Minimum $1,000 COP</p>
+              <p className="text-xs text-[var(--text-muted)] mt-1">
+                Minimum ${MIN_ONRAMP_COP.toLocaleString('en-US')} COP
+              </p>
             </div>
 
             {estimatedUsdc !== null && (

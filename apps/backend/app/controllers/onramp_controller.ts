@@ -63,6 +63,11 @@ const DEPOSIT_ADDRESS = () => env.get('SIPPY_ETH_DEPOSIT_ADDRESS', '')
 // to cap exposure through the hot-wallet bridge path.
 const MAX_ONRAMP_COP = 10_000_000
 
+// Minimum order size. Below this, Colurs fees + LiFi bridge gas eat the
+// entire spread and the bridge route reverts or completes for a tiny dust
+// amount that strands the order. Enforced on both /quote and /initiate.
+const MIN_ONRAMP_COP = 200_000
+
 // Monthly limit for users on the quick-flow (no full KYC).
 // ≈ $1,000 USD at ~4,000 COP/USD. Above this, /initiate returns
 // KYC_REQUIRED_FOR_AMOUNT and the frontend prompts the user to upgrade.
@@ -400,6 +405,10 @@ export default class OnrampController {
 
     if (!amountCop || typeof amountCop !== 'number' || amountCop <= 0)
       return response.status(400).json({ error: 'amountCop must be a positive number' })
+    if (amountCop < MIN_ONRAMP_COP)
+      return response
+        .status(400)
+        .json({ error: `Minimum onramp is ${MIN_ONRAMP_COP.toLocaleString('en-US')} COP` })
 
     // Try the real Colurs quote first
     try {
@@ -592,8 +601,10 @@ export default class OnrampController {
 
     if (!method || !VALID_METHODS.includes(method as OnrampMethod))
       return response.status(400).json({ error: 'method must be pse, nequi, or bancolombia' })
-    if (!amountCop || typeof amountCop !== 'number' || amountCop < 1000)
-      return response.status(400).json({ error: 'amountCop must be >= 1000' })
+    if (!amountCop || typeof amountCop !== 'number' || amountCop < MIN_ONRAMP_COP)
+      return response
+        .status(400)
+        .json({ error: `Minimum onramp is ${MIN_ONRAMP_COP.toLocaleString('en-US')} COP` })
     if (amountCop > MAX_ONRAMP_COP)
       return response
         .status(400)

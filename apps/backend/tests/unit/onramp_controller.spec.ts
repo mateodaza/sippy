@@ -433,6 +433,14 @@ test.group('OnrampController | quote — validation', () => {
     await controller.quote(ctx as any)
     assert.equal(getStatus(), 400)
   })
+
+  test('400 when amountCop is below minimum 200_000', async ({ assert }) => {
+    const { ctx, getStatus, getBody } = buildCtx({ body: { amountCop: 199_999 } })
+    const controller = new OnrampController()
+    await controller.quote(ctx as any)
+    assert.equal(getStatus(), 400)
+    assert.include((getBody().error as string).toLowerCase(), 'minimum')
+  })
 })
 
 test.group('OnrampController | quote — happy path', () => {
@@ -493,7 +501,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
     const { ctx, getStatus, getBody } = buildCtx({
       body: {
         method: 'pse',
-        amountCop: 50000,
+        amountCop: 200_000,
         idempotencyKey: crypto.randomUUID(),
         financialInstitutionCode: 'BANCOLOMBIA',
       },
@@ -507,7 +515,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
 
   test('400 when method is invalid', async ({ assert }) => {
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'cash', amountCop: 50000, idempotencyKey: crypto.randomUUID() },
+      body: { method: 'cash', amountCop: 200_000, idempotencyKey: crypto.randomUUID() },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -515,9 +523,9 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
     assert.include(getBody().error as string, 'method')
   })
 
-  test('400 when amountCop is below minimum 1000', async ({ assert }) => {
+  test('400 when amountCop is below minimum 200_000', async ({ assert }) => {
     const { ctx, getStatus } = buildCtx({
-      body: { method: 'nequi', amountCop: 500, idempotencyKey: crypto.randomUUID() },
+      body: { method: 'nequi', amountCop: 199_999, idempotencyKey: crypto.randomUUID() },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -536,7 +544,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
 
   test('400 when idempotencyKey is missing', async ({ assert }) => {
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'nequi', amountCop: 50000 },
+      body: { method: 'nequi', amountCop: 200_000 },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -546,7 +554,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
 
   test('400 when idempotencyKey is too short', async ({ assert }) => {
     const { ctx, getStatus } = buildCtx({
-      body: { method: 'nequi', amountCop: 50000, idempotencyKey: 'short' },
+      body: { method: 'nequi', amountCop: 200_000, idempotencyKey: 'short' },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -568,7 +576,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
     })
 
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'pse', amountCop: 50000, idempotencyKey: crypto.randomUUID() },
+      body: { method: 'pse', amountCop: 200_000, idempotencyKey: crypto.randomUUID() },
       // no financialInstitutionCode
     })
     const controller = new OnrampController()
@@ -580,7 +588,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
   test('503 when COLURS_DIRECT_USDC is true', async ({ assert }) => {
     process.env.COLURS_DIRECT_USDC = 'true'
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'nequi', amountCop: 50000, idempotencyKey: crypto.randomUUID() },
+      body: { method: 'nequi', amountCop: 200_000, idempotencyKey: crypto.randomUUID() },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -617,14 +625,14 @@ test.group('OnrampController | initiate — idempotency replay', (group) => {
     mockOnrampQuery({
       id: 'order-uuid-1',
       method: 'nequi',
-      amountCop: '50000',
+      amountCop: '200000',
       paymentLink: null,
       trackingKey: null,
       status: 'initiating_payment',
     })
 
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'nequi', amountCop: 50000, idempotencyKey: key },
+      body: { method: 'nequi', amountCop: 200_000, idempotencyKey: key },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -646,7 +654,7 @@ test.group('OnrampController | initiate — idempotency replay', (group) => {
     mockOnrampQuery({
       id: 'order-uuid-2',
       method: 'pse',
-      amountCop: '100000',
+      amountCop: '200000',
       paymentLink: 'https://colurs.com/pay/abc123',
       trackingKey: 'TRK-456',
       status: 'pending',
@@ -655,7 +663,7 @@ test.group('OnrampController | initiate — idempotency replay', (group) => {
     const { ctx, getStatus, getBody } = buildCtx({
       body: {
         method: 'pse',
-        amountCop: 100000,
+        amountCop: 200_000,
         idempotencyKey: key,
         financialInstitutionCode: 'BANCOLOMBIA',
       },
@@ -681,14 +689,14 @@ test.group('OnrampController | initiate — idempotency replay', (group) => {
     mockOnrampQuery({
       id: 'order-uuid-3',
       method: 'nequi',
-      amountCop: '50000',
+      amountCop: '200000',
       paymentLink: null,
       trackingKey: 'TRK-789',
       status: 'pending',
     })
 
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'nequi', amountCop: 50000, idempotencyKey: key },
+      body: { method: 'nequi', amountCop: 200_000, idempotencyKey: key },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
