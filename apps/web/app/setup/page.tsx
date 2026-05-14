@@ -37,6 +37,12 @@ import { isBlockedPrefix, isNANP } from '@sippy/shared'
 import { getDefaultChannel, canSwitchChannel } from '../../lib/auth-mode'
 import { ChannelPicker, ResendButton } from '../../components/shared/ChannelPicker'
 import { CDPProviderCustomAuth } from '../providers/cdp-provider'
+import {
+  linkEvent,
+  readAndPersistEventSlug,
+  clearEventSlug,
+  type LinkEventResponse,
+} from '../../lib/events'
 
 /**
  * Setup Page for Embedded Wallets
@@ -104,10 +110,26 @@ const STEPS: Step[] = ['phone', 'otp', 'email', 'tos', 'done']
 const TOS_VERSION = '1.0'
 const TOS_URL = 'https://www.sippy.lat/terms'
 
-function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string }) {
+function SetupContent({
+  phoneFromUrl: phoneFromUrlProp,
+  eventSlugFromUrl,
+}: {
+  phoneFromUrl: string
+  eventSlugFromUrl: string | null
+}) {
   const router = useRouter()
 
   const phoneFromUrl = phoneFromUrlProp
+
+  // Event slug hydrated from URL or sessionStorage, persisted across refreshes.
+  // Resolved on mount; server validates the slug — unknown ones are silently dropped.
+  const [eventSlug, setEventSlug] = useState<string | null>(null)
+  const linkEventFiredRef = useRef(false)
+  const [linkedEvent, setLinkedEvent] = useState<LinkEventResponse | null>(null)
+
+  useEffect(() => {
+    setEventSlug(readAndPersistEventSlug(eventSlugFromUrl))
+  }, [eventSlugFromUrl])
 
   // Redirect to settings if user already has a valid (non-expired) session
   useEffect(() => {
@@ -261,6 +283,33 @@ function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string
       handleApprovePermission()
     }
   }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tag the user to their event once setup is complete. Fire-and-forget —
+  // failure is non-blocking. The server silently rejects unknown/inactive slugs.
+  useEffect(() => {
+    if (step !== 'done') return
+    if (linkEventFiredRef.current) return
+    if (!eventSlug) return
+    const token = getFreshToken()
+    if (!token) return
+    linkEventFiredRef.current = true
+    linkEvent(eventSlug, token)
+      .then((result) => {
+        setLinkedEvent(result)
+        if (result.linked) {
+          console.log('[event] linked to', result.event.slug)
+        }
+      })
+      .catch((err) => {
+        console.warn('[event] link failed (non-blocking):', err)
+      })
+      .finally(() => {
+        // Clear the slug from sessionStorage once we've attempted to link.
+        // Prevents a subsequent /setup in the same tab from inheriting it
+        // and tagging the next user to the prior event.
+        clearEventSlug()
+      })
+  }, [step, eventSlug])
 
   // Recovery: Check for existing session on mount (only once)
   useEffect(() => {
@@ -1336,6 +1385,28 @@ function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string
             </h1>
             <p className="text-[var(--text-secondary)] mb-6">{t('setup.walletReady', lang)}</p>
 
+            {linkedEvent?.linked && (
+              <div className="bg-[var(--bg-tertiary)] p-4 rounded-lg text-left text-sm mb-6 border border-brand-primary/20">
+                <div className="text-3xl mb-2">🎟️</div>
+                <p className="text-[var(--text-secondary)] mb-1">
+                  {t('setup.eventCheckedIn', lang)}
+                </p>
+                <p className="font-display text-lg font-bold mb-3 text-[var(--text-primary)]">
+                  {linkedEvent.event.name}
+                </p>
+                {linkedEvent.poapClaimUrl && (
+                  <a
+                    href={linkedEvent.poapClaimUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block bg-brand-primary text-white px-4 py-2 rounded-lg font-semibold hover:bg-brand-primary-hover"
+                  >
+                    {t('setup.claimPoap', lang)} →
+                  </a>
+                )}
+              </div>
+            )}
+
             {walletAddress && (
               <div className="bg-[var(--bg-tertiary)] p-4 rounded-lg text-left text-sm mb-6">
                 <p className="font-semibold mb-2 text-[var(--text-primary)]">
@@ -1376,7 +1447,7 @@ function SetupContent({ phoneFromUrl: phoneFromUrlProp }: { phoneFromUrl: string
  * Gate component for bare /setup (no phone in URL).
  * Renders a phone input first, then mounts the correct provider after submission.
  */
-function PhoneEntryGate() {
+function PhoneEntryGate({ eventSlugFromUrl }: { eventSlugFromUrl: string | null }) {
   const [submittedPhone, setSubmittedPhone] = useState<string | null>(null)
   const router = useRouter()
   const [lang] = useState<Language>(() => getStoredLanguage() || 'en')
@@ -1411,7 +1482,7 @@ function PhoneEntryGate() {
           </div>
         }
       >
-        <SetupContent phoneFromUrl={submittedPhone} />
+        <SetupContent phoneFromUrl={submittedPhone} eventSlugFromUrl={eventSlugFromUrl} />
       </Suspense>
     </CDPProviderCustomAuth>
   )
@@ -1477,15 +1548,19 @@ function SetupPageInner() {
   const rawPhone = (searchParams.get('phone') || '').replace(/[^\d]/g, '')
   const phoneFromUrl = rawPhone ? `+${rawPhone}` : ''
 
+  // Event slug from share link (e.g. ?event=pizza-day-bog-2026). Optional and
+  // independent of phone — server-validated; unknown slugs are silently dropped.
+  const eventSlugFromUrl = (searchParams.get('event') || '').trim() || null
+
   // No phone from URL → show phone entry gate (provider chosen after phone is known)
   if (!phoneFromUrl) {
-    return <PhoneEntryGate />
+    return <PhoneEntryGate eventSlugFromUrl={eventSlugFromUrl} />
   }
 
   // Phone from URL → mount provider immediately
   return (
     <CDPProviderCustomAuth>
-      <SetupContent phoneFromUrl={phoneFromUrl} />
+      <SetupContent phoneFromUrl={phoneFromUrl} eventSlugFromUrl={eventSlugFromUrl} />
     </CDPProviderCustomAuth>
   )
 }

@@ -24,6 +24,7 @@ const SupportController = () => import('#controllers/support_controller')
 const WebhookAlchemyController = () => import('#controllers/webhook_alchemy_controller')
 const OnrampController = () => import('#controllers/onramp_controller')
 const OfframpController = () => import('#controllers/offramp_controller')
+const EventController = () => import('#controllers/event_controller')
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
@@ -46,6 +47,9 @@ router.post('/notify-fund', [NotifyController, 'fund'])
 
 // ── Public stats (aggregate-only, no PII) ────────────────────────────────────
 router.get('/api/stats', [PublicStatsController, 'index']).use(middleware.ipThrottle())
+
+// ── Public event lookup (IP-throttled, name/active/endsAt only) ──────────────
+router.get('/api/events/:slug', [EventController, 'getEventPublic']).use(middleware.ipThrottle())
 
 // ── Public support (IP-throttled) ────────────────────────────────────────────
 router
@@ -104,6 +108,7 @@ router
     router.get('/tos-status', [EmbeddedWalletController, 'tosStatus'])
     router.get('/profile', [EmbeddedWalletController, 'getProfile'])
     router.post('/support/tickets', [SupportController, 'create'])
+    router.post('/link-event', [EventController, 'linkEvent'])
 
     // ── Colurs rails — Colombia (+57) only ───────────────────────────────────
     router
