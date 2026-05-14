@@ -16,20 +16,23 @@ export default class extends BaseSchema {
           name             TEXT NOT NULL,
           description      TEXT,
           starts_at        TIMESTAMPTZ,
-          ends_at          TIMESTAMPTZ,
+          ends_at           TIMESTAMPTZ,
           poap_claim_url   TEXT,
-          welcome_message  JSONB,
           active           BOOLEAN NOT NULL DEFAULT true,
           created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
           updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `)
 
+      // CHECK constraint locks linked_at_step to the two values the service
+      // contract knows about, so a seed script or future writer can't sneak
+      // in an arbitrary string that TS won't catch.
       await db.rawQuery(`
         CREATE TABLE IF NOT EXISTS user_event_links (
           phone_number     TEXT NOT NULL REFERENCES user_preferences(phone_number) ON DELETE CASCADE,
           event_id         UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-          linked_at_step   TEXT,
+          linked_at_step   TEXT CHECK (linked_at_step IN ('done', 'returning')),
+          poap_claimed     BOOLEAN NOT NULL DEFAULT FALSE,
           poap_claimed_at  TIMESTAMPTZ,
           poap_tx_or_id    TEXT,
           metadata         JSONB,

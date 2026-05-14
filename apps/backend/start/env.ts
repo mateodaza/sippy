@@ -146,4 +146,9 @@ export default await Env.create(new URL('../', import.meta.url), {
   // confirmed this mapping in sandbox. Keep unset / "false" in production so the
   // full level>=5 + kyc_approved gate still applies.
   COLURS_KYC_PASSTHROUGH_ALLOWED: Env.schema.string.optional(),
+
+  // Event-linked onboarding — per-event POAP claim URLs read by the seeders.
+  // If unset, the event row is created with poap_claim_url=NULL and the EventCard
+  // won't render the "Claim your POAP" CTA. Declare new events here as we add them.
+  PIZZA_DAY_POAP_URL: Env.schema.string.optional(),
 })

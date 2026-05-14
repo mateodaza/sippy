@@ -25,11 +25,6 @@ export default class Event extends BaseModel {
   @column()
   declare poapClaimUrl: string | null
 
-  @column({
-    prepare: (value: Record<string, string> | null) => (value ? JSON.stringify(value) : null),
-  })
-  declare welcomeMessage: Record<string, string> | null
-
   @column()
   declare active: boolean
 

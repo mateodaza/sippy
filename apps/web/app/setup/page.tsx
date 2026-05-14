@@ -39,9 +39,15 @@ import { ChannelPicker, ResendButton } from '../../components/shared/ChannelPick
 import { CDPProviderCustomAuth } from '../providers/cdp-provider'
 import {
   linkEvent,
+  markPoapClaimed,
   readAndPersistEventSlug,
+  readAndPersistEventSource,
   clearEventSlug,
+  setPoapClaimIntent,
+  getPoapClaimIntent,
+  clearPoapClaimIntent,
   type LinkEventResponse,
+  type PoapClaimStatus,
 } from '../../lib/events'
 
 /**
@@ -102,6 +108,7 @@ type Step =
   | 'tos'
   | 'permission'
   | 'done'
+  | 'event-tagged'
   | 'email-login'
   | 'email-login-otp'
 // 'permission' is hidden — auto-created with max limit after ToS
@@ -110,30 +117,101 @@ const STEPS: Step[] = ['phone', 'otp', 'email', 'tos', 'done']
 const TOS_VERSION = '1.0'
 const TOS_URL = 'https://www.sippy.lat/terms'
 
+/**
+ * Reusable card shown on success screens to confirm the user is tagged to an
+ * event. Renders the POAP claim CTA when a URL is configured and reflects
+ * already-claimed state.
+ */
+function EventCard({
+  linkedEvent,
+  lang,
+  onPoapClaim,
+}: {
+  linkedEvent: Extract<LinkEventResponse, { linked: true }>
+  lang: Language
+  onPoapClaim: () => void
+}) {
+  return (
+    <div className="bg-[var(--bg-tertiary)] p-4 rounded-lg text-left text-sm mb-6 border border-brand-primary/20">
+      <div className="text-3xl mb-2">🎟️</div>
+      <p className="text-[var(--text-secondary)] mb-1">{t('setup.eventCheckedIn', lang)}</p>
+      <p className="font-display text-lg font-bold mb-3 text-[var(--text-primary)]">
+        {linkedEvent.event.name}
+      </p>
+      {linkedEvent.poapClaimUrl &&
+        (linkedEvent.poapClaimed ? (
+          <span className="inline-block bg-[var(--bg-secondary)] text-[var(--text-secondary)] px-4 py-2 rounded-lg font-semibold">
+            ✓ {t('setup.poapAlreadyClaimed', lang)}
+          </span>
+        ) : (
+          <a
+            href={linkedEvent.poapClaimUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onPoapClaim}
+            className="inline-block bg-brand-primary text-white px-4 py-2 rounded-lg font-semibold hover:bg-brand-primary-hover"
+          >
+            {t('setup.claimPoap', lang)} →
+          </a>
+        ))}
+    </div>
+  )
+}
+
+/**
+ * Event linking call sites — ALL THREE are guarded by `linkEventFiredRef` so
+ * exactly one network call goes out per mount. Order matters: if you add a
+ * 4th site, decide where in this priority list it sits before reusing the
+ * ref, or add a dedicated ref.
+ *
+ *   1. Retroactive recovery (already-onboarded user scans event QR)
+ *      └─ advanceToCorrectStep:  status.hasPermission && eventSlug
+ *         → linkEvent(slug, 'returning', source); renders 'event-tagged'
+ *
+ *   2. Done-step tagging (user finishes onboarding here)
+ *      └─ useEffect [step, eventSlug]:  step === 'done' && eventSlug
+ *         → linkEvent(slug, 'done', source); fire-and-forget
+ *
+ *   3. Mount-time recovery (session exists but we didn't hit (1) above)
+ *      └─ session-recovery effect ~line 511:  existing session + eventSlug
+ *         → linkEvent(slug, 'returning', source)
+ *
+ * Each site sets `linkEventFiredRef.current = true` BEFORE awaiting the
+ * promise so a re-render mid-flight can't double-fire. The ref is never
+ * reset within a mount.
+ */
 function SetupContent({
   phoneFromUrl: phoneFromUrlProp,
   eventSlugFromUrl,
+  eventSourceFromUrl,
 }: {
   phoneFromUrl: string
   eventSlugFromUrl: string | null
+  eventSourceFromUrl: string | null
 }) {
   const router = useRouter()
 
   const phoneFromUrl = phoneFromUrlProp
 
-  // Event slug hydrated from URL or sessionStorage, persisted across refreshes.
-  // Resolved on mount; server validates the slug — unknown ones are silently dropped.
+  // Event slug + optional source hydrated from URL or sessionStorage, persisted
+  // across refreshes. Resolved on mount; server validates and silently drops
+  // unknown slugs / invalid sources.
   const [eventSlug, setEventSlug] = useState<string | null>(null)
+  const [eventSource, setEventSource] = useState<string | null>(null)
   const linkEventFiredRef = useRef(false)
   const [linkedEvent, setLinkedEvent] = useState<LinkEventResponse | null>(null)
 
   useEffect(() => {
     setEventSlug(readAndPersistEventSlug(eventSlugFromUrl))
-  }, [eventSlugFromUrl])
+    setEventSource(readAndPersistEventSource(eventSourceFromUrl))
+  }, [eventSlugFromUrl, eventSourceFromUrl])
 
-  // Redirect to settings if user already has a valid (non-expired) session
+  // Redirect to settings if user already has a valid (non-expired) session.
+  // Exception: if there's an event slug to process retroactively, stay mounted
+  // so the recovery effect can fire linkEvent('returning') and render the
+  // event-tagged screen instead of bouncing.
   useEffect(() => {
-    if (!phoneFromUrl && getFreshToken()) {
+    if (!phoneFromUrl && getFreshToken() && !eventSlugFromUrl) {
       router.replace('/settings')
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -221,6 +299,25 @@ function SetupContent({
       const status = await statusResponse.json()
 
       if (status.hasPermission) {
+        // Retroactive event tag — already-onboarded user scanning the event QR.
+        // Fires linkEvent with step='returning' so we can distinguish them from
+        // users who actually onboarded at the event. Then we render the
+        // event-tagged screen instead of redirecting.
+        if (eventSlug && !linkEventFiredRef.current) {
+          linkEventFiredRef.current = true
+          try {
+            const result = await linkEvent(eventSlug, accessToken, 'returning', eventSource)
+            setLinkedEvent(result)
+            clearEventSlug()
+            if (result.linked) {
+              setStep('event-tagged')
+              return true
+            }
+          } catch (err) {
+            console.warn('[event] retroactive link failed (non-blocking):', err)
+            clearEventSlug()
+          }
+        }
         router.replace('/settings')
         return true
       }
@@ -284,6 +381,88 @@ function SetupContent({
     }
   }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Reconcile the UI with a markPoapClaimed server response. Pulled out so
+  // both the click handler and the retry-on-remount effect can share it.
+  //
+  // - 'claimed' / 'already-claimed': server confirmed → drop the intent flag
+  // - 'not-linked':                  no link row will ever exist → revert
+  //                                  the optimistic UI flip and drop intent
+  // - 'error':                       transient (often venue Wi-Fi) → leave
+  //                                  the intent flag in place so the next
+  //                                  mount retries
+  const reconcilePoapClaim = (status: PoapClaimStatus) => {
+    if (status === 'claimed' || status === 'already-claimed') {
+      clearPoapClaimIntent()
+      return
+    }
+    if (status === 'not-linked') {
+      console.warn('[event] poap-claim: user not linked to event — reverting UI')
+      clearPoapClaimIntent()
+      setLinkedEvent((prev) => (prev && prev.linked ? { ...prev, poapClaimed: false } : prev))
+      return
+    }
+    // 'error' — keep the intent flag for the retry effect to pick up later.
+  }
+
+  // Fired when the user clicks "Claim your POAP". Best-effort — fires the
+  // markPoapClaimed endpoint and reflects the recorded state locally.
+  //
+  // Race we're guarding: the `<a target="_blank">` opens the POAP page
+  // immediately, while our fetch races in parallel on flaky venue Wi-Fi. If
+  // our fetch drops, the user gets the POAP but our DB never records the
+  // click, the next visit still shows "Claim your POAP", and analytics
+  // under-count claims.
+  //
+  // Mitigation:
+  //  1. Flip the UI to claimed optimistically (best UX bet — claim almost
+  //     always succeeds).
+  //  2. Persist a localStorage intent flag so a subsequent mount can retry
+  //     the server call if it dropped.
+  //  3. Only revert on a definitive 'not-linked' response.
+  const handlePoapClaim = () => {
+    if (!linkedEvent?.linked) return
+    const slug = linkedEvent.event.slug
+    const token = getFreshToken()
+    if (!token) return
+
+    setPoapClaimIntent(slug)
+    setLinkedEvent((prev) => (prev && prev.linked ? { ...prev, poapClaimed: true } : prev))
+
+    void markPoapClaimed(slug, token).then(reconcilePoapClaim)
+  }
+
+  // Retry-on-remount for dropped POAP claims. If a prior click left a
+  // localStorage intent flag but our state still shows poapClaimed=false
+  // (i.e. the fetch dropped before we could record it), fire markPoapClaimed
+  // again and reconcile. Slug mismatch means stale intent from a different
+  // event — just clear it.
+  const poapRetryFiredRef = useRef(false)
+  useEffect(() => {
+    if (poapRetryFiredRef.current) return
+    if (!linkedEvent?.linked) return
+    const intentSlug = getPoapClaimIntent()
+    if (!intentSlug) return
+
+    if (intentSlug !== linkedEvent.event.slug) {
+      clearPoapClaimIntent()
+      return
+    }
+    if (linkedEvent.poapClaimed) {
+      // Server already confirmed via the link payload — no retry needed.
+      clearPoapClaimIntent()
+      return
+    }
+
+    const token = getFreshToken()
+    if (!token) return
+
+    poapRetryFiredRef.current = true
+    // Optimistically reflect the prior click so the UI doesn't briefly say
+    // "Claim your POAP" while we retry.
+    setLinkedEvent((prev) => (prev && prev.linked ? { ...prev, poapClaimed: true } : prev))
+    void markPoapClaimed(linkedEvent.event.slug, token).then(reconcilePoapClaim)
+  }, [linkedEvent]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Tag the user to their event once setup is complete. Fire-and-forget —
   // failure is non-blocking. The server silently rejects unknown/inactive slugs.
   useEffect(() => {
@@ -293,7 +472,7 @@ function SetupContent({
     const token = getFreshToken()
     if (!token) return
     linkEventFiredRef.current = true
-    linkEvent(eventSlug, token)
+    linkEvent(eventSlug, token, 'done', eventSource)
       .then((result) => {
         setLinkedEvent(result)
         if (result.linked) {
@@ -410,7 +589,39 @@ function SetupContent({
             const status = await statusResponse.json()
 
             if (status.hasPermission) {
-              // Fully onboarded — go to settings, no need to show setup again
+              // Fully onboarded — usually go straight to settings, but if the
+              // user is here via a retroactive event QR, run linkEvent first
+              // and render the event-tagged screen.
+              //
+              // Read slug/source fresh from URL-or-sessionStorage rather than
+              // the `eventSlug`/`eventSource` state, because this effect's
+              // closure was created on first render when both states are still
+              // null (the hydration effect at line 204 runs in parallel and
+              // its update isn't visible to this closure). The pure readers
+              // are idempotent — safe to call twice.
+              const slugForLink = readAndPersistEventSlug(eventSlugFromUrl)
+              const sourceForLink = readAndPersistEventSource(eventSourceFromUrl)
+              if (slugForLink && !linkEventFiredRef.current) {
+                linkEventFiredRef.current = true
+                try {
+                  const result = await linkEvent(
+                    slugForLink,
+                    accessToken,
+                    'returning',
+                    sourceForLink
+                  )
+                  setLinkedEvent(result)
+                  clearEventSlug()
+                  if (result.linked) {
+                    setStep('event-tagged')
+                    setIsCheckingSession(false)
+                    return
+                  }
+                } catch (err) {
+                  console.warn('[event] retroactive link failed (non-blocking):', err)
+                  clearEventSlug()
+                }
+              }
               router.replace('/settings')
               return
             } else if (status.tosAccepted) {
@@ -1057,11 +1268,13 @@ function SetupContent({
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-[var(--bg-primary)] panel-frame rounded-2xl p-8">
-        {/* Progress indicator */}
-        <div className="mb-8 text-sm text-[var(--text-secondary)] font-medium tracking-wide">
-          {{ en: 'Step', es: 'Paso', pt: 'Passo' }[lang] || 'Step'} {STEPS.indexOf(step) + 1} of{' '}
-          {STEPS.length}
-        </div>
+        {/* Progress indicator — hidden on terminal screens not in the linear flow */}
+        {step !== 'event-tagged' && (
+          <div className="mb-8 text-sm text-[var(--text-secondary)] font-medium tracking-wide">
+            {{ en: 'Step', es: 'Paso', pt: 'Passo' }[lang] || 'Step'} {STEPS.indexOf(step) + 1} of{' '}
+            {STEPS.length}
+          </div>
+        )}
 
         {/* Error display */}
         {error && (
@@ -1386,25 +1599,7 @@ function SetupContent({
             <p className="text-[var(--text-secondary)] mb-6">{t('setup.walletReady', lang)}</p>
 
             {linkedEvent?.linked && (
-              <div className="bg-[var(--bg-tertiary)] p-4 rounded-lg text-left text-sm mb-6 border border-brand-primary/20">
-                <div className="text-3xl mb-2">🎟️</div>
-                <p className="text-[var(--text-secondary)] mb-1">
-                  {t('setup.eventCheckedIn', lang)}
-                </p>
-                <p className="font-display text-lg font-bold mb-3 text-[var(--text-primary)]">
-                  {linkedEvent.event.name}
-                </p>
-                {linkedEvent.poapClaimUrl && (
-                  <a
-                    href={linkedEvent.poapClaimUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block bg-brand-primary text-white px-4 py-2 rounded-lg font-semibold hover:bg-brand-primary-hover"
-                  >
-                    {t('setup.claimPoap', lang)} →
-                  </a>
-                )}
-              </div>
+              <EventCard linkedEvent={linkedEvent} lang={lang} onPoapClaim={handlePoapClaim} />
             )}
 
             {walletAddress && (
@@ -1431,6 +1626,28 @@ function SetupContent({
           </div>
         )}
 
+        {/* Retroactive event tag — user was already onboarded when they scanned */}
+        {step === 'event-tagged' && (
+          <div className="text-center">
+            <div className="text-6xl mb-4">🎟️</div>
+            <h1 className="font-display text-2xl font-bold uppercase mb-4 text-[var(--text-primary)]">
+              {t('setup.eventTaggedTitle', lang)}
+            </h1>
+            <p className="text-[var(--text-secondary)] mb-6">{t('setup.eventTaggedBody', lang)}</p>
+
+            {linkedEvent?.linked && (
+              <EventCard linkedEvent={linkedEvent} lang={lang} onPoapClaim={handlePoapClaim} />
+            )}
+
+            <button
+              onClick={() => router.replace('/settings')}
+              className="w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover"
+            >
+              {t('setup.continueToWallet', lang)}
+            </button>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-[var(--text-secondary)]">
           <p>{t('setup.poweredBy', lang)}</p>
@@ -1447,17 +1664,48 @@ function SetupContent({
  * Gate component for bare /setup (no phone in URL).
  * Renders a phone input first, then mounts the correct provider after submission.
  */
-function PhoneEntryGate({ eventSlugFromUrl }: { eventSlugFromUrl: string | null }) {
+function PhoneEntryGate({
+  eventSlugFromUrl,
+  eventSourceFromUrl,
+}: {
+  eventSlugFromUrl: string | null
+  eventSourceFromUrl: string | null
+}) {
   const [submittedPhone, setSubmittedPhone] = useState<string | null>(null)
   const router = useRouter()
   const [lang] = useState<Language>(() => getStoredLanguage() || 'en')
 
-  // Redirect to settings if user already has a valid session
+  // Already-onboarded user with an event slug: mount SetupContent so the
+  // recovery effect can fire linkEvent('returning') and render the
+  // event-tagged screen. Without a slug, just go straight to /settings.
+  const hasFreshToken = typeof window !== 'undefined' ? !!getFreshToken() : false
+  const shouldMountForRetroactive = hasFreshToken && !!eventSlugFromUrl
+
   useEffect(() => {
-    if (getFreshToken()) {
+    if (hasFreshToken && !eventSlugFromUrl) {
       router.replace('/settings')
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (shouldMountForRetroactive) {
+    return (
+      <CDPProviderCustomAuth>
+        <Suspense
+          fallback={
+            <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
+              <div className="text-[var(--text-secondary)]">Loading...</div>
+            </div>
+          }
+        >
+          <SetupContent
+            phoneFromUrl=""
+            eventSlugFromUrl={eventSlugFromUrl}
+            eventSourceFromUrl={eventSourceFromUrl}
+          />
+        </Suspense>
+      </CDPProviderCustomAuth>
+    )
+  }
 
   if (!submittedPhone) {
     return (
@@ -1482,7 +1730,11 @@ function PhoneEntryGate({ eventSlugFromUrl }: { eventSlugFromUrl: string | null 
           </div>
         }
       >
-        <SetupContent phoneFromUrl={submittedPhone} eventSlugFromUrl={eventSlugFromUrl} />
+        <SetupContent
+          phoneFromUrl={submittedPhone}
+          eventSlugFromUrl={eventSlugFromUrl}
+          eventSourceFromUrl={eventSourceFromUrl}
+        />
       </Suspense>
     </CDPProviderCustomAuth>
   )
@@ -1552,15 +1804,24 @@ function SetupPageInner() {
   // independent of phone — server-validated; unknown slugs are silently dropped.
   const eventSlugFromUrl = (searchParams.get('event') || '').trim() || null
 
+  // Optional channel attribution. Validated server-side; junk silently dropped.
+  const eventSourceFromUrl = (searchParams.get('source') || '').trim() || null
+
   // No phone from URL → show phone entry gate (provider chosen after phone is known)
   if (!phoneFromUrl) {
-    return <PhoneEntryGate eventSlugFromUrl={eventSlugFromUrl} />
+    return (
+      <PhoneEntryGate eventSlugFromUrl={eventSlugFromUrl} eventSourceFromUrl={eventSourceFromUrl} />
+    )
   }
 
   // Phone from URL → mount provider immediately
   return (
     <CDPProviderCustomAuth>
-      <SetupContent phoneFromUrl={phoneFromUrl} eventSlugFromUrl={eventSlugFromUrl} />
+      <SetupContent
+        phoneFromUrl={phoneFromUrl}
+        eventSlugFromUrl={eventSlugFromUrl}
+        eventSourceFromUrl={eventSourceFromUrl}
+      />
     </CDPProviderCustomAuth>
   )
 }

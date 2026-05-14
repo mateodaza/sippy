@@ -1099,3 +1099,343 @@ describe('source integrity', () => {
     expect(source).toMatch(/canSwitchChannel/)
   })
 })
+
+// ──────────────────────────────────────────────────────────────────────────────
+// linkEventFiredRef guard — single-call invariant across the three call sites
+//
+// The setup page links the user to an event from three different places
+// (see the block comment above `SetupContent`). All three are guarded by the
+// same `linkEventFiredRef` so exactly one network call goes out per mount.
+// If anyone adds a fourth call site without wiring the guard, these tests
+// should catch it.
+//
+// Sites 2 (post-OTP `advanceToCorrectStep`) and 3 (mount-time session
+// recovery) are driven directly here. Site 1 (the `done`-step effect) is
+// covered by the source-code invariants below — driving it would require
+// stepping through the full onboarding flow.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('event linking — linkEventFiredRef guard', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    window.sessionStorage.clear()
+    window.localStorage.clear()
+  })
+
+  // URL: ?phone=…&event=…&source=…
+  function stubEventSearchParams(slug: string | null, source: string | null = null) {
+    mocks.searchParamsGet.mockImplementation((key: string) => {
+      if (key === 'phone') return '573001234567'
+      if (key === 'event') return slug
+      if (key === 'source') return source
+      return null
+    })
+  }
+
+  function countLinkEventCalls(mockFetch: ReturnType<typeof vi.fn>): RequestInit[] {
+    return mockFetch.mock.calls
+      .filter(
+        (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('/api/link-event')
+      )
+      .map((c: unknown[]) => c[1] as RequestInit)
+  }
+
+  it('session recovery (signed-in user lands on /setup?event=…): fires linkEvent("returning") once and shows event-tagged step', async () => {
+    // Site 3 — the mount-time recovery effect. The slug/source readers are
+    // called inside the hasPermission branch (rather than reading the
+    // closure-captured `eventSlug` state), which is what makes this path
+    // reliable even on first-render-with-event-in-URL.
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    stubEventSearchParams('pizza-day', 'qr-booth')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
+    _storedToken = 'stored-token-xyz'
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      if (url.includes('/api/link-event')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({
+            linked: true,
+            event: { slug: 'pizza-day', name: 'Pizza Day', endsAt: null },
+            actions: ['poap'],
+            poapClaimUrl: 'https://poap.example/x',
+            poapClaimed: false,
+            linkedAtStep: 'returning',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await flushAsync()
+    await flushAsync()
+
+    const calls = countLinkEventCalls(mockFetch)
+    expect(calls.length).toBe(1)
+    const body = JSON.parse(calls[0].body as string)
+    expect(body).toEqual({
+      eventSlug: 'pizza-day',
+      linkedAtStep: 'returning',
+      source: 'qr-booth',
+    })
+    // Stays on /setup rendering the event-tagged screen — does NOT redirect.
+    expect(mocks.routerReplace).not.toHaveBeenCalledWith('/settings')
+  })
+
+  it('session recovery falls back to sessionStorage when URL has no event param', async () => {
+    // Refresh case: user originally arrived via ?event=pizza-day, the slug
+    // was persisted to sessionStorage, then the URL was cleaned. On a fresh
+    // mount with no URL param, readAndPersistEventSlug picks up the stored
+    // slug and site 3 still fires linkEvent.
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    // No event in URL
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
+    _storedToken = 'stored-token-xyz'
+    window.sessionStorage.setItem('sippy:event-slug', 'pizza-day')
+    window.sessionStorage.setItem('sippy:event-source', 'qr-booth')
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      if (url.includes('/api/link-event')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({
+            linked: true,
+            event: { slug: 'pizza-day', name: 'Pizza Day', endsAt: null },
+            actions: [],
+            poapClaimUrl: null,
+            poapClaimed: false,
+            linkedAtStep: 'returning',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await flushAsync()
+    await flushAsync()
+
+    const calls = countLinkEventCalls(mockFetch)
+    expect(calls.length).toBe(1)
+    const body = JSON.parse(calls[0].body as string)
+    expect(body.eventSlug).toBe('pizza-day')
+    expect(body.source).toBe('qr-booth')
+  })
+
+  it('post-OTP advanceToCorrectStep (hasPermission + eventSlug): fires linkEvent("returning") exactly once', async () => {
+    // Fresh OTP verify path: user enters phone + OTP, server reports
+    // hasPermission=true, advanceToCorrectStep should fire linkEvent('returning')
+    // exactly once with the canonical body (eventSlug + linkedAtStep + source).
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    stubEventSearchParams('pizza-day', 'twitter')
+    setupOtpMocksWithBackend()
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      if (url.includes('/api/link-event')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({
+            linked: true,
+            event: { slug: 'pizza-day', name: 'Pizza Day', endsAt: null },
+            actions: [],
+            poapClaimUrl: null,
+            poapClaimed: false,
+            linkedAtStep: 'returning',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goToEmailStep('123456')
+    await flushAsync()
+    // Extra flushes in case a stray re-render attempts a second call.
+    await flushAsync()
+
+    const calls = countLinkEventCalls(mockFetch)
+    expect(calls.length).toBe(1)
+    const body = JSON.parse(calls[0].body as string)
+    expect(body).toEqual({
+      eventSlug: 'pizza-day',
+      linkedAtStep: 'returning',
+      source: 'twitter',
+    })
+  })
+
+  it('source param is omitted from the request body when absent', async () => {
+    // Defensive: lib/events.ts.linkEvent should only include `source` when
+    // explicitly passed. Confirms attribution doesn't get polluted with an
+    // empty-string source from a missing URL param.
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    stubEventSearchParams('pizza-day', null)
+    setupOtpMocksWithBackend()
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      if (url.includes('/api/link-event')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({
+            linked: true,
+            event: { slug: 'pizza-day', name: 'Pizza Day', endsAt: null },
+            actions: [],
+            poapClaimUrl: null,
+            poapClaimed: false,
+            linkedAtStep: 'returning',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goToEmailStep('123456')
+    await flushAsync()
+
+    const calls = countLinkEventCalls(mockFetch)
+    expect(calls.length).toBe(1)
+    const body = JSON.parse(calls[0].body as string)
+    expect(body).toEqual({ eventSlug: 'pizza-day', linkedAtStep: 'returning' })
+    expect(body).not.toHaveProperty('source')
+  })
+
+  it('silent reject (linked:false) still fires exactly once — guard flips before await', async () => {
+    // Server returns { linked: false } for unknown/inactive slugs. The guard
+    // should still flip (it's set BEFORE the await), so a re-render of any
+    // dependent effect can't double-fire even on rejection.
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    stubEventSearchParams('unknown-slug', 'twitter')
+    setupOtpMocksWithBackend()
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      if (url.includes('/api/link-event')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ linked: false }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goToEmailStep('123456')
+    await flushAsync()
+    await flushAsync()
+
+    expect(countLinkEventCalls(mockFetch).length).toBe(1)
+  })
+
+  it('does not fire linkEvent on the post-OTP path when no eventSlug is present', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    setupOtpMocksWithBackend()
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goToEmailStep('123456')
+    await flushAsync()
+
+    expect(countLinkEventCalls(mockFetch).length).toBe(0)
+    // Without an event slug, hasPermission redirects straight to /settings.
+    await waitForRedirect('/settings')
+  })
+})
+
+describe('event linking — source code invariants', () => {
+  // Belt-and-suspenders: if someone removes the guard or adds a 4th call
+  // site without wiring the ref, these tests fail fast — even when the
+  // runtime path for that call site is hard to drive from JSDom.
+  const source = readFileSync(join(__dir, 'page.tsx'), 'utf-8')
+
+  // Strip line comments and block comments so the regexes below don't match
+  // identifiers that only appear in comments. Cheap-and-cheerful: doesn't
+  // handle every JS lexical edge case, but it's good enough for this file
+  // where comments don't contain `//` or `/*` inside strings.
+  function stripComments(src: string): string {
+    return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  }
+  const code = stripComments(source)
+
+  it('declares the linkEventFiredRef ref exactly once', () => {
+    const declarations = code.match(/const linkEventFiredRef = useRef\(/g) ?? []
+    expect(declarations.length).toBe(1)
+  })
+
+  it('every call to linkEvent() has a paired linkEventFiredRef.current = true assignment', () => {
+    // Count `linkEvent(` invocations (excluding the named import in
+    // `import { linkEvent, ... }`) vs ref-set sites. They should match —
+    // if someone adds a 4th call site, this test forces them to wire the
+    // guard too.
+    const callSites = code.match(/(?:^|[^a-zA-Z_])linkEvent\(/g) ?? []
+    // Drop the named-import occurrence: `  linkEvent,` inside the import block.
+    // The import has a `,` immediately after, the calls have `(`. We already
+    // matched `linkEvent(` so imports are excluded by construction.
+    const refSets = code.match(/linkEventFiredRef\.current = true/g) ?? []
+    expect(callSites.length).toBe(refSets.length)
+    // And there really are three of them — the contract the block comment
+    // above SetupContent describes.
+    expect(callSites.length).toBe(3)
+  })
+})

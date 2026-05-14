@@ -109,6 +109,7 @@ router
     router.get('/profile', [EmbeddedWalletController, 'getProfile'])
     router.post('/support/tickets', [SupportController, 'create'])
     router.post('/link-event', [EventController, 'linkEvent'])
+    router.post('/event-poap-claimed', [EventController, 'markPoapClaimed'])
 
     // ── Colurs rails — Colombia (+57) only ───────────────────────────────────
     router
