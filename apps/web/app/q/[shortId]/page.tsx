@@ -30,8 +30,21 @@ const SIPPY_NUMBER_DISPLAY = process.env.NEXT_PUBLIC_SIPPY_WHATSAPP_NUMBER || ''
 
 type DeviceClass = 'mobile' | 'desktop' | 'unknown'
 
+/**
+ * Mirror of the backend ScanResponse shape. `backend_error` is wire-only
+ * (never a DB-stored outcome) and is set by either:
+ *   - the backend, when its `getQrLinkForScan` throws
+ *   - this page, when the backend fetch itself fails (network/non-2xx)
+ * Hoist into @sippy/shared post-freeze.
+ */
 interface ScanResponse {
-  outcome: 'redirected' | 'revoked' | 'not_found' | 'rate_limited' | 'invalid_version'
+  outcome:
+    | 'redirected'
+    | 'revoked'
+    | 'not_found'
+    | 'rate_limited'
+    | 'invalid_version'
+    | 'backend_error'
   shortId: string
   kind: 'pay' | 'event' | 'referral' | null
   waUrl: string
@@ -64,15 +77,30 @@ async function fetchScanResult(
       body: JSON.stringify({ deviceClass, userAgent, referer }),
       cache: 'no-store',
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      console.error(
+        `[qr/scan] backend returned non-2xx: status=${res.status} shortId=${shortId} backend=${BACKEND_URL}`
+      )
+      return null
+    }
     return (await res.json()) as ScanResponse
-  } catch {
+  } catch (err) {
+    // Network failure, DNS, TLS, JSON parse — all collapse here. Log enough
+    // to triage from server logs without leaking the backend URL into client
+    // bundles (this file is a Server Component, so console.error goes to the
+    // Next.js server's stderr).
+    console.error(`[qr/scan] backend fetch threw: shortId=${shortId} backend=${BACKEND_URL}`, err)
     return null
   }
 }
 
 export default async function QrLandingPage({ params }: { params: Promise<{ shortId: string }> }) {
-  const { shortId } = await params
+  const { shortId: rawShortId } = await params
+  // Normalize once. The backend regex `[A-Z0-9]{8}` and the bot's bracket-
+  // token regex are uppercase-only, so anything we pass downstream (wa.me
+  // text, fallback render, fetch body) must be uppercase. Lowercase printed
+  // URLs should still route correctly.
+  const shortId = rawShortId.toUpperCase()
   const hdrs = await headers()
   const userAgent = hdrs.get('user-agent')
   const referer = hdrs.get('referer')
@@ -81,8 +109,10 @@ export default async function QrLandingPage({ params }: { params: Promise<{ shor
   const scan = await fetchScanResult(shortId, deviceClass, userAgent, referer)
 
   // Backend unreachable — degrade to a generic wa.me redirect so the user
-  // still ends up talking to Sippy. Tracked separately because the spec
-  // promises we never leave a scanner stranded.
+  // still ends up talking to Sippy. The bracketed code is preserved (printed
+  // QR is presumed valid; the failure is on our side). No backend-side scan
+  // log is written in this branch — the backend is what's down — so failures
+  // here are only visible in apps/web server logs (see fetchScanResult).
   if (!scan) {
     const fallbackNumber = (SIPPY_NUMBER_DISPLAY || '').replace(/[^\d]/g, '')
     const fallbackUrl = fallbackNumber
@@ -91,7 +121,7 @@ export default async function QrLandingPage({ params }: { params: Promise<{ shor
     if (deviceClass === 'mobile') {
       redirect(fallbackUrl)
     }
-    return <DesktopFallback shortId={shortId} waUrl={fallbackUrl} outcome="rate_limited" />
+    return <DesktopFallback shortId={shortId} waUrl={fallbackUrl} outcome="backend_error" />
   }
 
   // Mobile happy path: hand off to WhatsApp.
@@ -121,6 +151,8 @@ function DesktopFallback({
   outcome: ScanResponse['outcome']
   displayLabel?: string | null
 }) {
+  // Per-outcome copy. backend_error gets its own honest message rather than
+  // borrowing "not found" — the QR is presumed valid; Sippy is what's down.
   const heading =
     outcome === 'redirected'
       ? displayLabel
@@ -128,14 +160,18 @@ function DesktopFallback({
         : 'Abre Sippy para continuar'
       : outcome === 'revoked'
         ? 'Este QR ya no está activo'
-        : 'No encontramos este código'
+        : outcome === 'backend_error'
+          ? 'No pudimos conectarnos con Sippy'
+          : 'No encontramos este código'
 
   const subline =
     outcome === 'redirected'
       ? 'Escanea con tu teléfono o abre WhatsApp para continuar.'
       : outcome === 'revoked'
         ? 'Pídele al dueño del QR uno nuevo. Puedes abrir WhatsApp para pedir ayuda.'
-        : 'Puedes abrir WhatsApp y escribirle a Sippy directamente.'
+        : outcome === 'backend_error'
+          ? 'Intenta de nuevo en unos segundos, o abre WhatsApp y envía el código de abajo.'
+          : 'Puedes abrir WhatsApp y escribirle a Sippy directamente.'
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-[var(--bg-primary)] px-6 py-12 text-[var(--text-primary)]">

@@ -25,6 +25,7 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import app from '@adonisjs/core/services/app'
+import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import '#types/container'
 import {
@@ -35,12 +36,21 @@ import {
   type QrScanOutcome,
 } from '#services/qr_link.service'
 
+/**
+ * Wire-only response outcome. Superset of `QrScanOutcome`: adds `backend_error`
+ * for cases where the DB lookup itself fails (transient blip, timeout) so the
+ * frontend can render an honest "couldn't reach Sippy" affordance without us
+ * having to widen the DB CHECK on `qr_scans.outcome`. The DB enum stays narrow;
+ * backend_error is only ever a response shape, never persisted.
+ */
+type ScanResponseOutcome = QrScanOutcome | 'backend_error'
+
 const SHORT_ID_PATTERN = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$/
 
 const VALID_DEVICE_CLASSES: ReadonlySet<DeviceClass> = new Set(['mobile', 'desktop', 'unknown'])
 
 interface ScanResponse {
-  outcome: QrScanOutcome
+  outcome: ScanResponseOutcome
   shortId: string
   kind: QrKind | null
   /** Pre-built wa.me URL the frontend should redirect to on mobile / link to on desktop. */
@@ -67,21 +77,26 @@ function pickDeviceClass(raw: unknown): DeviceClass {
  * Build the wa.me URL the user should land in. Always points at the Sippy
  * WhatsApp number; the prefilled text varies by outcome:
  *
- *  - redirected / revoked / rate_limited: include the bracketed code so the
- *    bot can dispatch based on the qr_links row (kind, status, payload) or
- *    surface an appropriate response.
+ *  - redirected / revoked / rate_limited / backend_error: include the bracketed
+ *    code so the bot can dispatch based on the qr_links row (kind, status,
+ *    payload) or surface an appropriate response. backend_error keeps the code
+ *    because the QR is presumed valid — the failure is on our side, not the
+ *    URL.
  *  - not_found / invalid_version: omit the code (it's meaningless or unparseable),
  *    just open with a greeting so the user can ask for help.
  *
  * Falls back to the raw `wa.me` host if `SIPPY_WHATSAPP_NUMBER` is unset, so
  * we never serve a broken redirect in dev/staging.
  */
-function buildWaUrl(outcome: QrScanOutcome, shortId: string): string {
+function buildWaUrl(outcome: ScanResponseOutcome, shortId: string): string {
   const number = (env.get('SIPPY_WHATSAPP_NUMBER') || '').replace(/[^\d]/g, '')
   const base = number ? `https://wa.me/${number}` : 'https://wa.me/'
 
   const includeCode =
-    outcome === 'redirected' || outcome === 'revoked' || outcome === 'rate_limited'
+    outcome === 'redirected' ||
+    outcome === 'revoked' ||
+    outcome === 'rate_limited' ||
+    outcome === 'backend_error'
   const text = includeCode ? `Hola Sippy! [${shortId}]` : 'Hola Sippy!'
 
   return `${base}?text=${encodeURIComponent(text)}`
@@ -96,7 +111,9 @@ export default class QrScanController {
    *     deviceClass?: 'mobile' | 'desktop' | 'unknown'
    *     userAgent?: string
    *     referer?: string
-   *     ipHash?: string  // pre-hashed by the caller (apps/web), never raw IP
+   *     ipHash?: string  // RESERVED — apps/web does not currently forward IP.
+   *                      // Will be populated post-freeze when real-IP
+   *                      // forwarding lands; see QR_SYSTEM_SPEC.md follow-up.
    *   }
    *
    * Returns 200 in all cases — the outcome field tells the frontend what
@@ -175,7 +192,30 @@ export default class QrScanController {
       return response.ok(payload)
     }
 
-    const link = await getQrLinkForScan(shortIdRaw)
+    // DB lookup. Wrapped so a transient DB blip never strands the scanner —
+    // the spec contract is "always 200 with a usable waUrl", which requires us
+    // to absorb lookup failures here rather than letting them propagate to a
+    // 500. We deliberately do NOT log to qr_scans on lookup failure: we can't
+    // classify it under one of the DB-CHECK outcomes without diluting the real
+    // outcome buckets, and the app-level logger.error below carries the same
+    // diagnostic signal.
+    let link: Awaited<ReturnType<typeof getQrLinkForScan>>
+    try {
+      link = await getQrLinkForScan(shortIdRaw)
+    } catch (err) {
+      logger.error(
+        { shortId: shortIdRaw, deviceClass, err },
+        'qr.scan lookup failed — returning backend_error to caller'
+      )
+      const payload: ScanResponse = {
+        outcome: 'backend_error',
+        shortId: shortIdRaw,
+        kind: null,
+        waUrl: buildWaUrl('backend_error', shortIdRaw),
+        displayLabel: null,
+      }
+      return response.ok(payload)
+    }
 
     let outcome: QrScanOutcome
     let kind: QrKind | null = null

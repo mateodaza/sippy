@@ -118,7 +118,15 @@ export async function logQrScan(args: LogQrScanArgs): Promise<void> {
       ]
     )
   } catch (error) {
-    logger.warn('qr_scan insert failed (non-blocking): %o', error)
+    logger.warn(
+      {
+        shortId: args.shortId,
+        outcome: args.outcome,
+        deviceClass: args.deviceClass,
+        err: error,
+      },
+      'qr_scan insert failed (non-blocking)'
+    )
     return
   }
 
@@ -135,7 +143,10 @@ export async function logQrScan(args: LogQrScanArgs): Promise<void> {
         [args.shortId]
       )
     } catch (error) {
-      logger.warn('qr_links scan_count bump failed (non-blocking): %o', error)
+      logger.warn(
+        { shortId: args.shortId, err: error },
+        'qr_links scan_count bump failed (non-blocking)'
+      )
     }
   }
 }

@@ -17,6 +17,7 @@
 
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
+import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import { getActiveEventBySlug } from '#services/event.service'
 import { createQrLink, listEventQrLinks } from '#services/qr_link.service'
@@ -253,8 +254,23 @@ export default class QrSheetsController {
         }
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      session.flash('error', `Failed to create QRs (rolled back, no rows persisted): ${message}`)
+      // Server-side log carries the diagnostic detail (constraint name, query,
+      // stack). The admin-facing flash is intentionally generic — we don't want
+      // raw DB error strings (FK names, table schema hints) leaking into a
+      // session flash that may persist past the read.
+      logger.error(
+        {
+          eventSlug: slug,
+          ownerPhone: ownerKey,
+          assistantCount: assistants.length,
+          err,
+        },
+        'qr_sheets.create transaction rolled back'
+      )
+      session.flash(
+        'error',
+        'Failed to create QRs (rolled back, no rows persisted). Check server logs for details.'
+      )
       return response.redirect(`/admin/qr-sheets/${encodeURIComponent(slug)}`)
     }
 

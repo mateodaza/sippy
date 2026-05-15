@@ -79,7 +79,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ### Mateo (UI / ops / content)
 
-- [ ] Generate Pizza Day assistant sheets via QR admin endpoint (consumes QR v1; see [QR_SYSTEM_SPEC.md](QR_SYSTEM_SPEC.md)). Each printable QR encodes `https://app.sippy.lat/q/<short-id>?v=1` and on scan redirects into WhatsApp with a `[short-id]` code. Payload metadata stored in `qr_links`: `{kind: 'event', event_slug: 'pizza-day-ctg-2026', source_tag: 'assistant-NN'}`.
+- [~] Generate Pizza Day assistant sheets via QR admin endpoint (consumes QR v1; see [QR_SYSTEM_SPEC.md](QR_SYSTEM_SPEC.md)). _QR primitive v1 code-complete (migrations 0018+0019, scan endpoint, admin sheets page, runtime path validated via curl). Awaiting browser smoke + the actual print run after vendor phones land May 18. Each printable QR encodes `${FRONTEND_URL}/q/<short-id>?v=1` and on scan redirects into WhatsApp with a `[short-id]` code. Payload metadata stored in `qr_links`: `{kind: 'event', event_slug: 'pizza-day-ctg-2026', source_tag: 'assistant-NN'}`._
 - [ ] Public leaderboard page (top 10 MVP + top 10 Connector + live counters)
 - [ ] Vendor mode receiver UI (mobile-first)
 - [ ] Spanish `/pizza-day` in-app doc
