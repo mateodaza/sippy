@@ -1,0 +1,232 @@
+# Pizza Day Plan — May 22, 2026
+
+> First Sippy live event. Cartagena Onchain. ~200 attendees expected.
+> Tech freeze Saturday May 16. Week of May 18 is ops training and dry runs only.
+> Doubles as the M2 ($9,250) public launch dress rehearsal (M2 deadline June 5).
+
+---
+
+## Event context
+
+- **Date:** May 22, 2026 (Friday)
+- **Host:** Cartagena Onchain
+- **Attendance target:** ~200
+- **Pizza funding:** Cartagena Onchain provides (not Sippy)
+- **Onramp at venue:** Manual cash-for-USDC exchange. 2–3 preloaded Sippy "exchange" wallets staffed by 2–3 people at the venue. Attendee hands over cash, exchange staff sends USDC to attendee's Sippy wallet. Colurs.io is NOT available for this event — they're still integrating.
+- **POAP:** Cartagena mints, one per attendee. Sippy does not run a parallel POAP.
+- **Vendor count:** 2 labeled Sippy accounts (acts as first street-vendor PoC).
+- **Exchange wallets:** 2–3 labeled Sippy accounts, separate from vendors. Excluded from Quest scoring.
+
+---
+
+## Why this event matters: Sippy primitives shipped
+
+Pizza Day isn't only an event. It's a stress test for four reusable Sippy primitives that compound into future events, partnerships, and the M2/M3 narrative:
+
+1. **Event onboarding + RSVP flow** (PR #19 foundation). QR-tagged sign-up with per-event welcome message, POAP link delivery, source tracking per assistant. Becomes the reusable "Sippy-hosted event" infrastructure for any future partner event.
+2. **Vendor mode** (street-vendor payments PoC). Labeled Sippy accounts as merchants, receiving USDC from attendees. First real-world test of Sippy as a payment rail for street vendors, food carts, neighborhood shops.
+3. **Sippy Quest** (event-scoped engagement). Leaderboards, prizes, P2P incentives scoped to an event. Reusable framework for activating attendees at any Sippy-supported event.
+4. **AI Smart Mode** (smarter parser). LLM-first parsing with regex fallback. Event-scoped rollout this round, but the groundwork carries forward to broader users.
+
+Each is a feature worth building on its own merit. Pizza Day is the forcing function and the first proof point for all four at once.
+
+---
+
+## Critical deadlines
+
+| Date               | Item                                                                                   | Owner |
+| ------------------ | -------------------------------------------------------------------------------------- | ----- |
+| **Sat May 16**     | Tech freeze. All code merged, no new features after this.                              | Both  |
+| Sat May 16         | Saturday call with organizers                                                          | Mateo |
+| **Mon May 18 EOD** | **Vendor phone numbers locked. Required to generate printable QR sheets and signage.** | Mateo |
+| Tue May 19         | Print assets finalized, sent to print                                                  | Mateo |
+| Wed May 20         | Printing complete                                                                      | Mateo |
+| Thu May 21         | Final dry run with print materials in hand                                             | Both  |
+| Fri May 22         | **PIZZA DAY**                                                                          | Both  |
+
+---
+
+## Locked decisions
+
+- **Tech freeze: Sat May 16.** Week of May 18 = ops training and dry runs only.
+- **Budget shape.** Pizza funded externally. Sippy's $2K marketing budget covers Quest prizes (~$300 cap), printing, post-event content. Don't blow the budget.
+- **Vendor model.** 2 labeled Sippy accounts marked `type=vendor`. Excluded from Quest scoring. Doubles as PoC for street-vendor onboarding.
+- **Exchange model.** 2–3 preloaded Sippy accounts marked `type=exchange`. Staffed by 2–3 people. Hold USDC float, send to attendees in exchange for cash. Excluded from Quest scoring (otherwise their tx count tops the leaderboard). Distinct from vendor wallets to keep accounting clean.
+- **Onramp at venue:** Cash → exchange wallet rep → USDC to attendee Sippy wallet. No Colurs.
+- **POAP UX.** After onboarding, two buttons: "Claim to my Sippy address" (default, one-click) or "Claim to my own wallet" (paste address). Default-to-Sippy keeps the funnel tight while giving users agency.
+- **SMART_MODE flag.** Per-user or per-event env. Parser tries LLM (Llama 4 Scout) first, regex fallback on failure. Never degrades current behavior. Enable for users tagged with `source=pizza-day`.
+- **Gas refuel "toteado".** Top up `GasRefuel.sol` on Arbitrum One before May 22. 200 cold wallets = lots of first-tx gas.
+- **Privacy.** Covered by existing onboarding ToS. No extra QR-side consent needed.
+- **Spanish in-app doc.** `/pizza-day` page in the app. Fun, friendly, trilingual not required (event is in Spanish-speaking context). Covers Quest rules, how to send, how to claim POAP, how to fund.
+
+---
+
+## Progress tracker
+
+**Freeze: Sat May 16.** Update marks as items ship.
+
+Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
+
+### Carlos (backend / contracts / parser)
+
+- [~] PR #19 fixes — POAP race, tests, `welcomeMessage` decision, env var
+- [ ] Admin endpoint: `GET /admin/events/:slug/attendees`
+- [ ] Vendor + Exchange account types + Quest exclusion logic
+- [ ] `SMART_MODE` flag in parser, with regex fallback on LLM error
+- [ ] Gas refuel top-up on Arbitrum One (`GasRefuel.sol` float)
+- [ ] Quest endpoint: MVP score + Connector score (one query each)
+
+### Mateo (UI / ops / content)
+
+- [ ] Per-assistant QR sheet generator (CSV → PDF)
+- [ ] Public leaderboard page (top 10 MVP + top 10 Connector + live counters)
+- [ ] Vendor mode receiver UI (mobile-first)
+- [ ] Spanish `/pizza-day` in-app doc
+- [ ] Live monitoring dashboard
+- [ ] Backup plan doc + printed fallback materials
+- [ ] Preload USDC float into 2–3 exchange wallets
+
+### Pre-event ops (May 18–21)
+
+- [ ] Collect 4–5 staff phone numbers (2 vendors + 2–3 exchange) by **Mon May 18 EOD**
+- [ ] Print assets finalized by **Tue May 19**
+- [ ] Printing complete by **Wed May 20**
+- [ ] Internal dry run with 5 testers by **Thu May 21**
+
+### Deferred
+
+- [ ] 20-min Sippy deck (draft after Saturday call once audience + slot known)
+- [ ] Post-event recap publish target: **Thu May 29** (within 7 days of event, in time for M2 grant report inclusion)
+
+---
+
+## Sippy Quest
+
+P2P usage is at zero today across the user base (per project memory). Pizza Day is the chance to seed it. Scoring rewards P2P specifically so the leaderboard tells us about social usage, not just who ate the most pizza.
+
+### Scoring (P2P-weighted, volume-blind on the top prize)
+
+Live onramp at the venue means attendees will arrive with different USDC amounts based on what they can spend. Scoring by USD volume would punish the broke and reward the funded. So the headline prize uses **pure tx count**, not volume.
+
+```
+top_score = (p2p_sends_count × 10) + (vendor_purchases × 2)
+```
+
+Volume is still displayed on the leaderboard for color, but doesn't drive the headline prize.
+
+### Categories
+
+| #   | Prize           | Criteria                                                | Cash      |
+| --- | --------------- | ------------------------------------------------------- | --------- |
+| 1   | **Pizza MVP**   | Highest `top_score` (P2P + vendor tx count)             | $150 USDC |
+| 2   | **Connector**   | Most unique P2P recipients who are also event attendees | $100 USDC |
+| 3   | **First Mover** | First P2P send at the event                             | $50 USDC  |
+
+**Total prize budget: $300** (from $2K marketing). Leaves ~$1.7K for printing, post-event content, paid social.
+
+### Connector tracking — SQL
+
+Both sender and recipient must be event attendees. Vendor and exchange accounts excluded. Self-sends excluded. Event time-window applied.
+
+```sql
+SELECT sender_id, COUNT(DISTINCT recipient_id) AS connections
+FROM transfers t
+JOIN event_attendees ea_s ON ea_s.user_id = t.sender_id
+JOIN event_attendees ea_r ON ea_r.user_id = t.recipient_id
+WHERE ea_s.event_slug = 'pizza-day-2026'
+  AND ea_r.event_slug = 'pizza-day-2026'
+  AND t.recipient_type NOT IN ('vendor', 'exchange')
+  AND t.sender_id != t.recipient_id
+  AND t.created_at BETWEEN <event_start> AND <event_end>
+GROUP BY sender_id
+ORDER BY connections DESC;
+```
+
+Returns a leader for the Connector prize. Same query feeds the public leaderboard.
+
+### Leaderboard UX
+
+- Public URL, refresh every 30s
+- Top 10 by score, first name + last-4 of phone (privacy-aware)
+- Live counters for the projector at venue: total attendees, total tx, total USDC volume
+- Renders Connector score separately from MVP score so people see both races
+
+---
+
+## Monitoring dashboard (event day)
+
+Mobile-friendly admin page, refresh 15–30s:
+
+- Onboarded count vs 200 target + per-minute rate
+- POAP claims (Cartagena's) vs onboarded — should track 1:1
+- Total tx count + USDC volume
+- Vendor account balances (both vendors)
+- Exchange wallet USDC floats (all 2–3) — alert when any drops below threshold
+- Top 5 Quest leaders (MVP) + top 5 Connectors
+- PostHog error rate, last 5 min
+- SMART_MODE fallback rate (regex hits / total parses)
+- Last 10 onboardings: timestamp, assistant ID, success/fail
+
+PostHog alerts to Mateo's phone for:
+
+- Onboarding error spike
+- POAP claim failure
+- Backend 5xx
+- SMART_MODE fallback rate climbing above threshold
+- Vendor account balance dropping (in case of pre-funding model)
+
+---
+
+## Backup plans
+
+| Failure                            | Plan B                                                                                                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Venue Wi-Fi dies                   | Pre-printed flyer with WhatsApp number; users DM Sippy later, manual onboard                                                                          |
+| Backend hiccup                     | "Saved, onboarding you in 2 min" message + retry queue                                                                                                |
+| Assistant's phone breaks           | Spare phones with QR sheets pre-loaded                                                                                                                |
+| POAP claim breaks (Cartagena side) | Manual paper claim list, retroactive mint coordinated with Cartagena                                                                                  |
+| SMART_MODE LLM fails               | Regex fallback automatic, no user impact                                                                                                              |
+| Specific assistant unreachable     | Catch-all QR with `?source=assistant-fallback`                                                                                                        |
+| Exchange wallet runs out of USDC   | One of the 3 floats covers while we top up the empty one from treasury wallet on the fly. Set per-wallet alert threshold (e.g. <$100 USDC remaining). |
+| Exchange staffer's phone breaks    | Other 1–2 exchange wallets keep running. Spare phone with wallet pre-loaded as backup.                                                                |
+
+---
+
+## Pitch deck
+
+Deferred. 20-min slot, Mateo presents. Draft after Saturday once we know:
+
+- Audience composition (Pizza Day attendees vs separate Cartagena Onchain session)
+- Time slot (during the event vs adjacent)
+
+Arc skeleton (per project memory):
+
+1. Open broad — money in LATAM, market-level data, no company names
+2. Narrow — WhatsApp is where people live, DeFi is where they don't want to live
+3. Product — live or recorded demo of the actual Pizza Day flow
+4. Expand — "make my money grow" agent vision, Arbitrum thesis
+5. Close — echo opener, money should feel like sending a WhatsApp
+
+Rules: no em dashes, no AI accent ("revolutionizing", "empowering"), causal transitions, don't mention Maash.
+
+---
+
+## Open questions
+
+1. **Deck audience and slot.** When and to whom is the 20-min slot? Determines framing.
+2. **Vendor + exchange staff identity.** 2 vendor accounts + 2–3 exchange accounts = 4–5 people total. Need their phones by **Mon May 18 EOD** so we can generate printable QR sheets and labeled signage.
+3. **Exchange wallet float size.** How much USDC do we preload per wallet? Function of expected onramp demand at 200 attendees. Rough cut: if 50% onramp ~$10 average, that's $1K total = ~$350 per wallet across 3 floats. Confirm before May 21.
+
+---
+
+## Post-event deliverables (M2 narrative)
+
+Pizza Day produces the M2 ($9,250, deadline June 5) public launch story:
+
+- Real attendees onboarded cold
+- Real P2P transactions on Arbitrum
+- Real Quest leaderboard + winners
+- Photos + short video edit
+- Recap post (numbers, story, attendee quotes) for Arbitrum and grant reporting
+
+Plan to publish the recap within 7 days of event (by May 29) to have time for grant report inclusion.
