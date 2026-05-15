@@ -25,6 +25,7 @@ const WebhookAlchemyController = () => import('#controllers/webhook_alchemy_cont
 const OnrampController = () => import('#controllers/onramp_controller')
 const OfframpController = () => import('#controllers/offramp_controller')
 const EventController = () => import('#controllers/event_controller')
+const QrScanController = () => import('#controllers/qr_scan_controller')
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
@@ -50,6 +51,13 @@ router.get('/api/stats', [PublicStatsController, 'index']).use(middleware.ipThro
 
 // ── Public event lookup (IP-throttled, name/active/endsAt only) ──────────────
 router.get('/api/events/:slug', [EventController, 'getEventPublic']).use(middleware.ipThrottle())
+
+// ── QR scan (public). Called by apps/web /q/:shortId page. ──────────────────
+// Throttle is intentionally controller-internal (per-shortId, not per-IP) so
+// that `rate_limited` outcome can be logged into qr_scans. The middleware
+// throttle would short-circuit with 429 before the controller runs, and the
+// per-IP key would always see the Next.js server IP. See QR_SYSTEM_SPEC.md.
+router.post('/api/qr/scan/:shortId', [QrScanController, 'scan'])
 
 // ── Public support (IP-throttled) ────────────────────────────────────────────
 router
@@ -158,6 +166,7 @@ const AdminUsersController = () => import('#controllers/admin/users_controller')
 const AnalyticsController = () => import('#controllers/admin/analytics_controller')
 const RolesController = () => import('#controllers/admin/roles_controller')
 const ModerationController = () => import('#controllers/admin/moderation_controller')
+const QrSheetsController = () => import('#controllers/admin/qr_sheets_controller')
 
 // Public admin routes
 router.get('/admin/login', [AdminAuthController, 'showLogin'])
@@ -193,6 +202,13 @@ router
       .use(middleware.adminRole({ role: 'admin' }))
     router
       .post('/resume', [ModerationController, 'resume'])
+      .use(middleware.adminRole({ role: 'admin' }))
+
+    // QR sheets — admin-only printable QR generator for event/assistant
+    // attribution sheets. Spec: QR_SYSTEM_SPEC.md.
+    router.get('/qr-sheets/:eventSlug', [QrSheetsController, 'show'])
+    router
+      .post('/qr-sheets/:eventSlug', [QrSheetsController, 'create'])
       .use(middleware.adminRole({ role: 'admin' }))
   })
   .prefix('/admin')

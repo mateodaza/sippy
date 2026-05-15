@@ -129,6 +129,42 @@ export class ConversationContextSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
+export class EventSchema extends BaseModel {
+  static $columns = [
+    'id',
+    'slug',
+    'name',
+    'description',
+    'startsAt',
+    'endsAt',
+    'poapClaimUrl',
+    'active',
+    'createdAt',
+    'updatedAt',
+  ] as const
+  $columns = EventSchema.$columns
+  @column({ isPrimary: true })
+  declare id: string
+  @column()
+  declare slug: string
+  @column()
+  declare name: string
+  @column()
+  declare description: string | null
+  @column.dateTime()
+  declare startsAt: DateTime | null
+  @column.dateTime()
+  declare endsAt: DateTime | null
+  @column()
+  declare poapClaimUrl: string | null
+  @column()
+  declare active: boolean
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
 export class ExportAuditLogSchema extends BaseModel {
   static $columns = ['id', 'attemptId', 'event', 'phoneHash', 'walletAddress', 'createdAt'] as const
   $columns = ExportAuditLogSchema.$columns
@@ -221,6 +257,14 @@ export class OnrampOrderSchema extends BaseModel {
     'idempotencyKey',
     'paymentLink',
     'trackingKey',
+    'colursDispersionQuoteId',
+    'colursDispersionQuoteUuid',
+    'colursDispersionMovementId',
+    'dispersionPolledAt',
+    'dispersionPollCount',
+    'fxRateCopUsd',
+    'usdtAmountReceived',
+    'usdtTxHash',
   ] as const
   $columns = OnrampOrderSchema.$columns
   @column({ isPrimary: true })
@@ -261,6 +305,22 @@ export class OnrampOrderSchema extends BaseModel {
   declare paymentLink: string | null
   @column()
   declare trackingKey: string | null
+  @column()
+  declare colursDispersionQuoteId: string | null
+  @column()
+  declare colursDispersionQuoteUuid: string | null
+  @column()
+  declare colursDispersionMovementId: string | null
+  @column.dateTime()
+  declare dispersionPolledAt: DateTime | null
+  @column()
+  declare dispersionPollCount: number
+  @column()
+  declare fxRateCopUsd: string | null
+  @column()
+  declare usdtAmountReceived: string | null
+  @column()
+  declare usdtTxHash: string | null
 }
 
 export class ParseLogSchema extends BaseModel {
@@ -374,6 +434,87 @@ export class PhoneRegistrySchema extends BaseModel {
   declare permissionCreatedAt: bigint | number | null
 }
 
+export class QrLinkSchema extends BaseModel {
+  static $columns = [
+    'shortId',
+    'ownerPhoneNumber',
+    'kind',
+    'eventSlug',
+    'sourceTag',
+    'displayName',
+    'scanCount',
+    'lastScannedAt',
+    'status',
+    'revokedAt',
+    'revokedReason',
+    'createdAt',
+    'updatedAt',
+  ] as const
+  $columns = QrLinkSchema.$columns
+  @column()
+  declare shortId: string
+  @column()
+  declare ownerPhoneNumber: string
+  @column()
+  declare kind: string
+  @column()
+  declare eventSlug: string | null
+  @column()
+  declare sourceTag: string | null
+  @column()
+  declare displayName: string | null
+  @column()
+  declare scanCount: number
+  @column.dateTime()
+  declare lastScannedAt: DateTime | null
+  @column()
+  declare status: string
+  @column.dateTime()
+  declare revokedAt: DateTime | null
+  @column()
+  declare revokedReason: string | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
+}
+
+export class QrScanSchema extends BaseModel {
+  static $columns = [
+    'id',
+    'shortId',
+    'scannedAt',
+    'userAgent',
+    'ipHash',
+    'referer',
+    'deviceClass',
+    'resolvedToPhoneNumber',
+    'resolvedAt',
+    'outcome',
+  ] as const
+  $columns = QrScanSchema.$columns
+  @column({ isPrimary: true })
+  declare id: bigint | number
+  @column()
+  declare shortId: string
+  @column.dateTime()
+  declare scannedAt: DateTime
+  @column()
+  declare userAgent: string | null
+  @column()
+  declare ipHash: string | null
+  @column()
+  declare referer: string | null
+  @column()
+  declare deviceClass: string | null
+  @column()
+  declare resolvedToPhoneNumber: string | null
+  @column.dateTime()
+  declare resolvedAt: DateTime | null
+  @column()
+  declare outcome: string
+}
+
 export class UserContactSchema extends BaseModel {
   static $columns = [
     'id',
@@ -399,6 +540,39 @@ export class UserContactSchema extends BaseModel {
   declare source: string
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime | null
+}
+
+export class UserEventLinkSchema extends BaseModel {
+  static $columns = [
+    'phoneNumber',
+    'eventId',
+    'linkedAtStep',
+    'poapClaimed',
+    'poapClaimedAt',
+    'poapTxOrId',
+    'metadata',
+    'createdAt',
+    'updatedAt',
+  ] as const
+  $columns = UserEventLinkSchema.$columns
+  @column()
+  declare phoneNumber: string
+  @column()
+  declare eventId: string
+  @column()
+  declare linkedAtStep: string | null
+  @column()
+  declare poapClaimed: boolean
+  @column.dateTime()
+  declare poapClaimedAt: DateTime | null
+  @column()
+  declare poapTxOrId: string | null
+  @column()
+  declare metadata: any | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime
 }
 
 export class UserPreferenceSchema extends BaseModel {
@@ -444,6 +618,15 @@ export class UserPreferenceSchema extends BaseModel {
   declare emailNudgeSentAt: DateTime | null
   @column.dateTime()
   declare setupNotifiedAt: DateTime | null
+}
+
+export class WalletAliasSchema extends BaseModel {
+  static $columns = ['address', 'ownerPhone'] as const
+  $columns = WalletAliasSchema.$columns
+  @column()
+  declare address: string
+  @column()
+  declare ownerPhone: string
 }
 
 export class WebSendLogSchema extends BaseModel {

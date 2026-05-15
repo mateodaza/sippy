@@ -21,14 +21,15 @@
 
 ## Why this event matters: Sippy primitives shipped
 
-Pizza Day isn't only an event. It's a stress test for four reusable Sippy primitives that compound into future events, partnerships, and the M2/M3 narrative:
+Pizza Day isn't only an event. It's a stress test for five reusable Sippy primitives that compound into future events, partnerships, and the M2/M3 narrative:
 
 1. **Event onboarding + RSVP flow** (PR #19 foundation). QR-tagged sign-up with per-event welcome message, POAP link delivery, source tracking per assistant. Becomes the reusable "Sippy-hosted event" infrastructure for any future partner event.
 2. **Vendor mode** (street-vendor payments PoC). Labeled Sippy accounts as merchants, receiving USDC from attendees. First real-world test of Sippy as a payment rail for street vendors, food carts, neighborhood shops.
 3. **Sippy Quest** (event-scoped engagement). Leaderboards, prizes, P2P incentives scoped to an event. Reusable framework for activating attendees at any Sippy-supported event.
 4. **AI Smart Mode** (smarter parser). LLM-first parsing with regex fallback. Event-scoped rollout this round, but the groundwork carries forward to broader users.
+5. **QR primitive v1** (account-level capability). Pay / event / referral QRs with versioning, revocation, and unified attribution. Pizza Day consumes the admin bulk-generator for assistant printables; full spec lives in [QR_SYSTEM_SPEC.md](QR_SYSTEM_SPEC.md). The user-facing "Pay me" and vendor signage variants ship in parallel.
 
-Each is a feature worth building on its own merit. Pizza Day is the forcing function and the first proof point for all four at once.
+Each is a feature worth building on its own merit. Pizza Day is the forcing function and the first proof point for all five at once.
 
 ---
 
@@ -78,7 +79,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ### Mateo (UI / ops / content)
 
-- [ ] Per-assistant QR sheet generator (CSV → PDF)
+- [ ] Generate Pizza Day assistant sheets via QR admin endpoint (consumes QR v1; see [QR_SYSTEM_SPEC.md](QR_SYSTEM_SPEC.md)). Each printable QR encodes `https://app.sippy.lat/q/<short-id>?v=1` and on scan redirects into WhatsApp with a `[short-id]` code. Payload metadata stored in `qr_links`: `{kind: 'event', event_slug: 'pizza-day-ctg-2026', source_tag: 'assistant-NN'}`.
 - [ ] Public leaderboard page (top 10 MVP + top 10 Connector + live counters)
 - [ ] Vendor mode receiver UI (mobile-first)
 - [ ] Spanish `/pizza-day` in-app doc

@@ -1800,7 +1800,7 @@ function SetupPageInner() {
   const rawPhone = (searchParams.get('phone') || '').replace(/[^\d]/g, '')
   const phoneFromUrl = rawPhone ? `+${rawPhone}` : ''
 
-  // Event slug from share link (e.g. ?event=pizza-day-bog-2026). Optional and
+  // Event slug from share link (e.g. ?event=pizza-day-ctg-2026). Optional and
   // independent of phone — server-validated; unknown slugs are silently dropped.
   const eventSlugFromUrl = (searchParams.get('event') || '').trim() || null
 
