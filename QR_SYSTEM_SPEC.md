@@ -7,15 +7,15 @@
 
 ### Ownership
 
-| Owner      | Scope                                                                                                                                                                                                                                                                                                 |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Carlos** | `user_preferences.account_type` migration (ENUM + check + backfill default). Quest exclusion reads of `account_type`. WhatsApp bot bracket-token extraction (deterministic first-contact hook, runs **before** LLM/intent parsing — QR attribution is routing metadata, not natural-language intent). |
-| **Mateo**  | `qr_links` + `qr_scans` migration (additive, references `user_preferences(phone_number)`, does NOT touch `user_preferences` schema). Short-id generator. PDF rendering. Admin bulk endpoint. Public `/q/:shortId` route.                                                                              |
+| Owner      | Scope                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Carlos** | Quest exclusion via env-supplied vendor/exchange phone list (`PIZZA_DAY_VENDOR_PHONES` + `PIZZA_DAY_EXCHANGE_PHONES`). WhatsApp bot bracket-token extraction (deterministic first-contact hook, runs **before** LLM/intent parsing — QR attribution is routing metadata, not natural-language intent). _Note: the originally-spec'd `user_preferences.account_type` migration is deferred — at Pizza Day scale (4–5 known phones) an env list is sufficient. Revisit the column when we have multiple events._ |
+| **Mateo**  | `qr_links` + `qr_scans` migration (additive, references `user_preferences(phone_number)`, does NOT touch `user_preferences` schema). Short-id generator. PDF rendering. Admin bulk endpoint. Public `/q/:shortId` route.                                                                                                                                                                                                                                                                                       |
 
 **Migration sequencing:**
 
-- Two separate migrations. Carlos's `account_type` migration is independent of Mateo's QR tables migration — no FK between them in v1. They can land in either order.
-- The QR migration is additive and defaulted: safe to run locally/staging now once the FK targets are confirmed (`user_preferences.phone_number`, `events.slug` — both exist). Prod waits until the `account_type` contract is locked so the resolve API can read it without retrofit.
+- Only Mateo's QR tables migration is required for v1 (0018 + 0019 already shipped). Carlos's `account_type` migration was deferred — Pizza Day uses an env-supplied phone list for vendor/exchange identification (4–5 known phones; column overkill at this scale).
+- The QR migration is additive and defaulted: safe to run locally/staging/prod (already applied). FK targets `user_preferences.phone_number` and `events.slug` both exist.
 
 ---
 
@@ -256,7 +256,7 @@ Returns:
   "kind": "pay" | "event" | "referral",
   // Only when status=active:
   "display": {
-    // pay: { name: "Carlos Q.", phoneSuffix: "4521", isVendor: false }
+    // pay: { name: "Carlos Q.", phoneSuffix: "4521", isVendor: false }  // isVendor derived from PIZZA_DAY_VENDOR_PHONES env list
     // event: { eventName: "Pizza Day Cartagena 2026", endsAt: "..." }
     // referral: { name: "Carlos Q." }
   }
@@ -408,8 +408,8 @@ Today is **Fri May 15, 2026**. Freeze is **Sat May 16**. The freeze ships _only_
 
 **Tasks:**
 
-- [x] Migration: `qr_links` + `qr_scans` (Mateo). Independent of Carlos's `user_preferences.account_type` migration — they can land in either order. _Done: `apps/backend/database/migrations/0018_create_qr_links_and_qr_scans.ts`, ran locally._
-- [ ] Migration: `ALTER TABLE user_preferences ADD COLUMN account_type` (Carlos)
+- [x] Migration: `qr_links` + `qr_scans` (Mateo). _Done: `apps/backend/database/migrations/0018_create_qr_links_and_qr_scans.ts`, applied to prod (batch 11)._
+- ~~Migration: `ALTER TABLE user_preferences ADD COLUMN account_type` (Carlos)~~ **Deferred** — replaced by env-supplied vendor/exchange phone list for Pizza Day scale.
 - [x] Short-id generator with collision retry. _Done: `apps/backend/app/services/qr_short_id.service.ts` + 9 unit tests passing in `tests/unit/qr_short_id_service.spec.ts`._
 - [x] Internal `createQrLink(kind, payload)` service function (apps/backend). _Done in `app/services/qr_link.service.ts` — validates kind/eventSlug combo, allocates short-id via generator, inserts qr_links row._
 - [x] Backend scan endpoint: `POST /api/qr/scan/:shortId` — lookup + scan log + return `{outcome, kind, waUrl, displayLabel}`. _Done in `app/controllers/qr_scan_controller.ts`. Route registered in `start/routes.ts` WITHOUT `middleware.ipThrottle()`; throttle is controller-internal per-shortId (`rate_limit_service.checkQrScanThrottle`, 100/min) so `rate_limited` outcome is logged. Per-IP throttle deferred to post-freeze pending real-IP forwarding._
@@ -462,17 +462,18 @@ Why cut: none of the above are on the Pizza Day critical path. Event-kind QRs pr
 
 ## Locked decisions (formerly open questions)
 
-1. **`user_preferences.account_type` is the single source of truth.** Identity is anchored on `user_preferences.phone_number` in this backend — there is no `users` table. ENUM column added via ALTER:
+1. **Vendor/exchange identification by env-supplied phone list (v1).** No `users.account_type` migration. At Pizza Day scale (4–5 known phones) an env-supplied list is sufficient. Two env vars on `sippy-backend`:
 
-   ```sql
-   ALTER TABLE user_preferences
-     ADD COLUMN account_type TEXT NOT NULL DEFAULT 'regular'
-     CHECK (account_type IN ('regular', 'vendor', 'exchange'));
+   ```
+   PIZZA_DAY_VENDOR_PHONES=+50312345678,+50387654321
+   PIZZA_DAY_EXCHANGE_PHONES=+50311111111,+50322222222,+50333333333
    ```
 
-   The Pizza Day plan's `type=vendor` / `type=exchange` labels and the QR resolve API's `isVendor` field both derive from this column. **No parallel `is_vendor` boolean anywhere.** `isVendor` exists only as a derived field in the public resolve API payload (computed as `account_type === 'vendor'`).
+   Phones are E.164. A small util (`app/utils/special_accounts.ts` or similar) exposes `isVendorPhone(phone)`, `isExchangePhone(phone)`, and `getQuestExcludedPhones()`. Quest scoring reads from this util — not a DB column. The future QR resolve API's `isVendor` derived field reads from the same util.
 
-   **Owner: Carlos.** This column is a shared backend contract for Quest exclusion (Pizza Day), vendor/exchange handling, and QR resolve behavior. Putting it in a separate Carlos-owned migration (not bundled with QR tables) avoids two people landing different semantics around vendor/exchange/regular.
+   **Why deferred:** the originally-spec'd `ALTER TABLE user_preferences ADD COLUMN account_type` is a real future shape (cleaner once we have multiple events / dozens of vendors), but adds a Carlos-side migration that's overkill for Pizza Day. Revisit post-event when scale forces it.
+
+   **Owner: Carlos.** Util + env wiring + Quest exclusion logic. ~30 min of work vs. the migration's ~2 hours.
 
 2. **Scan route inlines the lookup, doesn't call resolve.** Public `GET /q/:shortId` does a direct DB read via a shared service function (`getQrLinkForScan(shortId)`). The resolve API uses the same service function. One source of logic, no internal HTTP round-trip.
 

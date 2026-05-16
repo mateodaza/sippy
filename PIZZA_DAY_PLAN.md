@@ -70,12 +70,40 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ### Carlos (backend / contracts / parser)
 
-- [~] PR #19 fixes — POAP race, tests, `welcomeMessage` decision, env var
-- [ ] Admin endpoint: `GET /admin/events/:slug/attendees`
-- [ ] Vendor + Exchange account types + Quest exclusion logic
-- [ ] `SMART_MODE` flag in parser, with regex fallback on LLM error
-- [ ] Gas refuel top-up on Arbitrum One (`GasRefuel.sol` float)
-- [ ] Quest endpoint: MVP score + Connector score (one query each)
+> **Read first.** If you can do only one thing this week, do the **⚠️ bracket-token handler** below. Without it, every printed QR at Pizza Day is a dead end — users scan, land in WhatsApp with `[ABC23XYZ]`, the bot ignores them. ~1–2 hours. Everything else is your standard Pizza Day lane. Saturday call decides one conditional item (pay-kind dispatch). PR #19 baseline is shipped; the only follow-up is the review fixes, not a blocker.
+
+#### Pizza Day blockers (must land before Thu May 21 dry run)
+
+- [ ] **⚠️ WhatsApp bot: bracket-token first-contact handler.** Extract `\[([A-Z0-9]{8})\]` from incoming messages (deterministic, runs BEFORE LLM/intent parsing). Look up the short-id in `qr_links` (already exists in prod, migration 0018). Dispatch by `kind`:
+  - **`kind='event'`** (the only kind needed for Pizza Day): call your existing `linkUserToEvent(phone, event_slug, source_tag)` from PR #19, reply with event welcome.
+  - Other kinds: see conditional item below.
+
+  Spec: [QR_SYSTEM_SPEC.md](QR_SYSTEM_SPEC.md) → "Locked decisions #3 — Bracket-token extraction runs before the LLM/intent parser". The token should never enter the LLM prompt — strip to context before parsing. **Effort: ~1–2 hours.**
+
+- [ ] **Vendor + Exchange Quest exclusion via phone-list.** No migration. Read `PIZZA_DAY_VENDOR_PHONES` and `PIZZA_DAY_EXCHANGE_PHONES` env vars (comma-separated E.164). Small util `isVendorPhone(phone)` / `isExchangePhone(phone)` / `getQuestExcludedPhones()` for Quest exclusion. Phones supplied by Mateo when vendor/exchange staff identities land **Mon May 18**. **Effort: ~30 min.** _Originally spec'd as a `users.account_type` migration; deferred at this scale — see QR_SYSTEM_SPEC.md Locked decision #1._
+
+- [ ] **Quest endpoint: MVP score + Connector score** (one query each).
+  - MVP score per attendee: `(p2p_sends_count × 10) + (vendor_purchases × 2)`. See "Sippy Quest → Scoring" section above.
+  - Connector: see "Connector tracking — SQL" above for the exact shape (note: confirm `transfers` column names against the onchain table schema; may need `phone_registry` bridge if attribution is wallet-keyed).
+  - Both queries filter by the phone-list util from the item above.
+
+- [ ] **Admin endpoint: `GET /admin/events/:slug/attendees`.** Powers the live monitoring dashboard (onboarded-count, per-assistant attribution). Joins `user_event_links` to whatever onchain summary makes sense for live counts + per-source-tag breakdown.
+
+- [ ] **`SMART_MODE` flag in parser**, with regex fallback on LLM error. Enable for users tagged with `source=pizza-day` (event link metadata). LLM = Llama 4 Scout per existing parser conventions. Falls back to current regex parser on LLM error. Never degrades current behavior.
+
+- [ ] **Gas refuel top-up on Arbitrum One.** Top up `GasRefuel.sol` float. 200 cold wallets onboarding = lots of first-tx gas. Estimate: current per-tx gas × 200 + buffer.
+
+#### Conditional — Saturday May 16 call decides
+
+- [ ] **WhatsApp bot: `kind='pay'` dispatch.** Resolve owner identity from `qr_links.owner_phone_number`, present send confirmation flow ("¿Quieres enviar a {ownerDisplayName}? ¿Cuánto?"). Required ONLY if we ship vendor pay-QRs at Pizza Day. **Go/no-go: Saturday May 16 call.** If no, vendors use existing alias path (`send 5 to @pizza-station`). Same handler as the bracket-token item above, just additional dispatch branch. **Effort if green-lit: ~4–6 hours including confirm flow + tests.**
+
+#### Already shipped
+
+- [x] **PR #19 baseline merged** on main (commit `0f37178`) — `events` + `user_event_links` tables, `linkUserToEvent`, `markPoapClaimed`, retroactive linking for returning users, source attribution.
+
+#### Backlog (not a Pizza Day blocker — close when you can)
+
+- [ ] **PR #19 review follow-ups** — POAP race, tests, `welcomeMessage` decision, env var. Ideal to close this week, won't block the event if they slip.
 
 ### Mateo (UI / ops / content)
 
@@ -127,21 +155,25 @@ Volume is still displayed on the leaderboard for color, but doesn't drive the he
 
 ### Connector tracking — SQL
 
-Both sender and recipient must be event attendees. Vendor and exchange accounts excluded. Self-sends excluded. Event time-window applied.
+Both sender and recipient must be event attendees. Vendor + exchange phones excluded via env-supplied list (no DB column — see Carlos's tracker line). Self-sends excluded. Event time-window applied.
 
 ```sql
-SELECT sender_id, COUNT(DISTINCT recipient_id) AS connections
+-- :excluded_phones is the union of PIZZA_DAY_VENDOR_PHONES + PIZZA_DAY_EXCHANGE_PHONES,
+-- passed as a TEXT[] bind from the Quest service. Empty array = no exclusions.
+SELECT sender_phone, COUNT(DISTINCT recipient_phone) AS connections
 FROM transfers t
-JOIN event_attendees ea_s ON ea_s.user_id = t.sender_id
-JOIN event_attendees ea_r ON ea_r.user_id = t.recipient_id
-WHERE ea_s.event_slug = 'pizza-day-2026'
-  AND ea_r.event_slug = 'pizza-day-2026'
-  AND t.recipient_type NOT IN ('vendor', 'exchange')
-  AND t.sender_id != t.recipient_id
+JOIN user_event_links uel_s ON uel_s.phone_number = t.sender_phone
+JOIN user_event_links uel_r ON uel_r.phone_number = t.recipient_phone
+JOIN events e ON e.id = uel_s.event_id AND e.id = uel_r.event_id
+WHERE e.slug = 'pizza-day-ctg-2026'
+  AND NOT (t.recipient_phone = ANY(:excluded_phones))
+  AND t.sender_phone != t.recipient_phone
   AND t.created_at BETWEEN <event_start> AND <event_end>
-GROUP BY sender_id
+GROUP BY sender_phone
 ORDER BY connections DESC;
 ```
+
+_Note: column names in `transfers` need Carlos to confirm against the onchain table schema. The shape above assumes phone-keyed attribution; if attribution is wallet-keyed, the join needs `phone_registry` to bridge wallet → phone._
 
 Returns a leader for the Connector prize. Same query feeds the public leaderboard.
 
@@ -242,6 +274,8 @@ Pre-deploy verification for the QR primitive. **Status as of May 15, 2026: all i
 - [ ] `FRONTEND_URL` — set to the apps/web public domain (the one that serves `/q/[shortId]`). Drives URL banner color + printed QR contents.
 - [ ] `SIPPY_WHATSAPP_NUMBER=14722261449` — drives wa.me deeplink. If unset, code falls back to the same canonical via `SIPPY_WHATSAPP_NUMBER_FALLBACK` constant, but explicit is safer.
 - [ ] `SIPPY_EVENT_QR_OWNER_PHONE` (optional) — prefills the owner phone field in `/admin/qr-sheets/<slug>`. Convenience only.
+- [ ] `PIZZA_DAY_VENDOR_PHONES` — comma-separated E.164 list of the 2 vendor phones. Quest exclusion + future `isVendor` derivation read this. Phones land Mon May 18.
+- [ ] `PIZZA_DAY_EXCHANGE_PHONES` — comma-separated E.164 list of the 2–3 exchange staff phones. Quest exclusion reads this. Phones land Mon May 18.
 
 ### Frontend env vars (`sippy-web` service on Railway)
 
