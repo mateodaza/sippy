@@ -26,6 +26,7 @@ const OnrampController = () => import('#controllers/onramp_controller')
 const OfframpController = () => import('#controllers/offramp_controller')
 const EventController = () => import('#controllers/event_controller')
 const QrScanController = () => import('#controllers/qr_scan_controller')
+const MyPayQrController = () => import('#controllers/my_pay_qr_controller')
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
@@ -118,6 +119,10 @@ router
     router.post('/support/tickets', [SupportController, 'create'])
     router.post('/link-event', [EventController, 'linkEvent'])
     router.post('/event-poap-claimed', [EventController, 'markPoapClaimed'])
+
+    // Personal pay-QR — user-minted, idempotent (one active per user).
+    router.get('/qr/my-pay-link', [MyPayQrController, 'show'])
+    router.post('/qr/my-pay-link', [MyPayQrController, 'create'])
 
     // ── Colurs rails — Colombia (+57) only ───────────────────────────────────
     router

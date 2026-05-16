@@ -17,11 +17,14 @@ import logger from '@adonisjs/core/services/logger'
 import { getQrLinkForScan, resolveQrScan, type QrLinkForScan } from '#services/qr_link.service'
 import { linkUserToEvent, getActiveEventBySlug } from '#services/event.service'
 import { findUserPrefByPhone } from '#utils/user_pref_lookup'
-import { maskPhone } from '#utils/phone'
+import { canonicalizePhone, maskPhone } from '#utils/phone'
 import {
   formatEventWelcomeReturning,
   formatEventWelcomeNewUser,
   formatQrInactiveMessage,
+  formatQrLookupTransientErrorMessage,
+  formatPayAskForAmount,
+  formatSelfPayMessage,
   type Lang,
 } from '#utils/messages'
 
@@ -80,27 +83,40 @@ export type BracketDispatchOutcome =
   /** Short-id had no matching row in qr_links. Caller should fall through to
    *  normal parsing on the stripped text. */
   | 'not_found'
-  /** Short-id is revoked. Caller should fall through to normal parsing. */
+  /** Short-id is revoked (or its event expired). Reply sent. */
   | 'revoked'
-  /** Short-id is a pay/referral QR — not handled in v1. Fall through. */
+  /** Short-id is a `referral` QR — not handled yet. Fall through. */
   | 'unsupported_kind'
   /** User is already linked or just got linked. Reply sent to user. */
   | 'event_linked'
   /** User is not onboarded — caller should send the setup link reply. */
   | 'event_needs_onboarding'
+  /** Pay-QR scan — sender prompted for amount, recipient phone returned in
+   *  `payRecipient` so the caller can stash a partial-send context. */
+  | 'pay_prompt_for_amount'
+  /** Pay-QR scan where sender === owner. Reply sent, no further action. */
+  | 'pay_self_send'
 
 export interface BracketDispatchResult {
   outcome: BracketDispatchOutcome
   /**
    * The text we want to send back to the user. Null when the caller should
-   * continue normal parsing instead of replying. Populated for `event_linked`
-   * (welcome) and `event_needs_onboarding` (setup link).
+   * continue normal parsing instead of replying. Populated for `event_linked`,
+   * `event_needs_onboarding`, `revoked`, `pay_prompt_for_amount`, `pay_self_send`.
    */
   reply: string | null
   /** Surfaced for logging/observability. */
   shortId: string
   eventSlug: string | null
   sourceTag: string | null
+  /**
+   * Populated for `pay_prompt_for_amount` — the vendor's canonical phone.
+   * The caller writes a partial-send entry keyed on the sender so the next
+   * inbound message is interpreted as the amount for this recipient.
+   */
+  payRecipient?: string | null
+  /** Populated for `pay_prompt_for_amount` — vendor display name from qr_links. */
+  payDisplayName?: string | null
 }
 
 /**
@@ -114,11 +130,15 @@ export interface BracketDispatchResult {
  *  - If the user is NOT onboarded: do NOT call linkUserToEvent (the FK to
  *    user_preferences would fail). Instead, reply with a `/setup` link that
  *    carries `?event=<slug>&source=<tag>` so the web flow can link them on
- *    completion. The web /setup page already handles those URL params from
- *    PR #19.
+ *    completion. The web /setup page reads those URL params.
  *
- *  - For pay/referral kinds: not handled in v1 (P0 cut). Returns
- *    `unsupported_kind` so the caller falls through to normal parsing.
+ *  - For pay kinds: prompt the payer for an amount (or reply with a self-pay
+ *    no-op when sender === owner). Returns `pay_prompt_for_amount` plus
+ *    the recipient + display name so the caller can stash a pay-QR-tagged
+ *    partial-send for the follow-up amount message.
+ *
+ *  - For referral kinds: not handled yet. Returns `unsupported_kind` so the
+ *    caller falls through to normal parsing.
  *
  * Records the scan against `qr_scans` (best-effort — logging failures don't
  * block the user-facing reply). When the lookup hits, the scan is tagged with
@@ -136,11 +156,22 @@ export async function dispatchBracketToken(args: {
   try {
     link = await getQrLinkForScan(shortId)
   } catch (err) {
+    // Reply with a soft "try again" so the user knows their scan was
+    // received but couldn't be processed. The previous behavior fell
+    // through to the LLM on the stripped text, which means a payment
+    // attempt (`[xxx] 50`) became a bare "50" message the LLM couldn't
+    // route — silent dead-end at a register.
     logger.error(
       { shortId, phone: maskPhone(phoneNumber), err },
-      'bracket.dispatch: getQrLinkForScan threw — falling through to normal parsing'
+      'bracket.dispatch: getQrLinkForScan threw — surfacing transient-error reply'
     )
-    return { outcome: 'not_found', reply: null, shortId, eventSlug: null, sourceTag: null }
+    return {
+      outcome: 'not_found',
+      reply: formatQrLookupTransientErrorMessage(lang),
+      shortId,
+      eventSlug: null,
+      sourceTag: null,
+    }
   }
 
   // Resolve the prior /q/ scan row to this phone. We do this for ALL dispatch
@@ -173,9 +204,71 @@ export async function dispatchBracketToken(args: {
     }
   }
 
-  // Non-event kinds (pay/referral) — out of scope for the P0 cut, deferred
-  // to the Saturday call. Resolve the prior scan, fall through to normal
-  // parsing so existing handlers can take over.
+  // Pay-QR scan — sender is the payer, owner is the recipient. Pay-QRs
+  // are universal: any user mints one for receiving payments (vendor uses
+  // a business name; individual uses their own name). Return payRecipient
+  // + payDisplayName so the webhook caller can stash a partial-send
+  // marked payQrScan=true; downstream the send flow uses that flag to
+  // force the confirmation prompt + use the friendly display name in
+  // the confirm copy.
+  if (link.kind === 'pay') {
+    await resolveQrScan({ shortId, phoneNumber })
+
+    // Canonicalize both sides. Owner may be stored bare-digit in a legacy
+    // row; the sender always arrives canonical E.164 from the WhatsApp
+    // webhook. Raw equality would let a self-scan slip through.
+    const ownerCanonical = canonicalizePhone(link.ownerPhoneNumber)
+    const senderCanonical = canonicalizePhone(phoneNumber)
+
+    // Data-integrity guard: if the owner phone won't canonicalize, the
+    // qr_links row is corrupt — we can't trust the self-send check, and
+    // letting the flow proceed would let a malformed-row attacker bypass
+    // the guard. Treat as a dead QR: surface the inactive message and stop.
+    if (!ownerCanonical) {
+      logger.error(
+        { shortId, ownerRaw: link.ownerPhoneNumber },
+        'bracket.dispatch: pay-QR owner phone failed canonicalization — treating as inactive'
+      )
+      return {
+        outcome: 'revoked',
+        reply: formatQrInactiveMessage(lang),
+        shortId,
+        eventSlug: null,
+        sourceTag: link.sourceTag,
+      }
+    }
+
+    if (senderCanonical && ownerCanonical === senderCanonical) {
+      logger.info(
+        `bracket.dispatch: shortId=${shortId} pay_self_send phone=${maskPhone(phoneNumber)}`
+      )
+      return {
+        outcome: 'pay_self_send',
+        reply: formatSelfPayMessage(lang),
+        shortId,
+        eventSlug: null,
+        sourceTag: link.sourceTag,
+      }
+    }
+
+    const displayName = link.displayName ?? maskPhone(link.ownerPhoneNumber)
+    logger.info(
+      `bracket.dispatch: shortId=${shortId} pay_prompt vendor=${maskPhone(link.ownerPhoneNumber)} ` +
+        `payer=${maskPhone(phoneNumber)}`
+    )
+    return {
+      outcome: 'pay_prompt_for_amount',
+      reply: formatPayAskForAmount(displayName, lang),
+      shortId,
+      eventSlug: null,
+      sourceTag: link.sourceTag,
+      payRecipient: link.ownerPhoneNumber,
+      payDisplayName: displayName,
+    }
+  }
+
+  // Other non-event kinds (referral) — not handled yet. Resolve the prior
+  // scan, fall through to normal parsing so existing handlers can take over.
   if (link.kind !== 'event' || !link.eventSlug) {
     await resolveQrScan({ shortId, phoneNumber })
     logger.info(

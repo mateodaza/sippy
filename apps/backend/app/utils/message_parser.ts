@@ -145,6 +145,13 @@ const LOOSE_COMMAND_PATTERNS: Array<[string, RegExp]> = [
     'balance',
     /(?:^|\s)(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi|mi (?:wallet|billetera|cartera)|my wallet|minha carteira)(?:\s|$)/i,
   ],
+  // pay_qr — surface the user's pay-QR link. Trigger phrases focus on
+  // "how can someone pay me" / "my QR" / "my pay code". Placed above help
+  // so "mi codigo de pago" doesn't fall into the help bucket.
+  [
+    'pay_qr',
+    /(?:^|\s)(mi (?:c[oó]digo (?:de )?pago|qr (?:de )?pago|qr para (?:cobrar|recibir)|qr)|c[oó]mo me pagan|como me pagan|pay\s?qr|pay\s?link|pay\s?code|my (?:pay\s?(?:qr|code|link)|qr)|meu (?:c[oó]digo|qr) de pagamento|como me pagam)(?:\s|$)/i,
+  ],
   ['help', /(?:^|\s)(help(?!ful|less|ing|er|ed)|ayuda|ajuda)(?:\s|$)/i],
   [
     'history',

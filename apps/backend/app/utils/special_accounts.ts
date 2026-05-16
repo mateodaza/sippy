@@ -1,34 +1,36 @@
 /**
- * Special account identification — vendor / exchange phones.
+ * Special account identification — Quest exclusion list.
  *
- * Reads `PIZZA_DAY_VENDOR_PHONES` and `PIZZA_DAY_EXCHANGE_PHONES` from env
- * (comma-separated E.164) and exposes:
+ * Quest leaderboard scoring excludes exchange-staff phones (cash-for-USDC
+ * booth operators at the venue) so their tx volume doesn't dominate the
+ * social leaderboard. Read from `PIZZA_DAY_EXCHANGE_PHONES` env, comma-
+ * separated E.164.
  *
- *   isVendorPhone(phone)       — true if `phone` is in PIZZA_DAY_VENDOR_PHONES
- *   isExchangePhone(phone)     — true if `phone` is in PIZZA_DAY_EXCHANGE_PHONES
- *   getQuestExcludedPhones()   — union, for SQL `recipient NOT IN (...)` style filters
+ * **Merchant exclusion is intentionally NOT derived from `qr_links` anymore.**
+ * Earlier we shipped a `kind='pay'` → merchant inference, but pay-QRs are
+ * now universal — any user (vendor OR individual) can mint one for receiving
+ * payments. Treating every pay-QR owner as a merchant would silently exclude
+ * personal-pay-QR users from the Quest leaderboard.
  *
- * Why env vars instead of a DB column: at Pizza Day scale (4–5 known phones)
- * the originally-spec'd `user_preferences.account_type` migration is overkill.
- * Revisit when we have multiple events. Spec: QR_SYSTEM_SPEC.md "Locked
- * decision #1 — Vendor/exchange identification by env-supplied phone list".
+ * When real vendor mode lands (a `user_preferences.is_merchant` toggle, or
+ * a `qr_links.is_merchant` per-link flag), wire that signal into the union
+ * here. Until then, exchange-only exclusion is correct.
  *
- * Phones are canonicalized to E.164 on both sides of the comparison so a
- * caller passing bare digits or whitespace still matches an env entry written
- * as `+57 300 ...`. Malformed env entries are silently dropped (never throw —
- * a typo in an env var should not crash the bot).
+ * Phones are canonicalized to E.164 on both sides of the comparison so an
+ * env entry written as `+57 300 ...` still matches a canonical-form lookup.
+ * Malformed env entries are silently dropped (with logger.warn) — never
+ * throw on a typo in Railway settings.
  */
 
 import logger from '@adonisjs/core/services/logger'
 import { canonicalizePhone } from '#utils/phone'
 
-const VENDOR_ENV = 'PIZZA_DAY_VENDOR_PHONES'
 const EXCHANGE_ENV = 'PIZZA_DAY_EXCHANGE_PHONES'
 
 /**
  * Parse a comma-separated phone list from env. Drops entries that don't
- * canonicalize. Logger.warn fires when entries are rejected so a typo in
- * Railway settings is visible at boot time without crashing the service.
+ * canonicalize. logger.warn fires when entries are rejected so a typo in
+ * Railway settings shows up in logs.
  */
 function parsePhoneList(envVarName: string): Set<string> {
   const raw = process.env[envVarName]
@@ -58,19 +60,12 @@ function parsePhoneList(envVarName: string): Set<string> {
 }
 
 /**
- * True when `phone` matches an entry in `PIZZA_DAY_VENDOR_PHONES`.
- * Returns false for null/empty/unparseable input — never throws.
- */
-export function isVendorPhone(phone: string | null | undefined): boolean {
-  if (!phone) return false
-  const c = canonicalizePhone(phone)
-  if (!c) return false
-  return parsePhoneList(VENDOR_ENV).has(c)
-}
-
-/**
  * True when `phone` matches an entry in `PIZZA_DAY_EXCHANGE_PHONES`.
  * Returns false for null/empty/unparseable input — never throws.
+ *
+ * TODO(quest-leaderboard): no production callers yet — wired up when the
+ * Quest scoring code ships. Delete if the leaderboard ends up consuming
+ * `getQuestExcludedPhones` directly and never needs the per-phone check.
  */
 export function isExchangePhone(phone: string | null | undefined): boolean {
   if (!phone) return false
@@ -80,12 +75,12 @@ export function isExchangePhone(phone: string | null | undefined): boolean {
 }
 
 /**
- * Union of vendor + exchange phones, canonical E.164, deduped.
- * Fed into Quest SQL via a TEXT[] bind: `WHERE recipient_phone <> ALL(:excl)`.
- * Returns an empty array when both env vars are unset — Quest still runs,
- * just doesn't exclude anyone.
+ * Returns the canonical phones to exclude from Quest scoring.
+ *
+ * Currently exchange-only. When vendor mode lands, UNION a merchant-phone
+ * source here (`user_preferences.is_merchant` or similar) so businesses
+ * don't show up as top "connectors" on the social leaderboard.
  */
-export function getQuestExcludedPhones(): string[] {
-  const merged = new Set<string>([...parsePhoneList(VENDOR_ENV), ...parsePhoneList(EXCHANGE_ENV)])
-  return Array.from(merged)
+export async function getQuestExcludedPhones(): Promise<string[]> {
+  return Array.from(parsePhoneList(EXCHANGE_ENV))
 }

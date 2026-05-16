@@ -115,6 +115,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `💰 *Check your balance* — ask me anytime\n\n` +
       `📋 *See your transactions* — ask for your history\n\n` +
       `📇 *Contacts* — save, delete, or list contacts (e.g. "save mom +573...")\n\n` +
+      `📲 *Get your pay code* — say "my qr" or "pay qr"\n\n` +
       `👋 *Invite a friend* — give me their number\n\n` +
       `⚙️ *Change settings or limits* — ask for settings\n\n` +
       `🌐 *Switch language* — just tell me which one\n\n` +
@@ -125,6 +126,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `💰 *Ver tu saldo* — preguntame cuando quieras\n\n` +
       `📋 *Ver tus transacciones* — pideme tu historial\n\n` +
       `📇 *Contactos* — guardar, borrar o ver contactos (ej. "guardar mamá +573...")\n\n` +
+      `📲 *Tu codigo de pago* — di "mi qr" o "mi codigo de pago"\n\n` +
       `👋 *Invitar a un amigo* — dame su numero\n\n` +
       `⚙️ *Cambiar ajustes o limites* — pideme los ajustes\n\n` +
       `🌐 *Cambiar idioma* — solo dime cual\n\n` +
@@ -135,6 +137,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `💰 *Ver seu saldo* — me pergunta quando quiser\n\n` +
       `📋 *Ver suas transacoes* — pede seu historico\n\n` +
       `📇 *Contatos* — salvar, apagar ou ver contatos (ex. "salvar mãe +5511...")\n\n` +
+      `📲 *Seu codigo de pagamento* — diz "meu qr" ou "meu codigo de pagamento"\n\n` +
       `👋 *Convidar um amigo* — me da o numero\n\n` +
       `⚙️ *Mudar ajustes ou limites* — pede os ajustes\n\n` +
       `🌐 *Mudar idioma* — so me diz qual\n\n` +
@@ -275,6 +278,95 @@ export function formatQrInactiveMessage(lang: Lang = 'en'): string {
     en: () => `That QR code isn't active anymore. Ask an organizer for a current one.`,
     es: () => `Este codigo QR ya no esta activo. Pidele uno nuevo al organizador.`,
     pt: () => `Este codigo QR nao esta mais ativo. Peca um novo ao organizador.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when someone scans a pay-QR — asks the payer for the amount. The
+ * friendly display name (`qr_links.display_name`, set by the QR owner at
+ * issuance) is the social signal; no "merchant" framing because pay-QRs
+ * are universal (any user can mint one, vendors put a business name and
+ * individuals put their own).
+ */
+export function formatPayAskForAmount(displayName: string, lang: Lang = 'en'): string {
+  const m = {
+    en: () => `How much do you want to pay ${displayName}?`,
+    es: () => `Cuanto le pagas a ${displayName}?`,
+    pt: () => `Quanto voce paga a ${displayName}?`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Pay-QR confirmation prompt. Always shown (no below-threshold silent
+ * execute) so the payer can't accidentally double-pay — the pay-QR scan
+ * gesture is a "real money to a real person/business" act and deserves
+ * an explicit YES.
+ *
+ * displayName comes from `qr_links.display_name`; falls back to a masked
+ * phone if somehow missing (we log a warning when that happens).
+ */
+export function formatPayConfirmationPrompt(
+  amount: number,
+  displayName: string,
+  lang: Lang = 'en'
+): string {
+  const amt = formatCurrencyUSD(amount)
+  const m = {
+    en: () => `Confirm paying ${amt} USDC to ${displayName}? Reply YES to confirm.`,
+    es: () => `Confirmas pagar ${amt} USDC a ${displayName}? Responde SI para confirmar.`,
+    pt: () =>
+      `Confirmar pagamento de ${amt} USDC para ${displayName}? Responda SIM para confirmar.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when the QR-lookup DB call throws (transient outage, pool
+ * exhaustion). Distinct from `formatQrInactiveMessage` because the QR
+ * isn't necessarily dead — try again is the right ask.
+ */
+export function formatQrLookupTransientErrorMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `We couldn't read that QR code right now. Try again in a moment.`,
+    es: () => `No pudimos leer ese codigo QR ahora. Intenta de nuevo en un momento.`,
+    pt: () => `Nao conseguimos ler esse codigo QR agora. Tente novamente em um momento.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Surface the user's `/wallet/pay-qr` URL when they ask "how do I get
+ * paid?" / "mi codigo de pago" / "pay qr" etc. The page mints (or
+ * returns the existing) pay-QR for the authenticated user.
+ */
+export function formatPayQrLinkMessage(phoneNumber: string, lang: Lang = 'en'): string {
+  const params = new URLSearchParams({ phone: phoneNumber })
+  const url = `${FRONTEND_URL}/wallet/pay-qr?${params.toString()}`
+  const m = {
+    en: () =>
+      `Your pay code lives here:\n${url}\n\n` +
+      `Generate it once, print it or share the link — anyone who scans it pays you on Sippy.`,
+    es: () =>
+      `Tu codigo de pago vive aqui:\n${url}\n\n` +
+      `Generalo una vez, imprimelo o comparte el enlace — quien lo escanee te paga por Sippy.`,
+    pt: () =>
+      `Seu codigo de pagamento mora aqui:\n${url}\n\n` +
+      `Gere uma vez, imprima ou compartilhe o link — quem escaneia te paga pelo Sippy.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when a user scans their own pay-QR. Surfaces the no-op directly
+ * instead of dropping into an awkward "do you want to pay yourself?" flow.
+ */
+export function formatSelfPayMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `That's your own pay code. Share it so someone else can pay you.`,
+    es: () => `Ese es tu propio codigo de pago. Compartelo para que te paguen.`,
+    pt: () => `Esse e o seu proprio codigo de pagamento. Compartilhe para receber.`,
   }
   return m[lang]()
 }

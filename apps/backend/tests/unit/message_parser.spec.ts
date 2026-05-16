@@ -85,6 +85,15 @@ test.group('Message Parser | Loose Keyword Matching (Natural Language)', () => {
     { input: 'where are the settings?', expected: 'settings' },
     { input: 'como cambio la configuración?', expected: 'settings' },
     { input: 'what is sippy exactly?', expected: 'about' },
+    // pay_qr — discoverability of the /wallet/pay-qr surface
+    { input: 'mi qr', expected: 'pay_qr' },
+    { input: 'mi codigo de pago', expected: 'pay_qr' },
+    { input: 'mi código de pago por favor', expected: 'pay_qr' },
+    { input: 'pay qr', expected: 'pay_qr' },
+    { input: 'pay link', expected: 'pay_qr' },
+    { input: 'como me pagan', expected: 'pay_qr' },
+    { input: 'my pay qr please', expected: 'pay_qr' },
+    { input: 'meu codigo de pagamento', expected: 'pay_qr' },
   ]
 
   for (const t of tests) {

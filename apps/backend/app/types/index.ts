@@ -41,6 +41,13 @@ export interface PartialSend {
   recipient?: string // present if user gave a phone (canonical E.164)
   timestamp: number // Date.now()
   lang: Lang
+  // ── Pay-QR scan context (set by the kind='pay' bracket dispatcher) ─────
+  // Present when this partial was created by a pay-QR scan. Carries forward
+  // so the resolved send command can use the friendly display name in the
+  // confirmation prompt instead of a masked phone, and so the send flow
+  // can force the confirmation step regardless of CONFIRM_THRESHOLD.
+  recipientDisplayName?: string
+  payQrScan?: boolean
 }
 
 type Lang = 'en' | 'es' | 'pt'
@@ -59,6 +66,7 @@ export interface ParsedCommand {
     | 'social'
     | 'privacy'
     | 'fund'
+    | 'pay_qr'
     | 'invite'
     | 'confirm'
     | 'cancel'
@@ -93,6 +101,10 @@ export interface ParsedCommand {
   isLargeAmount?: boolean // true iff amount > 500 and no amountError
   localCurrency?: string // currency word detected in send (e.g. "pesos" → used for conversion)
   localAmount?: number // original amount in local currency before USDC conversion
+  // ── Pay-QR scan context (carried over from PartialSend when this
+  //    command was synthesized by resolving a pay-QR scan) ──────────────
+  recipientDisplayName?: string
+  payQrScan?: boolean
 }
 
 export interface WalletInfo {
