@@ -97,6 +97,17 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 - [ ] **WhatsApp bot: `kind='pay'` dispatch.** Resolve owner identity from `qr_links.owner_phone_number`, present send confirmation flow ("¿Quieres enviar a {ownerDisplayName}? ¿Cuánto?"). Required ONLY if we ship vendor pay-QRs at Pizza Day. **Go/no-go: Saturday May 16 call.** If no, vendors use existing alias path (`send 5 to @pizza-station`). Same handler as the bracket-token item above, just additional dispatch branch. **Effort if green-lit: ~4–6 hours including confirm flow + tests.**
 
+##### Mateo's matching admin extension (if go-decision)
+
+If pay-QRs are green-lit on Saturday, Mateo extends the admin sheets page to support `kind='pay'` creation. ~30 min, drop-in on top of existing code:
+
+1. **Backend** (`apps/backend/app/controllers/admin/qr_sheets_controller.ts`): add a parallel route or a kind toggle. For pay kind, drop the eventSlug requirement, accept `displayName` (e.g. "Carolina's Pizza"). Reuse `createQrLink({kind: 'pay', ownerPhoneNumber, displayName})` — service already supports it, no changes needed there.
+2. **Inertia page** (`apps/backend/inertia/pages/admin/qr_sheets.tsx`): variant of `PrintableSheet` for vendor signage — bigger QR, vendor name in place of event name, copy "Paga aquí con Sippy" instead of "Escanea para empezar". Cheetah blue `#00AFD7` consistent with pay-kind brand.
+3. **DB / migrations**: nothing. `kind='pay'` already supported by `qr_links` schema (migration 0018) and `createQrLink` already validates it.
+4. **No new env vars.** Vendor phones are already in `PIZZA_DAY_VENDOR_PHONES` from Carlos's item — admin form accepts them as `ownerPhoneNumber`.
+
+Print + distribute one vendor sheet per booth. Attendee scans → lands in WhatsApp → Carlos's pay-dispatch handles the confirm flow. End-to-end.
+
 #### Already shipped
 
 - [x] **PR #19 baseline merged** on main (commit `0f37178`) — `events` + `user_event_links` tables, `linkUserToEvent`, `markPoapClaimed`, retroactive linking for returning users, source attribution.
@@ -110,14 +121,14 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 - [~] Generate Pizza Day assistant sheets via QR admin endpoint (consumes QR v1; see [QR_SYSTEM_SPEC.md](QR_SYSTEM_SPEC.md)). _QR primitive v1 code-complete (migrations 0018+0019, scan endpoint, admin sheets page, runtime path validated via curl). Awaiting browser smoke + the actual print run after vendor phones land May 18. Each printable QR encodes `${FRONTEND_URL}/q/<short-id>?v=1` and on scan redirects into WhatsApp with a `[short-id]` code. Payload metadata stored in `qr_links`: `{kind: 'event', event_slug: 'pizza-day-ctg-2026', source_tag: 'assistant-NN'}`._
 - [ ] Public leaderboard page (top 10 MVP + top 10 Connector + live counters)
 - [ ] Vendor mode receiver UI (mobile-first)
-- [ ] Spanish `/pizza-day` in-app doc
+- [x] Spanish `/pizza-day` in-app doc. _Server Component at `apps/web/app/pizza-day/page.tsx`. Covers conseguir USDC, mandar plata, pagar pizza/bebidas, Quest premios, POAP claim, ayuda. Mobile-first, brand-aligned. Will be live on next apps/web deploy at `https://www.sippy.lat/pizza-day`._
 - [ ] Live monitoring dashboard
-- [ ] Backup plan doc + printed fallback materials
+- [x] Backup plan doc + printed fallback materials. _Backup plans table above. Printable WhatsApp-number flyer at `apps/web/app/pizza-day/flyer/page.tsx` — public URL `https://www.sippy.lat/pizza-day/flyer` once deployed. Cmd/Ctrl+P → print. Hand out as catch-all when sheets get lost / Wi-Fi dies._
 - [ ] Preload USDC float into 2–3 exchange wallets
 
 ### Pre-event ops (May 18–21)
 
-- [ ] Collect 4–5 staff phone numbers (2 vendors + 2–3 exchange) by **Mon May 18 EOD**
+- [ ] Collect 4–5 staff phone numbers (2 vendors + 2–3 exchange) by **Mon May 18 EOD**. Assistant identities are NOT needed — sheets use generic source-tags `pizzaday-ctg-2026-checker1` through `checkerN`, with the integer as the printed label. Lets us generate + print assistant sheets independently of staffing.
 - [ ] Print assets finalized by **Tue May 19**
 - [ ] Printing complete by **Wed May 20**
 - [ ] Internal dry run with 5 testers by **Thu May 21**
