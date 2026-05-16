@@ -86,7 +86,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
   Spec: [QR_SYSTEM_SPEC.md](QR_SYSTEM_SPEC.md) → "Locked decisions #3 — Bracket-token extraction runs before the LLM/intent parser". The token should never enter the LLM prompt — strip to context before parsing. **Effort: ~1–2 hours.**
 
-- [ ] **Vendor + Exchange Quest exclusion via phone-list.** No migration. Read `PIZZA_DAY_VENDOR_PHONES` and `PIZZA_DAY_EXCHANGE_PHONES` env vars (comma-separated E.164). Small util `isVendorPhone(phone)` / `isExchangePhone(phone)` / `getQuestExcludedPhones()` for Quest exclusion. Phones supplied by Mateo when vendor/exchange staff identities land **Mon May 18**. **Effort: ~30 min.** _Originally spec'd as a `users.account_type` migration; deferred at this scale — see QR_SYSTEM_SPEC.md Locked decision #1._
+- [x] **Vendor + Exchange Quest exclusion.** Shipped: `getQuestExcludedPhones()` in `app/utils/special_accounts.ts` derives merchants from `qr_links WHERE kind='pay' AND status='active'` (issuance is the merchant declaration — no vendor env list) and UNIONs with `PIZZA_DAY_EXCHANGE_PHONES` env for cash-booth staff. Exchange phones supplied by Mateo when staff identities land **Mon May 18**.
 
 - [ ] **Quest endpoint**: single leaderboard query, top 10 by `quest_score` (distinct senders per recipient, ≥$0.10 each). See "Quest leaderboard — SQL" section above for the exact shape. Confirm `transfers` column names against the onchain table schema; may need `phone_registry` bridge if attribution is wallet-keyed. Filter excluded phones via the util from the item above.
 
@@ -112,7 +112,7 @@ If pay-QRs are green-lit on Saturday, Mateo extends the admin sheets page to sup
 1. **Backend** (`apps/backend/app/controllers/admin/qr_sheets_controller.ts`): add a parallel route or a kind toggle. For pay kind, drop the eventSlug requirement, accept `displayName` (e.g. "Carolina's Pizza"). Reuse `createQrLink({kind: 'pay', ownerPhoneNumber, displayName})` — service already supports it, no changes needed there.
 2. **Inertia page** (`apps/backend/inertia/pages/admin/qr_sheets.tsx`): variant of `PrintableSheet` for vendor signage — bigger QR, vendor name in place of event name, copy "Paga aquí con Sippy" instead of "Escanea para empezar". Cheetah blue `#00AFD7` consistent with pay-kind brand.
 3. **DB / migrations**: nothing. `kind='pay'` already supported by `qr_links` schema (migration 0018) and `createQrLink` already validates it.
-4. **No new env vars.** Vendor phones are already in `PIZZA_DAY_VENDOR_PHONES` from Carlos's item — admin form accepts them as `ownerPhoneNumber`.
+4. **No new env vars.** Admin operator types the vendor phone directly into the pay-sheets form; the only requirement is that the phone already exists in `user_preferences` (onboarded). Issuance of the pay-QR is itself the merchant declaration — Quest exclusion picks them up automatically.
 
 Print + distribute one vendor sheet per booth. Attendee scans → lands in WhatsApp → Carlos's pay-dispatch handles the confirm flow. End-to-end.
 
@@ -204,8 +204,10 @@ quest_score = COUNT(DISTINCT sender_phone)
 The Quest player is the RECIPIENT (the one being "convinced"). Senders are the people they convinced. Both must be event attendees. Vendor + exchange phones excluded both ways. Self-sends excluded. Event time-window applied. $0.10 minimum per qualifying send.
 
 ```sql
--- :excluded_phones is the union of PIZZA_DAY_VENDOR_PHONES + PIZZA_DAY_EXCHANGE_PHONES,
--- passed as a TEXT[] bind from the Quest service. Empty array = no exclusions.
+-- :excluded_phones is the union of active pay-QR owners (merchants — derived
+-- from `qr_links WHERE kind='pay' AND status='active'`) + PIZZA_DAY_EXCHANGE_PHONES,
+-- produced by `getQuestExcludedPhones()` in app/utils/special_accounts.ts and
+-- passed as a TEXT[] bind. Empty array = no exclusions.
 SELECT recipient_phone, COUNT(DISTINCT sender_phone) AS quest_score
 FROM transfers t
 JOIN user_event_links uel_s ON uel_s.phone_number = t.sender_phone
@@ -325,7 +327,7 @@ Pre-deploy verification for the QR primitive. **Status as of May 15, 2026: all i
 - [ ] `FRONTEND_URL` — set to the apps/web public domain (the one that serves `/q/[shortId]`). Drives URL banner color + printed QR contents.
 - [ ] `SIPPY_WHATSAPP_NUMBER=14722261449` — drives wa.me deeplink. If unset, code falls back to the same canonical via `SIPPY_WHATSAPP_NUMBER_FALLBACK` constant, but explicit is safer.
 - [ ] `SIPPY_EVENT_QR_OWNER_PHONE` (optional) — prefills the owner phone field in `/admin/qr-sheets/<slug>`. Convenience only.
-- [ ] `PIZZA_DAY_VENDOR_PHONES` — comma-separated E.164 list of the 2 vendor phones. Quest exclusion + future `isVendor` derivation read this. Phones land Mon May 18.
+- ~~`PIZZA_DAY_VENDOR_PHONES`~~ — **removed**. Vendor identity is now derived from `qr_links WHERE kind='pay' AND status='active'` (issuance is the merchant declaration). Generate vendor sheets via `/admin/pay-sheets` instead.
 - [ ] `PIZZA_DAY_EXCHANGE_PHONES` — comma-separated E.164 list of the 2–3 exchange staff phones. Quest exclusion reads this. Phones land Mon May 18.
 
 ### Frontend env vars (`sippy-web` service on Railway)

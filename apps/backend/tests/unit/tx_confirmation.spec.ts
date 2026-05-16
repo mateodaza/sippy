@@ -287,6 +287,125 @@ test.group('Group C | routeCommand send threshold', () => {
   })
 })
 
+// ── Group C2 — routeCommand: merchant payment force-confirm ───────────────
+// Merchant payments (came from a pay-QR scan, carry merchantPayment=true
+// on the synthesized ParsedCommand) must NEVER auto-execute below threshold.
+// An attendee at a register should always see an explicit "Confirm paying
+// $X to <merchant>" prompt before USDC moves. These tests guard against a
+// refactor silently dropping the `!isMerchantPayment` guard at the send
+// branch in webhook_controller.
+
+test.group('Group C2 | routeCommand merchant payment force-confirm', () => {
+  // Core regression guard: a below-threshold merchant payment must NEVER
+  // call sendHandler silently. It can either (a) store a pending tx and
+  // wait for an explicit confirm, or (b) short-circuit with an error if the
+  // balance pre-check fails — both are acceptable. What's not acceptable
+  // is a silent execute, because at a register the attendee + vendor must
+  // both see the YES step before USDC moves. These tests assert
+  // sendHandler is NOT called; the upstream confirm + balance-failure
+  // paths are exercised separately in their own integration contexts.
+
+  test('M-01: merchant $3 (below threshold) → sendHandler NEVER called', async ({ assert }) => {
+    const pendingTxs = makePendingMap()
+    let sendHandlerCalled = false
+    const fakeSend = async (..._args: any[]) => {
+      sendHandlerCalled = true
+      return true
+    }
+    const fakeMsg = async () => {}
+
+    const cmd: ParsedCommand = {
+      command: 'send',
+      amount: 3,
+      recipient: '+573001234567',
+      merchantPayment: true,
+      recipientDisplayName: "Carolina's Pizza",
+    }
+    await routeCommand(
+      '+1555000010',
+      cmd,
+      'es',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
+
+    assert.isFalse(sendHandlerCalled, 'merchant $3 must NOT auto-execute below threshold')
+  })
+
+  test('M-02: merchant $3 without recipientDisplayName → sendHandler still NEVER called', async ({
+    assert,
+  }) => {
+    const pendingTxs = makePendingMap()
+    let sendHandlerCalled = false
+    const fakeSend = async (..._args: any[]) => {
+      sendHandlerCalled = true
+      return true
+    }
+    const fakeMsg = async () => {}
+
+    const cmd: ParsedCommand = {
+      command: 'send',
+      amount: 3,
+      recipient: '+573001234567',
+      merchantPayment: true,
+      // recipientDisplayName intentionally omitted — invariant must hold without it
+    }
+    await routeCommand(
+      '+1555000011',
+      cmd,
+      'es',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
+
+    assert.isFalse(sendHandlerCalled, 'still no silent execute without display name')
+  })
+
+  test('M-03: non-merchant $3 (regression guard) → still auto-executes below threshold', async ({
+    assert,
+  }) => {
+    const pendingTxs = makePendingMap()
+    let sendHandlerCalled = false
+    const fakeSend = async (..._args: any[]) => {
+      sendHandlerCalled = true
+      return true
+    }
+    const fakeMsg = async () => {}
+
+    // merchantPayment intentionally undefined — the "regular send" baseline.
+    const cmd: ParsedCommand = {
+      command: 'send',
+      amount: 3,
+      recipient: '+573001234567',
+    }
+    await routeCommand(
+      '+1555000012',
+      cmd,
+      'en',
+      NO_OP_RATE_CTX,
+      [],
+      undefined,
+      fakeSend as any,
+      undefined,
+      fakeMsg as any,
+      pendingTxs
+    )
+
+    assert.isTrue(sendHandlerCalled, 'regular sub-threshold send still fast-paths')
+    assert.equal(pendingTxs.size, 0)
+  })
+})
+
 // ── Group D — routeCommand: confirm handler ───────────────────────────────
 
 test.group('Group D | routeCommand confirm handler', () => {

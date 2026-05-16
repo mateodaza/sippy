@@ -30,14 +30,21 @@ let rawQueryCalls: RawQueryCall[] = []
 let rawQueryHandlers: Array<{ pattern: string; response: RawQueryResponse }> = []
 let origRawQuery: typeof db.rawQuery
 
+/** Normalize whitespace so substring-matchers don't break on a stray
+ *  newline/indent change in the underlying SQL string. */
+function normalizeSql(sql: string): string {
+  return sql.replace(/\s+/g, ' ').trim()
+}
+
 function installDbMock() {
   rawQueryCalls = []
   rawQueryHandlers = []
   origRawQuery = db.rawQuery
   db.rawQuery = (async (sql: string, bindings?: unknown[]) => {
-    rawQueryCalls.push({ sql, bindings })
+    const normalized = normalizeSql(sql)
+    rawQueryCalls.push({ sql: normalized, bindings })
     for (const { pattern, response } of rawQueryHandlers) {
-      if (sql.includes(pattern)) return response
+      if (normalized.includes(normalizeSql(pattern))) return response
     }
     return { rows: [], rowCount: 0 }
   }) as any
@@ -52,7 +59,8 @@ function setQueryResponse(pattern: string, response: RawQueryResponse) {
 }
 
 function queriesMatching(pattern: string): RawQueryCall[] {
-  return rawQueryCalls.filter((c) => c.sql.includes(pattern))
+  const needle = normalizeSql(pattern)
+  return rawQueryCalls.filter((c) => c.sql.includes(needle))
 }
 
 // ── Model mock helpers ──────────────────────────────────────────────────────────
@@ -98,7 +106,7 @@ interface QrLinkRow {
 }
 
 function mockQrLink(row: QrLinkRow | null) {
-  setQueryResponse('FROM qr_links\n     WHERE short_id', {
+  setQueryResponse('FROM qr_links WHERE short_id', {
     rows: row ? [row] : [],
   })
 }
@@ -217,7 +225,9 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
     assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)
   })
 
-  test('returns unsupported_kind for pay QRs (v1 cut)', async ({ assert }) => {
+  test('pay QR returns pay_prompt_for_amount with vendor framing + payRecipient', async ({
+    assert,
+  }) => {
     mockQrLink({
       short_id: 'PAYZ23XY',
       kind: 'pay',
@@ -234,9 +244,182 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
       lang: 'es',
     })
 
+    assert.equal(r.outcome, 'pay_prompt_for_amount')
+    assert.isNotNull(r.reply)
+    assert.include(r.reply!, 'Carolina Pizza')
+    assert.include(r.reply!, 'comercio')
+    assert.equal(r.payRecipient, '+573000000000', 'vendor phone returned for partial-send stash')
+    assert.equal(r.payDisplayName, 'Carolina Pizza')
+    // No event-link writes for pay-kind dispatch
+    assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)
+  })
+
+  test('pay QR with sender === owner returns pay_self_send (no payRecipient)', async ({
+    assert,
+  }) => {
+    mockQrLink({
+      short_id: 'SELFPAY1',
+      kind: 'pay',
+      status: 'active',
+      owner_phone_number: '+573001234567',
+      event_slug: null,
+      source_tag: null,
+      display_name: 'Carolina Pizza',
+    })
+
+    const r = await dispatchBracketToken({
+      shortId: 'SELFPAY1',
+      phoneNumber: '+573001234567',
+      lang: 'es',
+    })
+
+    assert.equal(r.outcome, 'pay_self_send')
+    assert.isNotNull(r.reply)
+    assert.include(r.reply!, 'tu propio')
+    assert.isUndefined(r.payRecipient, 'no recipient stash on self-send')
+  })
+
+  test('pay QR self-send guard canonicalizes bare-digit owner vs E.164 sender', async ({
+    assert,
+  }) => {
+    // Legacy bare-digit owner vs canonical E.164 sender from the WhatsApp
+    // webhook. Raw string compare would miss this and the sender would be
+    // awkwardly prompted to pay themselves.
+    mockQrLink({
+      short_id: 'SELFPAY2',
+      kind: 'pay',
+      status: 'active',
+      owner_phone_number: '573001234567', // bare digits
+      event_slug: null,
+      source_tag: null,
+      display_name: 'Carolina Pizza',
+    })
+
+    const r = await dispatchBracketToken({
+      shortId: 'SELFPAY2',
+      phoneNumber: '+573001234567', // canonical E.164
+      lang: 'es',
+    })
+
+    assert.equal(r.outcome, 'pay_self_send', 'canonicalize matches bare to +')
+  })
+
+  test('pay QR self-send guard matches when both stored as bare digits', async ({ assert }) => {
+    // Belt-and-suspenders — both sides bare (impossible in current code but
+    // protects against a future regression where the webhook stops
+    // canonicalizing the sender).
+    mockQrLink({
+      short_id: 'SELFPAY3',
+      kind: 'pay',
+      status: 'active',
+      owner_phone_number: '573001234567',
+      event_slug: null,
+      source_tag: null,
+      display_name: 'X',
+    })
+
+    const r = await dispatchBracketToken({
+      shortId: 'SELFPAY3',
+      phoneNumber: '573001234567',
+      lang: 'es',
+    })
+
+    assert.equal(r.outcome, 'pay_self_send')
+  })
+
+  test('pay QR self-send guard canonicalizes formatted owner (whitespace, dashes)', async ({
+    assert,
+  }) => {
+    mockQrLink({
+      short_id: 'SELFPAY4',
+      kind: 'pay',
+      status: 'active',
+      owner_phone_number: '+57 300-123 4567', // human-formatted
+      event_slug: null,
+      source_tag: null,
+      display_name: 'X',
+    })
+
+    const r = await dispatchBracketToken({
+      shortId: 'SELFPAY4',
+      phoneNumber: '+573001234567',
+      lang: 'es',
+    })
+
+    assert.equal(r.outcome, 'pay_self_send', 'normalization strips whitespace + dashes')
+  })
+
+  test('pay QR with unparseable owner phone surfaces inactive-QR reply', async ({ assert }) => {
+    // Owner phone is corrupt (failed canonicalization). The data-integrity
+    // guard at bracket_token.service.ts treats this as a dead QR rather
+    // than letting the flow proceed — the self-send check is otherwise
+    // unsafe and an attendee could be prompted to pay a malformed-phone
+    // vendor.
+    mockQrLink({
+      short_id: 'BADOWN23',
+      kind: 'pay',
+      status: 'active',
+      owner_phone_number: 'not-a-phone',
+      event_slug: null,
+      source_tag: null,
+      display_name: 'Glitched Vendor',
+    })
+
+    const r = await dispatchBracketToken({
+      shortId: 'BADOWN23',
+      phoneNumber: '+573001234567',
+      lang: 'es',
+    })
+
+    assert.equal(r.outcome, 'revoked', 'corrupt owner row treated as dead QR')
+    assert.isNotNull(r.reply)
+    assert.include(r.reply!, 'organizador', 'inactive-QR copy')
+    // Must NOT prompt the payer for an amount
+    assert.notEqual(r.outcome, 'pay_prompt_for_amount')
+  })
+
+  test('pay QR falls back to masked phone when display_name is null', async ({ assert }) => {
+    mockQrLink({
+      short_id: 'PAYZNULL',
+      kind: 'pay',
+      status: 'active',
+      owner_phone_number: '+573000000000',
+      event_slug: null,
+      source_tag: null,
+      display_name: null,
+    })
+
+    const r = await dispatchBracketToken({
+      shortId: 'PAYZNULL',
+      phoneNumber: '+573009999999',
+      lang: 'es',
+    })
+
+    assert.equal(r.outcome, 'pay_prompt_for_amount')
+    // Masked vendor phone surfaces in reply when displayName is missing
+    assert.include(r.reply!, '+57', 'mask retains country code')
+    assert.equal(r.payDisplayName?.startsWith('+57'), true)
+  })
+
+  test('referral kind still falls through as unsupported_kind', async ({ assert }) => {
+    mockQrLink({
+      short_id: 'REFRAL23',
+      kind: 'referral',
+      status: 'active',
+      owner_phone_number: '+573000000000',
+      event_slug: null,
+      source_tag: null,
+      display_name: null,
+    })
+
+    const r = await dispatchBracketToken({
+      shortId: 'REFRAL23',
+      phoneNumber: '+573001234567',
+      lang: 'es',
+    })
+
     assert.equal(r.outcome, 'unsupported_kind')
     assert.isNull(r.reply)
-    assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)
   })
 
   test('returns revoked with a reply when the event row is inactive (admin revoked / endsAt passed)', async ({

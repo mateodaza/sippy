@@ -159,7 +159,10 @@ test.group('Onchain Integration | Webhook dedup', (group) => {
       .json(body)
 
     assert.equal(response.status(), 200)
-    assert.equal(response.body().skipped, 'duplicate')
+    // Response body is a discriminated union of three shapes; only the
+    // "duplicate skipped" branch carries `skipped`. Narrow before the read.
+    const respBody = response.body() as { skipped?: string }
+    assert.equal(respBody.skipped, 'duplicate')
   })
 
   test('C-02: replaying a deferred delivery is allowed (not skipped)', async ({
@@ -187,7 +190,8 @@ test.group('Onchain Integration | Webhook dedup', (group) => {
       .json(body)
 
     // Should NOT be skipped — should attempt processing (200 or 500)
-    assert.notEqual(response.body().skipped, 'duplicate')
+    const respBody = response.body() as { skipped?: string }
+    assert.notEqual(respBody.skipped, 'duplicate')
   })
 })
 

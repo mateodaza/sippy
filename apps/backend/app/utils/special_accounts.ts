@@ -1,34 +1,41 @@
 /**
- * Special account identification — vendor / exchange phones.
+ * Special account identification — Quest exclusion list.
  *
- * Reads `PIZZA_DAY_VENDOR_PHONES` and `PIZZA_DAY_EXCHANGE_PHONES` from env
- * (comma-separated E.164) and exposes:
+ * Quest leaderboard scoring excludes transactions where the recipient is a
+ * known merchant (so vendors don't show up as top "connectors") or an
+ * exchange staff phone (cash-for-USDC at the venue would otherwise top the
+ * leaderboard).
  *
- *   isVendorPhone(phone)       — true if `phone` is in PIZZA_DAY_VENDOR_PHONES
- *   isExchangePhone(phone)     — true if `phone` is in PIZZA_DAY_EXCHANGE_PHONES
- *   getQuestExcludedPhones()   — union, for SQL `recipient NOT IN (...)` style filters
+ * Two sources, two semantics:
  *
- * Why env vars instead of a DB column: at Pizza Day scale (4–5 known phones)
- * the originally-spec'd `user_preferences.account_type` migration is overkill.
- * Revisit when we have multiple events. Spec: QR_SYSTEM_SPEC.md "Locked
- * decision #1 — Vendor/exchange identification by env-supplied phone list".
+ *   - **Merchant exclusion** derives from `qr_links` — anyone with an active
+ *     `kind='pay'` link is a merchant. Issuance IS the declaration; no env
+ *     list to keep in sync. Aligns with the rest of the payment path
+ *     (bracket dispatcher, webhook send branch) which already treats
+ *     pay-QR scans as merchant payments.
+ *
+ *   - **Exchange exclusion** stays env-based (`PIZZA_DAY_EXCHANGE_PHONES`).
+ *     Exchanges are a Pizza Day operational concept (staffed cash booths),
+ *     not a Sippy product surface — they don't get pay-QRs, so there's no
+ *     onchain artifact to derive from.
  *
  * Phones are canonicalized to E.164 on both sides of the comparison so a
- * caller passing bare digits or whitespace still matches an env entry written
- * as `+57 300 ...`. Malformed env entries are silently dropped (never throw —
- * a typo in an env var should not crash the bot).
+ * caller passing bare digits or whitespace still matches an env entry
+ * written as `+57 300 ...`. Malformed env entries are silently dropped
+ * (with logger.warn) — never throw on a typo in Railway settings.
  */
 
 import logger from '@adonisjs/core/services/logger'
 import { canonicalizePhone } from '#utils/phone'
+import { query } from '#services/db'
 
-const VENDOR_ENV = 'PIZZA_DAY_VENDOR_PHONES'
 const EXCHANGE_ENV = 'PIZZA_DAY_EXCHANGE_PHONES'
 
 /**
  * Parse a comma-separated phone list from env. Drops entries that don't
- * canonicalize. Logger.warn fires when entries are rejected so a typo in
- * Railway settings is visible at boot time without crashing the service.
+ * canonicalize. logger.warn fires when entries are rejected so a typo in
+ * Railway settings shows up in logs (not at boot — these are read lazily
+ * per call; boot-time visibility is a follow-up).
  */
 function parsePhoneList(envVarName: string): Set<string> {
   const raw = process.env[envVarName]
@@ -58,19 +65,14 @@ function parsePhoneList(envVarName: string): Set<string> {
 }
 
 /**
- * True when `phone` matches an entry in `PIZZA_DAY_VENDOR_PHONES`.
- * Returns false for null/empty/unparseable input — never throws.
- */
-export function isVendorPhone(phone: string | null | undefined): boolean {
-  if (!phone) return false
-  const c = canonicalizePhone(phone)
-  if (!c) return false
-  return parsePhoneList(VENDOR_ENV).has(c)
-}
-
-/**
  * True when `phone` matches an entry in `PIZZA_DAY_EXCHANGE_PHONES`.
  * Returns false for null/empty/unparseable input — never throws.
+ *
+ * Kept env-based because exchanges have no pay-QR (operator staffing only).
+ *
+ * TODO(quest-leaderboard): no production callers yet — wired up by the Quest
+ * scoring code when it ships. Delete if leaderboard ends up consuming
+ * getQuestExcludedPhones directly and never needs the per-phone check.
  */
 export function isExchangePhone(phone: string | null | undefined): boolean {
   if (!phone) return false
@@ -80,12 +82,48 @@ export function isExchangePhone(phone: string | null | undefined): boolean {
 }
 
 /**
- * Union of vendor + exchange phones, canonical E.164, deduped.
- * Fed into Quest SQL via a TEXT[] bind: `WHERE recipient_phone <> ALL(:excl)`.
- * Returns an empty array when both env vars are unset — Quest still runs,
- * just doesn't exclude anyone.
+ * Return the canonical phones for all active merchants — anyone who owns an
+ * active `kind='pay'` QR link.
+ *
+ * Pure DB read; on failure returns an empty set and logs (the caller is
+ * Quest scoring — observability, not a critical write path).
  */
-export function getQuestExcludedPhones(): string[] {
-  const merged = new Set<string>([...parsePhoneList(VENDOR_ENV), ...parsePhoneList(EXCHANGE_ENV)])
+async function getMerchantPhones(): Promise<Set<string>> {
+  try {
+    const result = await query<{ owner_phone_number: string }>(
+      `SELECT DISTINCT owner_phone_number
+         FROM qr_links
+        WHERE kind = 'pay' AND status = 'active'`
+    )
+    const canonical = new Set<string>()
+    for (const row of result.rows) {
+      const c = canonicalizePhone(row.owner_phone_number)
+      if (c) canonical.add(c)
+    }
+    return canonical
+  } catch (err) {
+    // logger.error (not warn) because this is an event-day-visible failure:
+    // when the merchant query fails, Quest exclusion silently becomes
+    // exchange-only and vendors show up at the top of the leaderboard.
+    // Show up in default log filters so ops sees the spike.
+    logger.error({ err }, 'getMerchantPhones failed — Quest exclusion degraded to exchange-only')
+    return new Set()
+  }
+}
+
+/**
+ * Union of active merchant phones (from `qr_links` issuance) + exchange env.
+ * Fed into Quest SQL via a TEXT[] bind: `WHERE recipient_phone <> ALL(:excl)`.
+ *
+ * Async because the merchant set is a DB read. Returns canonical E.164,
+ * deduped. Returns an empty array if neither source has anything — Quest
+ * still runs, just doesn't exclude anyone.
+ */
+export async function getQuestExcludedPhones(): Promise<string[]> {
+  const [merchants, exchange] = await Promise.all([
+    getMerchantPhones(),
+    Promise.resolve(parsePhoneList(EXCHANGE_ENV)),
+  ])
+  const merged = new Set<string>([...merchants, ...exchange])
   return Array.from(merged)
 }

@@ -280,6 +280,70 @@ export function formatQrInactiveMessage(lang: Lang = 'en'): string {
 }
 
 /**
+ * Sent when an attendee scans a vendor's pay-QR — asks the amount and
+ * makes it clear the recipient is a merchant (so the user knows this is
+ * a payment, not a peer transfer).
+ */
+export function formatVendorAskForAmount(displayName: string, lang: Lang = 'en'): string {
+  const m = {
+    en: () => `How much do you want to pay ${displayName}? They're a merchant on Sippy.`,
+    es: () => `Cuanto le pagas a ${displayName}? Es un comercio en Sippy.`,
+    pt: () => `Quanto voce paga a ${displayName}? E um comerciante no Sippy.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Vendor variant of the confirmation prompt. Always shown (no below-threshold
+ * silent execute) so an attendee can't accidentally double-pay a merchant.
+ *
+ * displayName comes from `qr_links.display_name` when the recipient was
+ * resolved via a pay-QR scan; falls back to the masked phone when missing.
+ */
+export function formatVendorConfirmationPrompt(
+  amount: number,
+  displayName: string,
+  lang: Lang = 'en'
+): string {
+  const amt = formatCurrencyUSD(amount)
+  const m = {
+    en: () => `Confirm paying ${amt} USDC to ${displayName} (merchant)? Reply YES to confirm.`,
+    es: () =>
+      `Confirmas pagar ${amt} USDC a ${displayName} (comercio)? Responde SI para confirmar.`,
+    pt: () =>
+      `Confirmar pagamento de ${amt} USDC para ${displayName} (comerciante)? Responda SIM para confirmar.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when the QR-lookup DB call throws (transient outage, pool
+ * exhaustion). Distinct from `formatQrInactiveMessage` because the QR
+ * isn't necessarily dead — try again is the right ask.
+ */
+export function formatQrLookupTransientErrorMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `We couldn't read that QR code right now. Try again in a moment.`,
+    es: () => `No pudimos leer ese codigo QR ahora. Intenta de nuevo en un momento.`,
+    pt: () => `Nao conseguimos ler esse codigo QR agora. Tente novamente em um momento.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when a user scans their own pay-QR. Surfaces the no-op directly
+ * instead of dropping into an awkward "do you want to pay yourself?" flow.
+ */
+export function formatSelfPayMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `That's your own pay code. Share it so someone else can pay you.`,
+    es: () => `Ese es tu propio codigo de pago. Compartelo para que te paguen.`,
+    pt: () => `Esse e o seu proprio codigo de pagamento. Compartilhe para receber.`,
+  }
+  return m[lang]()
+}
+
+/**
  * Sent when an already-onboarded phone scans an event QR. linkUserToEvent
  * has already been called with step='returning' by the time this fires —
  * the message is just the user-facing acknowledgement.

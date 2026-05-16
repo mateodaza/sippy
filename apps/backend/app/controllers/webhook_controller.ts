@@ -66,6 +66,7 @@ import {
   formatEmailNudge,
   formatInsufficientBalanceMessage,
   formatContactNotFound,
+  formatVendorConfirmationPrompt,
 } from '#utils/messages'
 
 import { DateTime } from 'luxon'
@@ -479,7 +480,13 @@ export async function routeCommand(
         }
         if (command.amount && command.recipient) {
           const threshold = env.get('CONFIRM_THRESHOLD') ?? CONFIRM_THRESHOLD_DEFAULT
-          if (command.amount <= threshold) {
+          // Force the confirmation path when this is a merchant payment
+          // (came from a pay-QR scan). An attendee should never silently
+          // double-pay a merchant just because the amount is below the
+          // personal-send threshold. Merchant context is carried over from
+          // the bracket dispatcher via the partial-send context.
+          const isMerchantPayment = command.merchantPayment === true
+          if (command.amount <= threshold && !isMerchantPayment) {
             // At or below threshold — concurrent guard + execute immediately
             if (activeSendsSet.has(phoneNumber)) {
               await sendMessageFn(phoneNumber, formatConcurrentSendMessage(lang), lang)
@@ -506,7 +513,9 @@ export async function routeCommand(
               activeSendsSet.delete(phoneNumber)
             }
           } else {
-            // Above threshold — check balance before asking for confirmation
+            // Above threshold OR vendor recipient — confirmation required.
+            // Check balance first so we don't ask the user to confirm a
+            // send they can't afford.
             try {
               const balance = await getEmbeddedBalance(phoneNumber)
               if (balance < command.amount) {
@@ -525,28 +534,57 @@ export async function routeCommand(
                 )
                 return
               }
-            } catch {
-              // Balance check failed — proceed to confirmation anyway.
-              // sendHandler will re-check balance before executing.
+            } catch (err) {
+              // Balance check failed. For non-merchant sends we let the user
+              // see the confirm prompt (sendHandler re-checks balance before
+              // executing). For merchant payments that's not safe: an
+              // attendee at a register types YES, the inner send fails with
+              // a generic insufficient-balance reply, and the vendor walks
+              // away believing they were paid. Short-circuit instead.
+              if (isMerchantPayment) {
+                logger.warn(
+                  { phone: maskPhone(phoneNumber), err },
+                  'merchant payment: balance check failed — surfacing generic error instead of confirm'
+                )
+                await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+                return
+              }
             }
 
-            // Store pending, ask for confirmation
+            // Store pending, ask for confirmation. Merchant payments get
+            // the vendor-framed copy with the friendly display name (carried
+            // over from the bracket dispatcher); everyone else gets the
+            // standard prompt.
             pendingTxs.set(phoneNumber, {
               amount: command.amount,
               recipient: command.recipient,
               timestamp: Date.now(),
               lang,
             })
-            await sendMessageFn(
-              phoneNumber,
-              formatConfirmationPromptWithWarning(
-                command.amount,
-                command.recipient,
-                command.isLargeAmount ?? false,
-                lang
-              ),
-              lang
-            )
+            // displayName is required by createQrLink at issuance time, so
+            // missing it on a merchant confirm means something is drifting
+            // (someone synthesized a merchant command outside the bracket
+            // flow, or the partial-send lost the field). Surface it without
+            // breaking the user-facing flow.
+            if (isMerchantPayment && !command.recipientDisplayName) {
+              logger.warn(
+                { phone: maskPhone(phoneNumber), recipient: maskPhone(command.recipient) },
+                'merchant confirm prompt missing recipientDisplayName — falling back to maskPhone'
+              )
+            }
+            const confirmPrompt = isMerchantPayment
+              ? formatVendorConfirmationPrompt(
+                  command.amount,
+                  command.recipientDisplayName ?? maskPhone(command.recipient),
+                  lang
+                )
+              : formatConfirmationPromptWithWarning(
+                  command.amount,
+                  command.recipient,
+                  command.isLargeAmount ?? false,
+                  lang
+                )
+            await sendMessageFn(phoneNumber, confirmPrompt, lang)
           }
         } else if (command.amount && !command.recipient) {
           // Has amount, missing recipient → store partial, ask for phone or alias
@@ -1221,9 +1259,27 @@ export default class WebhookController {
         })
         if (dispatch.reply) {
           // Event dispatch handled the message end-to-end (linked + welcomed,
-          // or sent the new-user setup URL, or surfaced an inactive-QR notice).
-          // Don't fall through to parsing — the bracket WAS the message.
+          // or sent the new-user setup URL, or surfaced an inactive-QR notice,
+          // or prompted for a pay-QR amount).
           await sendTextMessage(from, dispatch.reply, bracketLang)
+
+          // Pay-QR scan: stash a partial-send so the next inbound message
+          // resolves as the amount for this merchant. `merchantPayment: true`
+          // is the signal the downstream send branch reads to force the
+          // confirmation prompt (regardless of CONFIRM_THRESHOLD) and use
+          // the friendly display name in the confirm copy.
+          // The TTL-based GC + per-command partialSends.delete elsewhere in
+          // this file ensure a long-forgotten pay scan eventually expires.
+          if (dispatch.outcome === 'pay_prompt_for_amount' && dispatch.payRecipient) {
+            partialSends.set(from, {
+              recipient: dispatch.payRecipient,
+              recipientDisplayName: dispatch.payDisplayName ?? undefined,
+              merchantPayment: true,
+              timestamp: Date.now(),
+              lang: bracketLang,
+            })
+          }
+
           rateLimitService.markProcessed(messageId)
           return
         }
@@ -1265,13 +1321,19 @@ export default class WebhookController {
           resolved.amount,
           maskPhone(resolved.recipient)
         )
-        // Synthesize a complete send command and skip normal parsing
+        // Synthesize a complete send command and skip normal parsing.
+        // Carry the merchant-payment context forward so the downstream send
+        // branch can force confirmation + use the vendor display name in
+        // the confirm prompt. recipientDisplayName is undefined for non-pay
+        // partials and the send branch falls back to the default copy.
         const command: ParsedCommand = {
           command: 'send',
           amount: resolved.amount,
           recipient: resolved.recipient,
           isLargeAmount: resolved.amount > 500,
           originalText: text,
+          recipientDisplayName: partial.recipientDisplayName,
+          merchantPayment: partial.merchantPayment,
         }
         // Language, rate context, and routing — same path as normal sends
         const lang: Lang =

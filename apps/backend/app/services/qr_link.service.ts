@@ -246,6 +246,38 @@ export async function listEventQrLinks(eventSlug: string): Promise<QrLinkForScan
   }))
 }
 
+/**
+ * List all active `kind='pay'` QR links across all owners. Used by the admin
+ * pay-sheets page to render printable vendor signage. Ordered by display name
+ * (then created_at) so the page is deterministic across reprints.
+ */
+export async function listActivePayLinks(): Promise<QrLinkForScan[]> {
+  const result = await query<{
+    short_id: string
+    kind: QrKind
+    status: QrStatus
+    owner_phone_number: string
+    event_slug: string | null
+    source_tag: string | null
+    display_name: string | null
+  }>(
+    `SELECT short_id, kind, status, owner_phone_number, event_slug, source_tag, display_name
+     FROM qr_links
+     WHERE kind = 'pay' AND status = 'active'
+     ORDER BY display_name ASC NULLS LAST, created_at ASC`
+  )
+
+  return result.rows.map((row) => ({
+    shortId: row.short_id,
+    kind: row.kind,
+    status: row.status,
+    ownerPhoneNumber: row.owner_phone_number,
+    eventSlug: row.event_slug,
+    sourceTag: row.source_tag,
+    displayName: row.display_name,
+  }))
+}
+
 // ── Write: create a new QR link ─────────────────────────────────────────────
 
 export interface CreateQrLinkArgs {
