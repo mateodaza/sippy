@@ -47,6 +47,30 @@ type SmartAccount = Awaited<ReturnType<CdpClient['evm']['getOrCreateSmartAccount
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const ERC20_TRANSFER_ABI = ['function transfer(address to, uint256 amount) returns (bool)']
+
+/**
+ * Canonical send-status values. Mirrors the DB CHECK constraint exactly:
+ *   pending    — row reserved, userOp not yet submitted (or already 'failed'
+ *                if submission threw)
+ *   submitted  — userOp broadcast, awaiting on-chain confirmation
+ *   confirmed  — userOp completed AND status='complete' verified (C2)
+ *   failed     — submission itself threw; no userOp ever broadcast.
+ *                Cap budget IS released; retry is safe.
+ *
+ * Importing this union (instead of stringly-typed 'string') prevents a
+ * typo like `'comfirmed'` from silently passing through `.whereIn` and
+ * breaking cap math. M2.
+ */
+export const OPERATOR_SEND_STATUSES = ['pending', 'submitted', 'confirmed', 'failed'] as const
+export type OperatorSendStatus = (typeof OPERATOR_SEND_STATUSES)[number]
+
+/** The three states that count against the hourly cap + the duplicate guard.
+ *  'failed' rows are NOT in flight and don't reserve cap budget. */
+export const OPERATOR_SEND_IN_FLIGHT: readonly OperatorSendStatus[] = [
+  'pending',
+  'submitted',
+  'confirmed',
+]
 const USDC_BALANCEOF_ABI = ['function balanceOf(address owner) view returns (uint256)']
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -283,6 +307,14 @@ export async function submitUsdcSend(args: {
   if (amountUsdc <= 0) {
     throw new Error('amountUsdc must be > 0')
   }
+  // Defense in depth: the controller validates the recipient phone and looks
+  // up the wallet address from `user_preferences`, but a corrupted/legacy row
+  // could feed an invalid address straight into ABI encoding. ethers would
+  // happily encode garbage and burn paymaster credits OR send to a wrong
+  // address. Bail BEFORE any on-chain side effect.
+  if (!ethers.utils.isAddress(toAddress)) {
+    throw new Error(`Invalid toAddress '${toAddress}' — must be a valid EVM address`)
+  }
 
   const cdp = getCdpClient()
   const smart = await rehydrateSmartAccount(wallet)
@@ -329,7 +361,22 @@ export async function waitForOperatorSend(args: {
 }): Promise<{ txHash: string }> {
   const { smartAccount, userOpResult } = args
   const receipt = await smartAccount.waitForUserOperation(userOpResult)
+  // C2: CDP returns a discriminated union (FailedOperation | CompletedOperation).
+  // A reverted userOp returns status='failed' WITH a userOpHash. Without this
+  // check, the caller would persist tx_hash + status='confirmed' for a
+  // reverted send → operator believes the attendee got USDC, retries would
+  // also fail. Throw to keep the audit row in 'submitted' and surface the
+  // failure clearly to the caller.
+  if (receipt.status !== 'complete') {
+    throw new Error(
+      `userOp did not complete on-chain (status=${receipt.status}, ` +
+        `userOpHash=${receipt.userOpHash}). Funds did not move.`
+    )
+  }
   const userOp = await smartAccount.getUserOperation({ userOpHash: receipt.userOpHash })
+  // CompletedOperation guarantees transactionHash, but defensively fall back
+  // to userOpHash if the post-receipt fetch returns null (unlikely after a
+  // complete status, but better than serving an empty string).
   const txHash = userOp.transactionHash ?? receipt.userOpHash
   return { txHash }
 }
@@ -368,6 +415,15 @@ export async function drainOperatorWallet(args: {
   destinationAddress: string
 }): Promise<{ txHash: string | null; amountSent: number }> {
   const { wallet, destinationAddress } = args
+
+  // Same defense-in-depth as submit: the vine validator on the route already
+  // checks 0x-format, but service should never trust callers. Also blocks the
+  // case where the regex is bypassed by a future bug.
+  if (!ethers.utils.isAddress(destinationAddress)) {
+    throw new Error(
+      `Invalid destinationAddress '${destinationAddress}' — must be a valid EVM address`
+    )
+  }
 
   // Strict balance read — we MUST distinguish "wallet empty" from "RPC
   // failed" here. The display-safe variant returns 0 on RPC error, which
@@ -410,6 +466,18 @@ export async function drainOperatorWallet(args: {
   })
 
   const receipt = await smart.waitForUserOperation(userOpResult)
+  // C2: the receipt is a discriminated union (FailedOperation | CompletedOperation)
+  // per CDP SDK types. A reverted userOp (USDC transfer reverts, paymaster
+  // rejects, gas exhausted at execution) returns status='failed' WITH a
+  // userOpHash. Without this check, drain reports `{txHash, amountSent}`
+  // and admin walks away thinking the wallet is empty while funds remain.
+  if (receipt.status !== 'complete') {
+    throw new Error(
+      `Drain userOp did not complete on-chain (status=${receipt.status}, ` +
+        `userOpHash=${receipt.userOpHash}). Funds remain in wallet ${wallet.walletAddress}. ` +
+        `Check the explorer and retry.`
+    )
+  }
   const userOp = await smart.getUserOperation({ userOpHash: receipt.userOpHash })
   const txHash = userOp.transactionHash ?? receipt.userOpHash
 
@@ -420,20 +488,29 @@ export async function drainOperatorWallet(args: {
 // ── Balance read ────────────────────────────────────────────────────────────
 
 /**
- * Display-safe balance read. Swallows RPC errors and returns 0 so the
- * operator dashboard never crashes when the chain is flaky. Suitable for
- * the wallet card on the send page where 0 just means "nothing visible
- * right now, refresh later" and not "wallet definitively empty".
+ * Display-safe balance read. Returns a discriminated result instead of
+ * silently coercing RPC failures to `0` — that would make "wallet empty"
+ * indistinguishable from "RPC down" in the UI and could drive bad admin
+ * decisions (false-zero assignment/reassignment/drain).
+ *
+ * UI consumers should render `"—"` + an "unavailable" indicator when
+ * `kind === 'error'`, NOT `$0.00`.
  *
  * DO NOT use this for drain or any decision-making logic — see
  * `getOperatorWalletBalanceStrict` for the throw-on-failure variant.
  */
-export async function getOperatorWalletBalance(walletAddress: string): Promise<number> {
+export type BalanceResult = { kind: 'ok'; value: number } | { kind: 'error'; error: string }
+
+export async function getOperatorWalletBalance(walletAddress: string): Promise<BalanceResult> {
   try {
-    return await getOperatorWalletBalanceStrict(walletAddress)
+    return { kind: 'ok', value: await getOperatorWalletBalanceStrict(walletAddress) }
   } catch (err) {
-    logger.warn({ walletAddress, err }, 'operator_wallet.balance failed (returning 0 for display)')
-    return 0
+    const msg = err instanceof Error ? err.message : String(err)
+    logger.warn(
+      { walletAddress, err },
+      'operator_wallet.balance failed (display variant — surfacing error to UI)'
+    )
+    return { kind: 'error', error: msg.slice(0, 200) }
   }
 }
 
@@ -453,15 +530,17 @@ export async function getOperatorWalletBalanceStrict(walletAddress: string): Pro
 // ── Send-history helpers (used by the controller for caps + recent-sends UI) ─
 
 /**
- * Sum of amount_usdc for operator_sends in the rolling 1-hour window for
- * a specific operator. Counts rows in 'pending', 'submitted', 'confirmed' —
- * NOT 'failed' (failed sends don't move money and shouldn't tighten caps).
+ * Sum of amount_usdc for operator_sends in the rolling 1-hour window.
+ * **DISPLAY ONLY** — used by the operator dashboard to show "spent: $X /
+ * $500". The cap-gate uses its own SUM inside the advisory-lock transaction
+ * in `operator_send_controller.send()`; do NOT use this function for
+ * gating, the read is unlocked and racy. M7.
  */
 export async function getOperatorSpendInLastHour(operatorUserId: number): Promise<number> {
   const result = (await db
     .from('operator_sends')
     .where('operator_id', operatorUserId)
-    .whereIn('status', ['pending', 'submitted', 'confirmed'])
+    .whereIn('status', OPERATOR_SEND_IN_FLIGHT as readonly string[] as string[])
     .where('created_at', '>', db.raw("now() - interval '1 hour'"))
     .sum('amount_usdc as total')
     .first()) as { total: string | number | null } | undefined

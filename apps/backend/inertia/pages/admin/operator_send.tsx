@@ -29,7 +29,9 @@ interface Props {
   event: { slug: string; name: string } | null
   wallet: {
     address: string
-    balanceUsdc: number
+    /** null when the on-chain balance read failed — render "—" not $0.00. */
+    balanceUsdc: number | null
+    balanceError: string | null
     active: boolean
   } | null
   caps: {
@@ -221,9 +223,23 @@ export default function OperatorSendPage({
           </div>
           <div>
             <p className="spec-label">Balance</p>
-            <p className="mt-1 font-mono text-2xl font-bold text-crypto-hover">
-              ${wallet.balanceUsdc.toFixed(2)}
-            </p>
+            {wallet.balanceUsdc !== null ? (
+              <p className="mt-1 font-mono text-2xl font-bold text-crypto-hover">
+                ${wallet.balanceUsdc.toFixed(2)}
+              </p>
+            ) : (
+              <>
+                <p
+                  className="mt-1 font-mono text-2xl font-bold text-amber-700"
+                  title={wallet.balanceError ?? 'on-chain read failed'}
+                >
+                  —
+                </p>
+                <p className="mt-1 font-mono text-xs text-amber-700">
+                  RPC unavailable; balance unknown. Do NOT assume empty — retry shortly.
+                </p>
+              </>
+            )}
           </div>
           <div>
             <p className="spec-label">Hour cap remaining</p>

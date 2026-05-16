@@ -36,7 +36,9 @@ interface Attendee {
 
 interface OperatorWallet {
   walletAddress: string
-  balanceUsdc: number
+  /** null = RPC failure; UI renders "—" not $0.00 (H1). */
+  balanceUsdc: number | null
+  balanceError: string | null
   active: boolean
   operatorUserId: number
   operatorEmail: string | null
@@ -127,21 +129,43 @@ function OperatorWalletPanel({
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       ...(body ? { body: JSON.stringify(body) } : {}),
     })
-    const data = await res.json().catch(() => ({}))
-    return { ok: res.ok, status: res.status, data }
+    // M6: separate JSON parse failures from real responses. Non-JSON 5xx
+    // (nginx HTML, gateway timeout) used to coerce to `{}` and alert
+    // "Failed: undefined" — admin had no idea whether the request reached
+    // the backend. Capture status + raw body snippet so the caller can
+    // produce a meaningful error message.
+    let data: any = {}
+    let bodyText: string | null = null
+    const cloned = res.clone()
+    try {
+      data = await res.json()
+    } catch {
+      try {
+        bodyText = (await cloned.text()).slice(0, 200)
+      } catch {
+        bodyText = null
+      }
+    }
+    return { ok: res.ok, status: res.status, data, bodyText }
+  }
+
+  function alertError(action: string, status: number, data: any, bodyText: string | null) {
+    const msg =
+      data?.error ?? (bodyText ? `non-JSON response: ${bodyText}` : `HTTP ${status} (no body)`)
+    alert(`Failed to ${action} (status ${status}): ${msg}`)
   }
 
   async function doAssign() {
     if (!selectedOperatorId) return
     setBusy('assign')
-    const { ok, data } = await postJson(
+    const { ok, status, data, bodyText } = await postJson(
       `/admin/events/${encodeURIComponent(eventSlug)}/operator`,
       { operatorUserId: Number(selectedOperatorId) },
       'POST'
     )
     setBusy(null)
     if (!ok) {
-      alert(`Failed to assign: ${data?.error ?? 'unknown'}`)
+      alertError('assign', status, data, bodyText)
       return
     }
     router.reload({ only: ['operatorWallet'] })
@@ -156,14 +180,14 @@ function OperatorWalletPanel({
       return
     }
     setBusy('revoke')
-    const { ok, data } = await postJson(
+    const { ok, status, data, bodyText } = await postJson(
       `/admin/events/${encodeURIComponent(eventSlug)}/operator`,
       null,
       'DELETE'
     )
     setBusy(null)
     if (!ok) {
-      alert(`Failed to revoke: ${data?.error ?? 'unknown'}`)
+      alertError('revoke', status, data, bodyText)
       return
     }
     router.reload({ only: ['operatorWallet'] })
@@ -177,14 +201,14 @@ function OperatorWalletPanel({
     }
     if (!confirm(`Drain ALL USDC to ${drainAddress}? This cannot be undone.`)) return
     setBusy('drain')
-    const { ok, data } = await postJson(
+    const { ok, status, data, bodyText } = await postJson(
       `/admin/events/${encodeURIComponent(eventSlug)}/operator-wallet/drain`,
       { destinationAddress: drainAddress },
       'POST'
     )
     setBusy(null)
     if (!ok) {
-      alert(`Failed to drain: ${data?.error ?? 'unknown'}`)
+      alertError('drain', status, data, bodyText)
       return
     }
     alert(
@@ -231,9 +255,18 @@ function OperatorWalletPanel({
             </div>
             <div>
               <p className="spec-label">Balance</p>
-              <p className="mt-1 text-lg font-bold text-crypto-hover">
-                ${wallet.balanceUsdc.toFixed(2)}
-              </p>
+              {wallet.balanceUsdc !== null ? (
+                <p className="mt-1 text-lg font-bold text-crypto-hover">
+                  ${wallet.balanceUsdc.toFixed(2)}
+                </p>
+              ) : (
+                <p
+                  className="mt-1 text-lg font-bold text-amber-700"
+                  title={wallet.balanceError ?? 'on-chain read failed'}
+                >
+                  — <span className="text-xs">(unavailable)</span>
+                </p>
+              )}
             </div>
           </div>
 

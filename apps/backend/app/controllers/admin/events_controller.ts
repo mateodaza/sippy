@@ -107,10 +107,22 @@ interface AttendeePayload {
  * false if the caller already wrote a 403 response.
  */
 async function passesOperatorScope(ctx: HttpContext, requestedSlug: string): Promise<boolean> {
-  const user = ctx.auth.user!
-  if (user.role !== 'operator') return true
-  const assignment = await getOperatorWalletForUser(user.id)
-  if (!assignment || assignment.eventSlug !== requestedSlug) {
+  const user = ctx.auth.user
+  // M5 defense: route gate already requires auth, but if the gate is ever
+  // misconfigured/missing, fail closed here rather than throwing TypeError
+  // on auth.user!.
+  if (!user) {
+    ctx.response.unauthorized({ error: 'Authentication required' })
+    return false
+  }
+  // M3: default-deny. Explicitly allow only known roles; anything else
+  // (uppercase, future-added role, empty string) gets 403. Today the route
+  // gate only admits admin/operator, so this is belt-and-suspenders, but it
+  // prevents a leak if a new role is added without updating this branch.
+  if (user.role === 'admin') return true
+  if (user.role === 'operator') {
+    const assignment = await getOperatorWalletForUser(user.id)
+    if (assignment && assignment.eventSlug === requestedSlug) return true
     logger.warn(
       {
         user_id: user.id,
@@ -122,7 +134,12 @@ async function passesOperatorScope(ctx: HttpContext, requestedSlug: string): Pro
     ctx.response.forbidden({ error: 'Not authorized for this event' })
     return false
   }
-  return true
+  logger.warn(
+    { user_id: user.id, role: user.role, requested: requestedSlug },
+    'events_controller: unknown role attempted to access scoped endpoint'
+  )
+  ctx.response.forbidden({ error: 'Not authorized for this event' })
+  return false
 }
 
 interface AttendeesProps {
@@ -155,7 +172,14 @@ interface AttendeesProps {
    */
   operatorWallet: {
     walletAddress: string
-    balanceUsdc: number
+    /**
+     * USDC balance. `null` when the on-chain read failed (RPC down, contract
+     * revert, etc.). UI MUST render "—" or an unavailable badge for null —
+     * NEVER `$0.00`, which is indistinguishable from a truly empty wallet
+     * and could drive bad admin decisions (false-zero drain/reassignment).
+     */
+    balanceUsdc: number | null
+    balanceError: string | null
     active: boolean
     operatorUserId: number
     operatorEmail: string | null
@@ -337,7 +361,7 @@ export default class EventsController {
     if (callerRole === 'admin') {
       const wallet = await getOperatorWalletForEvent(slug)
       if (wallet) {
-        const [balanceUsdc, operatorRow] = await Promise.all([
+        const [balanceResult, operatorRow] = await Promise.all([
           getOperatorWalletBalance(wallet.walletAddress),
           db
             .from('admin_users')
@@ -347,7 +371,10 @@ export default class EventsController {
         ])
         operatorWalletPayload = {
           walletAddress: wallet.walletAddress,
-          balanceUsdc,
+          // Surface RPC failures explicitly — null + balanceError tells the
+          // UI to render "—" instead of $0.00 (H1).
+          balanceUsdc: balanceResult.kind === 'ok' ? balanceResult.value : null,
+          balanceError: balanceResult.kind === 'error' ? balanceResult.error : null,
           active: wallet.active,
           operatorUserId: wallet.operatorUserId,
           operatorEmail: operatorRow?.email ?? null,
@@ -549,13 +576,16 @@ export default class EventsController {
       return response.notFound({ error: `No operator wallet provisioned for '${slug}'` })
     }
 
-    const balanceUsdc = await getOperatorWalletBalance(wallet.walletAddress)
+    const balanceResult = await getOperatorWalletBalance(wallet.walletAddress)
     return response.ok({
       eventSlug: wallet.eventSlug,
       operatorUserId: wallet.operatorUserId,
       walletAddress: wallet.walletAddress,
       active: wallet.active,
-      balanceUsdc,
+      // Mirror the shape used in the attendees payload for consistency:
+      // null balance + non-null error → UI renders "unavailable".
+      balanceUsdc: balanceResult.kind === 'ok' ? balanceResult.value : null,
+      balanceError: balanceResult.kind === 'error' ? balanceResult.error : null,
     })
   }
 }

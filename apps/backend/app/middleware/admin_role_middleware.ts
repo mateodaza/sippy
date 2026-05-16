@@ -19,7 +19,18 @@ import logger from '@adonisjs/core/services/logger'
  */
 export default class AdminRoleMiddleware {
   async handle(ctx: HttpContext, next: NextFn, options: { role: 'admin' | 'operator' }) {
-    const user = ctx.auth.user!
+    // M5: explicit unauthenticated check. The route gate should require
+    // auth() before this middleware, but if that gate is ever omitted,
+    // `auth.user!` would throw TypeError → 500, hiding the misconfig.
+    // Fail closed with a clear 401.
+    const user = ctx.auth.user
+    if (!user) {
+      logger.warn(
+        { path: ctx.request.url() },
+        'admin_role: no authenticated user (auth middleware missing on route?)'
+      )
+      return ctx.response.unauthorized({ error: 'Authentication required' })
+    }
 
     const allowed =
       options.role === 'admin' ? user.role === 'admin' : ['operator', 'admin'].includes(user.role)

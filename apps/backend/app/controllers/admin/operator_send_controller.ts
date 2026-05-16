@@ -41,10 +41,23 @@ import { canonicalizePhone, maskPhone } from '#utils/phone'
 const DEFAULT_MAX_PER_TX = 100
 const DEFAULT_MAX_PER_HOUR = 500
 
+/**
+ * NaN-safe env-var → number. `Number('not-a-number')` returns NaN, and
+ * `amount > NaN` is false — so a typo'd env (`OPERATOR_MAX_PER_TX_USDC=abc`)
+ * would silently disable the cap. Reject any non-finite or non-positive
+ * value and fall back to the default.
+ */
+function parseCapEnv(envName: string, dflt: number): number {
+  const raw = env.get(envName)
+  if (raw === undefined || raw === null || raw === '') return dflt
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : dflt
+}
+
 function getCaps(): { perTx: number; perHour: number } {
   return {
-    perTx: Number(env.get('OPERATOR_MAX_PER_TX_USDC') ?? DEFAULT_MAX_PER_TX),
-    perHour: Number(env.get('OPERATOR_MAX_PER_HOUR_USDC') ?? DEFAULT_MAX_PER_HOUR),
+    perTx: parseCapEnv('OPERATOR_MAX_PER_TX_USDC', DEFAULT_MAX_PER_TX),
+    perHour: parseCapEnv('OPERATOR_MAX_PER_HOUR_USDC', DEFAULT_MAX_PER_HOUR),
   }
 }
 
@@ -68,7 +81,9 @@ interface ShowSendProps {
   event: { slug: string; name: string } | null
   wallet: {
     address: string
-    balanceUsdc: number
+    /** USDC balance. `null` when the on-chain read failed — UI renders "—". */
+    balanceUsdc: number | null
+    balanceError: string | null
     active: boolean
   } | null
   caps: {
@@ -134,7 +149,7 @@ export default class OperatorSendController {
       .select('slug', 'name')
       .first()
 
-    const [balanceUsdc, spentLastHourUsdc, recentSends] = await Promise.all([
+    const [balanceResult, spentLastHourUsdc, recentSends] = await Promise.all([
       getOperatorWalletBalance(wallet.walletAddress),
       getOperatorSpendInLastHour(user.id),
       loadRecentSends(user.id, wallet.eventSlug),
@@ -147,7 +162,11 @@ export default class OperatorSendController {
       event: event ? { slug: event.slug, name: event.name } : null,
       wallet: {
         address: wallet.walletAddress,
-        balanceUsdc,
+        // H1: surface RPC failure as null + balanceError so UI can render
+        // "—" instead of $0.00. An empty wallet and an RPC outage look
+        // identical in $0.00 and could drive the operator to refuse cash.
+        balanceUsdc: balanceResult.kind === 'ok' ? balanceResult.value : null,
+        balanceError: balanceResult.kind === 'error' ? balanceResult.error : null,
         active: wallet.active,
       },
       caps: {
@@ -307,6 +326,12 @@ export default class OperatorSendController {
     // The INSERT happens INSIDE the transaction with status='pending',
     // so the next concurrent send's SUM will see this reservation and
     // include it in its cap calculation.
+    // Allow explicit override for legitimate re-sends (e.g. admin confirmed
+    // attendee never actually received the first drop). Accept either body
+    // field or `?override=true` query string. Defaults to false.
+    const rawOverride = request.body()?.override ?? request.input('override', '')
+    const overrideDuplicate = rawOverride === true || String(rawOverride).toLowerCase() === 'true'
+
     let sendRowId: number
     try {
       sendRowId = await db.transaction(async (trx) => {
@@ -314,6 +339,44 @@ export default class OperatorSendController {
         // until the lock is acquired; same-operator sends queue, others
         // proceed in parallel. Lock auto-released on commit/rollback.
         await trx.rawQuery('SELECT pg_advisory_xact_lock(?)', [user.id])
+
+        // C1 — duplicate-recipient guard. The per-row "sent" rollup on the
+        // attendees page is purely cosmetic; two operators (or the same
+        // operator across page reloads) could otherwise both pay the same
+        // attendee. We MUST check inside this transaction so a concurrent
+        // POST also sees the pending reservation. Status filter omits
+        // 'failed' — those don't block a retry. The advisory lock is per
+        // operator, NOT per recipient, so two different operators could
+        // theoretically race here; the unique-recipient invariant is
+        // enforced by ordering (whoever wins the lookup wins) and is good
+        // enough for the Pizza Day cadence. A row-level lock would be the
+        // bullet-proof variant.
+        if (!overrideDuplicate) {
+          const dup = (await trx
+            .from('operator_sends')
+            .where({ event_slug: wallet.eventSlug, to_phone: recipientPrefKey })
+            .whereIn('status', ['pending', 'submitted', 'confirmed'])
+            .select('id', 'amount_usdc', 'status', 'created_at')
+            .orderBy('created_at', 'desc')
+            .first()) as
+            | {
+                id: string | number
+                amount_usdc: string
+                status: string
+                created_at: string
+              }
+            | undefined
+          if (dup) {
+            const err = new Error(
+              `Recipient already received $${dup.amount_usdc} USDC for event ` +
+                `'${wallet.eventSlug}' (status=${dup.status}, send id=${dup.id}). ` +
+                `Pass override=true to force a re-send.`
+            )
+            ;(err as any).code = 'DUPLICATE_RECIPIENT'
+            ;(err as any).existingSend = dup
+            throw err
+          }
+        }
 
         const spent = (await trx
           .from('operator_sends')
@@ -349,6 +412,13 @@ export default class OperatorSendController {
         return (inserted[0] as any).id ?? inserted[0]
       })
     } catch (err) {
+      if ((err as any)?.code === 'DUPLICATE_RECIPIENT') {
+        return response.status(409).send({
+          error: (err as Error).message,
+          code: 'DUPLICATE_RECIPIENT',
+          existingSend: (err as any).existingSend,
+        })
+      }
       if ((err as any)?.code === 'HOURLY_CAP_EXCEEDED') {
         return response.status(429).send({
           error: (err as Error).message,
@@ -409,12 +479,32 @@ export default class OperatorSendController {
     // userOp is broadcast. Persist its hash IMMEDIATELY so a wait failure
     // doesn't lose the audit trail. From this point, status will never go
     // back to 'failed' — only to 'confirmed' on success.
+    //
+    // H4: throw if userOpHash is missing rather than persisting an empty
+    // string. An empty hash would silently break the explorer link and
+    // any future reconciliation job that looks up by hash.
+    if (!submitted.userOpHash) {
+      // CDP SDK contract guarantees this, but defend anyway. We can't
+      // recover automatically — userOp may be in flight but we have no
+      // way to find it. Force admin intervention.
+      logger.error(
+        { operator_id: user.id, send_id: sendRowId },
+        'operator_send: CDP returned no userOpHash after sendUserOperation. Row stuck in pending — manual reconciliation required.'
+      )
+      return response.status(500).send({
+        success: false,
+        sendId: sendRowId,
+        error:
+          'CDP returned no userOpHash. Row marked pending — DO NOT retry. Contact admin to reconcile against Arbiscan.',
+      })
+    }
+
     await db
       .from('operator_sends')
       .where({ id: sendRowId })
       .update({
         status: 'submitted',
-        tx_hash: submitted.userOpHash || null,
+        tx_hash: submitted.userOpHash,
         updated_at: db.raw('now()'),
       })
 
@@ -425,6 +515,14 @@ export default class OperatorSendController {
     // fail at the EntryPoint, but that's a separate event. Operator gets
     // a "submitted" response with the hash; a future reconciliation job
     // can promote 'submitted' → 'confirmed' once the chain settles.
+    //
+    // H4: We DON'T blanket-catch everything as "still in flight". The
+    // service explicitly throws when the userOp completes with
+    // status='failed' (reverted on-chain). In that case we DO want the
+    // audit row to surface the failure — but we still cannot mark it
+    // 'failed' from the perspective of double-pay safety (the wallet was
+    // debited if the revert was AFTER the transfer). Instead, set a
+    // distinct intermediate state and let admin reconcile.
 
     try {
       const { txHash } = await waitForOperatorSend({
@@ -447,24 +545,44 @@ export default class OperatorSendController {
         status: 'confirmed',
       })
     } catch (waitErr) {
-      // userOp IS in flight. Do not mark failed — that would let the
-      // operator retry and double-pay. Return success with the userOp
-      // hash and a note explaining the deferred confirmation.
+      // Three possible cases:
+      //  (a) timeout: userOp still pending in bundler — keep 'submitted'
+      //  (b) on-chain revert: userOp completed but USDC didn't move —
+      //      KEEP 'submitted' (don't release cap budget for retry, since
+      //      this typically requires manual investigation)
+      //  (c) genuine programmer bug in waitForOperatorSend: TypeError,
+      //      out-of-memory, etc.
+      //
+      // In all three, we keep status='submitted' (NEVER 'failed', that
+      // would re-open the cap and enable retry → double-pay) but surface
+      // a clearer error to the operator. Admin must reconcile via
+      // Arbiscan + manual UPDATE.
+      const errClass =
+        waitErr instanceof Error && waitErr.message.includes('did not complete on-chain')
+          ? 'reverted'
+          : 'timeout-or-unknown'
       logger.warn(
         {
           operator_id: user.id,
           send_id: sendRowId,
           userOpHash: submitted.userOpHash,
+          errClass,
           err: waitErr,
         },
-        'operator_send.wait-timeout (userOp broadcast, awaiting on-chain confirmation)'
+        `operator_send.wait-${errClass} (userOp broadcast, requires reconciliation)`
       )
+      const isReverted = errClass === 'reverted'
       return response.ok({
-        success: true,
+        success: !isReverted,
         sendId: sendRowId,
         txHash: submitted.userOpHash,
         status: 'submitted',
-        note: 'Transaction submitted but confirmation timed out. Check the userOp hash on the explorer or refresh in a few seconds.',
+        note: isReverted
+          ? 'userOp completed but reverted on-chain — recipient did NOT receive USDC. ' +
+            'Audit row left as "submitted" (do not retry without admin reconciliation). ' +
+            'Check the userOp hash on the explorer.'
+          : 'Transaction submitted but confirmation timed out. ' +
+            'Check the userOp hash on the explorer or refresh in a few seconds.',
       })
     }
   }
