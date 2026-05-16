@@ -59,6 +59,12 @@ Each is a feature worth building on its own merit. Pizza Day is the forcing func
 - **Gas refuel "toteado".** Top up `GasRefuel.sol` on Arbitrum One before May 22. 200 cold wallets = lots of first-tx gas.
 - **Privacy.** Covered by existing onboarding ToS. No extra QR-side consent needed.
 - **Spanish in-app doc.** `/pizza-day` page in the app. Fun, friendly, trilingual not required (event is in Spanish-speaking context). Covers Quest rules, how to send, how to claim POAP, how to fund.
+- **Unified Event Operator Dashboard** (decided May 16, Mateo + Carlos). Single admin surface that merges three things into one tool for the on-the-ground operator at the venue:
+  1. **Live attendee list** — sees each new attendee appear as they complete onboarding (source-tagged so we know which assistant funnel they came through).
+  2. **Per-attendee "Send USDC" button** — once an attendee's wallet exists, the operator clicks once to seed them with the event's standard amount (Cartagena-funded). Replaces the manual cash-for-USDC exchange-wallet flow for seed distribution. (If cash-for-USDC top-ups still happen separately at the venue, that's a different lane; the dashboard owns the seed.)
+  3. **QR management** — the existing `/admin/qr-sheets/:eventSlug` page (already built, in prod) becomes a section of this dashboard rather than a separate URL. One operator UI, one URL to remember.
+
+  **Owner: Carlos.** Foundation already exists (`apps/backend/inertia/pages/admin/qr_sheets.tsx` + `qr_sheets_controller.ts` + `event.service.ts`); Carlos extends with the live-attendee view + seed-send action. Mateo works the vendor-mode UI in parallel (separate surface for vendors, not operators).
 
 ---
 
@@ -84,7 +90,12 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 - [ ] **Quest endpoint**: single leaderboard query, top 10 by `quest_score` (distinct senders per recipient, ≥$0.10 each). See "Quest leaderboard — SQL" section above for the exact shape. Confirm `transfers` column names against the onchain table schema; may need `phone_registry` bridge if attribution is wallet-keyed. Filter excluded phones via the util from the item above.
 
-- [ ] **Admin endpoint: `GET /admin/events/:slug/attendees`.** Powers the live monitoring dashboard (onboarded-count, per-assistant attribution). Joins `user_event_links` to whatever onchain summary makes sense for live counts + per-source-tag breakdown.
+- [ ] **Event Operator Dashboard (unified).** Extends the existing `/admin/qr-sheets/:eventSlug` page into a single operator surface. Three sections:
+  1. **Live attendees list** — polls `user_event_links` for the event (or pushes via SSE if simple); shows each attendee with source-tag, onboarding timestamp, wallet status.
+  2. **"Send USDC seed" button per attendee** — fires a tx from a configured treasury/operator wallet to the attendee's Sippy wallet for the standard event seed amount (env var, e.g., `PIZZA_DAY_SEED_USDC=2`). Idempotent (don't double-seed the same phone). Disabled until the attendee's wallet exists.
+  3. **QR management** — the existing admin sheets form + printable sheets stay as a section/tab of the dashboard, not a separate page.
+
+  Replaces the originally-spec'd standalone `GET /admin/events/:slug/attendees` endpoint and the standalone "live monitoring dashboard" — one tool, one URL. Foundation already in prod (`apps/backend/inertia/pages/admin/qr_sheets.tsx` + `qr_sheets_controller.ts`); extend rather than rebuild.
 
 - [ ] **`SMART_MODE` flag in parser**, with regex fallback on LLM error. Enable for users tagged with `source=pizza-day` (event link metadata). LLM = Llama 4 Scout per existing parser conventions. Falls back to current regex parser on LLM error. Never degrades current behavior.
 
@@ -117,12 +128,12 @@ Print + distribute one vendor sheet per booth. Attendee scans → lands in Whats
 
 - [~] Generate Pizza Day assistant sheets via QR admin endpoint (consumes QR v1; see [QR_SYSTEM_SPEC.md](QR_SYSTEM_SPEC.md)). _QR primitive v1 code-complete (migrations 0018+0019, scan endpoint, admin sheets page, runtime path validated via curl). Awaiting browser smoke + the actual print run after vendor phones land May 18. Each printable QR encodes `${FRONTEND_URL}/q/<short-id>?v=1` and on scan redirects into WhatsApp with a `[short-id]` code. Payload metadata stored in `qr_links`: `{kind: 'event', event_slug: 'pizza-day-ctg-2026', source_tag: 'assistant-NN'}`._
 - [ ] Public leaderboard page (top 10 MVP + top 10 Connector + live counters)
-- [ ] **Vendor mode receiver UI** (mobile-first dashboard). Design locked May 15:
+- [~] **Vendor mode receiver UI** (mobile-first dashboard) — **Mateo's solo lane this week**, while Carlos builds the unified operator dashboard in parallel. Design locked May 15:
   - **Attendee scan flow:** scan vendor QR (`kind='pay'`) → WhatsApp opens with `[short-id]` → bot asks "¿Cuánto pagar a {vendorName}?" → user types amount → confirm → send. (Carlos's pay-dispatch lane, conditional on Saturday call.)
   - **Vendor receive flow:** on each incoming payment, Sippy bot sends the vendor a WhatsApp message like `"+$5 USDC de Sippy_user_4521 → ver: sippy.lat/vendor"`. The link opens the mobile dashboard.
   - **Vendor dashboard** (new mobile-first page at apps/web `/vendor`, auth-gated by phone): today's tx count, total received USDC, last 10 transactions with sender + amount + timestamp. Auto-refresh every 30s. ~2 hours to build. Reads from the same onchain.transfer source the Quest endpoint uses.
 - [x] Spanish `/pizza-day` in-app doc. _Server Component at `apps/web/app/pizza-day/page.tsx`. Covers conseguir USDC, mandar plata, pagar pizza/bebidas, Quest premios, POAP claim, ayuda. Mobile-first, brand-aligned. Will be live on next apps/web deploy at `https://www.sippy.lat/pizza-day`._
-- [ ] Live monitoring dashboard
+- ~~Live monitoring dashboard~~ → **merged into Carlos's Event Operator Dashboard** (unified surface, see his tracker)
 - [x] Backup plan doc + printed fallback materials. _Backup plans table above. Printable WhatsApp-number flyer at `apps/web/app/pizza-day/flyer/page.tsx` — public URL `https://www.sippy.lat/pizza-day/flyer` once deployed. Cmd/Ctrl+P → print. Hand out as catch-all when sheets get lost / Wi-Fi dies._
 - [ ] Preload USDC float into 2–3 exchange wallets
 
@@ -361,7 +372,7 @@ Rules: no em dashes, no AI accent ("revolutionizing", "empowering"), causal tran
 1. **Deck audience and slot.** When and to whom is the 20-min slot? Determines framing.
 2. **Vendor + exchange staff identity.** 2 vendor accounts + 2–3 exchange accounts = 4–5 people total. Need their phones by **Mon May 18 EOD** so we can generate printable QR sheets and labeled signage.
 3. **Exchange wallet float size.** How much USDC do we preload per wallet? Function of expected onramp demand at 200 attendees. Rough cut: if 50% onramp ~$10 average, that's $1K total = ~$350 per wallet across 3 floats. Confirm before May 21.
-4. **How attendees actually receive USDC.** Plan currently says "cash → exchange staff → USDC", but Cartagena may be funding attendee wallets directly with "pizza price + small extra". Three possibilities to lock: (a) cash-for-USDC as documented, (b) Cartagena pre-funds wallets at onboarding with fixed amount, (c) hybrid (free seed + optional cash top-up). This shapes how much "extra" attendees have to play the Quest with.
+4. **How attendees actually receive USDC.** **Largely answered (May 16):** the unified operator dashboard owns seed distribution — operator clicks "Send USDC" per attendee once their wallet exists. Cartagena funds. Residual to lock: (a) exact seed amount (`PIZZA_DAY_SEED_USDC`, suggest $2-3 — covers pizza price + Quest play money), (b) whether cash-for-USDC top-ups still happen at the venue as a separate manual flow for attendees who want more, or if seed is the only on-ramp at the event. If no cash-for-USDC, the original "Exchange model" Locked decision becomes obsolete and exchange wallets get retired.
 5. **Pay-QR for vendors: go / no-go.** Original brief had "QR para pagos". Saturday locks whether vendor signage is QR-scannable or attendees use alias path (`paga 5 a pizza`). If go: Carlos's pay-dispatch + Mateo's admin extension + vendor dashboard. If no: same alias path that already works.
 
 ---
