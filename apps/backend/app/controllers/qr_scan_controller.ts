@@ -74,6 +74,16 @@ function pickDeviceClass(raw: unknown): DeviceClass {
 }
 
 /**
+ * Canonical Sippy WhatsApp number, digits-only for wa.me. Mirrors
+ * `apps/web/lib/constants.WHATSAPP_BOT_NUMBER`. Hardcoded as a fallback so a
+ * missing `SIPPY_WHATSAPP_NUMBER` env never produces a numberless wa.me URL
+ * (which silently redirects to api.whatsapp.com/send/?type=custom_url and
+ * makes the user pick a contact — breaking the "always lands in Sippy"
+ * promise).
+ */
+const SIPPY_WHATSAPP_NUMBER_FALLBACK = '14722261449'
+
+/**
  * Build the wa.me URL the user should land in. Always points at the Sippy
  * WhatsApp number; the prefilled text varies by outcome:
  *
@@ -85,12 +95,14 @@ function pickDeviceClass(raw: unknown): DeviceClass {
  *  - not_found / invalid_version: omit the code (it's meaningless or unparseable),
  *    just open with a greeting so the user can ask for help.
  *
- * Falls back to the raw `wa.me` host if `SIPPY_WHATSAPP_NUMBER` is unset, so
- * we never serve a broken redirect in dev/staging.
+ * Number resolution: prefer `SIPPY_WHATSAPP_NUMBER` env (lets staging/dev
+ * point at a different bot), fall back to the canonical hardcoded number.
+ * Never falls back to a numberless wa.me — that's a real Pizza Day bug we
+ * already hit once.
  */
 function buildWaUrl(outcome: ScanResponseOutcome, shortId: string): string {
-  const number = (env.get('SIPPY_WHATSAPP_NUMBER') || '').replace(/[^\d]/g, '')
-  const base = number ? `https://wa.me/${number}` : 'https://wa.me/'
+  const fromEnv = (env.get('SIPPY_WHATSAPP_NUMBER') || '').replace(/[^\d]/g, '')
+  const number = fromEnv || SIPPY_WHATSAPP_NUMBER_FALLBACK
 
   const includeCode =
     outcome === 'redirected' ||
@@ -99,7 +111,7 @@ function buildWaUrl(outcome: ScanResponseOutcome, shortId: string): string {
     outcome === 'backend_error'
   const text = includeCode ? `Hola Sippy! [${shortId}]` : 'Hola Sippy!'
 
-  return `${base}?text=${encodeURIComponent(text)}`
+  return `https://wa.me/${number}?text=${encodeURIComponent(text)}`
 }
 
 export default class QrScanController {

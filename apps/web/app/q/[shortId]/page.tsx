@@ -17,6 +17,7 @@
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import Link from 'next/link'
+import { WHATSAPP_BOT_NUMBER } from '@/lib/constants'
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -25,8 +26,6 @@ const BACKEND_URL =
         throw new Error('NEXT_PUBLIC_BACKEND_URL is required in production')
       })()
     : 'http://localhost:3001')
-
-const SIPPY_NUMBER_DISPLAY = process.env.NEXT_PUBLIC_SIPPY_WHATSAPP_NUMBER || ''
 
 type DeviceClass = 'mobile' | 'desktop' | 'unknown'
 
@@ -114,10 +113,12 @@ export default async function QrLandingPage({ params }: { params: Promise<{ shor
   // log is written in this branch — the backend is what's down — so failures
   // here are only visible in apps/web server logs (see fetchScanResult).
   if (!scan) {
-    const fallbackNumber = (SIPPY_NUMBER_DISPLAY || '').replace(/[^\d]/g, '')
-    const fallbackUrl = fallbackNumber
-      ? `https://wa.me/${fallbackNumber}?text=${encodeURIComponent(`Hola Sippy! [${shortId}]`)}`
-      : 'https://wa.me/'
+    // Always include the Sippy number — a numberless wa.me silently redirects
+    // to api.whatsapp.com/send/ and makes the user pick a contact, which
+    // breaks the "always lands in Sippy" promise. Use the canonical bot
+    // number from shared constants so this never drifts from the rest of the
+    // app's WhatsApp links.
+    const fallbackUrl = `https://wa.me/${WHATSAPP_BOT_NUMBER}?text=${encodeURIComponent(`Hola Sippy! [${shortId}]`)}`
     if (deviceClass === 'mobile') {
       redirect(fallbackUrl)
     }
