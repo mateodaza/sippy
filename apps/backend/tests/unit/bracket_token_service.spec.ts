@@ -192,7 +192,9 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
     assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)
   })
 
-  test('returns revoked when the qr_links row is status=revoked', async ({ assert }) => {
+  test('returns revoked with a reply when the qr_links row is status=revoked', async ({
+    assert,
+  }) => {
     mockQrLink({
       short_id: 'ABC23XYZ',
       kind: 'event',
@@ -210,7 +212,8 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
     })
 
     assert.equal(r.outcome, 'revoked')
-    assert.isNull(r.reply, 'no reply — caller falls through to normal parsing')
+    assert.isNotNull(r.reply, 'reply tells the user the QR is dead instead of silent fall-through')
+    assert.include(r.reply!, 'organizador', 'Spanish "ask an organizer" copy')
     assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)
   })
 
@@ -236,7 +239,7 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
     assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)
   })
 
-  test('returns not_found when the event row is inactive (admin revoked mid-event)', async ({
+  test('returns revoked with a reply when the event row is inactive (admin revoked / endsAt passed)', async ({
     assert,
   }) => {
     mockQrLink({
@@ -248,7 +251,9 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
       source_tag: 'asst-carolina',
       display_name: 'Carolina',
     })
-    // Event lookup returns inactive — bracket dispatcher should fall through.
+    // Event lookup returns inactive. Bracket dispatcher should treat this
+    // like a revoked QR — reply so the user knows, don't silently fall
+    // through with an empty stripped message.
     mockEvent(makeEvent({ active: false }))
 
     const r = await dispatchBracketToken({
@@ -257,9 +262,56 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
       lang: 'es',
     })
 
-    assert.equal(r.outcome, 'not_found')
-    assert.isNull(r.reply)
+    assert.equal(r.outcome, 'revoked')
+    assert.isNotNull(r.reply)
+    assert.include(r.reply!, 'organizador')
     assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)
+  })
+
+  test('linkUserToEvent throw bubbles up instead of silently sending a lying welcome', async ({
+    assert,
+  }) => {
+    mockQrLink({
+      short_id: 'ABC23XYZ',
+      kind: 'event',
+      status: 'active',
+      owner_phone_number: '+573000000000',
+      event_slug: 'pizza-day-ctg-2026',
+      source_tag: 'asst-carolina',
+      display_name: 'Carolina',
+    })
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    // Force the INSERT to throw — simulates an FK race or DB outage during
+    // the link write. Old behavior swallowed and still replied "checked in"
+    // (attendee invisible to operator dashboard, no POAP). New behavior
+    // re-throws so the webhook's outer catch surfaces a generic error and
+    // Meta retries the message — idempotent insert succeeds on retry.
+    setQueryResponse('INSERT INTO user_event_links', {
+      rows: [],
+    })
+    // Override the mock to actually throw for this query
+    const origRq = db.rawQuery
+    ;(db as any).rawQuery = async (sql: string, bindings?: unknown[]) => {
+      if (sql.includes('INSERT INTO user_event_links')) {
+        throw new Error('simulated FK race')
+      }
+      return origRq.call(db, sql, bindings as any)
+    }
+
+    try {
+      await assert.rejects(
+        () =>
+          dispatchBracketToken({
+            shortId: 'ABC23XYZ',
+            phoneNumber: '+573001234567',
+            lang: 'es',
+          }),
+        'simulated FK race'
+      )
+    } finally {
+      ;(db as any).rawQuery = origRq
+    }
   })
 
   test('event + onboarded user → event_linked, inserts user_event_links with step=returning', async ({

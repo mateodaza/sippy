@@ -1202,23 +1202,45 @@ export default class WebhookController {
     // is routing metadata (event_slug + source_tag), not natural-language
     // intent, so it never enters the LLM prompt — we strip it to context
     // before any parsing happens. Spec: QR_SYSTEM_SPEC.md "Locked decision #3".
+    //
+    // Wrapped in try/catch because processWebhook is invoked fire-and-forget
+    // by the route handler — any throw escaping here aborts processing
+    // without sending a reply and without marking the message processed,
+    // which makes Meta retry the same webhook in a loop. At Pizza Day that
+    // means an attendee scans a QR, sees nothing, scans again, still nothing.
+    // The catch mirrors the contact-card pattern above: log, send a generic
+    // error fallback, mark processed, return.
     const { shortId, stripped } = extractBracketToken(text)
     if (shortId) {
       const bracketLang: Lang = (await getUserLanguage(from)) || getLanguageForPhone(from)
-      const dispatch = await dispatchBracketToken({ shortId, phoneNumber: from, lang: bracketLang })
-      if (dispatch.reply) {
-        // Event dispatch handled the message end-to-end (linked + welcomed,
-        // or sent the new-user setup URL). Don't fall through to parsing —
-        // the bracket WAS the message.
-        await sendTextMessage(from, dispatch.reply, bracketLang)
+      try {
+        const dispatch = await dispatchBracketToken({
+          shortId,
+          phoneNumber: from,
+          lang: bracketLang,
+        })
+        if (dispatch.reply) {
+          // Event dispatch handled the message end-to-end (linked + welcomed,
+          // or sent the new-user setup URL, or surfaced an inactive-QR notice).
+          // Don't fall through to parsing — the bracket WAS the message.
+          await sendTextMessage(from, dispatch.reply, bracketLang)
+          rateLimitService.markProcessed(messageId)
+          return
+        }
+        // not_found / unsupported_kind without a reply: fall through to normal
+        // parsing on the stripped text. We don't want a stale/invalid token to
+        // swallow the rest of the user's message ("hola sippy [ABC23XYZ] balance"
+        // still resolves the balance intent).
+        text = stripped
+      } catch (err) {
+        logger.error(
+          { shortId, phone: maskPhone(from), err },
+          'bracket-token handler threw — sending error fallback'
+        )
+        await sendTextMessage(from, formatCommandErrorMessage(bracketLang), bracketLang)
         rateLimitService.markProcessed(messageId)
         return
       }
-      // not_found / revoked / unsupported_kind: fall through to normal parsing
-      // on the stripped text. We don't want a stale/invalid token to swallow
-      // the rest of the user's message ("hola sippy [ABC23XYZ] balance" still
-      // resolves the balance intent).
-      text = stripped
     }
 
     // ── Fetch conversation context (non-financial follow-ups) ──────────

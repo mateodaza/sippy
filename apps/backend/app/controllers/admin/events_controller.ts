@@ -22,6 +22,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
 import Event from '#models/event'
+import { maskPhone } from '#utils/phone'
 
 const DEFAULT_PER_PAGE = 50
 const MAX_PER_PAGE = 200
@@ -103,10 +104,10 @@ export default class EventsController {
       : Math.min(MAX_PER_PAGE, Math.max(1, perPageRaw))
 
     // Total count + step breakdown in one round-trip. linked_at_step is
-    // TEXT with a CHECK constraint locking it to ('done', 'returning') so
-    // the only "unknown" rows are pre-CHECK historical inserts (none in
-    // prod today, but we surface the bucket so a future drift is visible
-    // rather than silently miscounted).
+    // TEXT with a CHECK constraint that permits NULL plus the named values
+    // ('done', 'returning') — so the "unknown" bucket catches NULL rows
+    // and any future CHECK addition we don't yet recognize, rather than
+    // silently miscounting.
     const stepRows = (await db
       .from('user_event_links')
       .where('event_id', event.id)
@@ -178,8 +179,14 @@ export default class EventsController {
       .limit(perPage)
       .offset(offset)) as AttendeeRow[]
 
+    // Mask phones in the controller (not in the Inertia view) so the JSON
+    // variant of this endpoint never exposes raw E.164. Any authenticated
+    // admin can hit `Accept: application/json` and read this payload — a
+    // viewer-role admin shouldn't be able to scrape a full attendee phone
+    // book. Display masking still happens in the Inertia component but
+    // operates on already-masked input.
     const attendees: AttendeePayload[] = rows.map((r) => ({
-      phoneNumber: r.phone_number,
+      phoneNumber: maskPhone(r.phone_number),
       linkedAtStep: r.linked_at_step,
       source: (r.metadata?.source as string | undefined) ?? null,
       poapClaimed: r.poap_claimed,

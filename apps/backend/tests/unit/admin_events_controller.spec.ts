@@ -326,7 +326,9 @@ test.group('admin/events_controller | attendees', (group) => {
       { source: null, count: 5 },
     ])
     assert.equal(props.attendees.data.length, 2)
-    assert.equal(props.attendees.data[0].phoneNumber, '+573001234567')
+    // Phones are masked server-side so the JSON payload never exposes raw
+    // E.164 to viewer-role admins. maskPhone keeps country code + last 2.
+    assert.equal(props.attendees.data[0].phoneNumber, '+57********67')
     assert.equal(props.attendees.data[0].source, 'asst-carolina')
     assert.isTrue(props.attendees.data[0].poapClaimed)
     assert.isNull(props.attendees.data[1].source, 'null metadata.source surfaces as null')

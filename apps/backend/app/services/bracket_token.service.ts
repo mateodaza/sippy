@@ -18,7 +18,12 @@ import { getQrLinkForScan, resolveQrScan, type QrLinkForScan } from '#services/q
 import { linkUserToEvent, getActiveEventBySlug } from '#services/event.service'
 import { findUserPrefByPhone } from '#utils/user_pref_lookup'
 import { maskPhone } from '#utils/phone'
-import { formatEventWelcomeReturning, formatEventWelcomeNewUser, type Lang } from '#utils/messages'
+import {
+  formatEventWelcomeReturning,
+  formatEventWelcomeNewUser,
+  formatQrInactiveMessage,
+  type Lang,
+} from '#utils/messages'
 
 // ── Pattern ─────────────────────────────────────────────────────────────────
 
@@ -156,19 +161,21 @@ export async function dispatchBracketToken(args: {
   if (link.status === 'revoked') {
     await resolveQrScan({ shortId, phoneNumber })
     logger.info(`bracket.dispatch: shortId=${shortId} revoked phone=${maskPhone(phoneNumber)}`)
+    // Reply so the user knows the QR is dead — otherwise the stripped text
+    // falls through to the LLM as a bare greeting and they get a generic
+    // "didn't understand" with no actionable signal.
     return {
       outcome: 'revoked',
-      reply: null,
+      reply: formatQrInactiveMessage(lang),
       shortId,
       eventSlug: link.eventSlug,
       sourceTag: link.sourceTag,
     }
   }
 
-  // Non-event kinds (pay/referral) — out of scope for the P0 cut. Spec line
-  // PIZZA_DAY_PLAN.md:96 marks these as Saturday-conditional. Resolve the
-  // prior scan, fall through to normal parsing so existing handlers can
-  // (eventually) take over.
+  // Non-event kinds (pay/referral) — out of scope for the P0 cut, deferred
+  // to the Saturday call. Resolve the prior scan, fall through to normal
+  // parsing so existing handlers can take over.
   if (link.kind !== 'event' || !link.eventSlug) {
     await resolveQrScan({ shortId, phoneNumber })
     logger.info(
@@ -189,16 +196,17 @@ export async function dispatchBracketToken(args: {
   await resolveQrScan({ shortId, phoneNumber })
 
   // Sanity-check the event row still exists (admin could have revoked it
-  // mid-event). Use getActiveEventBySlug so an expired/inactive event is
-  // treated the same as a deleted one — silent fall-through.
+  // mid-event, or the event's endsAt window has passed). Treat the same as
+  // a revoked QR — reply so the user knows, don't silently fall through to
+  // the LLM with an empty stripped message.
   const event = await getActiveEventBySlug(link.eventSlug)
   if (!event) {
     logger.warn(
-      `bracket.dispatch: shortId=${shortId} event=${link.eventSlug} inactive — falling through`
+      `bracket.dispatch: shortId=${shortId} event=${link.eventSlug} inactive — replying as revoked`
     )
     return {
-      outcome: 'not_found',
-      reply: null,
+      outcome: 'revoked',
+      reply: formatQrInactiveMessage(lang),
       shortId,
       eventSlug: link.eventSlug,
       sourceTag: link.sourceTag,
@@ -234,17 +242,15 @@ export async function dispatchBracketToken(args: {
   // preserves first-contact source so re-scanning a different assistant's QR
   // doesn't rewrite attribution. Step is 'returning' because they already had
   // a wallet before this scan.
-  try {
-    await linkUserToEvent(phoneNumber, event.slug, 'returning', link.sourceTag ?? null)
-  } catch (err) {
-    // Don't swallow silently — the link failure could mean an FK race or a
-    // DB outage. Reply still goes out (user-facing flow shouldn't break), but
-    // we want the alarm on the server side.
-    logger.error(
-      { shortId, event: event.slug, phone: maskPhone(phoneNumber), err },
-      'bracket.dispatch: linkUserToEvent failed — reply still sent'
-    )
-  }
+  //
+  // Intentionally NOT wrapped in try/catch: if the link write fails, the
+  // welcome reply would lie ("you're checked in" while the row was never
+  // written), the attendee shows missing on the operator dashboard, and the
+  // POAP flow keyed on user_event_links never fires. Let the throw bubble
+  // up to the outer bracket handler in webhook_controller — the user gets
+  // a generic error message and Meta delivers it via the unrouted-error
+  // fallback, and on retry the idempotent insert succeeds.
+  await linkUserToEvent(phoneNumber, event.slug, 'returning', link.sourceTag ?? null)
 
   const reply = formatEventWelcomeReturning(event.name, link.sourceTag, lang)
   logger.info(

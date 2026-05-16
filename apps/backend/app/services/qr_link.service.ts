@@ -181,9 +181,10 @@ export async function resolveQrScan(args: {
   phoneNumber: string
 }): Promise<{ updated: boolean }> {
   try {
-    // The subquery + `id = (SELECT ...)` form lets us UPDATE the single
-    // most-recent unresolved row atomically. Using LIMIT 1 in UPDATE
-    // directly isn't portable across Postgres; the subquery pattern is.
+    // Subquery pattern because Postgres doesn't allow LIMIT in UPDATE
+    // directly (it's a MySQL extension). Two concurrent callers may race
+    // for the same row; the loser becomes a no-op, which is fine — this
+    // is the analytics loop-close, not a critical write.
     const result = await query<{ id: string }>(
       `UPDATE qr_scans
        SET resolved_to_phone_number = $1,

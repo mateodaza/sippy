@@ -263,6 +263,23 @@ export function formatEventWelcomeNewUser(
 }
 
 /**
+ * Sent when a scanned QR is revoked or its event is no longer active.
+ *
+ * Without this, attendees who scan a dead QR get silent fall-through to the
+ * LLM with their bracket token stripped — they see a generic "no entendi"
+ * reply and have no idea why. On event day that becomes repeat-scan churn
+ * at the door.
+ */
+export function formatQrInactiveMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `That QR code isn't active anymore. Ask an organizer for a current one.`,
+    es: () => `Este codigo QR ya no esta activo. Pidele uno nuevo al organizador.`,
+    pt: () => `Este codigo QR nao esta mais ativo. Peca um novo ao organizador.`,
+  }
+  return m[lang]()
+}
+
+/**
  * Sent when an already-onboarded phone scans an event QR. linkUserToEvent
  * has already been called with step='returning' by the time this fires —
  * the message is just the user-facing acknowledgement.
