@@ -38,15 +38,17 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
     let assignedEventSlug: string | null = null
     if (user?.role === 'operator') {
       try {
-        const row = (await db.raw(
-          `SELECT event_slug
-           FROM event_operator_wallets
-           WHERE operator_user_id = ? AND active = TRUE
-           ORDER BY updated_at DESC
-           LIMIT 1`,
-          [user.id]
-        )) as { rows?: { event_slug: string }[] }
-        assignedEventSlug = row.rows?.[0]?.event_slug ?? null
+        // Lucid query builder instead of `db.raw(?)` — the raw `?` binding
+        // wasn't expanding reliably for the operator-lookup case, leaving
+        // assignedEventSlug always null and breaking the operator sidebar.
+        const row = (await db
+          .from('event_operator_wallets')
+          .where('operator_user_id', user.id)
+          .where('active', true)
+          .orderBy('updated_at', 'desc')
+          .select('event_slug')
+          .first()) as { event_slug: string } | null
+        assignedEventSlug = row?.event_slug ?? null
       } catch (err) {
         // M4: log instead of swallow. Silent failure here strips the
         // operator's nav link, and they can't reach their send page —

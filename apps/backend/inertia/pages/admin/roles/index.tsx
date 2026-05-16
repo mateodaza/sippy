@@ -90,6 +90,7 @@ export default function RolesIndex({ admins }: { admins: Admin[] }) {
                     }}
                   >
                     <option value="admin">ADMIN</option>
+                    <option value="operator">OPERATOR</option>
                     <option value="viewer">VIEWER</option>
                   </select>
                 </td>
