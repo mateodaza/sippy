@@ -18,6 +18,7 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import { WHATSAPP_BOT_NUMBER } from '@/lib/constants'
+import { QrCodeImage } from './QrCodeImage'
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
@@ -174,18 +175,48 @@ function DesktopFallback({
           ? 'Intenta de nuevo en unos segundos, o abre WhatsApp y envía el código de abajo.'
           : 'Puedes abrir WhatsApp y escribirle a Sippy directamente.'
 
+  // Brand tokens — inline here (this is a Server Component, no JS bundle
+  // boundary to worry about). Dark surface to match the receive-money
+  // pages; cheetah blue for primary CTA, electric green for the brand mark.
+  const BRAND_BLUE = '#00AFD7'
+  const BRAND_GREEN = '#00D796'
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-[var(--bg-primary)] px-6 py-12 text-[var(--text-primary)]">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-black px-6 py-12 text-white">
       <div className="w-full max-w-md text-center">
-        <p className="mb-2 font-mono text-xs uppercase tracking-widest text-[var(--text-muted)]">
-          Sippy
-        </p>
+        {/* Sippy wordmark — green "S" tile + blue "ppy" accent */}
+        <div className="mb-8 flex items-center justify-center gap-2">
+          <span
+            aria-hidden="true"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md font-mono text-base font-bold text-black"
+            style={{ backgroundColor: BRAND_GREEN }}
+          >
+            S
+          </span>
+          <span className="font-mono text-lg font-bold tracking-tight">
+            si<span style={{ color: BRAND_BLUE }}>ppy</span>
+          </span>
+        </div>
+
         <h1 className="mb-3 text-2xl font-semibold">{heading}</h1>
-        <p className="mb-8 text-sm text-[var(--text-secondary)]">{subline}</p>
+        <p className="mb-6 text-sm text-neutral-400">{subline}</p>
+
+        {/* Show the QR for outcomes where there's an active link to scan. When
+            revoked / not_found / invalid_version, the QR would just route back
+            to a dead-end, so we hide it and keep only the WhatsApp CTA.
+            White card frame keeps the QR scannable on the dark background. */}
+        {outcome === 'redirected' || outcome === 'backend_error' ? (
+          <div className="mb-6 flex justify-center">
+            <div className="rounded-xl bg-white p-4 shadow-lg">
+              <QrCodeImage waUrl={waUrl} />
+            </div>
+          </div>
+        ) : null}
 
         <a
           href={waUrl}
-          className="inline-flex items-center justify-center rounded-md bg-[var(--brand-primary,#00AFD7)] px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:opacity-90"
+          style={{ backgroundColor: BRAND_BLUE }}
+          className="inline-flex items-center justify-center rounded-md px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:opacity-90"
           target="_blank"
           rel="noreferrer"
         >
@@ -194,20 +225,20 @@ function DesktopFallback({
 
         {outcome !== 'not_found' && outcome !== 'invalid_version' ? (
           <div className="mt-8 text-left">
-            <p className="mb-2 font-mono text-xs uppercase tracking-widest text-[var(--text-muted)]">
+            <p className="mb-2 font-mono text-xs uppercase tracking-widest text-neutral-500">
               Código
             </p>
-            <code className="block rounded-md border border-[var(--border-muted,rgba(0,0,0,0.1))] bg-[var(--bg-secondary,rgba(0,0,0,0.04))] px-3 py-2 font-mono text-sm">
+            <code className="block rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 font-mono text-sm text-white">
               [{shortId}]
             </code>
-            <p className="mt-2 text-xs text-[var(--text-muted)]">
+            <p className="mt-2 text-xs text-neutral-500">
               Si abres WhatsApp manualmente, envía este código al inicio del mensaje.
             </p>
           </div>
         ) : null}
 
-        <p className="mt-12 text-xs text-[var(--text-muted)]">
-          <Link href="/" className="underline">
+        <p className="mt-12 text-xs text-neutral-500">
+          <Link href="/" className="underline hover:text-neutral-300">
             Volver a sippy.lat
           </Link>
         </p>

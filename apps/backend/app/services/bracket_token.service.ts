@@ -110,12 +110,13 @@ export interface BracketDispatchResult {
   eventSlug: string | null
   sourceTag: string | null
   /**
-   * Populated for `pay_prompt_for_amount` — the vendor's canonical phone.
-   * The caller writes a partial-send entry keyed on the sender so the next
-   * inbound message is interpreted as the amount for this recipient.
+   * Populated for `pay_prompt_for_amount` — the recipient's canonical phone
+   * (the pay-QR owner). The caller writes a partial-send entry keyed on the
+   * sender so the next inbound message is interpreted as the amount for
+   * this recipient.
    */
   payRecipient?: string | null
-  /** Populated for `pay_prompt_for_amount` — vendor display name from qr_links. */
+  /** Populated for `pay_prompt_for_amount` — display name from qr_links. */
   payDisplayName?: string | null
 }
 
@@ -205,8 +206,8 @@ export async function dispatchBracketToken(args: {
   }
 
   // Pay-QR scan — sender is the payer, owner is the recipient. Pay-QRs
-  // are universal: any user mints one for receiving payments (vendor uses
-  // a business name; individual uses their own name). Return payRecipient
+  // are universal: any user mints one for receiving payments (a business
+  // uses a business name; an individual uses their own). Return payRecipient
   // + payDisplayName so the webhook caller can stash a partial-send
   // marked payQrScan=true; downstream the send flow uses that flag to
   // force the confirmation prompt + use the friendly display name in
@@ -253,7 +254,7 @@ export async function dispatchBracketToken(args: {
 
     const displayName = link.displayName ?? maskPhone(link.ownerPhoneNumber)
     logger.info(
-      `bracket.dispatch: shortId=${shortId} pay_prompt vendor=${maskPhone(link.ownerPhoneNumber)} ` +
+      `bracket.dispatch: shortId=${shortId} pay_prompt recipient=${maskPhone(link.ownerPhoneNumber)} ` +
         `payer=${maskPhone(phoneNumber)}`
     )
     return {

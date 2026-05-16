@@ -225,7 +225,7 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
     assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)
   })
 
-  test('pay QR returns pay_prompt_for_amount with vendor framing + payRecipient', async ({
+  test('pay QR returns pay_prompt_for_amount with displayName + payRecipient', async ({
     assert,
   }) => {
     mockQrLink({
@@ -352,8 +352,8 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
     // Owner phone is corrupt (failed canonicalization). The data-integrity
     // guard at bracket_token.service.ts treats this as a dead QR rather
     // than letting the flow proceed — the self-send check is otherwise
-    // unsafe and an attendee could be prompted to pay a malformed-phone
-    // vendor.
+    // unsafe and the payer could be prompted to send to a malformed-phone
+    // recipient.
     mockQrLink({
       short_id: 'BADOWN23',
       kind: 'pay',
@@ -395,7 +395,7 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
     })
 
     assert.equal(r.outcome, 'pay_prompt_for_amount')
-    // Masked vendor phone surfaces in reply when displayName is missing
+    // Masked owner phone surfaces in reply when displayName is missing
     assert.include(r.reply!, '+57', 'mask retains country code')
     assert.equal(r.payDisplayName?.startsWith('+57'), true)
   })

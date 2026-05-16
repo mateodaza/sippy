@@ -121,8 +121,10 @@ router
     router.post('/event-poap-claimed', [EventController, 'markPoapClaimed'])
 
     // Personal pay-QR — user-minted, idempotent (one active per user).
+    // PATCH renames without changing shortId (printed sheets keep working).
     router.get('/qr/my-pay-link', [MyPayQrController, 'show'])
     router.post('/qr/my-pay-link', [MyPayQrController, 'create'])
+    router.patch('/qr/my-pay-link', [MyPayQrController, 'update'])
 
     // ── Colurs rails — Colombia (+57) only ───────────────────────────────────
     router

@@ -6,8 +6,9 @@
  * an alias — whatever they want printed on the sheet).
  *
  * Routes (JWT-authenticated, prefix /api):
- *   GET  /qr/my-pay-link            — fetch existing active pay-QR (if any)
- *   POST /qr/my-pay-link            — create or return existing (idempotent)
+ *   GET   /qr/my-pay-link           — fetch existing active pay-QR (if any)
+ *   POST  /qr/my-pay-link           — create or return existing (idempotent)
+ *   PATCH /qr/my-pay-link           — update displayName on existing active QR
  *
  * Issuance IS the contract: anyone who mints a pay-QR can be paid via that
  * QR's bracket-token scan. There's no "is this a merchant" toggle — the
@@ -16,8 +17,8 @@
  *
  * Idempotency: a user with an existing active pay-QR gets that QR back,
  * not a new one. Prevents duplicate-mint on double-submit / refresh /
- * re-entry. DB-level partial unique index would enforce this harder;
- * app-level is fine at current scale.
+ * re-entry. To rename, use PATCH — keeps the shortId stable so printed
+ * sheets never invalidate from a rename.
  */
 
 import type { HttpContext } from '@adonisjs/core/http'
@@ -64,7 +65,7 @@ async function ensureUserPref(phoneNumber: string): Promise<void> {
   )
 }
 
-const createPayLinkValidator = vine.compile(
+const payLinkBodyValidator = vine.compile(
   vine.object({
     displayName: vine.string().trim().minLength(1).maxLength(MAX_DISPLAY_NAME),
   })
@@ -112,7 +113,7 @@ export default class MyPayQrController {
    */
   async create({ request, response, cdpUser }: HttpContext) {
     const { phoneNumber } = cdpUser!
-    const { displayName } = await request.validateUsing(createPayLinkValidator)
+    const { displayName } = await request.validateUsing(payLinkBodyValidator)
 
     const ownerKey = await resolveUserPrefKey(phoneNumber)
     // qr_links.owner_phone_number FKs to user_preferences. JWT auth proves
@@ -150,6 +151,55 @@ export default class MyPayQrController {
         'my-pay-link create failed'
       )
       return response.internalServerError({ error: 'create_failed' })
+    }
+  }
+
+  /**
+   * PATCH /api/qr/my-pay-link
+   *
+   * Body: { displayName: string (1..40) }
+   *
+   * Renames the user's existing active pay-QR. shortId is preserved so any
+   * printed sheets keep working — only the friendly name shown on the bot
+   * confirm prompt + the page changes. 404s if the user has no active QR
+   * yet (UI should call POST first).
+   */
+  async update({ request, response, cdpUser }: HttpContext) {
+    const { phoneNumber } = cdpUser!
+    const { displayName } = await request.validateUsing(payLinkBodyValidator)
+
+    const ownerKey = await resolveUserPrefKey(phoneNumber)
+    const existing = await findActivePayLink(ownerKey)
+    if (!existing) {
+      return response.notFound({ error: 'no_active_pay_qr' })
+    }
+
+    try {
+      // Scope by short_id so a duplicate-active-row race (or any future
+      // multi-mint scenario) doesn't rename every QR the owner has at
+      // once. We rename exactly the row findActivePayLink returned.
+      await query(
+        `UPDATE qr_links
+           SET display_name = $1
+         WHERE owner_phone_number = $2
+           AND short_id = $3
+           AND kind = 'pay'
+           AND status = 'active'`,
+        [displayName, ownerKey, existing.shortId]
+      )
+      const payload: PayLinkResponse = {
+        shortId: existing.shortId,
+        displayName,
+        scanUrl: buildScanUrl(existing.shortId),
+        ownerPhoneMasked: maskPhone(phoneNumber),
+      }
+      return response.ok(payload)
+    } catch (err) {
+      logger.error(
+        { ownerPhone: maskPhone(ownerKey), displayName, err },
+        'my-pay-link update failed'
+      )
+      return response.internalServerError({ error: 'update_failed' })
     }
   }
 }

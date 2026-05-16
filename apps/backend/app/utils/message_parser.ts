@@ -112,6 +112,16 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(gracias|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada|ya|ya vi|entendido|enterado|arre|sale|joya|de una|todo bien|a la orden)$/i,
     /^(obrigado|obrigada|valeu|beleza|legal|perfeito|tchau|at[eé] logo|de nada|entendi|entendido|j[oó]ia|firmeza|falou|blz)$/i,
   ],
+  // pay_qr — the LLM classifier sometimes routes "mi qr" / "pay qr" to greeting
+  // because it's a 2-word phrase with no verb. Strict patterns run before the
+  // LLM so these short phrases get the right route deterministically.
+  pay_qr: [
+    /^mi (?:c[oó]digo (?:de )?pago|qr (?:de )?pago|qr para (?:cobrar|recibir)|qr)$/i,
+    /^(?:c[oó]mo|como) me (?:pagan|paga|cobran)\??$/i,
+    /^(?:pay\s?qr|pay\s?link|pay\s?code|my (?:pay\s?(?:qr|code|link)|qr))$/i,
+    /^meu (?:c[oó]digo|qr) de pagamento$/i,
+    /^como me pagam\??$/i,
+  ],
 }
 
 /** Privacy patterns — each paired with the language it signals */
