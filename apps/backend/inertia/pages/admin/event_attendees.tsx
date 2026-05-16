@@ -123,10 +123,23 @@ function OperatorWalletPanel({
   const [drainAddress, setDrainAddress] = useState<string>('')
   const [busy, setBusy] = useState<null | string>(null) // 'assign' | 'revoke' | 'drain'
 
+  function getCsrfToken(): string {
+    // AdonisJS shield writes XSRF-TOKEN cookie; expects X-XSRF-TOKEN header
+    // on POST/PUT/DELETE. Without it, shield issues a 302 redirect to the
+    // referer and the request never reaches the controller.
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/)
+    return match ? decodeURIComponent(match[1]) : ''
+  }
+
   async function postJson(url: string, body: object | null, method: 'POST' | 'DELETE') {
     const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-XSRF-TOKEN': getCsrfToken(),
+      },
+      credentials: 'include',
       ...(body ? { body: JSON.stringify(body) } : {}),
     })
     // M6: separate JSON parse failures from real responses. Non-JSON 5xx
