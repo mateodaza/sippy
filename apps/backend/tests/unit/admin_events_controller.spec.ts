@@ -221,8 +221,12 @@ function makeCtx(args: {
   }
   const params: Record<string, unknown> = {}
   if (args.slug !== undefined) params.slug = args.slug
+  // Default to admin so the scope check (added with operator role) passes
+  // for all pre-existing tests. Tests that want to exercise the operator
+  // scope branch can override via the future `userRole` arg.
+  const auth = { user: { id: 1, role: 'admin' as const } }
   return {
-    ctx: { params, request, response, inertia } as unknown as HttpContext,
+    ctx: { params, request, response, inertia, auth } as unknown as HttpContext,
     captured,
   }
 }
@@ -273,10 +277,10 @@ test.group('admin/events_controller | attendees', (group) => {
     // POAP split — uses .first(), filtered aggregates
     stubQuery((s) => s.first === true, [{ claimed: 4, unclaimed: 6 }])
 
-    // Paginated list — has .offset() called
-    stubQuery(
-      (s) => s.paginate === true,
-      [
+    // Paginated list — now a raw SQL query with LEFT JOIN operator_sends.
+    // The discriminator is the `FROM user_event_links uel` substring + LIMIT.
+    setQueryResponse('FROM user_event_links uel', {
+      rows: [
         {
           phone_number: '+573001234567',
           linked_at_step: 'done',
@@ -284,6 +288,10 @@ test.group('admin/events_controller | attendees', (group) => {
           poap_claimed_at: '2026-05-22T19:32:11.000Z',
           metadata: { source: 'asst-carolina' },
           created_at: '2026-05-22T19:30:01.000Z',
+          operator_sent: false,
+          operator_sent_amount: null,
+          operator_last_tx_hash: null,
+          operator_last_sent_at: null,
         },
         {
           phone_number: '+573009999999',
@@ -292,9 +300,13 @@ test.group('admin/events_controller | attendees', (group) => {
           poap_claimed_at: null,
           metadata: null,
           created_at: '2026-05-22T19:25:00.000Z',
+          operator_sent: true,
+          operator_sent_amount: 25,
+          operator_last_tx_hash: '0xabc',
+          operator_last_sent_at: '2026-05-22T19:40:00.000Z',
         },
-      ]
-    )
+      ],
+    })
 
     // bySource — raw SQL path
     setQueryResponse(`metadata->>'source' AS source`, {
@@ -332,6 +344,13 @@ test.group('admin/events_controller | attendees', (group) => {
     assert.equal(props.attendees.data[0].source, 'asst-carolina')
     assert.isTrue(props.attendees.data[0].poapClaimed)
     assert.isNull(props.attendees.data[1].source, 'null metadata.source surfaces as null')
+    // operatorSend rollup from the LEFT JOIN — must be present per-row
+    assert.isObject(props.attendees.data[0].operatorSend)
+    assert.isFalse(props.attendees.data[0].operatorSend.sent)
+    assert.equal(props.attendees.data[0].operatorSend.totalAmountUsdc, 0)
+    assert.isTrue(props.attendees.data[1].operatorSend.sent)
+    assert.equal(props.attendees.data[1].operatorSend.totalAmountUsdc, 25)
+    assert.equal(props.attendees.data[1].operatorSend.lastTxHash, '0xabc')
   })
 
   test('returns JSON when Accept is application/json', async ({ assert }) => {

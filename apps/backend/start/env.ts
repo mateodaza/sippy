@@ -161,4 +161,10 @@ export default await Env.create(new URL('../', import.meta.url), {
   // /wallet/pay-qr) so there's no clean per-phone "is merchant" signal
   // yet. When real vendor mode lands, wire it into getQuestExcludedPhones.
   PIZZA_DAY_EXCHANGE_PHONES: Env.schema.string.optional(),
+
+  // Operator send caps. Per-tx is enforced before submission; per-hour is a
+  // rolling SUM over `operator_sends` where status IN (pending,submitted,confirmed).
+  // Operator can request a temporary cap raise via env-var update without redeploy.
+  OPERATOR_MAX_PER_TX_USDC: Env.schema.number.optional(),
+  OPERATOR_MAX_PER_HOUR_USDC: Env.schema.number.optional(),
 })
