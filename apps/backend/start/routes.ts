@@ -168,21 +168,45 @@ const RolesController = () => import('#controllers/admin/roles_controller')
 const ModerationController = () => import('#controllers/admin/moderation_controller')
 const QrSheetsController = () => import('#controllers/admin/qr_sheets_controller')
 const AdminEventsController = () => import('#controllers/admin/events_controller')
+const OperatorSendController = () => import('#controllers/admin/operator_send_controller')
 
 // Public admin routes
 router.get('/admin/login', [AdminAuthController, 'showLogin'])
 router.post('/admin/login', [AdminAuthController, 'login'])
 
-// Auth-protected admin routes
+// Auth-protected admin routes.
+//
+// SECURITY: allowlist pattern — every route gets an explicit role gate.
+// No route relies on "absence of middleware" being admin-only; that would
+// leak to operators on any new route added without thought.
+//
+// Layers of authorization:
+//   1. auth({guards:['web']}) — applied at the group level (login required)
+//   2. adminRole({role:'admin'|'operator'}) — applied per-route here
+//   3. Controller scope check — for routes operators CAN hit but only for
+//      their assigned event (qr-sheets/:slug, events/:slug/attendees)
+//
+// Spec: OPERATOR_FLOW_PLAN.md — "Authorization layer (3 capas)".
 router
   .group(() => {
+    // Logout: any authenticated user. No role gate.
     router.post('/logout', [AdminAuthController, 'logout'])
-    router.get('/', [DashboardController, 'index'])
-    router.get('/users', [AdminUsersController, 'index'])
-    router.get('/users/:phone', [AdminUsersController, 'show'])
-    router.get('/analytics', [AnalyticsController, 'index'])
-    router.get('/parse-patterns', [AnalyticsController, 'parsePatterns'])
-    router.get('/roles', [RolesController, 'index'])
+
+    // ── Admin-only routes ─────────────────────────────────────────────
+    router.get('/', [DashboardController, 'index']).use(middleware.adminRole({ role: 'admin' }))
+    router
+      .get('/users', [AdminUsersController, 'index'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .get('/users/:phone', [AdminUsersController, 'show'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .get('/analytics', [AnalyticsController, 'index'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .get('/parse-patterns', [AnalyticsController, 'parsePatterns'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router.get('/roles', [RolesController, 'index']).use(middleware.adminRole({ role: 'admin' }))
     router
       .put('/roles/:id', [RolesController, 'update'])
       .use(middleware.adminRole({ role: 'admin' }))
@@ -204,19 +228,44 @@ router
     router
       .post('/resume', [ModerationController, 'resume'])
       .use(middleware.adminRole({ role: 'admin' }))
-
-    // QR sheets — admin-only printable QR generator for event/assistant
-    // attribution sheets. Spec: QR_SYSTEM_SPEC.md.
-    router.get('/qr-sheets/:eventSlug', [QrSheetsController, 'show'])
     router
       .post('/qr-sheets/:eventSlug', [QrSheetsController, 'create'])
       .use(middleware.adminRole({ role: 'admin' }))
 
-    // Event live-monitoring — counts + attendees with per-source-tag
-    // attribution. Inertia page on HTML accept, JSON on Accept: application/json
-    // so apps/web's standalone live dashboard can poll the same endpoint.
-    // Spec: PIZZA_DAY_PLAN.md "Admin endpoint: GET /admin/events/:slug/attendees".
-    router.get('/events/:slug/attendees', [AdminEventsController, 'attendees'])
+    // Operator-wallet management (provision, revoke, drain, read). All admin-only.
+    router
+      .post('/events/:slug/operator', [AdminEventsController, 'assignOperator'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .delete('/events/:slug/operator', [AdminEventsController, 'revokeOperator'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .get('/events/:slug/operator-wallet', [AdminEventsController, 'getOperatorWallet'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .post('/events/:slug/operator-wallet/drain', [AdminEventsController, 'drainOperatorWallet'])
+      .use(middleware.adminRole({ role: 'admin' }))
+
+    // ── Operator-or-admin routes ──────────────────────────────────────
+    // Operators see ONLY: their own send page, their assigned event's
+    // QR sheets, their assigned event's attendees. Scope check inside
+    // the controllers enforces the slug match against the operator's
+    // assignment.
+    router
+      .get('/qr-sheets/:eventSlug', [QrSheetsController, 'show'])
+      .use(middleware.adminRole({ role: 'operator' }))
+    router
+      .get('/events/:slug/attendees', [AdminEventsController, 'attendees'])
+      .use(middleware.adminRole({ role: 'operator' }))
+    router
+      .get('/operator/send', [OperatorSendController, 'showSend'])
+      .use(middleware.adminRole({ role: 'operator' }))
+    router
+      .get('/operator/recipient/:phone', [OperatorSendController, 'validateRecipient'])
+      .use(middleware.adminRole({ role: 'operator' }))
+    router
+      .post('/operator/send', [OperatorSendController, 'send'])
+      .use(middleware.adminRole({ role: 'operator' }))
   })
   .prefix('/admin')
   .use(middleware.auth({ guards: ['web'] }))

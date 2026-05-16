@@ -29,6 +29,26 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
       }
     }
 
+    // For operators, surface the assigned event slug so the nav can render
+    // the right links without each page re-querying. Cheap single-row lookup;
+    // only fires when user.role === 'operator' so admin views pay nothing.
+    let assignedEventSlug: string | null = null
+    if (user?.role === 'operator') {
+      try {
+        const row = (await db.raw(
+          `SELECT event_slug
+           FROM event_operator_wallets
+           WHERE operator_user_id = ? AND active = TRUE
+           ORDER BY updated_at DESC
+           LIMIT 1`,
+          [user.id]
+        )) as { rows?: { event_slug: string }[] }
+        assignedEventSlug = row.rows?.[0]?.event_slug ?? null
+      } catch {
+        // table may not exist in legacy environments — leave as null
+      }
+    }
+
     return {
       auth: user
         ? {
@@ -37,6 +57,7 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
             fullName: user.fullName,
             role: user.role,
             initials: user.initials,
+            assignedEventSlug,
           }
         : null,
       flash: {
