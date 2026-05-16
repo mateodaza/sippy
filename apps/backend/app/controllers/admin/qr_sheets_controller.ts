@@ -16,7 +16,6 @@
  */
 
 import type { HttpContext } from '@adonisjs/core/http'
-import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import { getActiveEventBySlug } from '#services/event.service'
@@ -24,59 +23,6 @@ import { createQrLink, listEventQrLinks } from '#services/qr_link.service'
 import { getOperatorWalletForUser } from '#services/operator_wallet.service'
 import { resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { query } from '#services/db'
-
-const MAX_ASSISTANTS_PER_CREATE = 50
-const SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
-
-/** Lowercase, accent-strip, replace whitespace/punctuation with single dashes. */
-function slugifyForSource(input: string): string {
-  return input
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '') // strip combining diacritical marks
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60)
-}
-
-/**
- * Parse the assistants textarea. One assistant per line. Each line is either:
- *   "Carolina"                  → label="Carolina", sourceTag="carolina"
- *   "Carolina | asst-carolina"  → label="Carolina", sourceTag="asst-carolina"
- *
- * Empty lines and lines that slugify to nothing are skipped. Duplicate
- * sourceTags within the batch get a "-2", "-3", … suffix in input order.
- */
-function parseAssistants(raw: unknown): Array<{ label: string; sourceTag: string }> {
-  if (typeof raw !== 'string') return []
-  const lines = raw
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-
-  const used = new Set<string>()
-  const out: Array<{ label: string; sourceTag: string }> = []
-
-  for (const line of lines) {
-    const [labelPart, tagPart] = line.split('|').map((s) => s.trim())
-    const label = labelPart?.slice(0, 80) || ''
-    if (!label) continue
-
-    let sourceTag = tagPart ? slugifyForSource(tagPart) : slugifyForSource(label)
-    if (!sourceTag) continue
-
-    // Dedupe within the batch (case where two assistants share a name).
-    if (used.has(sourceTag)) {
-      const base = sourceTag
-      let n = 2
-      while (used.has(`${base}-${n}`)) n++
-      sourceTag = `${base}-${n}`
-    }
-    used.add(sourceTag)
-    out.push({ label, sourceTag })
-  }
-  return out
-}
 
 async function ownerExists(phoneNumber: string): Promise<boolean> {
   const r = await query<{ exists: number }>(
@@ -147,7 +93,13 @@ export default class QrSheetsController {
       return response.notFound({ error: `Event '${slug}' not found or inactive` })
     }
 
-    const links = await listEventQrLinks(slug)
+    // Only show THE general event QR (sourceTag IS NULL). Legacy assistant
+    // QRs minted under the old per-assistant pattern (sourceTag like
+    // 'asst-carolina', 'smoke-diego', etc.) stay in DB for audit but are
+    // hidden from this view — the product contract is now "one QR per
+    // event". Cleanup of legacy rows is a manual DB op (see runbook).
+    const allLinks = await listEventQrLinks(slug)
+    const generalLink = allLinks.find((l) => l.sourceTag === null) ?? null
 
     const props: ShowProps = {
       event: {
@@ -155,11 +107,15 @@ export default class QrSheetsController {
         name: event.name,
         endsAt: event.endsAt ? event.endsAt.toISO() : null,
       },
-      qrLinks: links.map((l) => ({
-        shortId: l.shortId,
-        sourceTag: l.sourceTag,
-        scanUrl: buildScanUrl(l.shortId),
-      })),
+      qrLinks: generalLink
+        ? [
+            {
+              shortId: generalLink.shortId,
+              sourceTag: generalLink.sourceTag,
+              scanUrl: buildScanUrl(generalLink.shortId),
+            },
+          ]
+        : [],
       defaultOwnerPhone: env.get('SIPPY_EVENT_QR_OWNER_PHONE') ?? null,
       scanUrlBase: getFrontendBase(),
       scanUrlIsFallback: !env.get('FRONTEND_URL'),
@@ -172,15 +128,17 @@ export default class QrSheetsController {
   /**
    * POST /admin/qr-sheets/:eventSlug
    *
-   * Body:
-   *   {
-   *     ownerPhoneNumber: string  // must exist in user_preferences
-   *     assistants: string        // newline-separated. "Label" or "Label | sourceTag"
-   *   }
+   * Creates ONE general event-onboarding QR per event. Idempotent: if a
+   * general QR already exists for this event (sourceTag IS NULL OR
+   * sourceTag = 'event'), returns it without re-creating.
    *
-   * Validates everything before any insert — if any input is bad, nothing is
-   * created. Successful runs flash `created=<count>` and redirect back to show
-   * so the new QRs render in the print view.
+   * Body:
+   *   { ownerPhoneNumber: string }  // must exist in user_preferences
+   *
+   * Pay-QRs (kind='pay') are minted via a different admin path — this
+   * endpoint exclusively creates the single onboarding QR. The shared
+   * `qr_links.short_id` PK + the dispatcher's per-kind branching guarantee
+   * no event/pay confusion at runtime.
    */
   async create({ params, request, response, session }: HttpContext) {
     const slug = String(params.eventSlug ?? '').trim()
@@ -190,11 +148,7 @@ export default class QrSheetsController {
       return response.redirect().back()
     }
 
-    const body = request.body() as {
-      ownerPhoneNumber?: unknown
-      assistants?: unknown
-    }
-
+    const body = request.body() as { ownerPhoneNumber?: unknown }
     const ownerRaw = typeof body.ownerPhoneNumber === 'string' ? body.ownerPhoneNumber.trim() : ''
     if (!ownerRaw) {
       session.flash('error', 'Owner phone number is required')
@@ -210,83 +164,36 @@ export default class QrSheetsController {
       return response.redirect(`/admin/qr-sheets/${encodeURIComponent(slug)}`)
     }
 
-    const assistants = parseAssistants(body.assistants)
-    if (assistants.length === 0) {
-      session.flash('error', 'At least one assistant is required (one label per line)')
-      return response.redirect(`/admin/qr-sheets/${encodeURIComponent(slug)}`)
-    }
-    if (assistants.length > MAX_ASSISTANTS_PER_CREATE) {
-      session.flash('error', `Too many assistants in one batch (max ${MAX_ASSISTANTS_PER_CREATE})`)
-      return response.redirect(`/admin/qr-sheets/${encodeURIComponent(slug)}`)
-    }
-
-    // Reject sourceTags that don't match the canonical slug pattern. parseAssistants
-    // already slugifies, but a manual "label | weird_tag" could slip through.
-    for (const a of assistants) {
-      if (!SLUG_PATTERN.test(a.sourceTag)) {
-        session.flash('error', `Invalid sourceTag '${a.sourceTag}' (use a-z, 0-9, hyphens)`)
-        return response.redirect(`/admin/qr-sheets/${encodeURIComponent(slug)}`)
-      }
-    }
-
-    // Reject sourceTags that already exist on this event so we don't silently
-    // create duplicate-attribution rows. Cheap pre-check; the underlying insert
-    // would still succeed (no UNIQUE on source_tag per event) but the resulting
-    // data would be confusing.
-    const existing = await listEventQrLinks(slug)
-    const existingTags = new Set(existing.map((l) => l.sourceTag).filter(Boolean))
-    const collisions = assistants.filter((a) => existingTags.has(a.sourceTag))
-    if (collisions.length > 0) {
-      session.flash(
-        'error',
-        `Source tags already exist for this event: ${collisions.map((c) => c.sourceTag).join(', ')}`
-      )
+    // Idempotency — only the GENERAL (sourceTag=null) QR blocks creation.
+    // Legacy assistant QRs (sourceTag='asst-carolina' etc.) don't count
+    // toward the "already exists" check — they're hidden in the UI anyway.
+    // Mirrors friend's pay-qr pattern: re-POST returns existing silently
+    // instead of flashing an error.
+    const existingAll = await listEventQrLinks(slug)
+    const existingGeneral = existingAll.find((l) => l.sourceTag === null)
+    if (existingGeneral) {
       return response.redirect(`/admin/qr-sheets/${encodeURIComponent(slug)}`)
     }
 
-    // All-or-nothing: wrap the inserts in a transaction so a mid-loop failure
-    // (DB constraint, FK violation, lost-connection blip) leaves nothing behind.
-    // Partial sheets are worse than no sheets — printed-but-missing assistants
-    // would skew attribution and waste a print run.
-    let created = 0
+    // Single insert — no transaction needed (1 row, atomic by definition).
     try {
-      await db.transaction(async (trx) => {
-        for (const a of assistants) {
-          await createQrLink(
-            {
-              kind: 'event',
-              ownerPhoneNumber: ownerKey,
-              eventSlug: slug,
-              sourceTag: a.sourceTag,
-              displayName: a.label,
-            },
-            trx
-          )
-          created++
-        }
+      await createQrLink({
+        kind: 'event',
+        ownerPhoneNumber: ownerKey,
+        eventSlug: slug,
+        // sourceTag null = "general event QR, no per-channel attribution".
+        // If you want attribution later, mint additional rows with non-null tags
+        // via tinker / SQL; the dispatcher reads sourceTag straight through.
+        sourceTag: null,
+        displayName: event.name,
       })
     } catch (err) {
-      // Server-side log carries the diagnostic detail (constraint name, query,
-      // stack). The admin-facing flash is intentionally generic — we don't want
-      // raw DB error strings (FK names, table schema hints) leaking into a
-      // session flash that may persist past the read.
-      logger.error(
-        {
-          eventSlug: slug,
-          ownerPhone: ownerKey,
-          assistantCount: assistants.length,
-          err,
-        },
-        'qr_sheets.create transaction rolled back'
-      )
-      session.flash(
-        'error',
-        'Failed to create QRs (rolled back, no rows persisted). Check server logs for details.'
-      )
+      logger.error({ eventSlug: slug, ownerPhone: ownerKey, err }, 'qr_sheets.create failed')
+      session.flash('error', 'Failed to create QR. Check server logs for details.')
       return response.redirect(`/admin/qr-sheets/${encodeURIComponent(slug)}`)
     }
 
-    session.flash('created', created)
+    session.flash('created', 1)
     return response.redirect(`/admin/qr-sheets/${encodeURIComponent(slug)}`)
   }
 }

@@ -12,6 +12,7 @@
  * Spec: QR_SYSTEM_SPEC.md.
  */
 
+import type { FormEvent } from 'react'
 import { Head, useForm } from '@inertiajs/react'
 import { QRCodeSVG } from 'qrcode.react'
 import AdminLayout from '../../layouts/admin_layout.js'
@@ -54,13 +55,12 @@ export default function QrSheetsPage({
 }: Props) {
   const { data, setData, post, processing, errors } = useForm({
     ownerPhoneNumber: defaultOwnerPhone ?? '',
-    assistants: '',
   })
 
   const flashError = flash?.error ? readFlash(flash.error) : null
   const flashCreated = flash?.created ? readFlash(flash.created) : null
 
-  function submit(e: React.FormEvent) {
+  function submit(e: FormEvent) {
     e.preventDefault()
     post(`/admin/qr-sheets/${encodeURIComponent(event.slug)}`)
   }
@@ -158,55 +158,46 @@ export default function QrSheetsPage({
         </div>
       ) : null}
 
-      <form
-        onSubmit={submit}
-        className="no-print panel-frame mb-8 space-y-4 p-6"
-        aria-label="Create event QRs"
-      >
-        <div>
-          <label htmlFor="ownerPhoneNumber" className="spec-label block">
-            Owner phone (must exist in user_preferences)
-          </label>
+      {/* Hide the form entirely once the event QR has been generated.
+          The generated QR appears below — operator just hits Cmd+P. */}
+      {qrLinks.length === 0 && (
+        <form
+          onSubmit={submit}
+          className="no-print panel-frame mb-8 space-y-3 p-6"
+          aria-label="Create event QR"
+        >
+          <p className="font-mono text-sm admin-text">
+            One QR for the whole event. Click below to generate it — printing is just Cmd/Ctrl+P
+            after.
+          </p>
+          {/* Owner phone is hidden — defaults to SIPPY_EVENT_QR_OWNER_PHONE env.
+              No reason to ask the admin each time; the owner is a Sippy team
+              account, not per-event metadata. If the env is missing the POST
+              flashes a clear error. */}
           <input
-            id="ownerPhoneNumber"
-            type="text"
+            type="hidden"
             value={data.ownerPhoneNumber}
             onChange={(e) => setData('ownerPhoneNumber', e.target.value)}
-            placeholder="+50312345678"
-            className="mt-1 w-full rounded border border-[var(--admin-border-subtle)] bg-[var(--admin-surface)] px-3 py-2 font-mono text-sm admin-text"
-            required
           />
           {errors.ownerPhoneNumber ? (
-            <p className="mt-1 text-xs text-red-600">{errors.ownerPhoneNumber}</p>
+            <p className="text-xs text-red-600">{errors.ownerPhoneNumber}</p>
           ) : null}
-        </div>
 
-        <div>
-          <label htmlFor="assistants" className="spec-label block">
-            Assistants (one per line — &quot;Label&quot; or &quot;Label | source-tag&quot;)
-          </label>
-          <textarea
-            id="assistants"
-            value={data.assistants}
-            onChange={(e) => setData('assistants', e.target.value)}
-            placeholder={'Carolina\nDiego\nSofia | asst-sofia'}
-            rows={8}
-            className="mt-1 w-full rounded border border-[var(--admin-border-subtle)] bg-[var(--admin-surface)] px-3 py-2 font-mono text-sm admin-text"
-            required
-          />
-          {errors.assistants ? (
-            <p className="mt-1 text-xs text-red-600">{errors.assistants}</p>
-          ) : null}
-        </div>
-
-        <button
-          type="submit"
-          disabled={processing}
-          className="rounded-md bg-crypto-hover px-5 py-2 font-mono text-xs font-bold uppercase tracking-[0.1em] text-white disabled:opacity-50"
-        >
-          {processing ? 'Creating…' : 'Generate QR Sheets'}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={processing || !defaultOwnerPhone}
+            className="rounded-md bg-crypto-hover px-5 py-2 font-mono text-xs font-bold uppercase tracking-[0.1em] text-white disabled:opacity-50"
+          >
+            {processing ? 'Creating…' : 'Generate event QR'}
+          </button>
+          {!defaultOwnerPhone && (
+            <p className="font-mono text-xs text-amber-700">
+              Set <code>SIPPY_EVENT_QR_OWNER_PHONE</code> env var on the backend before generating.
+              Must be a phone already onboarded in user_preferences.
+            </p>
+          )}
+        </form>
+      )}
 
       {/* ── Sheets (visible on screen as a grid; one-per-page in print) ──── */}
       {qrLinks.length === 0 ? (
