@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Image from 'next/image'
 import { QRCodeSVG } from 'qrcode.react'
 import { getStoredToken } from '@/lib/auth'
 import { useSessionGuard } from '@/lib/useSessionGuard'
@@ -11,12 +12,9 @@ import { CDPProviderDefault } from '../../providers/cdp-provider'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
 const MAX_DISPLAY_NAME = 40
-
-// Brand tokens — kept inline so this page doesn't depend on the wider
-// theme system (which is light-mode-first). Pizza Day is at night;
-// dark is the right default for the receive-money surface.
-const BRAND_BLUE = '#00AFD7' // cheetah blue — consumer / primary CTA
-const BRAND_GREEN = '#00D796' // electric green — crypto / value accent
+// QR foreground stays the literal brand hex because qrcode.react needs a
+// concrete color, not a CSS variable.
+const BRAND_BLUE = '#00AFD7'
 
 interface PayLink {
   shortId: string
@@ -53,17 +51,11 @@ function PayQrContent() {
   }, [])
 
   const [link, setLink] = useState<PayLink | null>(null)
-  // loading is per-fetch only. Start false so the unauth branch renders
-  // immediately instead of hanging on "Cargando" (loadExisting never runs
-  // without auth).
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState('')
 
-  // Edit mode for the displayName on an existing pay-QR. PATCH preserves
-  // the shortId so any printed sheets keep working — only the name shown
-  // on the bot confirm prompt + this page changes.
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
@@ -202,29 +194,29 @@ function PayQrContent() {
     }
   }
 
-  // ── Checking session → spinner ──────────────────────────────────────────
   if (isCheckingSession) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6 bg-black">
-        <p className="font-mono text-sm text-neutral-500">Cargando…</p>
+      <main className="min-h-screen flex items-center justify-center p-6 bg-[var(--bg-primary)]">
+        <p className="font-mono text-sm text-[var(--text-secondary)]">Cargando…</p>
       </main>
     )
   }
 
-  // ── Unauthenticated → inline OTP flow seeded from ?phone=... ────────────
   if (!isAuthenticated) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6 bg-black text-white">
-        <div className="w-full max-w-md rounded-2xl border border-neutral-800 bg-neutral-950 p-6">
+      <main className="min-h-screen flex items-center justify-center p-6 bg-[var(--bg-primary)]">
+        <div className="w-full max-w-md panel-frame rounded-2xl bg-[var(--bg-primary)] p-6">
           <BrandHeader />
-          <h1 className="mt-6 text-2xl font-bold tracking-tight">Mi código de pago</h1>
-          <p className="mt-1 mb-6 text-sm text-neutral-400">
+          <h1 className="mt-6 font-display text-2xl font-bold uppercase tracking-wide text-[var(--text-primary)]">
+            Mi código de pago
+          </h1>
+          <p className="mt-1 mb-6 text-sm text-[var(--text-secondary)]">
             Inicia sesión para generar y compartir tu QR.
           </p>
 
           {reAuthError ? (
             <div
-              className="mb-4 rounded border-l-4 border-red-500 bg-red-950/40 px-4 py-3 text-sm text-red-200"
+              className="mb-4 rounded-lg border border-red-200 bg-[var(--fill-danger-light)] px-4 py-3 text-sm text-red-700"
               role="alert"
             >
               {reAuthError}
@@ -239,7 +231,7 @@ function PayQrContent() {
                 locked={isPhoneLocked}
               />
               {isPhoneLocked ? (
-                <p className="mt-1 text-xs text-neutral-500">Número desde WhatsApp.</p>
+                <p className="mt-1 text-xs text-[var(--text-muted)]">Número desde WhatsApp.</p>
               ) : null}
               <div className="mt-4">
                 <ChannelPicker
@@ -255,7 +247,9 @@ function PayQrContent() {
 
           {reAuthStep === 'otp' && (
             <>
-              <p className="mb-4 text-sm text-neutral-400">Enviamos un código a {reAuthPhone}.</p>
+              <p className="mb-4 text-sm text-[var(--text-secondary)]">
+                Enviamos un código a {reAuthPhone}.
+              </p>
               <input
                 type="text"
                 inputMode="numeric"
@@ -263,13 +257,12 @@ function PayQrContent() {
                 onChange={(e) => setReAuthOtp(e.target.value.replace(/\D/g, ''))}
                 placeholder="123456"
                 maxLength={6}
-                className="w-full rounded border border-neutral-700 bg-neutral-900 text-white px-3 py-3 text-center text-2xl tracking-widest focus:border-[#00AFD7] focus:outline-none"
+                className="w-full p-3 border rounded-lg text-center text-2xl tracking-widest text-[var(--text-primary)]"
               />
               <button
                 onClick={handleReAuthVerifyOtp}
                 disabled={reAuthLoading || reAuthOtp.length !== 6}
-                style={{ backgroundColor: BRAND_BLUE }}
-                className="mt-4 w-full rounded-md px-5 py-3 text-sm font-bold uppercase tracking-wider text-white disabled:opacity-50"
+                className="mt-4 w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {reAuthLoading ? 'Verificando…' : 'Verificar'}
               </button>
@@ -281,7 +274,7 @@ function PayQrContent() {
               />
               <button
                 onClick={() => setReAuthOtp('')}
-                className="mt-2 w-full py-2 text-sm text-neutral-500"
+                className="mt-2 w-full py-2 text-sm text-[var(--text-secondary)]"
               >
                 Atrás
               </button>
@@ -292,17 +285,16 @@ function PayQrContent() {
     )
   }
 
-  // ── Per-fetch loading (authenticated) ──────────────────────────────────
   if (loading) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6 bg-black">
-        <p className="font-mono text-sm text-neutral-500">Cargando…</p>
+      <main className="min-h-screen flex items-center justify-center p-6 bg-[var(--bg-primary)]">
+        <p className="font-mono text-sm text-[var(--text-secondary)]">Cargando…</p>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-black text-white">
+    <main className="min-h-screen bg-[var(--bg-primary)]">
       <style>{`
         @media print {
           html, body { background: white !important; color: black !important; }
@@ -314,6 +306,7 @@ function PayQrContent() {
             padding: 0 !important;
             min-height: 100vh;
           }
+          .print-sheet::after { display: none !important; }
           @page { size: A4; margin: 20mm; }
         }
       `}</style>
@@ -321,15 +314,21 @@ function PayQrContent() {
       <div className="mx-auto max-w-md p-6">
         <header className="no-print mb-6">
           <BrandHeader />
-          <h1 className="mt-6 text-2xl font-bold tracking-tight">Mi código de pago</h1>
-          <p className="mt-1 text-sm text-neutral-400">
+          <div className="flex items-center gap-3 mt-6 mb-2">
+            <span className="indicator-dot indicator-dot-active" aria-hidden="true" />
+            <span className="spec-label spec-label-muted">PAY QR</span>
+          </div>
+          <h1 className="font-display text-2xl font-bold uppercase tracking-wide text-[var(--text-primary)]">
+            Mi código de pago
+          </h1>
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
             Comparte tu QR para que te paguen con Sippy. Tú decides el nombre que ven.
           </p>
         </header>
 
         {error ? (
           <div
-            className="no-print mb-4 rounded border-l-4 border-red-500 bg-red-950/40 px-4 py-3 text-sm text-red-200"
+            className="no-print mb-4 rounded-lg border border-red-200 bg-[var(--fill-danger-light)] px-4 py-3 text-sm text-red-700"
             role="alert"
           >
             {error}
@@ -337,10 +336,13 @@ function PayQrContent() {
         ) : null}
 
         {!link ? (
-          <form onSubmit={handleCreate} className="no-print space-y-4">
+          <form
+            onSubmit={handleCreate}
+            className="no-print panel-frame rounded-2xl bg-[var(--bg-primary)] p-6 space-y-4"
+          >
             <div>
-              <label htmlFor="displayName" className="block text-sm font-medium">
-                Nombre para mostrar
+              <label htmlFor="displayName" className="block spec-label spec-label-muted mb-2">
+                NOMBRE PARA MOSTRAR
               </label>
               <input
                 id="displayName"
@@ -349,51 +351,56 @@ function PayQrContent() {
                 onChange={(e) => setDisplayName(e.target.value)}
                 maxLength={MAX_DISPLAY_NAME}
                 placeholder="Carolina's Pizza  ·  Mateo  ·  @cafe-norte"
-                className="mt-1 w-full rounded border border-neutral-700 bg-neutral-900 text-white px-3 py-2 text-sm placeholder:text-neutral-600 focus:border-[#00AFD7] focus:outline-none"
+                className="w-full p-3 border rounded-lg text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                 required
                 autoFocus
               />
-              <p className="mt-1 text-xs text-neutral-500">
+              <p className="mt-2 text-xs text-[var(--text-muted)]">
                 Aparece en el QR impreso y en el chat de quien te paga.
               </p>
             </div>
             <button
               type="submit"
               disabled={submitting || !displayName.trim()}
-              style={{ backgroundColor: BRAND_BLUE }}
-              className="w-full rounded-md px-5 py-3 text-sm font-bold uppercase tracking-wider text-white disabled:opacity-50"
+              className="w-full bg-brand-primary text-white py-3 rounded-lg font-semibold hover:bg-brand-primary-hover disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {submitting ? 'Generando…' : 'Generar mi código'}
             </button>
           </form>
         ) : (
           <>
-            {/* Printable sheet — kept on white background so the printed
-                output stays clean even when the screen is dark. */}
+            {/* Printable sheet — kept on white background so printed output
+                stays clean regardless of the on-screen theme. */}
             <article
-              className="print-sheet flex flex-col items-center justify-center gap-6 rounded-xl border border-neutral-200 bg-white p-8 text-black"
+              className="print-sheet panel-frame flex flex-col items-center justify-center gap-6 rounded-2xl bg-white p-8 text-black"
               aria-label={`Pay sheet for ${link.displayName ?? 'Sippy'}`}
             >
               <header className="w-full text-center">
-                <p className="font-mono text-xs uppercase tracking-[0.18em] text-neutral-500">
-                  Sippy
-                </p>
+                <div className="flex justify-center">
+                  <Image
+                    src="/images/logos/sippy-wordmark-cheetah.svg"
+                    alt="Sippy"
+                    width={88}
+                    height={25}
+                    className="h-6 w-auto"
+                  />
+                </div>
                 {isEditing ? (
                   <>
                     {/* Print fallback: while the user has the edit input
                         open, Cmd/Ctrl+P would otherwise print a nameless
                         sheet. Render the current saved name in a
                         print-only h2 so the printed output always has it. */}
-                    <h2 className="mt-1 hidden text-3xl font-semibold print:block">
+                    <h2 className="mt-3 hidden font-display text-3xl font-bold uppercase tracking-wide print:block">
                       {link.displayName ?? 'Sippy'}
                     </h2>
-                    <div className="no-print mt-2 flex flex-col items-center gap-2">
+                    <div className="no-print mt-3 flex flex-col items-center gap-2">
                       <input
                         type="text"
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
                         maxLength={MAX_DISPLAY_NAME}
-                        className="w-full max-w-[280px] rounded border border-neutral-300 px-3 py-2 text-center text-2xl font-semibold text-black focus:border-[#00AFD7] focus:outline-none"
+                        className="w-full max-w-[280px] rounded-lg border border-neutral-300 px-3 py-2 text-center font-display text-2xl font-bold uppercase tracking-wide text-black focus:border-brand-primary focus:outline-none"
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -409,15 +416,14 @@ function PayQrContent() {
                           type="button"
                           onClick={saveEdit}
                           disabled={savingEdit || !editValue.trim()}
-                          style={{ backgroundColor: BRAND_BLUE }}
-                          className="rounded-md px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                          className="bg-brand-primary text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-brand-primary-hover disabled:opacity-50"
                         >
                           {savingEdit ? 'Guardando…' : 'Guardar'}
                         </button>
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="rounded-md border border-neutral-300 px-4 py-1.5 text-sm font-medium hover:bg-neutral-100"
+                          className="rounded-lg border border-neutral-300 px-4 py-1.5 text-sm font-medium hover:bg-neutral-100"
                         >
                           Cancelar
                         </button>
@@ -425,8 +431,10 @@ function PayQrContent() {
                     </div>
                   </>
                 ) : (
-                  <div className="mt-1 flex items-center justify-center gap-2">
-                    <h2 className="text-3xl font-semibold">{link.displayName ?? 'Sippy'}</h2>
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <h2 className="font-display text-3xl font-bold uppercase tracking-wide">
+                      {link.displayName ?? 'Sippy'}
+                    </h2>
                     <button
                       type="button"
                       onClick={startEdit}
@@ -449,7 +457,9 @@ function PayQrContent() {
               />
 
               <footer className="w-full text-center">
-                <p className="text-lg font-semibold">Paga aquí con Sippy</p>
+                <p className="font-display text-lg font-bold uppercase tracking-wide">
+                  Paga aquí con Sippy
+                </p>
                 <p className="mt-1 text-sm text-neutral-600">Escanea con tu cámara para pagar.</p>
                 <p className="mt-2 break-all font-mono text-[11px] text-neutral-500">
                   {link.scanUrl}
@@ -461,20 +471,19 @@ function PayQrContent() {
               <button
                 type="button"
                 onClick={handlePrint}
-                className="flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-800"
+                className="flex-1 panel-frame rounded-lg bg-[var(--bg-primary)] px-4 py-3 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-secondary)]"
               >
                 Imprimir
               </button>
               <button
                 type="button"
                 onClick={handleShare}
-                style={{ backgroundColor: BRAND_BLUE }}
-                className="flex-1 rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                className="flex-1 bg-brand-primary text-white px-4 py-3 rounded-lg text-sm font-semibold hover:bg-brand-primary-hover"
               >
                 Compartir
               </button>
             </div>
-            <p className="no-print mt-3 text-center text-xs text-neutral-500">
+            <p className="no-print mt-3 text-center font-mono text-xs text-[var(--text-muted)]">
               {link.ownerPhoneMasked}
             </p>
           </>
@@ -484,25 +493,26 @@ function PayQrContent() {
   )
 }
 
-/**
- * Sippy wordmark — small, mono-style header used at the top of dark
- * surfaces. Cheetah blue accent on the "ppy" so the brand color is
- * present without dominating the layout.
- */
 function BrandHeader() {
   return (
-    <div className="flex items-center gap-2">
-      <span
-        aria-hidden="true"
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md font-mono text-base font-bold text-black"
-        style={{ backgroundColor: BRAND_GREEN }}
-      >
-        S
-      </span>
-      <span className="font-mono text-lg font-bold tracking-tight">
-        si<span style={{ color: BRAND_BLUE }}>ppy</span>
-      </span>
-    </div>
+    <a href="/" className="inline-flex items-center gap-3">
+      <Image
+        src="/images/logos/sippy-s-mark-cheetah.svg"
+        alt="Sippy"
+        width={18}
+        height={32}
+        className="h-7 w-auto"
+        priority
+      />
+      <Image
+        src="/images/logos/sippy-wordmark-cheetah.svg"
+        alt="Sippy"
+        width={88}
+        height={25}
+        className="h-5 w-auto"
+        priority
+      />
+    </a>
   )
 }
 
