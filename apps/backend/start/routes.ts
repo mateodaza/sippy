@@ -235,9 +235,9 @@ router
     router
       .post('/resume', [ModerationController, 'resume'])
       .use(middleware.adminRole({ role: 'admin' }))
-    router
-      .post('/qr-sheets/:eventSlug', [QrSheetsController, 'create'])
-      .use(middleware.adminRole({ role: 'admin' }))
+    // QR sheets POST endpoint removed — event QRs are auto-provisioned by
+    // GET (lazy-create on first read). Eliminates the admin-only role gate
+    // that confused operators trying to refresh their event's QR.
 
     // Operator-wallet management (provision, revoke, drain, read). All admin-only.
     router
