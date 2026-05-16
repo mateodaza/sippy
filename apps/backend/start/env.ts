@@ -161,4 +161,10 @@ export default await Env.create(new URL('../', import.meta.url), {
   // instead of a `user_preferences.account_type` column at this scale.
   PIZZA_DAY_VENDOR_PHONES: Env.schema.string.optional(),
   PIZZA_DAY_EXCHANGE_PHONES: Env.schema.string.optional(),
+
+  // Operator send caps. Per-tx is enforced before submission; per-hour is a
+  // rolling SUM over `operator_sends` where status IN (pending,submitted,confirmed).
+  // Operator can request a temporary cap raise via env-var update without redeploy.
+  OPERATOR_MAX_PER_TX_USDC: Env.schema.number.optional(),
+  OPERATOR_MAX_PER_HOUR_USDC: Env.schema.number.optional(),
 })

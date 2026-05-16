@@ -4,7 +4,9 @@ import vine from '@vinejs/vine'
 
 const updateRoleValidator = vine.compile(
   vine.object({
-    role: vine.enum(['admin', 'viewer']),
+    // 'operator' = event-floor send role. Admin promotes a viewer to operator
+    // here, then assigns them to an event via /admin/events/:slug/operator.
+    role: vine.enum(['admin', 'viewer', 'operator']),
   })
 )
 

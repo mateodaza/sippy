@@ -8,6 +8,8 @@ interface AuthUser {
   fullName: string | null
   role: string
   initials: string
+  /** Populated for `role === 'operator'`. Drives nav scoping. */
+  assignedEventSlug?: string | null
 }
 
 interface FlashMessages {
@@ -245,7 +247,7 @@ function PollerStatus({
 }
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const { auth, flash, indexerStatus } = usePage().props as {
+  const { auth, flash, indexerStatus } = usePage().props as unknown as {
     auth: AuthUser | null
     flash: FlashMessages
     indexerStatus: IndexerStatus | null
@@ -257,6 +259,85 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     if (href === '/admin') return currentPath === '/admin'
     return currentPath.startsWith(href)
   }
+
+  // Role-aware nav. Operators see ONLY their send page, their assigned
+  // event's attendees, and the same event's QR sheets. All other admin
+  // surfaces (users, analytics, roles, dashboard root) are hidden.
+  // Spec: OPERATOR_FLOW_PLAN.md — "Operator role is strict-scope".
+  const effectiveNavItems =
+    auth?.role === 'operator'
+      ? (() => {
+          const slug = auth.assignedEventSlug
+          const items = [
+            {
+              href: '/admin/operator/send',
+              label: 'SEND',
+              icon: (
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              ),
+            },
+          ]
+          if (slug) {
+            items.push(
+              {
+                href: `/admin/events/${encodeURIComponent(slug)}/attendees`,
+                label: 'ATTENDEES',
+                icon: (
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                ),
+              },
+              {
+                href: `/admin/qr-sheets/${encodeURIComponent(slug)}`,
+                label: 'QR SHEETS',
+                icon: (
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                  </svg>
+                ),
+              }
+            )
+          }
+          return items
+        })()
+      : navItems
 
   const sidebarContent = (
     <>
@@ -319,7 +400,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
       {/* Navigation */}
       <div className="space-y-0.5 px-3 py-4">
-        {navItems.map((item) => (
+        {effectiveNavItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -339,6 +420,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             {item.label}
           </Link>
         ))}
+        {auth?.role === 'operator' && !auth.assignedEventSlug && (
+          <div
+            className="mt-3 rounded border-l-4 border-amber-600 bg-amber-50 px-3 py-2 font-mono text-xs text-amber-900"
+            role="alert"
+          >
+            No event assigned. Ask an admin to assign you.
+          </div>
+        )}
       </div>
 
       {/* Indexer status */}

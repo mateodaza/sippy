@@ -21,6 +21,7 @@ import logger from '@adonisjs/core/services/logger'
 import env from '#start/env'
 import { getActiveEventBySlug } from '#services/event.service'
 import { createQrLink, listEventQrLinks } from '#services/qr_link.service'
+import { getOperatorWalletForUser } from '#services/operator_wallet.service'
 import { resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { query } from '#services/db'
 
@@ -128,8 +129,19 @@ export default class QrSheetsController {
    * Returns 404 if the event doesn't exist or isn't active — the admin should
    * already have the slug from elsewhere; this isn't a discovery endpoint.
    */
-  async show({ params, inertia, session, response }: HttpContext) {
+  async show({ params, inertia, session, response, auth }: HttpContext) {
     const slug = String(params.eventSlug ?? '').trim()
+
+    // Operator scope-check: operators can only view their assigned event's
+    // QR sheets. Admin passes through. 403 if mismatch.
+    const user = auth.user!
+    if (user.role === 'operator') {
+      const assignment = await getOperatorWalletForUser(user.id)
+      if (!assignment || assignment.eventSlug !== slug) {
+        return response.forbidden({ error: 'Not authorized for this event' })
+      }
+    }
+
     const event = await getActiveEventBySlug(slug)
     if (!event) {
       return response.notFound({ error: `Event '${slug}' not found or inactive` })

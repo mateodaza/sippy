@@ -34,6 +34,13 @@ export default class AuthController {
     rateLimitService.resetLoginThrottle(ip)
     await auth.use('web').login(user)
     session.flash('success', 'Welcome back!')
+
+    // Operators land on their send page directly — they don't see the
+    // admin dashboard at all (it's scoped out for them). Other roles
+    // (admin, viewer) go to the main dashboard as before.
+    if (user.role === 'operator') {
+      return response.redirect().toPath('/admin/operator/send')
+    }
     return response.redirect().toPath('/admin')
   }
 
