@@ -180,16 +180,86 @@ PostHog alerts to Mateo's phone for:
 
 ## Backup plans
 
-| Failure                            | Plan B                                                                                                                                                |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Venue Wi-Fi dies                   | Pre-printed flyer with WhatsApp number; users DM Sippy later, manual onboard                                                                          |
-| Backend hiccup                     | "Saved, onboarding you in 2 min" message + retry queue                                                                                                |
-| Assistant's phone breaks           | Spare phones with QR sheets pre-loaded                                                                                                                |
-| POAP claim breaks (Cartagena side) | Manual paper claim list, retroactive mint coordinated with Cartagena                                                                                  |
-| SMART_MODE LLM fails               | Regex fallback automatic, no user impact                                                                                                              |
-| Specific assistant unreachable     | Catch-all QR with `?source=assistant-fallback`                                                                                                        |
-| Exchange wallet runs out of USDC   | One of the 3 floats covers while we top up the empty one from treasury wallet on the fly. Set per-wallet alert threshold (e.g. <$100 USDC remaining). |
-| Exchange staffer's phone breaks    | Other 1–2 exchange wallets keep running. Spare phone with wallet pre-loaded as backup.                                                                |
+| Failure                            | Plan B                                                                                                                                                                                                                                            |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Venue Wi-Fi dies                   | Pre-printed flyer with WhatsApp number; users DM Sippy later, manual onboard                                                                                                                                                                      |
+| Backend hiccup                     | "Saved, onboarding you in 2 min" message + retry queue                                                                                                                                                                                            |
+| Assistant's phone breaks           | Spare phones with QR sheets pre-loaded                                                                                                                                                                                                            |
+| POAP claim breaks (Cartagena side) | Manual paper claim list, retroactive mint coordinated with Cartagena                                                                                                                                                                              |
+| SMART_MODE LLM fails               | Regex fallback automatic, no user impact                                                                                                                                                                                                          |
+| Specific assistant unreachable     | Catch-all QR with `source_tag='assistant-fallback'` (provision via admin UI as `Fallback \| assistant-fallback`; ops carries a printed copy). Attribution still flows through `source_tag` so we can see how often fallback gets used post-event. |
+| Exchange wallet runs out of USDC   | One of the 3 floats covers while we top up the empty one from treasury wallet on the fly. Set per-wallet alert threshold (e.g. <$100 USDC remaining).                                                                                             |
+| Exchange staffer's phone breaks    | Other 1–2 exchange wallets keep running. Spare phone with wallet pre-loaded as backup.                                                                                                                                                            |
+
+---
+
+## Day-of operator runbook
+
+A single tactical card for **Fri May 22, 2026**. Pin this; everything else in this doc is context.
+
+### Pre-flight (T-60 minutes, before doors open)
+
+- [ ] Open Railway dashboard. Confirm `sippy-backend` and `sippy-web` services are healthy (green, no recent crashes).
+- [ ] Open `/admin/qr-sheets/pizza-day-ctg-2026`. Confirm:
+  - URL prefix banner is **sky-blue** (not amber). If amber, `FRONTEND_URL` is unset on backend — set it before the event starts.
+  - All printed assistant sheets render correctly.
+  - **Fallback QR is in the list** (source_tag `assistant-fallback`). If missing, generate it now.
+- [ ] Open WhatsApp on a test phone. Open one printed QR's `/q/<short-id>` URL. Confirm it deeplinks into a chat with Sippy (not into "choose contact").
+- [ ] Confirm each exchange wallet has its preloaded USDC float.
+- [ ] Open the live monitoring dashboard in a browser tab. Leave it visible.
+- [ ] Distribute QR sheets to assistants. Each assistant gets one labeled sheet + a copy of the fallback.
+
+### During the event
+
+- [ ] **Onboarding rate** (monitoring dashboard): expect spikes when waves arrive. Investigate if rate drops to zero unexpectedly.
+- [ ] **PostHog error rate**: alert threshold already set on Mateo's phone. Investigate any spike.
+- [ ] **Exchange wallet floats**: alert fires at <$100 USDC. Top up from treasury wallet on the fly.
+- [ ] **Quest leaderboard projector**: refresh visible to attendees, drives engagement.
+- [ ] **Failure response**: refer to Backup plans section below for the specific failure mode.
+
+### End of event
+
+- [ ] **Snapshot Quest leaderboard** at the cutoff time. Pin the 3 prize winners (Pizza MVP, Connector, First Mover) for payout.
+- [ ] **Capture screenshots**: leaderboard final state, monitoring dashboard final counters, any noteworthy moments. Needed for the post-event recap.
+- [ ] Disburse Quest prizes (3 × USDC transfers from treasury).
+- [ ] Drain exchange wallet floats back to treasury (or leave for next event).
+
+---
+
+## Release checklist (QR system → prod)
+
+Pre-deploy verification for the QR primitive. **Status as of May 15, 2026: all items below either ✅ done or ⚠️ unverified — confirm before Pizza Day.**
+
+### Database
+
+- [x] Migration `0017_create_events_and_user_event_links` applied on prod (batch 11)
+- [x] Migration `0018_create_qr_links_and_qr_scans` applied on prod (batch 11)
+- [x] Migration `0019_qr_event_source_unique_index` applied on prod (batch 12)
+- [x] Seeder `pizza_day_seeder.ts` ran on prod → `events` row `pizza-day-ctg-2026` exists
+
+### Backend env vars (`sippy-backend` service on Railway)
+
+- [ ] `FRONTEND_URL` — set to the apps/web public domain (the one that serves `/q/[shortId]`). Drives URL banner color + printed QR contents.
+- [ ] `SIPPY_WHATSAPP_NUMBER=14722261449` — drives wa.me deeplink. If unset, code falls back to the same canonical via `SIPPY_WHATSAPP_NUMBER_FALLBACK` constant, but explicit is safer.
+- [ ] `SIPPY_EVENT_QR_OWNER_PHONE` (optional) — prefills the owner phone field in `/admin/qr-sheets/<slug>`. Convenience only.
+
+### Frontend env vars (`sippy-web` service on Railway)
+
+- [ ] `NEXT_PUBLIC_BACKEND_URL` — apps/web's Server Component calls this to hit `/api/qr/scan/:shortId`.
+- [ ] `NEXT_PUBLIC_SIPPY_WHATSAPP_NUMBER` (optional) — display-only; `WHATSAPP_BOT_NUMBER` constant in `lib/constants.ts` is the durable source.
+
+### Code presence on prod
+
+- [x] Backend route `POST /api/qr/scan/:shortId` reachable
+- [x] Backend route `GET/POST /admin/qr-sheets/:eventSlug` reachable (admin-auth gated)
+- [ ] Apps/web route `/q/[shortId]` reachable — **verify via a test scan from a phone**
+
+### End-to-end smoke
+
+- [ ] Generate 2 test sheets via admin UI on prod
+- [ ] Scan one with a phone → confirm WhatsApp opens **directly to Sippy** (not the contact-picker page)
+- [ ] Bot receives a message containing `[<SHORTID>]` (Carlos's bracket-token extraction lands here; defer this row until his side ships)
+- [ ] Delete test sheets after verification
 
 ---
 
