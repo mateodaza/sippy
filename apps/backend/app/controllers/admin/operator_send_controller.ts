@@ -35,8 +35,10 @@ import {
   type EventOperatorWalletRow,
 } from '#services/operator_wallet.service'
 import { getUserWallet } from '#services/cdp_wallet.service'
-import { resolveUserPrefKey } from '#utils/user_pref_lookup'
+import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { canonicalizePhone, maskPhone } from '#utils/phone'
+import { sendTextMessage } from '#services/whatsapp.service'
+import { formatOperatorPaymentReceived, type Lang } from '#utils/messages'
 
 const DEFAULT_MAX_PER_TX = 100
 const DEFAULT_MAX_PER_HOUR = 500
@@ -95,6 +97,40 @@ interface ShowSendProps {
   /** When ?to=<phone> is provided, pre-fill the form. */
   prefillRecipientPhone: string | null
   flash: { error?: string; success?: string } | null
+}
+
+/**
+ * Send the post-confirm receipt to the recipient on WhatsApp. Fully
+ * isolated from the request lifecycle — must NEVER throw upwards because
+ * the on-chain send already succeeded and the operator's UI must not see
+ * a 500 over a notification failure. Errors are logged; recipient can fall
+ * back to *balance* in chat.
+ */
+async function notifyRecipientOfPayment(args: {
+  recipientPhone: string
+  amountUsdc: number
+  eventName: string
+  eventSlug: string
+  sendId: number | string
+}): Promise<void> {
+  try {
+    const pref = await findUserPrefByPhone(args.recipientPhone)
+    const lang: Lang = (pref?.preferredLanguage as Lang | undefined) ?? 'es'
+    const message = formatOperatorPaymentReceived(args.amountUsdc, args.eventName, lang)
+    await sendTextMessage(args.recipientPhone, message, lang)
+    logger.info(
+      `operator_send.notified send_id=${args.sendId} to=${maskPhone(args.recipientPhone)} lang=${lang}`
+    )
+  } catch (err) {
+    logger.warn(
+      {
+        send_id: args.sendId,
+        recipient: maskPhone(args.recipientPhone),
+        err,
+      },
+      'operator_send.notify-failed (on-chain send still succeeded)'
+    )
+  }
 }
 
 async function loadRecentSends(operatorUserId: number, eventSlug: string): Promise<RecentSend[]> {
@@ -538,6 +574,31 @@ export default class OperatorSendController {
           updated_at: db.raw('now()'),
         })
       logger.info(`operator_send.confirmed op=${user.id} send_id=${sendRowId} tx=${txHash}`)
+
+      // Notify recipient on WhatsApp. Fired AFTER the chain confirms so the
+      // message acts as a receipt, not a promise — if we sent on submit and
+      // the userOp later reverted, the user would see a false "received"
+      // notification. The send is intentionally swallowed: a WhatsApp API
+      // hiccup (rate-limit, 5xx) MUST NOT propagate as a 500 to the operator
+      // — the money already moved, the audit row is correct, the operator
+      // can tell the recipient to type *balance* if the ping is delayed.
+      //
+      // Event-name lookup is best-effort: if the row is missing or the read
+      // fails we fall back to the slug so the user still gets a message.
+      const eventRow = await db
+        .from('events')
+        .where({ slug: wallet.eventSlug })
+        .select('name')
+        .first()
+        .catch(() => null)
+      void notifyRecipientOfPayment({
+        recipientPhone: recipientCanonical,
+        amountUsdc: body.amountUsdc,
+        eventName: eventRow?.name ?? wallet.eventSlug,
+        eventSlug: wallet.eventSlug,
+        sendId: sendRowId,
+      })
+
       return response.ok({
         success: true,
         sendId: sendRowId,

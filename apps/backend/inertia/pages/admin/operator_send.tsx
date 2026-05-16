@@ -105,6 +105,20 @@ export default function OperatorSendPage({
   const [lookup, setLookup] = useState<RecipientLookupState>({ kind: 'idle' })
   const [confirming, setConfirming] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // When the backend returns 409 DUPLICATE_RECIPIENT, surface a separate
+  // override flow instead of treating it as a fatal flash. Operator can
+  // legitimately need to re-pay (first send never reached the attendee,
+  // attendee handed over more cash, etc.) — gated by an explicit second
+  // confirm so it stays deliberate.
+  const [duplicateBlock, setDuplicateBlock] = useState<{
+    message: string
+    existing: {
+      id: string | number
+      amount_usdc: string
+      status: string
+      created_at: string
+    } | null
+  } | null>(null)
   const [localFlash, setLocalFlash] = useState<{ kind: 'success' | 'error'; text: string } | null>(
     flash?.success
       ? { kind: 'success', text: flash.success }
@@ -156,7 +170,7 @@ export default function OperatorSendPage({
     setConfirming(false)
   }
 
-  async function doSend() {
+  async function doSend(override = false) {
     if (lookup.kind !== 'valid') return
     const amountNum = Number.parseFloat(amount)
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
@@ -165,6 +179,7 @@ export default function OperatorSendPage({
     }
     setSubmitting(true)
     setLocalFlash(null)
+    if (override) setDuplicateBlock(null)
     try {
       const xsrf = readXsrfToken()
       const res = await fetch('/admin/operator/send', {
@@ -174,9 +189,24 @@ export default function OperatorSendPage({
           'Accept': 'application/json',
           ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}),
         },
-        body: JSON.stringify({ recipientPhone: lookup.phone, amountUsdc: amountNum }),
+        body: JSON.stringify({
+          recipientPhone: lookup.phone,
+          amountUsdc: amountNum,
+          ...(override ? { override: true } : {}),
+        }),
       })
       const body = await res.json()
+      // 409 — backend's duplicate-recipient guard fired. Render an override
+      // panel so operator can choose to re-send (with code=DUPLICATE_RECIPIENT
+      // we know it's the dup guard, not a different conflict). Don't treat
+      // as a generic flash error.
+      if (res.status === 409 && body?.code === 'DUPLICATE_RECIPIENT') {
+        setDuplicateBlock({
+          message: body.error ?? 'Recipient already received a payment for this event.',
+          existing: body.existingSend ?? null,
+        })
+        return
+      }
       if (!res.ok || !body.success) {
         setLocalFlash({ kind: 'error', text: body.error ?? 'Send failed' })
         return
@@ -293,6 +323,45 @@ export default function OperatorSendPage({
         </div>
       )}
 
+      {/* Duplicate-recipient override panel. Backend guards against double-pay
+          by default; this panel lets operator override deliberately. Two-click
+          confirm keeps the override from being a single-tap mistake. */}
+      {duplicateBlock && (
+        <div
+          className="mb-4 rounded border-l-4 border-amber-600 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          role="alert"
+        >
+          <p className="font-semibold">Recipient already received a payment for this event</p>
+          {duplicateBlock.existing && (
+            <p className="mt-1 font-mono text-xs">
+              Previous send: ${duplicateBlock.existing.amount_usdc} USDC · status:{' '}
+              {duplicateBlock.existing.status} · id: {duplicateBlock.existing.id}
+            </p>
+          )}
+          <p className="mt-2 text-xs">
+            Only override if you verified the attendee did NOT receive the funds, or they handed
+            over additional cash that warrants a second send.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => void doSend(true)}
+              disabled={submitting}
+              className="rounded-md bg-amber-700 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.1em] text-white hover:bg-amber-800 disabled:opacity-50"
+            >
+              {submitting ? 'Sending…' : 'Send anyway'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDuplicateBlock(null)}
+              className="rounded-md border border-amber-700 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.1em] text-amber-800 hover:bg-amber-100"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Form */}
       {wallet && wallet.active && (
         <form
@@ -319,6 +388,7 @@ export default function OperatorSendPage({
                   setRecipientPhone(e.target.value)
                   setLookup({ kind: 'idle' })
                   setConfirming(false)
+                  setDuplicateBlock(null)
                 }}
                 placeholder="+573001234567"
                 className="flex-1 rounded border border-[var(--admin-border-subtle)] bg-[var(--admin-surface)] px-3 py-2 font-mono text-sm admin-text"
@@ -368,6 +438,7 @@ export default function OperatorSendPage({
               onChange={(e) => {
                 setAmount(e.target.value)
                 setConfirming(false)
+                setDuplicateBlock(null)
               }}
               placeholder="0.00"
               className="mt-1 w-full rounded border border-[var(--admin-border-subtle)] bg-[var(--admin-surface)] px-3 py-2 font-mono text-sm admin-text"

@@ -395,6 +395,31 @@ export function formatEventWelcomeReturning(
   return m[lang]()
 }
 
+/**
+ * Sent to a recipient when an event operator pays them USDC in exchange for
+ * cash at the venue. Fired AFTER the on-chain send is confirmed — never on
+ * a still-pending submission, so the operator can confidently hand over
+ * cash before the user gets the ping (the message is the receipt, not the
+ * promise). Amount is already in USDC; we format to 2 decimals like the rest
+ * of the catalog.
+ */
+export function formatOperatorPaymentReceived(
+  amountUsdc: number,
+  eventName: string,
+  lang: Lang = 'en'
+): string {
+  const amount = formatCurrencyUSD(amountUsdc)
+  const m = {
+    en: () =>
+      `You received ${amount} USDC at ${eventName}.\n\n` + `Type *balance* to see your wallet.`,
+    es: () =>
+      `Recibiste ${amount} USDC en ${eventName}.\n\n` + `Escribe *saldo* para ver tu billetera.`,
+    pt: () =>
+      `Voce recebeu ${amount} USDC em ${eventName}.\n\n` + `Digite *saldo* para ver sua carteira.`,
+  }
+  return m[lang]()
+}
+
 // --- About ---
 
 export function formatAboutMessage(lang: Lang = 'en'): string {
