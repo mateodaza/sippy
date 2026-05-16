@@ -151,6 +151,62 @@ export async function logQrScan(args: LogQrScanArgs): Promise<void> {
   }
 }
 
+// ── Write: resolve a prior /q/ scan to a phone ──────────────────────────────
+
+/**
+ * UPDATE the most recent unresolved `qr_scans` row for `shortId` with the
+ * phone we just learned about (via the WhatsApp bracket-token handler).
+ *
+ * This is the "close the loop" half of the QR scan pipeline:
+ *   1. User scans QR → /q/<id> → backend INSERTs a qr_scans row with
+ *      `resolved_to_phone_number = NULL` (phone unknown at scan time)
+ *   2. User opens WhatsApp, sends `Hola Sippy! [<id>]`
+ *   3. Bot's bracket-handler calls this fn → UPDATE that row with the phone
+ *
+ * Why UPDATE, not INSERT: scan_count + uniqueness of the scan event matter
+ * for analytics. Inserting a second row here would double-count every scan
+ * and inflate `qr_links.scan_count`, while leaving the original /q/ row
+ * unresolved forever. Spec: QR_SYSTEM_SPEC.md "When a scan is resolved".
+ *
+ * Returns `{ updated: false }` when no unresolved row exists for this
+ * shortId (rare — user typed the bracket directly without scanning). We
+ * deliberately do NOT insert a fallback row in that case: the user didn't
+ * actually scan, so attributing a scan to them would lie to analytics.
+ *
+ * Errors are caught and logged — never throws. Resolution analytics are
+ * observability, not a hard dependency of the bot reply flow.
+ */
+export async function resolveQrScan(args: {
+  shortId: string
+  phoneNumber: string
+}): Promise<{ updated: boolean }> {
+  try {
+    // The subquery + `id = (SELECT ...)` form lets us UPDATE the single
+    // most-recent unresolved row atomically. Using LIMIT 1 in UPDATE
+    // directly isn't portable across Postgres; the subquery pattern is.
+    const result = await query<{ id: string }>(
+      `UPDATE qr_scans
+       SET resolved_to_phone_number = $1,
+           resolved_at = now()
+       WHERE id = (
+         SELECT id FROM qr_scans
+         WHERE short_id = $2 AND resolved_to_phone_number IS NULL
+         ORDER BY scanned_at DESC
+         LIMIT 1
+       )
+       RETURNING id`,
+      [args.phoneNumber, args.shortId]
+    )
+    return { updated: (result.rows?.length ?? 0) > 0 }
+  } catch (error) {
+    logger.warn(
+      { shortId: args.shortId, err: error },
+      'qr_scan resolve UPDATE failed (non-blocking)'
+    )
+    return { updated: false }
+  }
+}
+
 // ── Read: list event QRs ────────────────────────────────────────────────────
 
 /**

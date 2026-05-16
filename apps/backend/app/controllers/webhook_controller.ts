@@ -17,6 +17,7 @@ import type { WebhookPayload, ParsedCommand, PendingTransaction, PartialSend } f
 import '#types/container'
 import type { Lang } from '#utils/messages'
 import { parseMessage, parseAndValidateAmount } from '#utils/message_parser'
+import { extractBracketToken, dispatchBracketToken } from '#services/bracket_token.service'
 import { sendTextMessage, markAsReadWithTyping } from '#services/whatsapp.service'
 import {
   getUserLanguage,
@@ -1193,6 +1194,31 @@ export default class WebhookController {
       await sendTextMessage(from, formatTextOnlyMessage(mediaLang), mediaLang)
       rateLimitService.markProcessed(messageId)
       return
+    }
+
+    // ── QR bracket-token first-contact handler ─────────────────────────
+    // Runs BEFORE the partial-send resolver, parser, and LLM. A scanned QR
+    // lands the user in WhatsApp with `Hola Sippy! [ABC23XYZ]`; the token
+    // is routing metadata (event_slug + source_tag), not natural-language
+    // intent, so it never enters the LLM prompt — we strip it to context
+    // before any parsing happens. Spec: QR_SYSTEM_SPEC.md "Locked decision #3".
+    const { shortId, stripped } = extractBracketToken(text)
+    if (shortId) {
+      const bracketLang: Lang = (await getUserLanguage(from)) || getLanguageForPhone(from)
+      const dispatch = await dispatchBracketToken({ shortId, phoneNumber: from, lang: bracketLang })
+      if (dispatch.reply) {
+        // Event dispatch handled the message end-to-end (linked + welcomed,
+        // or sent the new-user setup URL). Don't fall through to parsing —
+        // the bracket WAS the message.
+        await sendTextMessage(from, dispatch.reply, bracketLang)
+        rateLimitService.markProcessed(messageId)
+        return
+      }
+      // not_found / revoked / unsupported_kind: fall through to normal parsing
+      // on the stripped text. We don't want a stale/invalid token to swallow
+      // the rest of the user's message ("hola sippy [ABC23XYZ] balance" still
+      // resolves the balance intent).
+      text = stripped
     }
 
     // ── Fetch conversation context (non-financial follow-ups) ──────────

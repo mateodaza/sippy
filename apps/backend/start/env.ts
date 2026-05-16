@@ -151,4 +151,14 @@ export default await Env.create(new URL('../', import.meta.url), {
   // If unset, the event row is created with poap_claim_url=NULL and the EventCard
   // won't render the "Claim your POAP" CTA. Declare new events here as we add them.
   PIZZA_DAY_POAP_URL: Env.schema.string.optional(),
+
+  // Pizza Day special-account phones — comma-separated E.164. Read by
+  // `app/utils/special_accounts.ts` for Quest exclusion: vendor sends count
+  // as purchases (worth 2pts), exchange staff sends are onramp distribution.
+  // Neither should drive the social leaderboard, so we filter them out of
+  // P2P counts + Connector recipients. 4–5 known phones total. See
+  // QR_SYSTEM_SPEC.md "Locked decision #1" for why this is env-supplied
+  // instead of a `user_preferences.account_type` column at this scale.
+  PIZZA_DAY_VENDOR_PHONES: Env.schema.string.optional(),
+  PIZZA_DAY_EXCHANGE_PHONES: Env.schema.string.optional(),
 })
