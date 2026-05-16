@@ -82,6 +82,16 @@ function shortAddress(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
+// Shield's CSRF middleware rejects POSTs that don't echo the XSRF-TOKEN
+// cookie back as an `X-XSRF-TOKEN` header. The reject path is a 302 to the
+// referer, which then renders as HTML — so a missing token surfaces as
+// "Unexpected token '<'" on the JSON.parse, not a 4xx. Always send it.
+function readXsrfToken(): string | null {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 export default function OperatorSendPage({
   event,
   wallet,
@@ -156,9 +166,14 @@ export default function OperatorSendPage({
     setSubmitting(true)
     setLocalFlash(null)
     try {
+      const xsrf = readXsrfToken()
       const res = await fetch('/admin/operator/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}),
+        },
         body: JSON.stringify({ recipientPhone: lookup.phone, amountUsdc: amountNum }),
       })
       const body = await res.json()
