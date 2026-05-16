@@ -676,10 +676,24 @@ function parseSendMatch(
  *
  * Send commands are NEVER accepted from LLM for M1.
  */
+export interface ParseMessageOptions {
+  /**
+   * Recursion guard for SMART MODE fall-through. When the dispatcher's
+   * outcome is `fall_through`, it re-enters `parseMessage` with this set
+   * to `true`. Today parseMessage doesn't invoke SMART internally (SMART
+   * runs BEFORE it in the webhook), so the flag is forward-discipline:
+   * any future code that adds a SMART call inside this function must
+   * respect `skipSmart` to prevent classifier→fall_through→classifier loops.
+   */
+  skipSmart?: boolean
+}
+
 export async function parseMessage(
   text: string,
   ctx?: ParseContext,
-  context: ContextMessage[] = []
+  context: ContextMessage[] = [],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- forward-discipline param
+  _options: ParseMessageOptions = {}
 ): Promise<ParsedCommand> {
   const startTime = Date.now()
 

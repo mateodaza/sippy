@@ -16,6 +16,7 @@
 
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
+import Image from 'next/image'
 import Link from 'next/link'
 import { WHATSAPP_BOT_NUMBER } from '@/lib/constants'
 import { QrCodeImage } from './QrCodeImage'
@@ -175,70 +176,79 @@ function DesktopFallback({
           ? 'Intenta de nuevo en unos segundos, o abre WhatsApp y envía el código de abajo.'
           : 'Puedes abrir WhatsApp y escribirle a Sippy directamente.'
 
-  // Brand tokens — inline here (this is a Server Component, no JS bundle
-  // boundary to worry about). Dark surface to match the receive-money
-  // pages; cheetah blue for primary CTA, electric green for the brand mark.
-  const BRAND_BLUE = '#00AFD7'
-  const BRAND_GREEN = '#00D796'
+  // Route is forced-dark via ThemeWrapper, so design tokens evaluate to the
+  // dark palette. Using vars keeps this consistent with the rest of the app
+  // (wallet, settings, stats) instead of bespoke hex.
+  const showQr = outcome === 'redirected' || outcome === 'backend_error'
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-black px-6 py-12 text-white">
-      <div className="w-full max-w-md text-center">
-        {/* Sippy wordmark — green "S" tile + blue "ppy" accent */}
-        <div className="mb-8 flex items-center justify-center gap-2">
-          <span
-            aria-hidden="true"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md font-mono text-base font-bold text-black"
-            style={{ backgroundColor: BRAND_GREEN }}
-          >
-            S
-          </span>
-          <span className="font-mono text-lg font-bold tracking-tight">
-            si<span style={{ color: BRAND_BLUE }}>ppy</span>
+    <main className="flex min-h-screen flex-col items-center justify-center bg-[var(--bg-primary)] px-6 py-12 text-[var(--text-primary)]">
+      <div className="w-full max-w-md">
+        <div className="mb-8 flex justify-center">
+          <Image
+            src="/images/logos/sippy-wordmark-cheetah.svg"
+            alt="Sippy"
+            width={120}
+            height={34}
+            className="h-7 w-auto"
+            priority
+          />
+        </div>
+
+        <div className="mb-2 flex items-center justify-center gap-3">
+          <span className="indicator-dot indicator-dot-active" aria-hidden="true" />
+          <span className="spec-label spec-label-muted">
+            {outcome === 'redirected'
+              ? 'PAY QR'
+              : outcome === 'revoked'
+                ? 'INACTIVE'
+                : outcome === 'backend_error'
+                  ? 'OFFLINE'
+                  : 'NOT FOUND'}
           </span>
         </div>
 
-        <h1 className="mb-3 text-2xl font-semibold">{heading}</h1>
-        <p className="mb-6 text-sm text-neutral-400">{subline}</p>
+        <h1 className="mb-3 text-center font-display text-2xl font-bold uppercase tracking-wide">
+          {heading}
+        </h1>
+        <p className="mb-6 text-center text-sm text-[var(--text-secondary)]">{subline}</p>
 
-        {/* Show the QR for outcomes where there's an active link to scan. When
-            revoked / not_found / invalid_version, the QR would just route back
-            to a dead-end, so we hide it and keep only the WhatsApp CTA.
-            White card frame keeps the QR scannable on the dark background. */}
-        {outcome === 'redirected' || outcome === 'backend_error' ? (
+        {/* Hide the QR on dead-end outcomes (revoked / not_found / invalid_version)
+            — scanning it would just bounce back here. Card uses the same
+            panel-frame double-border as the rest of the receive-money surfaces. */}
+        {showQr ? (
           <div className="mb-6 flex justify-center">
-            <div className="rounded-xl bg-white p-4 shadow-lg">
+            <div className="panel-frame rounded-2xl bg-[#0a0a0a] p-6">
               <QrCodeImage waUrl={waUrl} />
             </div>
           </div>
         ) : null}
 
-        <a
-          href={waUrl}
-          style={{ backgroundColor: BRAND_BLUE }}
-          className="inline-flex items-center justify-center rounded-md px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:opacity-90"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Abrir WhatsApp
-        </a>
+        <div className="flex justify-center">
+          <a
+            href={waUrl}
+            className="inline-flex items-center justify-center rounded-lg bg-brand-primary px-6 py-3 text-base font-semibold text-white transition hover:bg-brand-primary-hover"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Abrir WhatsApp
+          </a>
+        </div>
 
         {outcome !== 'not_found' && outcome !== 'invalid_version' ? (
-          <div className="mt-8 text-left">
-            <p className="mb-2 font-mono text-xs uppercase tracking-widest text-neutral-500">
-              Código
-            </p>
-            <code className="block rounded-md border border-neutral-800 bg-neutral-900 px-3 py-2 font-mono text-sm text-white">
+          <div className="mt-8">
+            <p className="mb-2 spec-label spec-label-muted">CÓDIGO</p>
+            <code className="block rounded-lg border border-[var(--border-strong)] bg-[#0a0a0a] px-3 py-2 font-mono text-sm text-[var(--text-primary)]">
               [{shortId}]
             </code>
-            <p className="mt-2 text-xs text-neutral-500">
+            <p className="mt-2 text-xs text-[var(--text-muted)]">
               Si abres WhatsApp manualmente, envía este código al inicio del mensaje.
             </p>
           </div>
         ) : null}
 
-        <p className="mt-12 text-xs text-neutral-500">
-          <Link href="/" className="underline hover:text-neutral-300">
+        <p className="mt-12 text-center text-xs text-[var(--text-muted)]">
+          <Link href="/" className="underline hover:text-[var(--text-secondary)]">
             Volver a sippy.lat
           </Link>
         </p>

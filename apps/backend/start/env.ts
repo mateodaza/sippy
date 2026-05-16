@@ -167,4 +167,24 @@ export default await Env.create(new URL('../', import.meta.url), {
   // Operator can request a temporary cap raise via env-var update without redeploy.
   OPERATOR_MAX_PER_TX_USDC: Env.schema.number.optional(),
   OPERATOR_MAX_PER_HOUR_USDC: Env.schema.number.optional(),
+
+  // ── SMART MODE ───────────────────────────────────────────────────────
+  // Killswitch + cohort gate. With SMART_MODE_ENABLED=false the dispatcher
+  // skips classifier calls entirely; the existing regex+LLM parser stays
+  // in charge. Default off so a config-less deploy can't accidentally
+  // burn Groq tokens or change behavior.
+  //
+  // Activation: SMART_MODE_ENABLED=true turns the code path on.
+  // Cohort gate: per-user check `isSmartModeEnabledFor(phone)` then decides
+  // whether THIS user actually hits SMART MODE — looks at user_event_links
+  // for source=pizza-day metadata. Set SMART_MODE_COHORT_ALL=true to
+  // bypass the cohort and route every authenticated user (post-event v2).
+  SMART_MODE_ENABLED: Env.schema.string.optional(),
+  SMART_MODE_COHORT_ALL: Env.schema.string.optional(),
+
+  // Narrow recovery composer (gibberish + OOS only). Stays off by default;
+  // when enabled, low-risk recovery replies get LLM-generated copy instead
+  // of fixed templates. Templates remain the fallback if the composer
+  // fails or returns sanitizer-rejected text. Money paths NEVER touch this.
+  SMART_MODE_COMPOSER_ENABLED: Env.schema.string.optional(),
 })

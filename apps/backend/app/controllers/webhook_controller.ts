@@ -32,7 +32,6 @@ import {
   formatInvalidSendFormat,
   formatHistoryMessage,
   formatSettingsMessage,
-  formatUnknownCommandMessage,
   formatLanguageSetMessage,
   formatCommandErrorMessage,
   formatGreetingMessage,
@@ -98,6 +97,9 @@ import {
   handleListContacts,
   handleContactCard,
 } from '#commands/contact_command'
+import { isSmartModeEnabledFor } from '#services/smart_mode/cohort'
+import { dispatchSmartMode } from '#services/smart_mode/dispatcher'
+import { selectUnknownVariant } from '#services/smart_mode/unknown_variants'
 
 // Exported so tests can seed/inspect state directly
 export const pendingTransactions = new Map<string, PendingTransaction>()
@@ -170,6 +172,82 @@ const CONFIRM_THRESHOLD_DEFAULT = 5
 const ACTIVE_SEND_TIMEOUT_MS = 60_000 // safety valve — clears stuck sends
 const PENDING_TX_TTL_MS = 2 * 60 * 1000 // 2 minutes
 const PENDING_OVERWRITE_TTL_MS = 60_000 // 60 seconds for contact overwrite confirmation
+
+// Non-financial intents that should accrue conversation context. Kept outside
+// processWebhook so SMART-routed and regex-routed paths share the same set —
+// any drift would mean SMART-handled greetings/help don't grow context the
+// way regex/LLM-routed ones do (regression risk for state-aware copy).
+const CONTEXT_INTENTS = new Set<string>([
+  'greeting',
+  'social',
+  'help',
+  'about',
+  'history',
+  'settings',
+  'language',
+  'start',
+])
+
+/**
+ * Append conversation context (for eligible intents) and resolve the final
+ * language used for routing + outbound copy. Mirrors the persistence the
+ * old inline block ran at the same lifecycle point, factored out so the
+ * SMART execute branch and the regular parseMessage branch can't drift.
+ *
+ * Side effects:
+ *   - appendConversationMessage when command is in CONTEXT_INTENTS
+ *   - setUserLanguage when the high-confidence detected lang differs from
+ *     the stored preference (skipped on `unknown` — a single typo must not
+ *     flip the user's language)
+ *
+ * `cachedUserLang` lets the caller skip a redundant getUserLanguage round-trip
+ * when it already fetched the value (e.g. the SMART path uses it for the
+ * classifier's `preferredLang` hint). `undefined` = not provided, fetch it;
+ * `null` = caller fetched and got no preference; `Lang` = caller fetched value.
+ *
+ * Exported for future webhook integration tests; not part of the public API.
+ */
+export async function appendContextAndResolveLang(
+  from: string,
+  text: string,
+  command: ParsedCommand,
+  cachedUserLang?: Lang | null
+): Promise<Lang> {
+  if (CONTEXT_INTENTS.has(command.command)) {
+    appendConversationMessage(from, text)
+  }
+
+  let userLang: Lang | null =
+    cachedUserLang !== undefined ? cachedUserLang : await getUserLanguage(from)
+
+  // Explicit language command always wins
+  if (command.command === 'language' && command.detectedLanguage) {
+    const lang = command.detectedLanguage as Lang
+    await setUserLanguage(from, lang)
+    return lang
+  }
+
+  const detection = detectLanguage(text)
+  const llmLang =
+    command.detectedLanguage && command.detectedLanguage !== 'ambiguous'
+      ? (command.detectedLanguage as Lang)
+      : null
+  const detectedLang =
+    llmLang || (detection && detection.confidence >= PERSIST_THRESHOLD ? detection.lang : null)
+
+  if (detectedLang) {
+    if (detectedLang !== userLang && command.command !== 'unknown') {
+      await setUserLanguage(from, detectedLang)
+    }
+    if (command.command !== 'unknown' || !userLang) {
+      userLang = detectedLang
+    }
+  } else if (!userLang && detection) {
+    userLang = detection.lang
+  }
+
+  return userLang || getLanguageForPhone(from)
+}
 
 // GC interval — removes entries that were never confirmed/cancelled.
 // Correctness is NOT reliant on this interval; expiry is enforced lazily
@@ -911,10 +989,30 @@ export async function routeCommand(
 
       case 'unknown': {
         const s = await resolveStatus()
+        // Deterministic floor message — used whenever the LLM-driven paths
+        // (helpfulMessage or generateResponse) produce nothing usable.
+        // SMART's verdict (when fall-through stamped the command) selects
+        // the OOS pool and surfaces the sanitized hint when present;
+        // otherwise default to the 'gibberish' pool — the most neutral
+        // framing for unmatched input that didn't go through SMART.
+        const fallbackUnknown = selectUnknownVariant({
+          lang,
+          category: command.smartCategory ?? 'gibberish',
+          text: command.originalText ?? '',
+          dialect,
+          oosRedirect: command.smartOosRedirect ?? null,
+        })
         if (s === 'new_user') {
           await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+        } else if (command.smartOosRedirect) {
+          // SMART produced a sanitizer-cleared, input-tailored OOS hint.
+          // Skip the LLM-driven helpfulMessage / generateResponse paths —
+          // a generic LLM reply (even one that passes validation) is
+          // strictly worse than the tailored redirect, and re-rolling
+          // costs a token budget on a path that already decided.
+          await sendMessageFn(phoneNumber, fallbackUnknown, lang)
         } else if (command.helpfulMessage) {
           const validated = await validateAndFallback(
             command.helpfulMessage,
@@ -923,28 +1021,20 @@ export async function routeCommand(
             s,
             dialectHint(dialect)
           )
-          await sendMessageFn(
-            phoneNumber,
-            validated || formatUnknownCommandMessage(command.originalText || '', lang, dialect),
-            lang
-          )
+          await sendMessageFn(phoneNumber, validated || fallbackUnknown, lang)
         } else {
           // No helpfulMessage — try generating a conversational reply via LLM
-          // before falling back to the static unknown message
+          // before falling back to the variant-selector floor. SMART OOS
+          // without a sanitized redirect and SMART gibberish both reach here:
+          // the variant is the floor, not the primary response, because a
+          // good LLM completion can still beat the generic phrasing when
+          // we don't have a tailored hint to anchor to.
           const text = command.originalText ?? ''
           const raw = text
             ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
             : null
           const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
-          if (reply) {
-            await sendMessageFn(phoneNumber, reply, lang)
-          } else {
-            await sendMessageFn(
-              phoneNumber,
-              formatUnknownCommandMessage(command.originalText || '', lang, dialect),
-              lang
-            )
-          }
+          await sendMessageFn(phoneNumber, reply || fallbackUnknown, lang)
         }
         break
       }
@@ -1368,70 +1458,122 @@ export default class WebhookController {
       partialSends.delete(from) // expired
     }
 
+    // ── SMART MODE — cohort-gated triage layer ─────────────────────────
+    // Runs AFTER partial-send resolution (which owns mid-flow continuation)
+    // and BEFORE the regex/LLM parser. Three outcomes:
+    //   • execute      — synthesized ParsedCommand goes through the SAME
+    //                    handleCommand chokepoint as regex-routed messages,
+    //                    so force-confirm/threshold/self-send/balance guards
+    //                    all still apply. Context append + language learning
+    //                    flow through `appendContextAndResolveLang` so SMART
+    //                    and regex paths stay in sync.
+    //   • reply        — send the sanitized clarifying question and stop.
+    //                    No command synthesized, so no context/lang side
+    //                    effects (matches: an unanswered ambiguity isn't
+    //                    a real intent yet).
+    //   • fall_through — let parseMessage have a shot. Pass `skipSmart:true`
+    //                    so any future code that adds a SMART call inside
+    //                    parseMessage can't loop classifier→fall→classifier.
+    //
+    // Cohort/env gate fails closed; SMART MODE skipped on DB error.
+    const smartEnabled = await isSmartModeEnabledFor(from)
+    let cachedUserLang: Lang | null | undefined
+    // SMART fall-through verdict (category + sanitized OOS hint), captured
+    // here so the unknown handler downstream can pick a state-aware variant
+    // instead of the single static fallback. Stays undefined on non-SMART
+    // paths (cohort off) — the variant selector handles that case too.
+    let smartFallThroughCategory: 'out_of_scope' | 'gibberish' | undefined
+    let smartFallThroughOosRedirect: string | undefined
+    if (smartEnabled) {
+      cachedUserLang = await getUserLanguage(from)
+      const outcome = await dispatchSmartMode({
+        text,
+        phoneNumber: from,
+        context,
+        preferredLang: cachedUserLang ?? undefined,
+      })
+      logger.info(
+        {
+          msgId: messageId,
+          phone: maskPhone(from),
+          lang: cachedUserLang ?? null,
+          category: outcome.classification.category,
+          intent: outcome.classification.intent ?? null,
+          confidence: outcome.classification.confidence,
+          dispatcherDecision: outcome.kind,
+        },
+        'smart_mode.webhook'
+      )
+      if (outcome.kind === 'execute') {
+        const lang = await appendContextAndResolveLang(from, text, outcome.command, cachedUserLang)
+        if (outcome.command.llmStatus) {
+          logger.info('LLM status: %s', outcome.command.llmStatus)
+        }
+        clearPendingIfUnrelated(from, outcome.command, pendingTransactions)
+        const recipientPhone =
+          outcome.command.command === 'send' ? outcome.command.recipient : undefined
+        const rateCtx = await fetchRateContext(from, recipientPhone)
+        try {
+          await this.handleCommand(from, outcome.command, lang, rateCtx, context)
+          logger.info('Message %s processed (smart_mode execute)', messageId)
+        } finally {
+          rateLimitService.markProcessed(messageId)
+        }
+        return
+      }
+      if (outcome.kind === 'reply') {
+        const lang: Lang = cachedUserLang || getLanguageForPhone(from)
+        try {
+          await sendTextMessage(from, outcome.text, lang)
+          logger.info('Message %s processed (smart_mode reply)', messageId)
+        } finally {
+          // Mark processed even if WhatsApp send throws — otherwise Meta
+          // retries the inbound and we loop on the same failing send.
+          // Matches the dedupe semantics of execute (line 1506) and the
+          // regular handleCommand branch (lines 1540-1543).
+          rateLimitService.markProcessed(messageId)
+        }
+        return
+      }
+      // fall_through — capture the verdict so the unknown handler can pick
+      // a state-aware variant downstream, then drop into parseMessage with
+      // the recursion guard set.
+      if (
+        outcome.classification.category === 'out_of_scope' ||
+        outcome.classification.category === 'gibberish'
+      ) {
+        smartFallThroughCategory = outcome.classification.category
+      }
+      if (outcome.kind === 'fall_through' && outcome.oosRedirect) {
+        smartFallThroughOosRedirect = outcome.oosRedirect
+      }
+    }
+
     // ── Parse command ──────────────────────────────────────────────────
-    const command = await parseMessage(text, { messageId, phoneNumber: from }, context)
+    const command = await parseMessage(text, { messageId, phoneNumber: from }, context, {
+      skipSmart: smartEnabled,
+    })
     logger.info('Command parsed: %o', command)
 
-    // ── Store context for eligible intents (fire-and-forget, before handler) ──
-    // Written early to reduce race window if a second message arrives quickly.
-    // Only non-financial intents — never store send attempts or unknown messages.
-    const CONTEXT_INTENTS = new Set([
-      'greeting',
-      'social',
-      'help',
-      'about',
-      'history',
-      'settings',
-      'language',
-      'start',
-    ])
-    if (CONTEXT_INTENTS.has(command.command)) {
-      appendConversationMessage(from, text)
+    // Thread the SMART fall-through verdict into the unknown branch so
+    // the unknown handler can pick a state-aware variant. We only set
+    // these when the parser ALSO returned unknown — if parseMessage
+    // recovered a real intent (e.g. SMART said OOS but regex caught
+    // a simple "balance"), there's nothing to clarify.
+    if (command.command === 'unknown') {
+      if (smartFallThroughCategory) command.smartCategory = smartFallThroughCategory
+      if (smartFallThroughOosRedirect) command.smartOosRedirect = smartFallThroughOosRedirect
     }
+
+    // ── Context append + language detection + persistence ─────────────
+    // Shared with SMART execute branch (see appendContextAndResolveLang).
+    // `cachedUserLang` is set when the SMART branch already fetched the
+    // user's stored preference; passing it avoids a redundant round-trip.
+    const lang = await appendContextAndResolveLang(from, text, command, cachedUserLang)
 
     // Log LLM status for observability
     if (command.llmStatus) {
       logger.info('LLM status: %s', command.llmStatus)
-    }
-
-    // ── Language detection + persistence ──────────────────────────────
-    let userLang = await getUserLanguage(from)
-
-    // Explicit language command always wins
-    if (command.command === 'language' && command.detectedLanguage) {
-      const lang = command.detectedLanguage as 'en' | 'es' | 'pt'
-      await setUserLanguage(from, lang)
-      userLang = lang
-    } else {
-      // Auto-detect from message text (regex-based)
-      const detection = detectLanguage(text)
-
-      // LLM detection (higher quality for natural language)
-      const llmLang =
-        command.detectedLanguage && command.detectedLanguage !== 'ambiguous'
-          ? (command.detectedLanguage as 'en' | 'es' | 'pt')
-          : null
-
-      // Best signal: LLM (when available) > regex (when high confidence)
-      const detectedLang =
-        llmLang || (detection && detection.confidence >= PERSIST_THRESHOLD ? detection.lang : null)
-
-      if (detectedLang) {
-        // Update persisted preference if different — language follows the user.
-        // Skip persistence for unknown commands: a single typo or gibberish
-        // message shouldn't permanently flip the user's language.
-        if (detectedLang !== userLang && command.command !== 'unknown') {
-          await setUserLanguage(from, detectedLang)
-        }
-        // Use detected lang for this message (even on unknown), but only
-        // override if user has no persisted preference
-        if (command.command !== 'unknown' || !userLang) {
-          userLang = detectedLang
-        }
-      } else if (!userLang && detection) {
-        // Low confidence, no persisted preference — use for this message only
-        userLang = detection.lang
-      }
     }
 
     // Cancel stale pending tx if user sends an unrelated command
@@ -1447,7 +1589,6 @@ export default class WebhookController {
     const rateCtx = await fetchRateContext(from, recipientPhone)
 
     // ── Route to command handler ──────────────────────────────────────
-    const lang: Lang = userLang || getLanguageForPhone(from)
     try {
       await this.handleCommand(from, command, lang, rateCtx, context)
       logger.info('Message %s processed successfully', messageId)

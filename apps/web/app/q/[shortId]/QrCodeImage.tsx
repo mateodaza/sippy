@@ -10,13 +10,16 @@ import { QRCodeSVG } from 'qrcode.react'
  * phone scanning it lands directly in WhatsApp — no extra /q round-trip.
  */
 export function QrCodeImage({ waUrl }: { waUrl: string }) {
+  // /q/* is forced-dark via ThemeWrapper, so the QR sits on a near-black
+  // card. White-on-transparent matches the receive-money surface and stays
+  // scannable; modern phone cameras handle inverted QR codes fine.
   return (
     <QRCodeSVG
       value={waUrl}
       size={200}
       level="H"
-      fgColor="#00AFD7"
-      bgColor="#FFFFFF"
+      fgColor="#FFFFFF"
+      bgColor="transparent"
       includeMargin
     />
   )

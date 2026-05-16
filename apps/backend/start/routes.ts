@@ -176,6 +176,7 @@ const ModerationController = () => import('#controllers/admin/moderation_control
 const QrSheetsController = () => import('#controllers/admin/qr_sheets_controller')
 const AdminEventsController = () => import('#controllers/admin/events_controller')
 const OperatorSendController = () => import('#controllers/admin/operator_send_controller')
+const SmartModeEvalController = () => import('#controllers/admin/smart_mode_eval_controller')
 
 // Public admin routes
 router.get('/admin/login', [AdminAuthController, 'showLogin'])
@@ -251,6 +252,14 @@ router
       .use(middleware.adminRole({ role: 'admin' }))
     router
       .post('/events/:slug/operator-wallet/drain', [AdminEventsController, 'drainOperatorWallet'])
+      .use(middleware.adminRole({ role: 'admin' }))
+
+    // SMART MODE classifier eval — runs the golden dataset against a model
+    // preset and returns per-case + summary metrics. Admin-only because
+    // every request burns Groq tokens (real LLM calls). Spec: hive-mind +
+    // Camello eval pattern, ported into Sippy.
+    router
+      .post('/smart-mode/eval', [SmartModeEvalController, 'run'])
       .use(middleware.adminRole({ role: 'admin' }))
 
     // ── Operator-or-admin routes ──────────────────────────────────────

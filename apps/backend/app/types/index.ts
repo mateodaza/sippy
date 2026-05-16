@@ -105,6 +105,13 @@ export interface ParsedCommand {
   //    command was synthesized by resolving a pay-QR scan) ──────────────
   recipientDisplayName?: string
   payQrScan?: boolean
+  // ── SMART MODE fall-through hint (set when SMART classified the
+  //    inbound as out_of_scope or gibberish and then fell through to
+  //    the regex/LLM parser, which also returned 'unknown'). Read by
+  //    the unknown handler to pick a state-aware variant instead of
+  //    the single static fallback. Unset for non-SMART paths. ────────
+  smartCategory?: 'out_of_scope' | 'gibberish'
+  smartOosRedirect?: string
 }
 
 export interface WalletInfo {

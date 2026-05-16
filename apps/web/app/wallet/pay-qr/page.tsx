@@ -306,6 +306,10 @@ function PayQrContent() {
             padding: 0 !important;
             min-height: 100vh;
           }
+          /* Force the dark-mode text/border utilities back to print defaults
+             so the sheet always prints with high contrast on paper. SVG QR
+             colors come from element attrs, not CSS, so they're untouched. */
+          .print-sheet * { color: black !important; border-color: #d4d4d4 !important; }
           .print-sheet::after { display: none !important; }
           @page { size: A4; margin: 20mm; }
         }
@@ -369,20 +373,21 @@ function PayQrContent() {
           </form>
         ) : (
           <>
-            {/* Printable sheet — kept on white background so printed output
-                stays clean regardless of the on-screen theme. */}
+            {/* Receive-money sheet — dark on screen so the brand-blue QR pops
+                against a near-black surface in low light; print stylesheet
+                forces it back to a clean white sheet for the printed copy. */}
             <article
-              className="print-sheet panel-frame flex flex-col items-center justify-center gap-6 rounded-2xl bg-white p-8 text-black"
+              className="print-sheet panel-frame flex flex-col items-center justify-center gap-6 rounded-2xl bg-white p-8 text-black dark:bg-[#0a0a0a] dark:text-white"
               aria-label={`Pay sheet for ${link.displayName ?? 'Sippy'}`}
             >
               <header className="w-full text-center">
                 <div className="flex justify-center">
                   <Image
-                    src="/images/logos/sippy-wordmark-cheetah.svg"
+                    src="/images/logos/sippy-s-mark-cheetah.svg"
                     alt="Sippy"
-                    width={88}
-                    height={25}
-                    className="h-6 w-auto"
+                    width={32}
+                    height={56}
+                    className="h-8 w-auto"
                   />
                 </div>
                 {isEditing ? (
@@ -400,7 +405,7 @@ function PayQrContent() {
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
                         maxLength={MAX_DISPLAY_NAME}
-                        className="w-full max-w-[280px] rounded-lg border border-neutral-300 px-3 py-2 text-center font-display text-2xl font-bold uppercase tracking-wide text-black focus:border-brand-primary focus:outline-none"
+                        className="w-full max-w-[280px] rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-center font-display text-2xl font-bold uppercase tracking-wide text-black focus:border-brand-primary focus:outline-none dark:border-[var(--border-strong)] dark:text-white"
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -423,7 +428,7 @@ function PayQrContent() {
                         <button
                           type="button"
                           onClick={cancelEdit}
-                          className="rounded-lg border border-neutral-300 px-4 py-1.5 text-sm font-medium hover:bg-neutral-100"
+                          className="rounded-lg border border-neutral-300 px-4 py-1.5 text-sm font-medium hover:bg-neutral-100 dark:border-[var(--border-strong)] dark:hover:bg-white/5"
                         >
                           Cancelar
                         </button>
@@ -439,7 +444,7 @@ function PayQrContent() {
                       type="button"
                       onClick={startEdit}
                       aria-label="Cambiar nombre"
-                      className="no-print rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900"
+                      className="no-print rounded-full p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-white/5 dark:hover:text-white"
                     >
                       <PencilIcon />
                     </button>
@@ -447,21 +452,39 @@ function PayQrContent() {
                 )}
               </header>
 
-              <QRCodeSVG
-                value={link.scanUrl}
-                size={300}
-                level="H"
-                fgColor={BRAND_BLUE}
-                bgColor="#FFFFFF"
-                includeMargin
-              />
+              {/* Light + print QR: brand blue on white. Printed copies always
+                  use this variant regardless of on-screen theme. */}
+              <div className="dark:hidden print:!block">
+                <QRCodeSVG
+                  value={link.scanUrl}
+                  size={300}
+                  level="H"
+                  fgColor={BRAND_BLUE}
+                  bgColor="#FFFFFF"
+                  includeMargin
+                />
+              </div>
+              {/* Dark-mode QR: white on transparent so it sits flush on the
+                  dark sheet. Hidden in print (the version above wins). */}
+              <div className="hidden dark:block print:!hidden">
+                <QRCodeSVG
+                  value={link.scanUrl}
+                  size={300}
+                  level="H"
+                  fgColor="#FFFFFF"
+                  bgColor="transparent"
+                  includeMargin
+                />
+              </div>
 
               <footer className="w-full text-center">
                 <p className="font-display text-lg font-bold uppercase tracking-wide">
                   Paga aquí con Sippy
                 </p>
-                <p className="mt-1 text-sm text-neutral-600">Escanea con tu cámara para pagar.</p>
-                <p className="mt-2 break-all font-mono text-[11px] text-neutral-500">
+                <p className="mt-1 text-sm text-neutral-600 dark:text-white/60">
+                  Escanea con tu cámara para pagar.
+                </p>
+                <p className="mt-2 break-all font-mono text-[11px] text-neutral-500 dark:text-white/40">
                   {link.scanUrl}
                 </p>
               </footer>
@@ -495,21 +518,13 @@ function PayQrContent() {
 
 function BrandHeader() {
   return (
-    <a href="/" className="inline-flex items-center gap-3">
-      <Image
-        src="/images/logos/sippy-s-mark-cheetah.svg"
-        alt="Sippy"
-        width={18}
-        height={32}
-        className="h-7 w-auto"
-        priority
-      />
+    <a href="/" className="inline-flex items-center">
       <Image
         src="/images/logos/sippy-wordmark-cheetah.svg"
         alt="Sippy"
-        width={88}
-        height={25}
-        className="h-5 w-auto"
+        width={120}
+        height={34}
+        className="h-7 w-auto"
         priority
       />
     </a>
