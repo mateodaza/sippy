@@ -167,6 +167,7 @@ const AnalyticsController = () => import('#controllers/admin/analytics_controlle
 const RolesController = () => import('#controllers/admin/roles_controller')
 const ModerationController = () => import('#controllers/admin/moderation_controller')
 const QrSheetsController = () => import('#controllers/admin/qr_sheets_controller')
+const AdminEventsController = () => import('#controllers/admin/events_controller')
 
 // Public admin routes
 router.get('/admin/login', [AdminAuthController, 'showLogin'])
@@ -210,6 +211,12 @@ router
     router
       .post('/qr-sheets/:eventSlug', [QrSheetsController, 'create'])
       .use(middleware.adminRole({ role: 'admin' }))
+
+    // Event live-monitoring — counts + attendees with per-source-tag
+    // attribution. Inertia page on HTML accept, JSON on Accept: application/json
+    // so apps/web's standalone live dashboard can poll the same endpoint.
+    // Spec: PIZZA_DAY_PLAN.md "Admin endpoint: GET /admin/events/:slug/attendees".
+    router.get('/events/:slug/attendees', [AdminEventsController, 'attendees'])
   })
   .prefix('/admin')
   .use(middleware.auth({ guards: ['web'] }))

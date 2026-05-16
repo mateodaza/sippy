@@ -228,6 +228,81 @@ export function formatGreetingIncomplete(phoneNumber: string, lang: Lang = 'en')
   return m[lang]()
 }
 
+// --- Event QR welcomes (bracket-token handler) ---
+
+/**
+ * Sent when a not-yet-onboarded phone scans an event QR. The /setup URL
+ * carries the event slug + source tag so the web flow can link them to
+ * the event on completion (PR #19's linkEvent handles those URL params).
+ */
+export function formatEventWelcomeNewUser(
+  phoneNumber: string,
+  eventName: string,
+  eventSlug: string,
+  sourceTag: string | null,
+  lang: Lang = 'en'
+): string {
+  const params = new URLSearchParams({ phone: phoneNumber, event: eventSlug })
+  if (sourceTag) params.set('source', sourceTag)
+  const setupUrl = `${FRONTEND_URL}/setup?${params.toString()}`
+  const m = {
+    en: () =>
+      `Welcome to Sippy at ${eventName}!\n\n` +
+      `Set up your wallet to get started (60 seconds):\n${setupUrl}\n\n` +
+      `Once you're in, send me a message and we'll go.`,
+    es: () =>
+      `Bienvenido a Sippy en ${eventName}!\n\n` +
+      `Configura tu billetera para empezar (60 segundos):\n${setupUrl}\n\n` +
+      `Cuando termines, mandame un mensaje y arrancamos.`,
+    pt: () =>
+      `Bem-vindo ao Sippy no ${eventName}!\n\n` +
+      `Configure sua carteira para comecar (60 segundos):\n${setupUrl}\n\n` +
+      `Quando terminar, me manda uma mensagem e a gente comeca.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when a scanned QR is revoked or its event is no longer active.
+ *
+ * Without this, attendees who scan a dead QR get silent fall-through to the
+ * LLM with their bracket token stripped — they see a generic "no entendi"
+ * reply and have no idea why. On event day that becomes repeat-scan churn
+ * at the door.
+ */
+export function formatQrInactiveMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `That QR code isn't active anymore. Ask an organizer for a current one.`,
+    es: () => `Este codigo QR ya no esta activo. Pidele uno nuevo al organizador.`,
+    pt: () => `Este codigo QR nao esta mais ativo. Peca um novo ao organizador.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when an already-onboarded phone scans an event QR. linkUserToEvent
+ * has already been called with step='returning' by the time this fires —
+ * the message is just the user-facing acknowledgement.
+ */
+export function formatEventWelcomeReturning(
+  eventName: string,
+  _sourceTag: string | null,
+  lang: Lang = 'en'
+): string {
+  const m = {
+    en: () =>
+      `Welcome back to ${eventName}! You're checked in.\n\n` +
+      `Type *balance* to see your wallet, or *help* for what I can do.`,
+    es: () =>
+      `Bienvenido de vuelta a ${eventName}! Estas registrado.\n\n` +
+      `Escribe *saldo* para ver tu billetera, o *ayuda* para ver que puedo hacer.`,
+    pt: () =>
+      `Bem-vindo de volta ao ${eventName}! Voce esta registrado.\n\n` +
+      `Digite *saldo* para ver sua carteira, ou *ajuda* para ver o que posso fazer.`,
+  }
+  return m[lang]()
+}
+
 // --- About ---
 
 export function formatAboutMessage(lang: Lang = 'en'): string {
