@@ -215,10 +215,29 @@ export async function dispatchBracketToken(args: {
   if (link.kind === 'pay') {
     await resolveQrScan({ shortId, phoneNumber })
 
+    // Post-migration 0021, owner_phone_number is nullable at the type
+    // level — but the DB CHECK constraint `qr_links_kind_payload_check`
+    // guarantees kind='pay' rows ALWAYS have an owner. If we somehow
+    // see one without (DB drift, manual SQL hack), treat as a dead QR.
+    if (!link.ownerPhoneNumber) {
+      logger.error(
+        { shortId },
+        'bracket.dispatch: pay-QR row has null owner_phone_number — schema violation, treating as inactive'
+      )
+      return {
+        outcome: 'revoked',
+        reply: formatQrInactiveMessage(lang),
+        shortId,
+        eventSlug: null,
+        sourceTag: link.sourceTag,
+      }
+    }
+    const ownerPhoneNumber: string = link.ownerPhoneNumber
+
     // Canonicalize both sides. Owner may be stored bare-digit in a legacy
     // row; the sender always arrives canonical E.164 from the WhatsApp
     // webhook. Raw equality would let a self-scan slip through.
-    const ownerCanonical = canonicalizePhone(link.ownerPhoneNumber)
+    const ownerCanonical = canonicalizePhone(ownerPhoneNumber)
     const senderCanonical = canonicalizePhone(phoneNumber)
 
     // Data-integrity guard: if the owner phone won't canonicalize, the

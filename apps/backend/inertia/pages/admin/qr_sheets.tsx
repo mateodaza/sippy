@@ -12,8 +12,7 @@
  * Spec: QR_SYSTEM_SPEC.md.
  */
 
-import type { FormEvent } from 'react'
-import { Head, useForm } from '@inertiajs/react'
+import { Head } from '@inertiajs/react'
 import { QRCodeSVG } from 'qrcode.react'
 import AdminLayout from '../../layouts/admin_layout.js'
 
@@ -30,7 +29,6 @@ interface Props {
     endsAt: string | null
   }
   qrLinks: QrLink[]
-  defaultOwnerPhone: string | null
   scanUrlBase: string
   scanUrlIsFallback: boolean
   flash: { error?: string | string[]; created?: number | number[] } | null
@@ -48,22 +46,14 @@ function readFlash(value: string | number | string[] | number[] | undefined): st
 export default function QrSheetsPage({
   event,
   qrLinks,
-  defaultOwnerPhone,
   scanUrlBase,
   scanUrlIsFallback,
   flash,
 }: Props) {
-  const { data, setData, post, processing, errors } = useForm({
-    ownerPhoneNumber: defaultOwnerPhone ?? '',
-  })
-
+  // No form / no submit — the event QR is auto-provisioned by the GET
+  // controller (lazy-create on first read). UI is render-only.
   const flashError = flash?.error ? readFlash(flash.error) : null
   const flashCreated = flash?.created ? readFlash(flash.created) : null
-
-  function submit(e: FormEvent) {
-    e.preventDefault()
-    post(`/admin/qr-sheets/${encodeURIComponent(event.slug)}`)
-  }
 
   return (
     <AdminLayout>
@@ -158,46 +148,9 @@ export default function QrSheetsPage({
         </div>
       ) : null}
 
-      {/* Hide the form entirely once the event QR has been generated.
-          The generated QR appears below — operator just hits Cmd+P. */}
-      {qrLinks.length === 0 && (
-        <form
-          onSubmit={submit}
-          className="no-print panel-frame mb-8 space-y-3 p-6"
-          aria-label="Create event QR"
-        >
-          <p className="font-mono text-sm admin-text">
-            One QR for the whole event. Click below to generate it — printing is just Cmd/Ctrl+P
-            after.
-          </p>
-          {/* Owner phone is hidden — defaults to SIPPY_EVENT_QR_OWNER_PHONE env.
-              No reason to ask the admin each time; the owner is a Sippy team
-              account, not per-event metadata. If the env is missing the POST
-              flashes a clear error. */}
-          <input
-            type="hidden"
-            value={data.ownerPhoneNumber}
-            onChange={(e) => setData('ownerPhoneNumber', e.target.value)}
-          />
-          {errors.ownerPhoneNumber ? (
-            <p className="text-xs text-red-600">{errors.ownerPhoneNumber}</p>
-          ) : null}
-
-          <button
-            type="submit"
-            disabled={processing || !defaultOwnerPhone}
-            className="rounded-md bg-crypto-hover px-5 py-2 font-mono text-xs font-bold uppercase tracking-[0.1em] text-white disabled:opacity-50"
-          >
-            {processing ? 'Creating…' : 'Generate event QR'}
-          </button>
-          {!defaultOwnerPhone && (
-            <p className="font-mono text-xs text-amber-700">
-              Set <code>SIPPY_EVENT_QR_OWNER_PHONE</code> env var on the backend before generating.
-              Must be a phone already onboarded in user_preferences.
-            </p>
-          )}
-        </form>
-      )}
+      {/* No form needed — the event QR is auto-provisioned by the GET
+          controller on first load. If the event exists, the QR exists.
+          Operator + admin both see it without clicking anything. */}
 
       {/* ── Sheets (visible on screen as a grid; one-per-page in print) ──── */}
       {qrLinks.length === 0 ? (

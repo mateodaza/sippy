@@ -32,7 +32,12 @@ export interface QrLinkForScan {
   shortId: string
   kind: QrKind
   status: QrStatus
-  ownerPhoneNumber: string
+  /**
+   * Pay-kind: always present (recipient identity, FK to user_preferences).
+   * Event/referral-kind: nullable post-migration 0021 — the row is anchored
+   * by event_slug (events) or short_id alone (referral), no owner required.
+   */
+  ownerPhoneNumber: string | null
   eventSlug: string | null
   sourceTag: string | null
   displayName: string | null
@@ -250,7 +255,13 @@ export async function listEventQrLinks(eventSlug: string): Promise<QrLinkForScan
 
 export interface CreateQrLinkArgs {
   kind: QrKind
-  ownerPhoneNumber: string
+  /**
+   * Required for `kind='pay'` (recipient identity, FK to user_preferences).
+   * Optional / null for `kind='event'` and `kind='referral'` — those kinds
+   * route by event_slug or shortId and don't need an owner. Migration 0021
+   * relaxed the DB NOT NULL constraint for non-pay kinds.
+   */
+  ownerPhoneNumber?: string | null
   eventSlug?: string | null
   sourceTag?: string | null
   displayName?: string | null
@@ -258,22 +269,24 @@ export interface CreateQrLinkArgs {
 
 /**
  * Insert a new QR link row. Allocates a unique short-id, validates the
- * kind/payload combination against the DB CHECK constraint (`event` requires
- * `event_slug`; `pay`/`referral` forbid it), and returns the created row's
- * canonical shape.
+ * kind/payload combination against the DB CHECK constraint, and returns
+ * the created row's canonical shape.
  *
- * The owner_phone_number must exist in `user_preferences` — the DB enforces
- * this via FK. Callers should resolve the phone via `resolveUserPrefKey` if
- * the input might be in legacy bare-digit form.
+ * Validation mirrors the DB CHECK exactly (post-migration 0021):
+ *   - kind='event' requires eventSlug (owner_phone_number optional)
+ *   - kind='pay'   requires owner_phone_number (eventSlug forbidden)
+ *   - kind='referral' has no required payload
  *
- * Pass `trx` to participate in an existing transaction (used by the admin
- * bulk-create flow so that partial failures roll back cleanly). The short-id
+ * For pay-kind, the owner_phone_number must exist in `user_preferences` —
+ * the DB enforces this via FK. Callers should resolve the phone via
+ * `resolveUserPrefKey` if the input might be in legacy bare-digit form.
+ *
+ * Pass `trx` to participate in an existing transaction. The short-id
  * generator runs outside the transaction — its lookup is read-only and the
  * collision probability is functionally zero at our scale.
  *
  * Throws on validation errors (caller should treat as 400) or DB errors
- * (caller should treat as 500). Does NOT swallow — this is a write path
- * with user-facing consequences.
+ * (caller should treat as 500). Does NOT swallow.
  */
 export async function createQrLink(
   args: CreateQrLinkArgs,
@@ -287,6 +300,9 @@ export async function createQrLink(
   if (args.kind !== 'event' && args.eventSlug) {
     throw new Error(`createQrLink: kind='${args.kind}' must not include eventSlug`)
   }
+  if (args.kind === 'pay' && !args.ownerPhoneNumber) {
+    throw new Error("createQrLink: kind='pay' requires ownerPhoneNumber")
+  }
 
   const shortId = await generateUniqueShortId()
 
@@ -298,13 +314,14 @@ export async function createQrLink(
     // typed bindings exclude `null` from StrictValues, but the underlying knex
     // driver accepts null fine (and the schema's nullable columns require it).
     // The non-trx path uses our `query()` wrapper which has a looser signature.
+    const ownerPhone = args.ownerPhoneNumber ?? null
     await trx.rawQuery(
       `INSERT INTO qr_links
         (short_id, owner_phone_number, kind, event_slug, source_tag, display_name)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [
         shortId,
-        args.ownerPhoneNumber,
+        ownerPhone,
         args.kind,
         args.eventSlug ?? null,
         args.sourceTag ?? null,
@@ -312,13 +329,14 @@ export async function createQrLink(
       ] as unknown as string[]
     )
   } else {
+    const ownerPhone = args.ownerPhoneNumber ?? null
     await query(
       `INSERT INTO qr_links
         (short_id, owner_phone_number, kind, event_slug, source_tag, display_name)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         shortId,
-        args.ownerPhoneNumber,
+        ownerPhone,
         args.kind,
         args.eventSlug ?? null,
         args.sourceTag ?? null,
@@ -337,7 +355,7 @@ export async function createQrLink(
     shortId,
     kind: args.kind,
     status: 'active',
-    ownerPhoneNumber: args.ownerPhoneNumber,
+    ownerPhoneNumber: args.ownerPhoneNumber ?? null,
     eventSlug: args.eventSlug ?? null,
     sourceTag: args.sourceTag ?? null,
     displayName: args.displayName ?? null,
