@@ -287,25 +287,23 @@ test.group('Group C | routeCommand send threshold', () => {
   })
 })
 
-// ── Group C2 — routeCommand: merchant payment force-confirm ───────────────
-// Merchant payments (came from a pay-QR scan, carry merchantPayment=true
-// on the synthesized ParsedCommand) must NEVER auto-execute below threshold.
-// An attendee at a register should always see an explicit "Confirm paying
-// $X to <merchant>" prompt before USDC moves. These tests guard against a
-// refactor silently dropping the `!isMerchantPayment` guard at the send
-// branch in webhook_controller.
+// ── Group C2 — routeCommand: pay-QR payment force-confirm ────────────────
+// Pay-QR scans (synthesized ParsedCommand carries payQrScan=true)
+// must NEVER auto-execute below threshold. Every pay-QR scan is a "real
+// money to someone via a QR" gesture and deserves an explicit YES, even
+// when the amount is sub-threshold. These tests guard against a refactor
+// silently dropping the `!isMerchantPayment` guard at the send branch in
+// webhook_controller.
 
-test.group('Group C2 | routeCommand merchant payment force-confirm', () => {
-  // Core regression guard: a below-threshold merchant payment must NEVER
+test.group('Group C2 | routeCommand pay-QR force-confirm', () => {
+  // Core regression guard: a below-threshold pay-QR payment must NEVER
   // call sendHandler silently. It can either (a) store a pending tx and
   // wait for an explicit confirm, or (b) short-circuit with an error if the
   // balance pre-check fails — both are acceptable. What's not acceptable
-  // is a silent execute, because at a register the attendee + vendor must
-  // both see the YES step before USDC moves. These tests assert
-  // sendHandler is NOT called; the upstream confirm + balance-failure
-  // paths are exercised separately in their own integration contexts.
+  // is a silent execute. These tests assert sendHandler is NOT called;
+  // the upstream confirm + balance-failure paths are exercised separately.
 
-  test('M-01: merchant $3 (below threshold) → sendHandler NEVER called', async ({ assert }) => {
+  test('M-01: pay-QR $3 (below threshold) → sendHandler NEVER called', async ({ assert }) => {
     const pendingTxs = makePendingMap()
     let sendHandlerCalled = false
     const fakeSend = async (..._args: any[]) => {
@@ -318,7 +316,7 @@ test.group('Group C2 | routeCommand merchant payment force-confirm', () => {
       command: 'send',
       amount: 3,
       recipient: '+573001234567',
-      merchantPayment: true,
+      payQrScan: true,
       recipientDisplayName: "Carolina's Pizza",
     }
     await routeCommand(
@@ -334,10 +332,10 @@ test.group('Group C2 | routeCommand merchant payment force-confirm', () => {
       pendingTxs
     )
 
-    assert.isFalse(sendHandlerCalled, 'merchant $3 must NOT auto-execute below threshold')
+    assert.isFalse(sendHandlerCalled, 'pay-QR $3 must NOT auto-execute below threshold')
   })
 
-  test('M-02: merchant $3 without recipientDisplayName → sendHandler still NEVER called', async ({
+  test('M-02: pay-QR $3 without recipientDisplayName → sendHandler still NEVER called', async ({
     assert,
   }) => {
     const pendingTxs = makePendingMap()
@@ -352,7 +350,7 @@ test.group('Group C2 | routeCommand merchant payment force-confirm', () => {
       command: 'send',
       amount: 3,
       recipient: '+573001234567',
-      merchantPayment: true,
+      payQrScan: true,
       // recipientDisplayName intentionally omitted — invariant must hold without it
     }
     await routeCommand(
@@ -371,7 +369,7 @@ test.group('Group C2 | routeCommand merchant payment force-confirm', () => {
     assert.isFalse(sendHandlerCalled, 'still no silent execute without display name')
   })
 
-  test('M-03: non-merchant $3 (regression guard) → still auto-executes below threshold', async ({
+  test('M-03: non-pay $3 (regression guard) → still auto-executes below threshold', async ({
     assert,
   }) => {
     const pendingTxs = makePendingMap()
@@ -382,7 +380,7 @@ test.group('Group C2 | routeCommand merchant payment force-confirm', () => {
     }
     const fakeMsg = async () => {}
 
-    // merchantPayment intentionally undefined — the "regular send" baseline.
+    // payQrScan intentionally undefined — the "regular send" baseline.
     const cmd: ParsedCommand = {
       command: 'send',
       amount: 3,

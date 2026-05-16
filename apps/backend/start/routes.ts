@@ -26,6 +26,7 @@ const OnrampController = () => import('#controllers/onramp_controller')
 const OfframpController = () => import('#controllers/offramp_controller')
 const EventController = () => import('#controllers/event_controller')
 const QrScanController = () => import('#controllers/qr_scan_controller')
+const MyPayQrController = () => import('#controllers/my_pay_qr_controller')
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
@@ -119,6 +120,10 @@ router
     router.post('/link-event', [EventController, 'linkEvent'])
     router.post('/event-poap-claimed', [EventController, 'markPoapClaimed'])
 
+    // Personal pay-QR — user-minted, idempotent (one active per user).
+    router.get('/qr/my-pay-link', [MyPayQrController, 'show'])
+    router.post('/qr/my-pay-link', [MyPayQrController, 'create'])
+
     // ── Colurs rails — Colombia (+57) only ───────────────────────────────────
     router
       .group(() => {
@@ -167,7 +172,6 @@ const AnalyticsController = () => import('#controllers/admin/analytics_controlle
 const RolesController = () => import('#controllers/admin/roles_controller')
 const ModerationController = () => import('#controllers/admin/moderation_controller')
 const QrSheetsController = () => import('#controllers/admin/qr_sheets_controller')
-const PaySheetsController = () => import('#controllers/admin/pay_sheets_controller')
 const AdminEventsController = () => import('#controllers/admin/events_controller')
 
 // Public admin routes
@@ -211,14 +215,6 @@ router
     router.get('/qr-sheets/:eventSlug', [QrSheetsController, 'show'])
     router
       .post('/qr-sheets/:eventSlug', [QrSheetsController, 'create'])
-      .use(middleware.adminRole({ role: 'admin' }))
-
-    // Pay-QR sheets — vendor / merchant printables. Not event-bound; one row
-    // per (owner_phone, display_name). Attendees scan → bracket-token
-    // dispatcher routes kind='pay' → bot prompts amount with vendor framing.
-    router.get('/pay-sheets', [PaySheetsController, 'show'])
-    router
-      .post('/pay-sheets', [PaySheetsController, 'create'])
       .use(middleware.adminRole({ role: 'admin' }))
 
     // Event live-monitoring — counts + attendees with per-source-tag

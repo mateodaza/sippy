@@ -246,9 +246,8 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
 
     assert.equal(r.outcome, 'pay_prompt_for_amount')
     assert.isNotNull(r.reply)
-    assert.include(r.reply!, 'Carolina Pizza')
-    assert.include(r.reply!, 'comercio')
-    assert.equal(r.payRecipient, '+573000000000', 'vendor phone returned for partial-send stash')
+    assert.include(r.reply!, 'Carolina Pizza', 'displayName surfaced in pay prompt')
+    assert.equal(r.payRecipient, '+573000000000', 'owner phone returned for partial-send stash')
     assert.equal(r.payDisplayName, 'Carolina Pizza')
     // No event-link writes for pay-kind dispatch
     assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)

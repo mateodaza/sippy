@@ -23,7 +23,7 @@ import {
   formatEventWelcomeNewUser,
   formatQrInactiveMessage,
   formatQrLookupTransientErrorMessage,
-  formatVendorAskForAmount,
+  formatPayAskForAmount,
   formatSelfPayMessage,
   type Lang,
 } from '#utils/messages'
@@ -134,7 +134,7 @@ export interface BracketDispatchResult {
  *
  *  - For pay kinds: prompt the payer for an amount (or reply with a self-pay
  *    no-op when sender === owner). Returns `pay_prompt_for_amount` plus
- *    the recipient + display name so the caller can stash a merchant-tagged
+ *    the recipient + display name so the caller can stash a pay-QR-tagged
  *    partial-send for the follow-up amount message.
  *
  *  - For referral kinds: not handled yet. Returns `unsupported_kind` so the
@@ -204,12 +204,13 @@ export async function dispatchBracketToken(args: {
     }
   }
 
-  // Pay-QR scan — sender is the payer, owner is the merchant. The kind='pay'
-  // link is itself the merchant declaration for this scope (no separate env
-  // list). We return payRecipient + payDisplayName so the webhook caller can
-  // stash a partial-send marked merchantPayment=true; downstream the send
-  // flow uses that flag to force the confirmation prompt + use the friendly
-  // display name in the confirm copy.
+  // Pay-QR scan — sender is the payer, owner is the recipient. Pay-QRs
+  // are universal: any user mints one for receiving payments (vendor uses
+  // a business name; individual uses their own name). Return payRecipient
+  // + payDisplayName so the webhook caller can stash a partial-send
+  // marked payQrScan=true; downstream the send flow uses that flag to
+  // force the confirmation prompt + use the friendly display name in
+  // the confirm copy.
   if (link.kind === 'pay') {
     await resolveQrScan({ shortId, phoneNumber })
 
@@ -257,7 +258,7 @@ export async function dispatchBracketToken(args: {
     )
     return {
       outcome: 'pay_prompt_for_amount',
-      reply: formatVendorAskForAmount(displayName, lang),
+      reply: formatPayAskForAmount(displayName, lang),
       shortId,
       eventSlug: null,
       sourceTag: link.sourceTag,
