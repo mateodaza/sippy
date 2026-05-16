@@ -50,7 +50,7 @@ Each is a feature worth building on its own merit. Pizza Day is the forcing func
 ## Locked decisions
 
 - **Tech freeze: Sat May 16.** Week of May 18 = ops training and dry runs only.
-- **Budget shape.** Pizza funded externally. Sippy's $2K marketing budget covers Quest prizes (~$300 cap), printing, post-event content. Don't blow the budget.
+- **Budget shape.** Pizza funded externally. Sippy's $2K marketing budget covers Quest prizes (~$140 cap), printing, post-event content. Don't blow the budget.
 - **Vendor model.** 2 labeled Sippy accounts marked `type=vendor`. Excluded from Quest scoring. Doubles as PoC for street-vendor onboarding.
 - **Exchange model.** 2–3 preloaded Sippy accounts marked `type=exchange`. Staffed by 2–3 people. Hold USDC float, send to attendees in exchange for cash. Excluded from Quest scoring (otherwise their tx count tops the leaderboard). Distinct from vendor wallets to keep accounting clean.
 - **Onramp at venue:** Cash → exchange wallet rep → USDC to attendee Sippy wallet. No Colurs.
@@ -82,10 +82,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 - [ ] **Vendor + Exchange Quest exclusion via phone-list.** No migration. Read `PIZZA_DAY_VENDOR_PHONES` and `PIZZA_DAY_EXCHANGE_PHONES` env vars (comma-separated E.164). Small util `isVendorPhone(phone)` / `isExchangePhone(phone)` / `getQuestExcludedPhones()` for Quest exclusion. Phones supplied by Mateo when vendor/exchange staff identities land **Mon May 18**. **Effort: ~30 min.** _Originally spec'd as a `users.account_type` migration; deferred at this scale — see QR_SYSTEM_SPEC.md Locked decision #1._
 
-- [ ] **Quest endpoint: MVP score + Connector score** (one query each).
-  - MVP score per attendee: `(p2p_sends_count × 10) + (vendor_purchases × 2)`. See "Sippy Quest → Scoring" section above.
-  - Connector: see "Connector tracking — SQL" above for the exact shape (note: confirm `transfers` column names against the onchain table schema; may need `phone_registry` bridge if attribution is wallet-keyed).
-  - Both queries filter by the phone-list util from the item above.
+- [ ] **Quest endpoint**: single leaderboard query, top 10 by `quest_score` (distinct senders per recipient, ≥$0.10 each). See "Quest leaderboard — SQL" section above for the exact shape. Confirm `transfers` column names against the onchain table schema; may need `phone_registry` bridge if attribution is wallet-keyed. Filter excluded phones via the util from the item above.
 
 - [ ] **Admin endpoint: `GET /admin/events/:slug/attendees`.** Powers the live monitoring dashboard (onboarded-count, per-assistant attribution). Joins `user_event_links` to whatever onchain summary makes sense for live counts + per-source-tag breakdown.
 
@@ -120,7 +117,10 @@ Print + distribute one vendor sheet per booth. Attendee scans → lands in Whats
 
 - [~] Generate Pizza Day assistant sheets via QR admin endpoint (consumes QR v1; see [QR_SYSTEM_SPEC.md](QR_SYSTEM_SPEC.md)). _QR primitive v1 code-complete (migrations 0018+0019, scan endpoint, admin sheets page, runtime path validated via curl). Awaiting browser smoke + the actual print run after vendor phones land May 18. Each printable QR encodes `${FRONTEND_URL}/q/<short-id>?v=1` and on scan redirects into WhatsApp with a `[short-id]` code. Payload metadata stored in `qr_links`: `{kind: 'event', event_slug: 'pizza-day-ctg-2026', source_tag: 'assistant-NN'}`._
 - [ ] Public leaderboard page (top 10 MVP + top 10 Connector + live counters)
-- [ ] Vendor mode receiver UI (mobile-first)
+- [ ] **Vendor mode receiver UI** (mobile-first dashboard). Design locked May 15:
+  - **Attendee scan flow:** scan vendor QR (`kind='pay'`) → WhatsApp opens with `[short-id]` → bot asks "¿Cuánto pagar a {vendorName}?" → user types amount → confirm → send. (Carlos's pay-dispatch lane, conditional on Saturday call.)
+  - **Vendor receive flow:** on each incoming payment, Sippy bot sends the vendor a WhatsApp message like `"+$5 USDC de Sippy_user_4521 → ver: sippy.lat/vendor"`. The link opens the mobile dashboard.
+  - **Vendor dashboard** (new mobile-first page at apps/web `/vendor`, auth-gated by phone): today's tx count, total received USDC, last 10 transactions with sender + amount + timestamp. Auto-refresh every 30s. ~2 hours to build. Reads from the same onchain.transfer source the Quest endpoint uses.
 - [x] Spanish `/pizza-day` in-app doc. _Server Component at `apps/web/app/pizza-day/page.tsx`. Covers conseguir USDC, mandar plata, pagar pizza/bebidas, Quest premios, POAP claim, ayuda. Mobile-first, brand-aligned. Will be live on next apps/web deploy at `https://www.sippy.lat/pizza-day`._
 - [ ] Live monitoring dashboard
 - [x] Backup plan doc + printed fallback materials. _Backup plans table above. Printable WhatsApp-number flyer at `apps/web/app/pizza-day/flyer/page.tsx` — public URL `https://www.sippy.lat/pizza-day/flyer` once deployed. Cmd/Ctrl+P → print. Hand out as catch-all when sheets get lost / Wi-Fi dies._
@@ -142,49 +142,78 @@ Print + distribute one vendor sheet per booth. Attendee scans → lands in Whats
 
 ## Sippy Quest
 
-P2P usage is at zero today across the user base (per project memory). Pizza Day is the chance to seed it. Scoring rewards P2P specifically so the leaderboard tells us about social usage, not just who ate the most pizza.
+**One task. Top 3 winners.** P2P usage is at zero today (per project memory). Pizza Day seeds it. Attendees arrive with small USDC stacks (pizza price + a small extra from Cartagena), so the Quest can't depend on having lots of money — the skill has to be social, not financial.
 
-### Scoring (P2P-weighted, volume-blind on the top prize)
+### The game: "convince others to give you their extras"
 
-Live onramp at the venue means attendees will arrive with different USDC amounts based on what they can spend. Scoring by USD volume would punish the broke and reward the funded. So the headline prize uses **pure tx count**, not volume.
+Single mechanic, anyone can play with $0:
+
+- Pitch / socialize / ask other attendees to send you ≥$0.10
+- Distinct senders are what counts
+- The 3 attendees with the most distinct senders win
+
+**Design intent:** 100 people sending you $0.10 each is worth more than 1 person sending you $100. The game rewards reach and charm, not size of any single ask.
+
+### Scoring
 
 ```
-top_score = (p2p_sends_count × 10) + (vendor_purchases × 2)
+quest_score = COUNT(DISTINCT sender_phone)
+              WHERE recipient_phone = <you>
+                AND amount >= 0.10 USDC
+                AND sender_phone in event_attendees
+                AND sender_phone NOT IN (vendor_phones + exchange_phones)
+                AND created_at BETWEEN <event_start> AND <event_end>
 ```
 
-Volume is still displayed on the leaderboard for color, but doesn't drive the headline prize.
+- $0.10 minimum per incoming send to qualify (filters out zero-amount transactions; tiny enough that anyone can give one)
+- Distinct senders only (one $5 send and ten $5 sends from the same person both = 1)
+- Vendor + exchange phones excluded (would otherwise distort everything)
+- Self-sends excluded
 
-### Categories
+### Prizes
 
-| #   | Prize           | Criteria                                                | Cash      |
-| --- | --------------- | ------------------------------------------------------- | --------- |
-| 1   | **Pizza MVP**   | Highest `top_score` (P2P + vendor tx count)             | $150 USDC |
-| 2   | **Connector**   | Most unique P2P recipients who are also event attendees | $100 USDC |
-| 3   | **First Mover** | First P2P send at the event                             | $50 USDC  |
+| Place  | Prize    |
+| ------ | -------- |
+| 🥇 1st | $80 USDC |
+| 🥈 2nd | $40 USDC |
+| 🥉 3rd | $20 USDC |
 
-**Total prize budget: $300** (from $2K marketing). Leaves ~$1.7K for printing, post-event content, paid social.
+**Total prize budget: $140** (from $2K marketing). Leaves ~$1.86K for printing, post-event content, paid social. Smaller pot intentionally — the fun is the social game, not the money. $80 is still meaningful for the winner.
 
-### Connector tracking — SQL
+### Why this works
 
-Both sender and recipient must be event attendees. Vendor + exchange phones excluded via env-supplied list (no DB column — see Carlos's tracker line). Self-sends excluded. Event time-window applied.
+- One rule, one sentence. Anyone can explain it at the door.
+- Wealth-blind. You don't need to arrive with money to win — you need to convince people to send you theirs.
+- Social by design. The mechanic IS the engagement. Networking, pitching, performing.
+- Anti-spam via the $0.10 minimum + distinct-sender rule (filters zero-amount, lets anyone with any USDC participate).
+- P2P seeding still happens — every qualifying send is real P2P traffic.
+
+### Quest leaderboard — SQL
+
+The Quest player is the RECIPIENT (the one being "convinced"). Senders are the people they convinced. Both must be event attendees. Vendor + exchange phones excluded both ways. Self-sends excluded. Event time-window applied. $0.10 minimum per qualifying send.
 
 ```sql
 -- :excluded_phones is the union of PIZZA_DAY_VENDOR_PHONES + PIZZA_DAY_EXCHANGE_PHONES,
 -- passed as a TEXT[] bind from the Quest service. Empty array = no exclusions.
-SELECT sender_phone, COUNT(DISTINCT recipient_phone) AS connections
+SELECT recipient_phone, COUNT(DISTINCT sender_phone) AS quest_score
 FROM transfers t
 JOIN user_event_links uel_s ON uel_s.phone_number = t.sender_phone
 JOIN user_event_links uel_r ON uel_r.phone_number = t.recipient_phone
 JOIN events e ON e.id = uel_s.event_id AND e.id = uel_r.event_id
 WHERE e.slug = 'pizza-day-ctg-2026'
+  AND t.amount >= 0.10
+  AND NOT (t.sender_phone   = ANY(:excluded_phones))
   AND NOT (t.recipient_phone = ANY(:excluded_phones))
   AND t.sender_phone != t.recipient_phone
   AND t.created_at BETWEEN <event_start> AND <event_end>
-GROUP BY sender_phone
-ORDER BY connections DESC;
+GROUP BY recipient_phone
+ORDER BY quest_score DESC
+LIMIT 10;
 ```
 
-_Note: column names in `transfers` need Carlos to confirm against the onchain table schema. The shape above assumes phone-keyed attribution; if attribution is wallet-keyed, the join needs `phone_registry` to bridge wallet → phone._
+Top 3 by `quest_score` win prizes. Same query feeds the live projector leaderboard.
+
+_Note: column names in `transfers` need Carlos to confirm against the onchain table schema. Shape above assumes phone-keyed attribution; if attribution is wallet-keyed, the join needs `phone_registry` to bridge wallet → phone. `amount >= 0.10` assumes USDC in whole-dollar units; adjust if onchain table stores raw 6-decimal form (`amount >= 100_000`)._
 
 Returns a leader for the Connector prize. Same query feeds the public leaderboard.
 
@@ -332,6 +361,8 @@ Rules: no em dashes, no AI accent ("revolutionizing", "empowering"), causal tran
 1. **Deck audience and slot.** When and to whom is the 20-min slot? Determines framing.
 2. **Vendor + exchange staff identity.** 2 vendor accounts + 2–3 exchange accounts = 4–5 people total. Need their phones by **Mon May 18 EOD** so we can generate printable QR sheets and labeled signage.
 3. **Exchange wallet float size.** How much USDC do we preload per wallet? Function of expected onramp demand at 200 attendees. Rough cut: if 50% onramp ~$10 average, that's $1K total = ~$350 per wallet across 3 floats. Confirm before May 21.
+4. **How attendees actually receive USDC.** Plan currently says "cash → exchange staff → USDC", but Cartagena may be funding attendee wallets directly with "pizza price + small extra". Three possibilities to lock: (a) cash-for-USDC as documented, (b) Cartagena pre-funds wallets at onboarding with fixed amount, (c) hybrid (free seed + optional cash top-up). This shapes how much "extra" attendees have to play the Quest with.
+5. **Pay-QR for vendors: go / no-go.** Original brief had "QR para pagos". Saturday locks whether vendor signage is QR-scannable or attendees use alias path (`paga 5 a pizza`). If go: Carlos's pay-dispatch + Mateo's admin extension + vendor dashboard. If no: same alias path that already works.
 
 ---
 

@@ -99,24 +99,28 @@ export default function PizzaDayPage() {
           </p>
         </Section>
 
-        <Section number="4" title="Gana premios con el Sippy Quest">
-          <p>Durante el evento llevamos un leaderboard en vivo. Tres premios al cierre:</p>
+        <Section number="4" title="Sippy Quest — el reto del evento">
+          <p>
+            <strong>Un solo reto:</strong> convence a la mayor cantidad de gente posible de que te
+            manden <span className="font-mono">$0.10</span> o más por Sippy. Cuentan personas
+            distintas, no monto. El que más amigos distintos lo logre, gana.
+          </p>
+          <p className="mt-3 text-sm text-[var(--text-secondary,#374151)]">
+            100 personas mandándote $0.10 valen más que 1 persona mandándote $100. Es un juego
+            social: pitch, networking, ser memorable.
+          </p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <Prize amount="$150 USDC" name="Pizza MVP" criterion="Más transacciones del evento" />
             <Prize
-              amount="$100 USDC"
-              name="Connector"
-              criterion="Más personas distintas a las que le mandaste plata"
+              amount="$80 USDC"
+              name="🥇 1° lugar"
+              criterion="Más personas distintas que te mandaron"
             />
-            <Prize
-              amount="$50 USDC"
-              name="First Mover"
-              criterion="Primera transferencia entre asistentes"
-            />
+            <Prize amount="$40 USDC" name="🥈 2° lugar" criterion="Segundo en personas distintas" />
+            <Prize amount="$20 USDC" name="🥉 3° lugar" criterion="Tercero en personas distintas" />
           </div>
           <p className="mt-4 text-sm text-[var(--text-secondary,#374151)]">
-            No cuentan los envíos a vendors ni a uno mismo. Mira el leaderboard en vivo en la
-            pantalla del evento o pregúntale a Sippy <span className="font-mono">leaderboard</span>.
+            No cuentan envíos a vendors ni a uno mismo. Mira el leaderboard en vivo en la pantalla
+            del evento o pregúntale a Sippy <span className="font-mono">leaderboard</span>.
           </p>
         </Section>
 
