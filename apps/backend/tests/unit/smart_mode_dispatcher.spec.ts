@@ -237,7 +237,10 @@ test.group('dispatcher | action → validator downgrade → ambiguous', () => {
 
     assert.equal(out.kind, 'reply')
     if (out.kind !== 'reply') return
-    assert.equal(out.text, '¿Cuánto?')
+    assert.equal(out.text, 'Cuanto quieres enviar?')
+    assert.equal(out.pending?.kind, 'send')
+    if (out.pending?.kind !== 'send') return
+    assert.equal(out.pending.partial.recipientRaw, 'mateo')
   })
 
   test('send with no recipient → downgraded, asks "¿A quién?"', async ({ assert }) => {
@@ -254,7 +257,10 @@ test.group('dispatcher | action → validator downgrade → ambiguous', () => {
 
     const out = await dispatchSmartMode({ ...BASE_ARGS, clientFactory: () => client })
     if (out.kind !== 'reply') throw new Error('expected reply after downgrade')
-    assert.equal(out.text, '¿A quién?')
+    assert.equal(out.text, '10 a quien? Mandame el numero o el nombre del contacto.')
+    assert.equal(out.pending?.kind, 'send')
+    if (out.pending?.kind !== 'send') return
+    assert.equal(out.pending.partial.amount, 10)
   })
 })
 
@@ -263,7 +269,9 @@ test.group('dispatcher | action → validator downgrade → ambiguous', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test.group('dispatcher | ambiguous → reply', () => {
-  test('clean clarifying_question passes through sanitized', async ({ assert }) => {
+  test('send ambiguity uses deterministic money-flow copy and seeds partial send', async ({
+    assert,
+  }) => {
     const client = mockClient({
       category: 'ambiguous',
       intent: 'send',
@@ -279,18 +287,22 @@ test.group('dispatcher | ambiguous → reply', () => {
 
     assert.equal(out.kind, 'reply')
     if (out.kind !== 'reply') return
-    assert.equal(out.text, '¿A cuál Mateo le pagas?')
+    assert.equal(out.text, '5 a quien? Mandame el numero o el nombre del contacto.')
+    assert.equal(out.pending?.kind, 'send')
+    if (out.pending?.kind !== 'send') return
+    assert.equal(out.pending.partial.amount, 5)
+    assert.isTrue(out.pending.partial.sendIntent)
   })
 
-  test('banned-content question → falls back to deterministic text', async ({ assert }) => {
+  test('send missing both slots seeds send-intent partial', async ({ assert }) => {
     const client = mockClient({
       category: 'ambiguous',
       intent: 'send',
       confidence: 0.5,
-      reasoning: 'leaky LLM',
-      clarifying_question: 'Confirma 5 USDC a tu contacto?', // sanitizer must reject
+      reasoning: 'send intent, no slots',
+      clarifying_question: '¿Cuánto?',
       oos_redirect: null,
-      slots: { amount: 5 },
+      slots: null,
       detectedLang: 'es',
     })
 
@@ -298,12 +310,54 @@ test.group('dispatcher | ambiguous → reply', () => {
 
     assert.equal(out.kind, 'reply')
     if (out.kind !== 'reply') return
-    assert.notEqual(
-      out.text,
-      'Confirma 5 USDC a tu contacto?',
-      'sanitizer must strip the banned LLM text'
-    )
-    assert.isAbove(out.text.length, 5, 'fallback message is non-empty')
+    assert.equal(out.text, 'Cuanto quieres enviar?')
+    assert.equal(out.pending?.kind, 'send')
+    if (out.pending?.kind !== 'send') return
+    assert.isTrue(out.pending.partial.sendIntent)
+    assert.isUndefined(out.pending.partial.amount)
+    assert.isUndefined(out.pending.partial.recipient)
+  })
+
+  test('invite ambiguity uses deterministic invite copy and seeds pending invite', async ({
+    assert,
+  }) => {
+    const client = mockClient({
+      category: 'ambiguous',
+      intent: 'invite',
+      confidence: 0.5,
+      reasoning: 'invite missing recipient',
+      clarifying_question: '¿A qué número o alias deseas invitar?',
+      oos_redirect: null,
+      slots: null,
+      detectedLang: 'es',
+    })
+
+    const out = await dispatchSmartMode({ ...BASE_ARGS, clientFactory: () => client })
+
+    assert.equal(out.kind, 'reply')
+    if (out.kind !== 'reply') return
+    assert.equal(out.text, 'Mandame el numero de telefono que quieres invitar.')
+    assert.equal(out.pending?.kind, 'invite')
+  })
+
+  test('non-money clean clarifying_question passes through sanitized', async ({ assert }) => {
+    const client = mockClient({
+      category: 'ambiguous',
+      intent: 'social',
+      confidence: 0.5,
+      reasoning: 'unclear social/help intent',
+      clarifying_question: '¿Quieres ayuda con Sippy?',
+      oos_redirect: null,
+      slots: null,
+      detectedLang: 'es',
+    })
+
+    const out = await dispatchSmartMode({ ...BASE_ARGS, clientFactory: () => client })
+
+    assert.equal(out.kind, 'reply')
+    if (out.kind !== 'reply') return
+    assert.equal(out.text, '¿Quieres ayuda con Sippy?')
+    assert.isUndefined(out.pending)
   })
 })
 

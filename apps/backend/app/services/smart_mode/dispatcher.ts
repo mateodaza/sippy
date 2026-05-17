@@ -31,7 +31,7 @@
 import logger from '@adonisjs/core/services/logger'
 import { canonicalizePhone, maskPhone } from '#utils/phone'
 import type { ContextMessage } from '#services/db'
-import type { ParsedCommand } from '#types/index'
+import type { ParsedCommand, PartialSend } from '#types/index'
 import { classifyMessage, type ClassifierGroqClient } from './classifier.js'
 import { validateSmartAction, shouldFallThroughToExistingParser } from './validators.js'
 import { sanitizeClarification, sanitizeOosRedirect } from './sanitizer.js'
@@ -41,7 +41,12 @@ import type { SmartClassification, SmartIntent } from './types.js'
 
 export type DispatcherOutcome =
   | { kind: 'execute'; command: ParsedCommand; classification: SmartClassification }
-  | { kind: 'reply'; text: string; classification: SmartClassification }
+  | {
+      kind: 'reply'
+      text: string
+      classification: SmartClassification
+      pending?: SmartPendingState
+    }
   | {
       kind: 'fall_through'
       /** OPTIONAL hint the webhook may use AFTER `parseMessage(skipSmart:true)`
@@ -49,6 +54,10 @@ export type DispatcherOutcome =
       oosRedirect: string | null
       classification: SmartClassification
     }
+
+export type SmartPendingState =
+  | { kind: 'send'; partial: Omit<PartialSend, 'timestamp' | 'lang'> }
+  | { kind: 'invite' }
 
 export interface DispatchArgs {
   /** Inbound text (already bracket-stripped). */
@@ -123,9 +132,10 @@ export async function dispatchSmartMode(args: DispatchArgs): Promise<DispatcherO
   }
 
   if (classification.category === 'ambiguous') {
-    // Sanitize the LLM-authored question; null result → deterministic fallback.
-    const sanitized = sanitizeClarification(classification.clarifying_question)
+    const deterministic = deterministicAmbiguousReply(classification, args.preferredLang ?? 'es')
+    const sanitized = deterministic ?? sanitizeClarification(classification.clarifying_question)
     const text = sanitized ?? FALLBACK_AMBIGUOUS_QUESTION
+    const pending = pendingStateForAmbiguous(classification)
     logger.info(
       {
         phone: maskPhone(args.phoneNumber),
@@ -133,11 +143,12 @@ export async function dispatchSmartMode(args: DispatchArgs): Promise<DispatcherO
         intent: classification.intent,
         confidence: classification.confidence,
         usedFallback: sanitized === null,
+        pendingKind: pending?.kind ?? null,
         classifyMs,
       },
       'smart_mode.dispatch: reply (ambiguous)'
     )
-    return { kind: 'reply', text, classification }
+    return { kind: 'reply', text, classification, pending }
   }
 
   // out_of_scope OR gibberish — fall through to existing parser.
@@ -171,6 +182,82 @@ export async function dispatchSmartMode(args: DispatchArgs): Promise<DispatcherO
     'smart_mode.dispatch: unhandled category — falling through'
   )
   return { kind: 'fall_through', oosRedirect: null, classification }
+}
+
+function deterministicAmbiguousReply(
+  c: SmartClassification,
+  lang: 'en' | 'es' | 'pt'
+): string | null {
+  if (c.intent === 'send') {
+    const slots = c.slots ?? undefined
+    const hasAmount = slots?.amount != null || (slots?.localAmount != null && !!slots.localCurrency)
+    const hasRecipient = !!slots?.recipientRaw
+
+    if (hasAmount && !hasRecipient) {
+      const amount = slots?.amount ?? slots?.localAmount
+      const formatted = amount != null ? `${amount}` : ''
+      const m = {
+        en: () => `${formatted} to whom? Send me the phone number or contact name.`,
+        es: () => `${formatted} a quien? Mandame el numero o el nombre del contacto.`,
+        pt: () => `${formatted} pra quem? Me manda o numero ou nome do contato.`,
+      }
+      return m[lang]()
+    }
+
+    if (hasRecipient && !hasAmount) {
+      const m = {
+        en: () => `How much do you want to send?`,
+        es: () => `Cuanto quieres enviar?`,
+        pt: () => `Quanto voce quer enviar?`,
+      }
+      return m[lang]()
+    }
+
+    const m = {
+      en: () => `How much do you want to send?`,
+      es: () => `Cuanto quieres enviar?`,
+      pt: () => `Quanto voce quer enviar?`,
+    }
+    return m[lang]()
+  }
+
+  if (c.intent === 'invite') {
+    const m = {
+      en: () => `Send me the phone number you want to invite.`,
+      es: () => `Mandame el numero de telefono que quieres invitar.`,
+      pt: () => `Me manda o numero de telefone que voce quer convidar.`,
+    }
+    return m[lang]()
+  }
+
+  return null
+}
+
+function pendingStateForAmbiguous(c: SmartClassification): SmartPendingState | undefined {
+  if (c.intent === 'send') {
+    const partial: Omit<PartialSend, 'timestamp' | 'lang'> = { sendIntent: true }
+    const slots = c.slots ?? undefined
+    if (slots?.amount != null) {
+      partial.amount = slots.amount
+    } else if (slots?.localAmount != null && slots.localCurrency) {
+      partial.amount = slots.localAmount
+    }
+    if (slots?.recipientRaw) {
+      const canon = canonicalizePhone(slots.recipientRaw)
+      if (canon) {
+        partial.recipient = canon
+      } else {
+        partial.recipientRaw = slots.recipientRaw
+      }
+    }
+    return { kind: 'send', partial }
+  }
+
+  if (c.intent === 'invite') {
+    return { kind: 'invite' }
+  }
+
+  return undefined
 }
 
 // ── ParsedCommand synthesizer ────────────────────────────────────────────

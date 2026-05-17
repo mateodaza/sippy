@@ -39,8 +39,20 @@ export interface PendingTransaction {
 export interface PartialSend {
   amount?: number // present if user gave an amount
   recipient?: string // present if user gave a phone (canonical E.164)
+  recipientRaw?: string // present if user gave an alias/name that still needs resolution
   timestamp: number // Date.now()
   lang: Lang
+  // Set when the user has expressed send intent but has not supplied either
+  // required slot yet. Lets the next standalone "1" or "Carlos" advance the
+  // same partial-send state machine instead of being parsed as a fresh turn.
+  sendIntent?: boolean
+  // Set when the user filled the amount slot with a local-currency word
+  // ("200 pesos", "50 reais", "10 soles"). Carries the ISO/LOCAL code so
+  // the eventual `complete` resolution synthesizes a ParsedCommand with
+  // both `amount` AND `localCurrency` set — without this, the downstream
+  // FX step skips conversion and we'd send USDC at the local face value
+  // (a 400x money-correctness bug for COP/VES sends).
+  localCurrency?: string
   // ── Pay-QR scan context (set by the kind='pay' bracket dispatcher) ─────
   // Present when this partial was created by a pay-QR scan. Carries forward
   // so the resolved send command can use the friendly display name in the

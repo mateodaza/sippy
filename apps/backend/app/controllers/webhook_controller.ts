@@ -105,6 +105,7 @@ import { selectUnknownVariant } from '#services/smart_mode/unknown_variants'
 export const pendingTransactions = new Map<string, PendingTransaction>()
 export const partialSends = new Map<string, PartialSend>()
 export const activeSends = new Set<string>()
+export const pendingInvites = new Map<string, { timestamp: number; lang: Lang }>()
 export const pendingContactOverwrites = new Map<
   string,
   { alias: string; newPhone: string; timestamp: number }
@@ -267,6 +268,11 @@ const pendingTxCleanupInterval = setInterval(() => {
         partialSends.delete(phone)
       }
     }
+    for (const [phone, invite] of pendingInvites.entries()) {
+      if (now - invite.timestamp > PENDING_TX_TTL_MS) {
+        pendingInvites.delete(phone)
+      }
+    }
     for (const [phone, ow] of pendingContactOverwrites.entries()) {
       if (now - ow.timestamp > PENDING_OVERWRITE_TTL_MS) {
         pendingContactOverwrites.delete(phone)
@@ -297,6 +303,9 @@ function clearPendingIfUnrelated(
   // Clear partial sends on any non-send command (user moved on)
   if (command.command !== 'send') {
     partialSends.delete(from)
+  }
+  if (command.command !== 'invite') {
+    pendingInvites.delete(from)
   }
 }
 
@@ -1006,12 +1015,14 @@ export async function routeCommand(
           await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
-        } else if (command.smartOosRedirect) {
-          // SMART produced a sanitizer-cleared, input-tailored OOS hint.
-          // Skip the LLM-driven helpfulMessage / generateResponse paths —
-          // a generic LLM reply (even one that passes validation) is
-          // strictly worse than the tailored redirect, and re-rolling
-          // costs a token budget on a path that already decided.
+        } else if (command.smartCategory) {
+          // SMART already classified this unknown as out-of-scope/gibberish.
+          // If it also produced a sanitizer-cleared OOS hint, fallbackUnknown
+          // is that tailored redirect; otherwise it is a deterministic
+          // state-aware variant. In both cases we skip the LLM-driven
+          // helpfulMessage / generateResponse paths: a generic LLM reply
+          // can drift into jokes/weather/etc. after SMART already decided
+          // the turn is outside Sippy's action surface.
           await sendMessageFn(phoneNumber, fallbackUnknown, lang)
         } else if (command.helpfulMessage) {
           const validated = await validateAndFallback(
@@ -1024,11 +1035,10 @@ export async function routeCommand(
           await sendMessageFn(phoneNumber, validated || fallbackUnknown, lang)
         } else {
           // No helpfulMessage — try generating a conversational reply via LLM
-          // before falling back to the variant-selector floor. SMART OOS
-          // without a sanitized redirect and SMART gibberish both reach here:
-          // the variant is the floor, not the primary response, because a
-          // good LLM completion can still beat the generic phrasing when
-          // we don't have a tailored hint to anchor to.
+          // before falling back to the variant-selector floor. Reachable ONLY
+          // for non-SMART unknowns (cohort off, SMART couldn't classify, or
+          // SMART executed/replied/never ran for this turn); SMART-stamped
+          // unknowns hit the `smartCategory` branch above and never get here.
           const text = command.originalText ?? ''
           const raw = text
             ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
@@ -1100,42 +1110,242 @@ export async function dispatchCommand(
   )
 }
 
+export type PartialSendResolution =
+  | {
+      kind: 'complete'
+      amount: number
+      recipient: string
+      /** Set when the user typed the amount with a local-currency word
+       *  (or the seed already carried one). Plumbed into the synthesized
+       *  ParsedCommand so the FX step converts before sending. */
+      localCurrency?: string
+    }
+  | { kind: 'progress'; partial: PartialSend; prompt: 'amount' | 'recipient' }
+
+function stripRecipientLead(text: string): string {
+  return text
+    .trim()
+    .replace(/^(?:a|al|para|to|for)\s+/i, '')
+    .trim()
+}
+
 /**
- * Try to fill in the missing piece of a partial send.
- * Returns { amount, recipient } if successful, null otherwise.
+ * Map of currency-word slot replies to the ISO/LOCAL code used by the
+ * downstream FX step. Mirrors `CURRENCY_WORD_MAP` in message_parser.ts —
+ * kept in sync so a standalone "200 pesos" reply produces the same
+ * `localCurrency` value as "envia 200 pesos a +57…" through the regex
+ * path. Null entries mean USD-equivalent (no FX conversion).
  */
-async function resolvePartialSend(
+const STANDALONE_CURRENCY_MAP: Record<string, string | null> = {
+  dollar: null,
+  dollars: null,
+  dolar: null,
+  dolares: null,
+  usd: null,
+  plata: null,
+  peso: 'LOCAL',
+  pesos: 'LOCAL',
+  real: 'BRL',
+  reais: 'BRL',
+  sol: 'PEN',
+  soles: 'PEN',
+  lempira: 'HNL',
+  lempiras: 'HNL',
+  quetzal: 'GTQ',
+  quetzales: 'GTQ',
+  colon: 'CRC',
+  colones: 'CRC',
+  bolivar: 'VES',
+  bolivares: 'VES',
+  guarani: 'PYG',
+  guaranies: 'PYG',
+}
+
+interface StandaloneAmountParse {
+  amount: number
+  /** null = USD/no currency word; non-null = local currency code for FX. */
+  localCurrency: string | null
+}
+
+/**
+ * Parse a standalone amount reply, capturing both the numeric value and
+ * any currency word the user appended. Returning the currency separately
+ * is what keeps "200 pesos" from becoming $200 USDC in the partial-send
+ * resolver — caller must thread `localCurrency` into the synthesized
+ * command so FX runs.
+ */
+function parseStandaloneAmount(text: string): StandaloneAmountParse | null {
+  const trimmed = text.trim().replace(/^\$/, '')
+  // Capture the trailing currency word (accent-stripped match key).
+  const currencyMatch = trimmed.match(
+    /\s+(d[oó]lar(?:es)?|dollars?|pesos?|usd|plata|rea(?:is|l)|soles?|lempiras?|quetzales?|colone?s?|bol[ií]vares?|guaranie?s?)\s*$/i
+  )
+  let localCurrency: string | null = null
+  let cleaned = trimmed
+  if (currencyMatch) {
+    const key = currencyMatch[1]
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+    if (key in STANDALONE_CURRENCY_MAP) {
+      localCurrency = STANDALONE_CURRENCY_MAP[key]
+    }
+    cleaned = trimmed.slice(0, currencyMatch.index).trim()
+  }
+  const result = parseAndValidateAmount(cleaned)
+  if (result.value === null || result.errorCode !== null) return null
+  return { amount: result.value, localCurrency }
+}
+
+/**
+ * Try to advance or complete a partial send.
+ * Returns a complete send when both slots are known, a progressed partial
+ * when one standalone reply filled exactly one slot, or null when the text
+ * should fall back to normal parsing.
+ *
+ * Exported for the SMART-seed → resolve integration tests; not part of
+ * the public webhook API.
+ */
+export async function resolvePartialSend(
   partial: PartialSend,
   text: string,
   ownerPhone: string
-): Promise<{ amount: number; recipient: string } | null> {
+): Promise<PartialSendResolution | null> {
   const trimmed = text.trim()
 
-  if (partial.recipient && !partial.amount) {
+  if ((partial.recipient || partial.recipientRaw) && !partial.amount) {
     // We have the recipient, user should be sending the amount.
-    // Strip currency words: "4 dólares", "$5", "10 pesos" → number
-    const cleaned = trimmed
-      .replace(/^\$/, '')
-      .replace(/\s*(d[oó]lar(?:es)?|dollars?|pesos?|usd|plata)\s*$/i, '')
-      .trim()
-    const result = parseAndValidateAmount(cleaned)
-    if (result.value !== null && result.errorCode === null) {
-      return { amount: result.value, recipient: partial.recipient }
+    const parsed = parseStandaloneAmount(trimmed)
+    if (parsed !== null) {
+      // Prefer the freshly-typed currency; fall back to whatever the seed
+      // already carried (e.g. dispatcher pre-filled amount with a currency
+      // and recipient came in later, then amount came in — unlikely but
+      // mirrored for completeness).
+      const localCurrency = parsed.localCurrency ?? partial.localCurrency ?? undefined
+      if (partial.recipient) {
+        return {
+          kind: 'complete',
+          amount: parsed.amount,
+          recipient: partial.recipient,
+          localCurrency,
+        }
+      }
+
+      const candidate = partial.recipientRaw!
+      const phone = canonicalizePhone(candidate)
+      if (phone) {
+        return { kind: 'complete', amount: parsed.amount, recipient: phone, localCurrency }
+      }
+      const matches = await smartResolveAlias(ownerPhone, candidate)
+      if (matches.length === 1) {
+        return {
+          kind: 'complete',
+          amount: parsed.amount,
+          recipient: matches[0].targetPhone,
+          localCurrency,
+        }
+      }
+
+      return {
+        kind: 'progress',
+        partial: {
+          ...partial,
+          amount: parsed.amount,
+          localCurrency,
+          recipientRaw: undefined,
+          timestamp: Date.now(),
+        },
+        prompt: 'recipient',
+      }
     }
   }
 
   if (partial.amount && !partial.recipient) {
     // We have the amount, user should be sending the phone number or alias.
-    const phone = canonicalizePhone(trimmed)
+    const candidate = stripRecipientLead(trimmed)
+    const phone = canonicalizePhone(candidate)
     if (phone) {
-      return { amount: partial.amount, recipient: phone }
+      return {
+        kind: 'complete',
+        amount: partial.amount,
+        recipient: phone,
+        localCurrency: partial.localCurrency,
+      }
     }
     // Try smart alias resolution (prefix, word, contains, typo)
-    const matches = await smartResolveAlias(ownerPhone, trimmed)
+    const matches = await smartResolveAlias(ownerPhone, candidate)
     if (matches.length === 1) {
-      return { amount: partial.amount, recipient: matches[0].targetPhone }
+      return {
+        kind: 'complete',
+        amount: partial.amount,
+        recipient: matches[0].targetPhone,
+        localCurrency: partial.localCurrency,
+      }
     }
     // Multiple matches or no match → fall through to normal parsing
+  }
+
+  if (partial.sendIntent && !partial.amount && !partial.recipient) {
+    const parsed = parseStandaloneAmount(trimmed)
+    if (parsed !== null) {
+      return {
+        kind: 'progress',
+        partial: {
+          ...partial,
+          amount: parsed.amount,
+          localCurrency: parsed.localCurrency ?? undefined,
+          timestamp: Date.now(),
+        },
+        prompt: 'recipient',
+      }
+    }
+
+    const candidate = stripRecipientLead(trimmed)
+    const phone = canonicalizePhone(candidate)
+    if (phone) {
+      return {
+        kind: 'progress',
+        partial: {
+          ...partial,
+          recipient: phone,
+          recipientRaw: undefined,
+          timestamp: Date.now(),
+        },
+        prompt: 'amount',
+      }
+    }
+
+    const matches = await smartResolveAlias(ownerPhone, candidate)
+    if (matches.length === 1) {
+      return {
+        kind: 'progress',
+        partial: {
+          ...partial,
+          recipient: matches[0].targetPhone,
+          recipientRaw: undefined,
+          timestamp: Date.now(),
+        },
+        prompt: 'amount',
+      }
+    }
+  }
+
+  return null
+}
+
+export async function resolvePendingInvite(
+  ownerPhone: string,
+  text: string
+): Promise<ParsedCommand | null> {
+  const candidate = stripRecipientLead(text)
+  const phone = canonicalizePhone(candidate)
+  if (phone) {
+    return { command: 'invite', recipient: phone, originalText: text }
+  }
+
+  const matches = await smartResolveAlias(ownerPhone, candidate)
+  if (matches.length === 1) {
+    return { command: 'invite', recipient: matches[0].targetPhone, originalText: text }
   }
 
   return null
@@ -1406,18 +1616,57 @@ export default class WebhookController {
     // ── Fetch conversation context (non-financial follow-ups) ──────────
     const context = await getConversationContext(from)
 
+    // ── Multi-turn invite: resolve the phone/contact after SMART asked ─
+    const pendingInvite = pendingInvites.get(from)
+    if (pendingInvite && Date.now() - pendingInvite.timestamp <= PENDING_TX_TTL_MS) {
+      const command = await resolvePendingInvite(from, text)
+      if (command) {
+        pendingInvites.delete(from)
+        const lang: Lang =
+          (await getUserLanguage(from)) || pendingInvite.lang || getLanguageForPhone(from)
+        clearPendingIfUnrelated(from, command, pendingTransactions)
+        const rateCtx = await fetchRateContext(from, undefined)
+        try {
+          await this.handleCommand(from, command, lang, rateCtx, context)
+          logger.info('Message %s processed (pending invite resolved)', messageId)
+        } finally {
+          rateLimitService.markProcessed(messageId)
+        }
+        return
+      }
+      pendingInvites.delete(from)
+    } else if (pendingInvite) {
+      pendingInvites.delete(from)
+    }
+
     // ── Multi-turn send: resolve partial sends before parsing ──────────
     // If the user previously gave an incomplete send (amount or recipient only),
     // try to interpret this message as the missing piece.
     const partial = partialSends.get(from)
     if (partial && Date.now() - partial.timestamp <= PENDING_TX_TTL_MS) {
-      let resolved: { amount: number; recipient: string } | null = null
+      let resolved: PartialSendResolution | null = null
       try {
         resolved = await resolvePartialSend(partial, text, from)
       } catch (err) {
         logger.error('resolvePartialSend failed for %s: %o', maskPhone(from), err)
       }
-      if (resolved) {
+      if (resolved?.kind === 'progress') {
+        partialSends.set(from, resolved.partial)
+        const lang: Lang =
+          (await getUserLanguage(from)) || resolved.partial.lang || getLanguageForPhone(from)
+        const prompt =
+          resolved.prompt === 'recipient'
+            ? formatAskForRecipient(resolved.partial.amount!, lang)
+            : formatAskForAmount(resolved.partial.recipient!, lang)
+        try {
+          await sendTextMessage(from, prompt, lang)
+          logger.info('Message %s processed (partial send progressed)', messageId)
+        } finally {
+          rateLimitService.markProcessed(messageId)
+        }
+        return
+      }
+      if (resolved?.kind === 'complete') {
         partialSends.delete(from)
         logger.info(
           'Partial send resolved for %s: amount=%s recipient=%s',
@@ -1430,6 +1679,15 @@ export default class WebhookController {
         // branch can force confirmation + use the display name in the
         // confirm prompt. recipientDisplayName is undefined for non-pay
         // partials and the send branch falls back to the default copy.
+        //
+        // When `resolved.localCurrency` is set, mirror the dual-field
+        // semantics the regex parser uses (`parseSendMatch` in
+        // message_parser.ts:639-645) and the SMART synthesizer uses
+        // (dispatcher.ts:304-308): both `amount` AND `localAmount` carry
+        // the raw pre-conversion value; the downstream FX step replaces
+        // `amount` with the USDC equivalent using `localCurrency` as the
+        // signal. Setting only `amount` would skip conversion entirely
+        // and send local face value as USDC.
         const command: ParsedCommand = {
           command: 'send',
           amount: resolved.amount,
@@ -1438,6 +1696,10 @@ export default class WebhookController {
           originalText: text,
           recipientDisplayName: partial.recipientDisplayName,
           payQrScan: partial.payQrScan,
+        }
+        if (resolved.localCurrency) {
+          command.localAmount = resolved.amount
+          command.localCurrency = resolved.localCurrency
         }
         // Language, rate context, and routing — same path as normal sends
         const lang: Lang =
@@ -1523,6 +1785,18 @@ export default class WebhookController {
       }
       if (outcome.kind === 'reply') {
         const lang: Lang = cachedUserLang || getLanguageForPhone(from)
+        if (outcome.pending?.kind === 'send') {
+          partialSends.set(from, {
+            ...outcome.pending.partial,
+            timestamp: Date.now(),
+            lang,
+          })
+        } else if (outcome.pending?.kind === 'invite') {
+          pendingInvites.set(from, {
+            timestamp: Date.now(),
+            lang,
+          })
+        }
         try {
           await sendTextMessage(from, outcome.text, lang)
           logger.info('Message %s processed (smart_mode reply)', messageId)
