@@ -46,45 +46,53 @@ export type UnknownCategory = 'out_of_scope' | 'gibberish'
 //   • Each variant should redirect to a Sippy capability (balance / send /
 //     help) so users always know what to try next.
 
+// Tone rules (mirror prompt.ts OOS guidance so static fallbacks don't
+// regress when the LLM redirect can't be sanitized):
+//   • Acknowledge briefly, then offer 1–2 capabilities.
+//   • Conversational, lowercase-leaning, no em-dashes (the LLM tends to
+//     copy them from examples; consistency across paths matters).
+//   • End with a soft question or offer when natural.
+//   • No emojis, no slang particles, no AI cliches.
+
 const OOS_BASE: Record<Lang, string[]> = {
   en: [
-    `Not my area — I handle money. You can check your balance, send, or see your history.`,
-    `That's outside what I do. Try "balance" or "send 5 to ..." to get started.`,
-    `I don't handle that one. But I can show your balance, send money, or list your transfers.`,
-    `Outside my scope. Say "help" to see what I actually do.`,
+    `Hmm, that's not really my thing. I can show your balance or help you send. Which one?`,
+    `Not my area, but I can help with money stuff. Want to check your balance or send?`,
+    `That one's outside what I do. Want to see your balance, or maybe send some money?`,
+    `Can't help with that, but money I can do. Try "balance" or tell me who you want to send to.`,
   ],
   es: [
-    `No es lo mio — yo manejo plata. Puedes ver tu saldo, enviar, o ver tu historial.`,
-    `Eso esta fuera de lo que hago. Prueba "saldo" o "envia 5 a ..." para empezar.`,
-    `No manejo eso. Pero te puedo mostrar el saldo, enviar, o listar tus transferencias.`,
-    `Fuera de mi area. Di "ayuda" para ver lo que si hago.`,
+    `Hmm, eso no es lo mio. Puedo mostrarte tu saldo o ayudarte a enviar. ¿Cual prefieres?`,
+    `No es lo mio, pero con plata si te ayudo. ¿Quieres ver tu saldo o enviarle a alguien?`,
+    `Eso esta fuera de lo mio. Pero te puedo mostrar el saldo o ayudarte a mandar plata.`,
+    `No manejo eso, pero si quieres revisar tu saldo o mandar algo, ahi te ayudo.`,
   ],
   pt: [
-    `Nao e minha area — eu cuido de dinheiro. Pode ver seu saldo, enviar, ou ver seu historico.`,
-    `Isso esta fora do que faco. Tenta "saldo" ou "envia 5 pra ..." pra comecar.`,
-    `Nao lido com isso. Mas posso mostrar seu saldo, enviar, ou listar suas transferencias.`,
-    `Fora do meu escopo. Diz "ajuda" pra ver o que eu faco.`,
+    `Hmm, isso nao e bem o que eu faco. Posso mostrar seu saldo ou te ajudar a enviar. Qual prefere?`,
+    `Nao e minha area, mas com dinheiro eu ajudo. Quer ver seu saldo ou enviar pra alguem?`,
+    `Isso esta fora do que eu faco. Mas posso mostrar seu saldo ou te ajudar a mandar dinheiro.`,
+    `Nao lido com isso, mas se quiser ver seu saldo ou enviar algo, te ajudo.`,
   ],
 }
 
 const GIBBERISH_BASE: Record<Lang, string[]> = {
   en: [
-    `Hmm, didn't catch that. You can say "balance", "send", or "help".`,
-    `Not sure I follow — try "balance" or "help" to see what I do.`,
-    `Couldn't parse that one. "help" shows what I can do for you.`,
-    `Not sure what you mean. Try "balance" or "send 5 to <name>".`,
+    `Hmm, didn't quite catch that. Want to check your balance or send to someone?`,
+    `Not sure what you mean. Try "balance" or tell me who you want to pay.`,
+    `Couldn't parse that one. If you want a hand, say "help" or just tell me what you need.`,
+    `That one threw me off. Want to see your balance, or send some money?`,
   ],
   es: [
-    `Hmm, no te entendi. Puedes decir "saldo", "enviar", o "ayuda".`,
-    `No te sigo — prueba "saldo" o "ayuda" para ver lo que hago.`,
-    `No pude leer eso. "ayuda" te muestra lo que puedo hacer.`,
-    `No estoy seguro de lo que dices. Prueba "saldo" o "envia 5 a <nombre>".`,
+    `Hmm, no te capto. ¿Quieres ver tu saldo o enviarle a alguien?`,
+    `No estoy seguro de lo que dices. Prueba "saldo" o cuentame que necesitas.`,
+    `No te entendi bien. Si quieres, te muestro el saldo o te ayudo a mandar plata.`,
+    `Eso no lo descifro. Dime "ayuda" o cuentame que quieres hacer.`,
   ],
   pt: [
-    `Hmm, nao entendi. Pode dizer "saldo", "enviar", ou "ajuda".`,
-    `Nao te sigo — tenta "saldo" ou "ajuda" pra ver o que faco.`,
-    `Nao consegui ler isso. "ajuda" mostra o que posso fazer.`,
-    `Nao tenho certeza do que dizes. Tenta "saldo" ou "envia 5 pra <nome>".`,
+    `Hmm, nao captei. Quer ver seu saldo ou enviar pra alguem?`,
+    `Nao tenho certeza do que voce disse. Tenta "saldo" ou me conta o que precisa.`,
+    `Nao entendi direito. Se quiser, te mostro o saldo ou te ajudo a mandar dinheiro.`,
+    `Isso eu nao decifrei. Diz "ajuda" ou me conta o que voce quer fazer.`,
   ],
 }
 

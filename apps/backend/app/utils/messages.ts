@@ -466,24 +466,38 @@ export function formatBalanceMessage(
   )
   const addr = maskAddress(params.wallet)
 
+  // Dashboard link: phone-scoped /wallet URL. Surfaces the web hub at
+  // the most-engaged moment (user just asked about their money), without
+  // a full second message. Suppressed when phoneNumber is missing — the
+  // /wallet route requires a phone to deep-link cleanly.
+  const dashboardUrl = params.phoneNumber
+    ? `${FRONTEND_URL}/wallet?phone=${encodeURIComponent(params.phoneNumber)}`
+    : null
+
   const m = {
     en: () => {
       let msg = `Balance\n\nUSD: ${amt}\nWallet: ${addr}`
       if (params.ethBalance)
         msg = `Balance\n\nTransfer credit: ${params.ethBalance} ETH\nUSD: ${amt}\nWallet: ${addr}`
-      return msg + `\n\nAdd funds: ${FUND_URL}`
+      msg += `\n\nAdd funds: ${FUND_URL}`
+      if (dashboardUrl) msg += `\nFull view: ${dashboardUrl}`
+      return msg
     },
     es: () => {
       let msg = `Saldo\n\nUSD: ${amt}\nBilletera: ${addr}`
       if (params.ethBalance)
         msg = `Saldo\n\nCredito de transferencia: ${params.ethBalance} ETH\nUSD: ${amt}\nBilletera: ${addr}`
-      return msg + `\n\nAgregar fondos: ${FUND_URL}`
+      msg += `\n\nAgregar fondos: ${FUND_URL}`
+      if (dashboardUrl) msg += `\nVer todo: ${dashboardUrl}`
+      return msg
     },
     pt: () => {
       let msg = `Saldo\n\nUSD: ${amt}\nCarteira: ${addr}`
       if (params.ethBalance)
         msg = `Saldo\n\nCredito de transferencia: ${params.ethBalance} ETH\nUSD: ${amt}\nCarteira: ${addr}`
-      return msg + `\n\nAdicionar fundos: ${FUND_URL}`
+      msg += `\n\nAdicionar fundos: ${FUND_URL}`
+      if (dashboardUrl) msg += `\nVer tudo: ${dashboardUrl}`
+      return msg
     },
   }
   return m[lang]()
@@ -847,6 +861,23 @@ export function formatHistoryMessage(phoneNumber: string, lang: Lang = 'en'): st
     en: () => `Transaction history\n\nView your activity at:\n${url}`,
     es: () => `Historial de transacciones\n\nVer tu actividad en:\n${url}`,
     pt: () => `Historico de transacoes\n\nVeja sua atividade em:\n${url}`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Dashboard deep-link reply. The `/wallet` page is the authenticated app
+ * hub: balance, activity, send, settings link. Bot keyword `dashboard` /
+ * `mi cuenta` / `meu painel` routes here. Also appended (as a one-liner)
+ * to the balance reply so users who ask for their balance discover the
+ * fuller view at the most-engaged moment.
+ */
+export function formatDashboardMessage(phoneNumber: string, lang: Lang = 'en'): string {
+  const url = `${FRONTEND_URL}/wallet?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () => `Your Sippy dashboard — balance, activity, send, pay QR, fund:\n${url}`,
+    es: () => `Tu panel de Sippy — saldo, actividad, enviar, mi QR, recargar:\n${url}`,
+    pt: () => `Seu painel Sippy — saldo, atividade, enviar, meu QR, recarregar:\n${url}`,
   }
   return m[lang]()
 }

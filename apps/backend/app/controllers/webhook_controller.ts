@@ -32,6 +32,7 @@ import {
   formatInvalidSendFormat,
   formatHistoryMessage,
   formatSettingsMessage,
+  formatDashboardMessage,
   formatLanguageSetMessage,
   formatCommandErrorMessage,
   formatGreetingMessage,
@@ -229,6 +230,7 @@ const CONTEXT_INTENTS = new Set<string>([
   'settings',
   'language',
   'start',
+  'dashboard',
 ])
 
 /**
@@ -1004,6 +1006,21 @@ export async function routeCommand(
           await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
         } else {
           await sendMessageFn(phoneNumber, formatSettingsMessage(phoneNumber, lang), lang)
+        }
+        break
+      }
+
+      case 'dashboard': {
+        // Mirror `settings`: gate on setup status so we don't deep-link a
+        // new user into a wallet they haven't created yet. Pre-setup users
+        // get the same setup nudge; complete users get the /wallet link.
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+        } else {
+          await sendMessageFn(phoneNumber, formatDashboardMessage(phoneNumber, lang), lang)
         }
         break
       }

@@ -219,8 +219,11 @@ test.group('unknown_variants | ES stays neutral across dialects', () => {
   })
 
   test('no Spanish variant contains regional slang particles', ({ assert }) => {
-    // Hard guard against slang re-entering the table on a future edit.
-    const SLANG = /\b(parce|pille|pana|chamo|wey|guey|che|boludo|bacano|chido)\b/i
+    // Hard guard against slang AND regional voseo re-entering the table.
+    // `decime` slipped past once (AR/UY voseo for "dime") — keep the regex
+    // as the documented source of truth for what "neutral Spanish" means.
+    const SLANG =
+      /\b(parce|pille|pana|chamo|wey|guey|che|boludo|bacano|chido|decime|deci|haceme|vení|fijate|mirá|tené)\b/i
     for (const v of __testing.OOS_BASE.es) assert.notMatch(v, SLANG, `OOS variant has slang: ${v}`)
     for (const v of __testing.GIBBERISH_BASE.es)
       assert.notMatch(v, SLANG, `gibberish variant has slang: ${v}`)

@@ -331,3 +331,117 @@ test.group('Message Parser | Context Parameter', () => {
     assert.equal(result.command, 'balance')
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Partial-amount currency capture (P1 money-correctness regression)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Trace from 2026-05-17: "envia 200 pesos" via the regex partial-amount
+// path returned `{amount: 200}` with NO `localCurrency`, so the stored
+// partial later resolved into a $200 USDC send instead of 200 COP.
+// The amount-only regex now captures the currency word and sets BOTH
+// `amount` + `localAmount` + `localCurrency` so the downstream FX step
+// runs on the completing turn. Mirrors the action-path semantics.
+
+test.group('Message Parser | Partial-amount currency capture', () => {
+  test('"envia 200 pesos" (ES) sets localCurrency=LOCAL and localAmount', ({ assert }) => {
+    const result = parseMessageWithRegex('envia 200 pesos')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 200)
+    assert.equal(result.localAmount, 200, 'localAmount must mirror amount for FX')
+    assert.equal(result.localCurrency, 'LOCAL', 'pesos must map to LOCAL')
+    assert.isUndefined(result.recipient, 'still no recipient — partial')
+  })
+
+  test('"manda 50 reais" (PT) sets localCurrency=BRL', ({ assert }) => {
+    const result = parseMessageWithRegex('manda 50 reais')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 50)
+    assert.equal(result.localCurrency, 'BRL')
+  })
+
+  test('"send 100 pesos" (EN) captures pesos as LOCAL', ({ assert }) => {
+    const result = parseMessageWithRegex('send 100 pesos')
+    assert.equal(result.command, 'send')
+    assert.equal(result.localCurrency, 'LOCAL')
+  })
+
+  test('"envia 200" (no currency word) does NOT set localCurrency', ({ assert }) => {
+    const result = parseMessageWithRegex('envia 200')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 200)
+    assert.isUndefined(result.localCurrency, 'plain USDC: no FX trigger')
+    assert.isUndefined(result.localAmount)
+  })
+
+  test('"envia 5 dolares" (USD-equivalent word) does NOT set localCurrency', ({ assert }) => {
+    // dolar/dolares/plata/usd/dollars all map to null in CURRENCY_WORD_MAP
+    // and must NOT trigger FX — they're spoken shorthand for USDC.
+    const result = parseMessageWithRegex('envia 5 dolares')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 5)
+    assert.isUndefined(result.localCurrency)
+  })
+
+  test('accent variants ("envía 200 pesos") still capture currency', ({ assert }) => {
+    const result = parseMessageWithRegex('envía 200 pesos')
+    assert.equal(result.localCurrency, 'LOCAL')
+  })
+
+  // Dashboard keyword — new bot command pointing to `/wallet`. Coverage
+  // matters because "bot is the front door" relies on every web surface
+  // being reachable; we also need to confirm dashboard doesn't shadow
+  // balance keywords (which intentionally still route to `balance`).
+  const DASHBOARD_KEYWORDS = [
+    'dashboard',
+    'my app',
+    'home',
+    'mi app',
+    'mi cuenta',
+    'panel',
+    'meu painel',
+    'meu app',
+  ]
+  for (const kw of DASHBOARD_KEYWORDS) {
+    test(`"${kw}" routes to dashboard`, ({ assert }) => {
+      const result = parseMessageWithRegex(kw)
+      assert.equal(result.command, 'dashboard', `${kw} must route to dashboard`)
+    })
+  }
+
+  // Balance-keyword shadowing guard: keywords historically owned by
+  // `balance` MUST keep routing to balance (we surface the dashboard
+  // through the appended "Ver todo" link instead, not by rerouting).
+  const BALANCE_KEYWORDS = ['balance', 'saldo', 'mi wallet', 'my wallet', 'mi billetera']
+  for (const kw of BALANCE_KEYWORDS) {
+    test(`"${kw}" still routes to balance (not dashboard)`, ({ assert }) => {
+      const result = parseMessageWithRegex(kw)
+      assert.equal(result.command, 'balance', `${kw} must still be balance`)
+    })
+  }
+
+  // Unified currency-word grammar: partial path now supports every currency
+  // SEND_PATTERNS supports. Pins parity so a future addition to one path
+  // can't drift from the other (silent USDC fallback = real money bug).
+  const UNIFIED_CASES: Array<{ input: string; localCurrency: string; lang: string }> = [
+    { input: 'envia 50 soles', localCurrency: 'PEN', lang: 'ES partial' },
+    { input: 'envia 100 lempiras', localCurrency: 'HNL', lang: 'ES partial' },
+    { input: 'envia 25 quetzales', localCurrency: 'GTQ', lang: 'ES partial' },
+    { input: 'envia 5000 colones', localCurrency: 'CRC', lang: 'ES partial' },
+    { input: 'envia 30 bolivares', localCurrency: 'VES', lang: 'ES partial' },
+    { input: 'envia 10000 guaranies', localCurrency: 'PYG', lang: 'ES partial' },
+    { input: 'send 50 soles', localCurrency: 'PEN', lang: 'EN partial' },
+    { input: 'manda 50 reais', localCurrency: 'BRL', lang: 'PT partial' },
+  ]
+  for (const { input, localCurrency, lang } of UNIFIED_CASES) {
+    test(`unified currency: ${lang} "${input}" → localCurrency=${localCurrency}`, ({ assert }) => {
+      const result = parseMessageWithRegex(input)
+      assert.equal(result.command, 'send', `${input} must match as send`)
+      assert.equal(
+        result.localCurrency,
+        localCurrency,
+        `${input} must set localCurrency=${localCurrency} (parity with SEND_PATTERNS)`
+      )
+    })
+  }
+})

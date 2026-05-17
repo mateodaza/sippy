@@ -208,3 +208,37 @@ test.group('History | setup status gating', () => {
     assert.notInclude(messages[0], '/setup?phone=')
   })
 })
+
+// ── Dashboard ─────────────────────────────────────────────────────────────
+// Mirrors Settings cases (SS-04..SS-06) — same setup-gating contract.
+// Pre-setup users must NOT receive the dashboard link (they don't have
+// a wallet yet); onboarded users get the /wallet deep link.
+
+test.group('Dashboard | setup status gating', () => {
+  const cmd: ParsedCommand = { command: 'dashboard' }
+
+  test('SS-17: dashboard + new_user → setup nudge', async ({ assert }) => {
+    const { messages, fakeMsg } = capture()
+    await route(cmd, 'new_user', fakeMsg)
+    assert.lengthOf(messages, 1)
+    assert.include(messages[0], '/setup?phone=')
+  })
+
+  test('SS-18: dashboard + embedded_incomplete → finish-setup nudge, NOT /wallet URL', async ({
+    assert,
+  }) => {
+    const { messages, fakeMsg } = capture()
+    await route(cmd, 'embedded_incomplete', fakeMsg)
+    assert.lengthOf(messages, 1)
+    assert.include(messages[0], '/setup?phone=')
+    assert.notInclude(messages[0], '/wallet?phone=')
+  })
+
+  test('SS-19: dashboard + onboarded → dashboard reply with /wallet URL', async ({ assert }) => {
+    const { messages, fakeMsg } = capture()
+    await route(cmd, 'onboarded', fakeMsg)
+    assert.lengthOf(messages, 1)
+    assert.include(messages[0], '/wallet?phone=')
+    assert.notInclude(messages[0], '/setup?phone=')
+  })
+})

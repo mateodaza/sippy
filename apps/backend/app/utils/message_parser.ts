@@ -74,6 +74,21 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(configuraci[oó]n|ajustes)$/i,
     /^(configura[cç][aã]o|ajustes)$/i,
   ],
+  // Dashboard / web hub link — `/wallet`. Mirrors the bot-as-front-door
+  // principle: every web destination should be reachable from chat, and
+  // the dashboard is the most common "show me the app" request.
+  //
+  // Deliberately does NOT include `mi wallet` / `my wallet` /
+  // `mi billetera` / `minha carteira` — those are claimed by `balance`
+  // (showing the balance text is the older, higher-frequency expectation).
+  // The balance reply now appends the dashboard link, so users who type
+  // those keywords still discover the hub. SMART not wired: keywords are
+  // explicit, no need for fuzzy classification.
+  dashboard: [
+    /^(dashboard|my\s?app|home)$/i,
+    /^(mi\s?app|mi\s?cuenta|panel)$/i,
+    /^(meu\s?painel|meu\s?app)$/i,
+  ],
   history: [
     /^(history|transactions?)$/i,
     /^(historial|transacciones?)$/i,
@@ -205,9 +220,18 @@ const INVITE_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
   { pattern: /^convid[aá]r?\s+(?:(?:o|a)\s+)?(.+)$/i, lang: 'pt' },
 ]
 
-// Optional currency word after amount: "1 dólar", "5 dolares", "10 pesos", "20 reais"
-// Capturing group so parseSendMatch can detect local currency sends.
-const CURRENCY_WORD = `(?:\\s+(d[oó]lar(?:es)?|dollars?|pesos?|usd|plata|rea(?:is|l)|soles?|lempiras?|quetzales?|colone?s?|bol[ií]vares?|guaranie?s?))?`
+// Currency-word alternation. Used in BOTH the action-path send regex
+// (`SEND_PATTERNS`) and the amount-only partial regex
+// (`PARTIAL_AMOUNT_PATTERNS`) so any future currency added here is
+// supported in BOTH paths. Keeping the two in sync matters for money
+// correctness: an action-path "envia 200 soles a +51..." that matched
+// while a partial-path "envia 200 soles" did not would silently
+// downgrade the partial to USDC and ship the wrong amount.
+const CURRENCY_WORD_INNER = `d[oó]lar(?:es)?|dollars?|pesos?|usd|plata|rea(?:is|l)|soles?|lempiras?|quetzales?|colone?s?|bol[ií]vares?|guaranie?s?`
+
+// Optional capturing wrap used by SEND_PATTERNS (recipient follows the
+// currency word, so the wrap doesn't include the end-of-string anchor).
+const CURRENCY_WORD = `(?:\\s+(${CURRENCY_WORD_INNER}))?`
 
 /** Map currency words (accent-stripped, lowercase) to ISO currency codes */
 const CURRENCY_WORD_MAP: Record<string, string | null> = {
@@ -443,23 +467,37 @@ const PARTIAL_RECIPIENT_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | '
   },
 ]
 
-/** Patterns for "send <amount>" without recipient */
+/** Patterns for "send <amount>" without recipient.
+ *
+ *  Group 1: amount (digits + optional decimal).
+ *  Group 2 (optional): currency word — captured so `matchPartialSend` can
+ *  thread `localCurrency` into the partial. Without the capture, "envia
+ *  200 pesos" stored only `amount=200` and the next-turn resolver
+ *  completed it as USDC face value (the 2026-05-17 regex-path money bug).
+ *
+ *  Currency-word alternation MUST stay synchronized with `CURRENCY_WORD`
+ *  used by SEND_PATTERNS (interpolated via `CURRENCY_WORD_INNER` —
+ *  edit there, not here). */
 const PARTIAL_AMOUNT_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
-  // EN: "send 5", "send $10"
+  // EN: "send 5", "send $10", "send 200 pesos", "send 50 soles"
   {
-    pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|dollars?|pesos?|usd|plata))?$/i,
+    pattern: new RegExp(`^send\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}$`, 'i'),
     lang: 'en',
   },
-  // ES: "enviar 5", "envía 10 dólares"
+  // ES: "enviar 5", "envía 10 dólares", "manda 200 pesos", "transferir 50 soles"
   {
-    pattern:
-      /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir|pas[aá]r?)(?:le|les)?\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|pesos?|usd|plata))?$/i,
+    pattern: new RegExp(
+      `^(?:env[ií][ae]?r?|mand[aáe]r?|transferir|pas[aá]r?)(?:le|les)?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}$`,
+      'i'
+    ),
     lang: 'es',
   },
-  // PT: "enviar 5", "manda 10"
+  // PT: "enviar 5", "manda 10 reais"
   {
-    pattern:
-      /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir)\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|reais?|usd|grana))?$/i,
+    pattern: new RegExp(
+      `^(?:env[ií][ae]?r?|mand[aáe]r?|transferir)\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}$`,
+      'i'
+    ),
     lang: 'pt',
   },
 ]
@@ -481,12 +519,35 @@ function matchPartialSend(text: string): ParsedCommand | null {
     }
   }
 
-  // Amount-only: "enviar 5"
+  // Amount-only: "enviar 5", "envia 200 pesos"
   for (const { pattern, lang } of PARTIAL_AMOUNT_PATTERNS) {
     const match = text.match(pattern)
     if (match) {
       const result = parseAndValidateAmount(match[1])
       if (result.value !== null && result.errorCode === null) {
+        // Currency word capture (group 2). When present and mappable to a
+        // local-currency code, set BOTH `amount` and `localAmount` so the
+        // downstream FX step converts (mirrors `parseSendMatch`). USD-
+        // equivalent words (dollar, plata, usd) map to null and stay USDC.
+        const rawCurrency = match[2]
+        const currencyKey = rawCurrency
+          ? rawCurrency
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/\p{Diacritic}/gu, '')
+          : null
+        const currencyCode = currencyKey ? CURRENCY_WORD_MAP[currencyKey] : null
+        if (currencyCode) {
+          return {
+            command: 'send',
+            amount: result.value,
+            localAmount: result.value,
+            localCurrency: currencyCode,
+            isLargeAmount: result.isLarge,
+            detectedLanguage: lang,
+            originalText: text,
+          }
+        }
         return {
           command: 'send',
           amount: result.value,
