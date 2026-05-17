@@ -178,15 +178,23 @@ const PENDING_TX_TTL_MS = 2 * 60 * 1000 // 2 minutes
 const PENDING_OVERWRITE_TTL_MS = 60_000 // 60 seconds for contact overwrite confirmation
 
 /**
- * Friendly label for the recipient in retry copy. Display name wins
- * (alias / pay-QR), otherwise mask the phone to last 4 — never leak
- * the full number in chat copy when we can avoid it.
+ * Friendly label for the recipient in recoverable-error retry copy.
+ * Display name wins (alias / pay-QR), then masked phone, then raw text.
+ *
+ * Invariant: returns a label ONLY when reseedRecoverableSendError will
+ * actually have something to seed (i.e. `recipient || recipientRaw`).
+ * A label without a seedable identifier would tell the user "retry to
+ * Carlos" while the bot silently drops Carlos on the next inbound —
+ * exactly the trust-breaking context loss this whole subsystem exists
+ * to prevent. If a future flow has only `recipientDisplayName` and no
+ * canonical/raw recipient, fix the upstream so it carries one rather
+ * than relaxing this guard.
  */
 function recipientLabelFor(command: ParsedCommand): string | null {
+  if (!command.recipient && !command.recipientRaw) return null
   if (command.recipientDisplayName) return command.recipientDisplayName
   if (command.recipient) return maskPhone(command.recipient)
-  if (command.recipientRaw) return command.recipientRaw
-  return null
+  return command.recipientRaw ?? null
 }
 
 /**
@@ -1740,7 +1748,17 @@ export default class WebhookController {
       }
       pendingInvites.delete(from)
     } else if (pendingInvite) {
+      // expired — drop the stale entry and log it so a user who took
+      // longer than PENDING_TX_TTL_MS to reply with the contact/number
+      // doesn't silently get their message re-parsed as an unknown
+      // command (the previous turn's invite prompt becomes invisible
+      // context). Parity with the partial-send `// expired` branch below.
       pendingInvites.delete(from)
+      logger.info(
+        'Pending invite for %s expired (>%dms since prompt) — dropped',
+        maskPhone(from),
+        PENDING_TX_TTL_MS
+      )
     }
 
     // ── Multi-turn send: resolve partial sends before parsing ──────────
@@ -1785,13 +1803,13 @@ export default class WebhookController {
         // partials and the send branch falls back to the default copy.
         //
         // When `resolved.localCurrency` is set, mirror the dual-field
-        // semantics the regex parser uses (`parseSendMatch` in
-        // message_parser.ts:639-645) and the SMART synthesizer uses
-        // (dispatcher.ts:304-308): both `amount` AND `localAmount` carry
-        // the raw pre-conversion value; the downstream FX step replaces
-        // `amount` with the USDC equivalent using `localCurrency` as the
-        // signal. Setting only `amount` would skip conversion entirely
-        // and send local face value as USDC.
+        // semantics used by `parseSendMatch` (`message_parser.ts`) and
+        // `synthesizeParsedCommand` (`smart_mode/dispatcher.ts`): both
+        // `amount` AND `localAmount` carry the raw pre-conversion value;
+        // the downstream FX step replaces `amount` with the USDC
+        // equivalent using `localCurrency` as the signal. Setting only
+        // `amount` would skip conversion entirely and send local face
+        // value as USDC.
         const command: ParsedCommand = {
           command: 'send',
           amount: resolved.amount,
@@ -1907,8 +1925,8 @@ export default class WebhookController {
         } finally {
           // Mark processed even if WhatsApp send throws — otherwise Meta
           // retries the inbound and we loop on the same failing send.
-          // Matches the dedupe semantics of execute (line 1506) and the
-          // regular handleCommand branch (lines 1540-1543).
+          // Same dedupe semantics as the SMART execute branch above and
+          // the regular handleCommand branch in `processWebhook`.
           rateLimitService.markProcessed(messageId)
         }
         return

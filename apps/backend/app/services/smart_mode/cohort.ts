@@ -25,6 +25,7 @@ import env from '#start/env'
 import logger from '@adonisjs/core/services/logger'
 import { query } from '#services/db'
 import { resolveUserPrefKey } from '#utils/user_pref_lookup'
+import { maskPhone } from '#utils/phone'
 
 const COHORT_SOURCE_PREFIX = 'pizza-day'
 
@@ -65,8 +66,11 @@ export async function isSmartModeEnabledFor(phoneNumber: string): Promise<boolea
     )
     return r.rows.length > 0
   } catch (err) {
+    // Mask the phone — every other webhook log path in the SMART stack
+    // uses maskPhone, and on a flaky postgres this branch could fire on
+    // every inbound, shipping raw E.164 to wherever logs go.
     logger.warn(
-      { phoneNumber, err },
+      { phone: maskPhone(phoneNumber), err },
       'smart_mode.cohort: DB error checking cohort — failing closed (skip SMART MODE)'
     )
     return false

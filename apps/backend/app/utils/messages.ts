@@ -875,9 +875,9 @@ export function formatHistoryMessage(phoneNumber: string, lang: Lang = 'en'): st
 export function formatDashboardMessage(phoneNumber: string, lang: Lang = 'en'): string {
   const url = `${FRONTEND_URL}/wallet?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
-    en: () => `Your Sippy dashboard — balance, activity, send, pay QR, fund:\n${url}`,
-    es: () => `Tu panel de Sippy — saldo, actividad, enviar, mi QR, recargar:\n${url}`,
-    pt: () => `Seu painel Sippy — saldo, atividade, enviar, meu QR, recarregar:\n${url}`,
+    en: () => `Your Sippy dashboard: balance, activity, send, pay QR, fund.\n${url}`,
+    es: () => `Tu panel de Sippy: saldo, actividad, enviar, mi QR, recargar.\n${url}`,
+    pt: () => `Seu painel Sippy: saldo, atividade, enviar, meu QR, recarregar.\n${url}`,
   }
   return m[lang]()
 }
@@ -1484,7 +1484,7 @@ export function formatAmountBelowMinWithContext(
   }
   const m = {
     en: () =>
-      `${args.localAmount} ${currencyWord} is about ${formatCurrencyUSD(args.usdcAmount)} USDC — below the 0.10 USDC minimum. How much ${currencyWord} do you want to send to ${args.recipientLabel}?`,
+      `${args.localAmount} ${currencyWord} is about ${formatCurrencyUSD(args.usdcAmount)} USDC, below the 0.10 USDC minimum. How much ${currencyWord} do you want to send to ${args.recipientLabel}?`,
     es: () =>
       `${args.localAmount} ${currencyWord} son aproximadamente ${formatCurrencyUSD(args.usdcAmount)} USDC, menos del minimo de 0.10 USDC. ¿Cuanto quieres enviar a ${args.recipientLabel} en ${currencyWord}?`,
     pt: () =>

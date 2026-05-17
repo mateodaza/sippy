@@ -266,8 +266,8 @@ function pendingStateForAmbiguous(c: SmartClassification): SmartPendingState | u
       // MUST also seed `localCurrency` — otherwise the next-turn resolver
       // has no FX signal and the synthesized command sends face value as
       // USDC (the May-17 "ok 1000 pesos → $1000.00 USDC" bug). Mirrors
-      // the action-path synthesizer at line 304-308 which sets both
-      // amount and localCurrency for the same reason.
+      // the local-currency branch in `synthesizeParsedCommand` below,
+      // which sets both `amount` and `localCurrency` for the same reason.
       partial.amount = slots.localAmount
       partial.localCurrency = slots.localCurrency
     }
@@ -321,9 +321,9 @@ function synthesizeParsedCommand(
   const slots = c.slots ?? undefined
   if (slots) {
     // Currency-amount semantics MUST mirror the existing regex parser
-    // (`parseSendMatch` in message_parser.ts:639-645): when the message
-    // carries a local currency word, BOTH `amount` and `localAmount` get
-    // the same raw pre-conversion value. The downstream FX step replaces
+    // (`parseSendMatch` in `message_parser.ts`): when the message carries
+    // a local currency word, BOTH `amount` and `localAmount` get the
+    // same raw pre-conversion value. The downstream FX step replaces
     // `amount` with the USDC equivalent using `localCurrency` as the
     // signal. Setting only `localAmount` would skip conversion entirely.
     //
