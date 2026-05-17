@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Info } from 'lucide-react'
+import { Info, Send as SendIcon, QrCode, Plus, Share2 } from 'lucide-react'
 import { useSendUserOperation } from '@coinbase/cdp-hooks'
 import { SippyPhoneInput } from '@/components/ui/phone-input'
 import { getStoredToken, clearToken } from '@/lib/auth'
@@ -61,6 +61,11 @@ import { CDPProviderDefault } from '../providers/cdp-provider'
 const NETWORK = process.env.NEXT_PUBLIC_SIPPY_NETWORK || 'arbitrum'
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
 const CDP_PROJECT_ID = process.env.NEXT_PUBLIC_CDP_PROJECT_ID || ''
+// External Coinbase / fallback fund URL. Used when the user's phone is NOT
+// Colombian (Colombian phones get routed to /onramp for Colurs COP→USDC).
+// Mirrors the bot's `fund` command routing rule in webhook_controller.ts.
+const FUND_URL = process.env.NEXT_PUBLIC_FUND_URL || 'https://fund.sippy.lat'
+const SIPPY_WA_NUMBER = process.env.NEXT_PUBLIC_SIPPY_WHATSAPP_NUMBER || '+14722261449'
 
 type SendStep = 'form' | 'confirm' | 'sending' | 'success' | 'error'
 type SendFrom = 'whatsapp' | 'web'
@@ -115,6 +120,11 @@ function WalletContent() {
   const [activity, setActivity] = useState<NormalizedTransaction[]>([])
   const [isLoadingData, setIsLoadingData] = useState(false)
   const [walletDrift, setWalletDrift] = useState(false)
+  // Verified phone from /api/wallet-status — used as the fallback source of
+  // truth when the URL has no ?phone= (e.g. user navigated to /wallet
+  // directly from a bookmark). Without this fallback, the Fund action
+  // routes +57 users to the external onramp instead of /onramp.
+  const [walletStatusPhone, setWalletStatusPhone] = useState<string | null>(null)
 
   // Send state
   const [sendStep, setSendStep] = useState<SendStep>('form')
@@ -180,6 +190,11 @@ function WalletContent() {
       })
       if (statusRes.ok) {
         const status = await statusRes.json()
+        // Capture the verified phone regardless of wallet presence — the
+        // dashboard action row uses it to decide fund routing (+57 → /onramp).
+        if (typeof status.phoneNumber === 'string') {
+          setWalletStatusPhone(status.phoneNumber)
+        }
         if (status.walletAddress) {
           freshEoaAddress = status.walletAddress
           setEoaAddress(freshEoaAddress)
@@ -402,6 +417,71 @@ function WalletContent() {
 
   const handleMax = () => {
     if (activeBalance) setAmount(activeBalance.usdc)
+  }
+
+  // ── Dashboard action row handlers ─────────────────────────────────────────
+
+  // Scroll to the inline send form. The Send card is a quick affordance —
+  // clicking it shouldn't navigate away, just jump the user to the form
+  // below. Kept inline (per the 2026-05-17 IA decision) so we don't have
+  // to deal with modal state for a primary wallet action. Intentionally
+  // does NOT auto-focus the first input — on mobile that pops the
+  // keyboard mid-scroll which is jarring.
+  const handleSendCardClick = () => {
+    const el = document.getElementById('wallet-send-section')
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // Fund routing mirrors the bot's `fund` command (webhook_controller.ts):
+  // +57 phones land on the Colombian onramp (Colurs COP→USDC); everyone
+  // else goes to the external Coinbase / FUND_URL.
+  //
+  // Prefer the verified phone from /api/wallet-status over the URL param —
+  // a bookmarked /wallet visit has no ?phone= and would otherwise drop
+  // +57 users to the external onramp by mistake. Fall back to FUND_URL
+  // when neither source has a phone (defensive — a phoneless /onramp
+  // landing is worse than the external link).
+  const rampPhone = phoneFromUrl || walletStatusPhone || ''
+  const fundHref = rampPhone.startsWith('+57')
+    ? `/onramp?phone=${encodeURIComponent(rampPhone)}`
+    : FUND_URL
+
+  // Invite uses Web Share API when present (mobile native sheet), falls
+  // back to clipboard copy with a brief inline toast. The shared link is
+  // a wa.me URL to Sippy's bot — opens WhatsApp directly with a pre-
+  // filled greeting, the fastest path to first send for a new user.
+  //
+  // Critical: navigator.share treats `text` and `url` as separate fields
+  // and many share targets (iOS WhatsApp / Messages / Mail) auto-append
+  // the URL after the text. So `text` MUST NOT contain the URL — passing
+  // both would render the link twice. For clipboard, we concatenate
+  // (no separate URL field).
+  const [inviteCopied, setInviteCopied] = useState(false)
+  const handleInviteClick = async () => {
+    const waUrl = `https://wa.me/${SIPPY_WA_NUMBER.replace(/\D/g, '')}?text=${encodeURIComponent(
+      'Hey Sippy!'
+    )}`
+    const invitationCopy = t('wallet.invite.shareText', lang)
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({
+          title: t('wallet.invite.shareTitle', lang),
+          text: invitationCopy,
+          url: waUrl,
+        })
+        return
+      } catch {
+        // User cancelled or share failed — fall through to clipboard.
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(`${invitationCopy} ${waUrl}`)
+      setInviteCopied(true)
+      setTimeout(() => setInviteCopied(false), 2000)
+    } catch {
+      // Clipboard write blocked (rare on https in modern browsers).
+      // No-op — the user can long-press the bot link below if needed.
+    }
   }
 
   // ============================================================================
@@ -658,8 +738,69 @@ function WalletContent() {
           )}
         </div>
 
+        {/* Dashboard action row — 4 quick-access cards. Send scrolls to the
+            inline form below; Pay QR / Fund deep-link to their pages; Invite
+            opens the native share sheet (or copies a wa.me invite link).
+            Intentionally placed BETWEEN balance and the inline send form so
+            users who land here for a primary action see all four entry
+            points in one glance. */}
+        <div className="grid grid-cols-4 gap-2">
+          <button
+            type="button"
+            onClick={handleSendCardClick}
+            className="flex flex-col items-center gap-2 bg-[var(--bg-primary)] panel-frame rounded-2xl py-3 px-2 hover:bg-[var(--bg-secondary)] transition-colors"
+            aria-label={t('wallet.action.send', lang)}
+          >
+            <SendIcon className="w-5 h-5 text-brand-primary" strokeWidth={2.5} />
+            <span className="text-xs font-semibold text-[var(--text-primary)]">
+              {t('wallet.action.send', lang)}
+            </span>
+          </button>
+          <a
+            href="/wallet/pay-qr"
+            className="flex flex-col items-center gap-2 bg-[var(--bg-primary)] panel-frame rounded-2xl py-3 px-2 hover:bg-[var(--bg-secondary)] transition-colors"
+            aria-label={t('wallet.action.payQr', lang)}
+          >
+            <QrCode className="w-5 h-5 text-brand-primary" strokeWidth={2.5} />
+            <span className="text-xs font-semibold text-[var(--text-primary)]">
+              {t('wallet.action.payQr', lang)}
+            </span>
+          </a>
+          <a
+            href={fundHref}
+            target={fundHref.startsWith('http') ? '_blank' : undefined}
+            rel={fundHref.startsWith('http') ? 'noopener noreferrer' : undefined}
+            className="flex flex-col items-center gap-2 bg-[var(--bg-primary)] panel-frame rounded-2xl py-3 px-2 hover:bg-[var(--bg-secondary)] transition-colors"
+            aria-label={t('wallet.action.fund', lang)}
+          >
+            <Plus className="w-5 h-5 text-brand-primary" strokeWidth={2.5} />
+            <span className="text-xs font-semibold text-[var(--text-primary)]">
+              {t('wallet.action.fund', lang)}
+            </span>
+          </a>
+          <button
+            type="button"
+            onClick={handleInviteClick}
+            className="flex flex-col items-center gap-2 bg-[var(--bg-primary)] panel-frame rounded-2xl py-3 px-2 hover:bg-[var(--bg-secondary)] transition-colors relative"
+            aria-label={t('wallet.action.invite', lang)}
+          >
+            <Share2 className="w-5 h-5 text-brand-primary" strokeWidth={2.5} />
+            <span className="text-xs font-semibold text-[var(--text-primary)]">
+              {t('wallet.action.invite', lang)}
+            </span>
+            {inviteCopied && (
+              <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] bg-[var(--text-primary)] text-[var(--bg-primary)] px-2 py-0.5 rounded">
+                {t('wallet.invite.copied', lang)}
+              </span>
+            )}
+          </button>
+        </div>
+
         {/* Send section */}
-        <div className="bg-[var(--bg-primary)] panel-frame rounded-2xl p-6">
+        <div
+          id="wallet-send-section"
+          className="bg-[var(--bg-primary)] panel-frame rounded-2xl p-6 scroll-mt-4"
+        >
           <h2 className="font-display text-lg font-bold uppercase text-[var(--text-primary)] mb-4">
             {t('wallet.send', lang)}
           </h2>
