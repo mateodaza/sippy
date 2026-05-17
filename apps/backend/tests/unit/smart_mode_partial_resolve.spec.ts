@@ -34,6 +34,7 @@ import db from '@adonisjs/lucid/services/db'
 import type { PartialSend } from '#types/index'
 import { resolvePartialSend, resolvePendingInvite } from '#controllers/webhook_controller'
 import type { SmartPendingState } from '#services/smart_mode/dispatcher'
+import { formatAskForRecipient } from '#utils/messages'
 
 const OWNER = '+573009999999'
 const RECIPIENT = '+573001234567'
@@ -439,5 +440,47 @@ test.group('partial_resolve | alias resolution (P2)', (group) => {
     if (!cmd) return
     assert.equal(cmd.command, 'invite')
     assert.equal(cmd.recipient, CARLOS_PHONE)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Display polish — formatAskForRecipient agrees with the dispatcher echo
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// The partial-progress prompt and the SMART deterministic echo are two
+// independent code paths that BOTH need to surface the user's currency
+// word; otherwise mid-flow it looks like Sippy is about to send USDC
+// at the local face value (the May-17 audit P3). These tests pin
+// formatAskForRecipient's side; the dispatcher's side is pinned in
+// smart_mode_dispatcher.spec.ts via the LOCAL/BRL seed tests.
+
+test.group('formatAskForRecipient | currency-aware echo (P3)', () => {
+  test('no localCurrency renders USD format', ({ assert }) => {
+    const out = formatAskForRecipient(200, 'es')
+    assert.include(out, '$200', 'USDC case must use $ formatting')
+    assert.notInclude(out, 'pesos')
+  })
+
+  test('LOCAL renders as "pesos" (most common LATAM)', ({ assert }) => {
+    const out = formatAskForRecipient(200, 'es', 'LOCAL')
+    assert.include(out, '200 pesos')
+    assert.notInclude(out, '$200', 'must NOT use USD formatting when local currency is set')
+  })
+
+  test('BRL renders as "reais"', ({ assert }) => {
+    const out = formatAskForRecipient(50, 'pt', 'BRL')
+    assert.include(out, '50 reais')
+  })
+
+  test('PEN renders as "soles"', ({ assert }) => {
+    const out = formatAskForRecipient(10, 'es', 'PEN')
+    assert.include(out, '10 soles')
+  })
+
+  test('unknown currency code falls back to USD format (no crash)', ({ assert }) => {
+    // Defensive: if a future schema adds a code without updating the
+    // word map, we'd rather show $X than crash or print "5 undefined".
+    const out = formatAskForRecipient(5, 'en', 'ZZZ')
+    assert.include(out, '$5')
   })
 })

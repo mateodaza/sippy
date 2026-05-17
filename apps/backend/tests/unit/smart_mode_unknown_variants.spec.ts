@@ -7,8 +7,10 @@
  *   • Gibberish ignores oosRedirect (classifier schema invariant)
  *   • Same text → same variant (deterministic, no flicker on resend)
  *   • Different text → different distribution across the pool
- *   • Spanish dialect (co/mx/ar/ve) widens the ES pool
- *   • Non-ES langs ignore the dialect arg
+ *   • Spanish stays neutral across LATAM — `dialect` is accepted but
+ *     IGNORED (regional slang felt off in 2026-05-17 field test; see
+ *     unknown_variants.ts header for rationale). The Spanish neutrality
+ *     group also guards against slang particles re-entering on edit.
  *   • Hash never throws on empty / unicode / very long input
  */
 
@@ -195,29 +197,33 @@ test.group('unknown_variants | oosRedirect override', () => {
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Spanish dialect widening
+// Spanish neutrality — dialect-flavored pools intentionally empty
+// (regional slang like "parce" / "pille" felt off in 2026-05-17 field test;
+// see unknown_variants.ts header for rationale)
 // ══════════════════════════════════════════════════════════════════════════════
 
-test.group('unknown_variants | ES dialect widening', () => {
-  test('ES+co OOS pool includes both neutral and co-flavored entries', ({ assert }) => {
+test.group('unknown_variants | ES stays neutral across dialects', () => {
+  test('ES+co OOS pool equals the neutral pool (no dialect widening)', ({ assert }) => {
     const pool = __testing.getVariantPool('out_of_scope', 'es', 'co')
-    for (const v of __testing.OOS_BASE.es) assert.include(pool, v)
-    for (const v of __testing.OOS_ES_DIALECT.co ?? []) assert.include(pool, v)
-    assert.equal(
-      pool.length,
-      __testing.OOS_BASE.es.length + (__testing.OOS_ES_DIALECT.co?.length ?? 0)
-    )
+    assert.deepEqual(pool, __testing.OOS_BASE.es)
   })
 
-  test('ES+mx gibberish pool widens with mx-flavored entries', ({ assert }) => {
+  test('ES+mx gibberish pool equals the neutral pool', ({ assert }) => {
     const pool = __testing.getVariantPool('gibberish', 'es', 'mx')
-    assert.isAbove(pool.length, __testing.GIBBERISH_BASE.es.length)
-    for (const v of __testing.GIBBERISH_ES_DIALECT.mx ?? []) assert.include(pool, v)
+    assert.deepEqual(pool, __testing.GIBBERISH_BASE.es)
   })
 
-  test('ES+neutral does NOT add dialect entries', ({ assert }) => {
+  test('ES+neutral matches the base pool', ({ assert }) => {
     const pool = __testing.getVariantPool('out_of_scope', 'es', 'neutral')
-    assert.equal(pool.length, __testing.OOS_BASE.es.length)
+    assert.deepEqual(pool, __testing.OOS_BASE.es)
+  })
+
+  test('no Spanish variant contains regional slang particles', ({ assert }) => {
+    // Hard guard against slang re-entering the table on a future edit.
+    const SLANG = /\b(parce|pille|pana|chamo|wey|guey|che|boludo|bacano|chido)\b/i
+    for (const v of __testing.OOS_BASE.es) assert.notMatch(v, SLANG, `OOS variant has slang: ${v}`)
+    for (const v of __testing.GIBBERISH_BASE.es)
+      assert.notMatch(v, SLANG, `gibberish variant has slang: ${v}`)
   })
 
   test('EN ignores dialect arg', ({ assert }) => {

@@ -789,8 +789,38 @@ export function formatAskForAmount(recipient: string, lang: Lang = 'en'): string
   return m[lang]()
 }
 
-export function formatAskForRecipient(amount: number, lang: Lang = 'en'): string {
-  const amt = formatCurrencyUSD(amount)
+/**
+ * Map of FX currency codes to the human word users typed. Used to echo
+ * the amount back in the recipient prompt: when the user said "200 pesos"
+ * we should ask "200 pesos a quien?", not "$200.00 a quien?" (which
+ * looks like a USDC send and panicked a tester on 2026-05-17 even
+ * though the conversion runs correctly at the next turn).
+ *
+ * `LOCAL` defaults to "pesos" because every market we serve that uses
+ * the LOCAL sentinel (COP, MXN, ARS) calls the currency "pesos".
+ */
+const CURRENCY_WORD_BY_CODE: Record<string, string> = {
+  LOCAL: 'pesos',
+  BRL: 'reais',
+  PEN: 'soles',
+  HNL: 'lempiras',
+  GTQ: 'quetzales',
+  CRC: 'colones',
+  VES: 'bolivares',
+  PYG: 'guaranies',
+}
+
+export function formatAskForRecipient(
+  amount: number,
+  lang: Lang = 'en',
+  localCurrency?: string
+): string {
+  // When the partial carries a local-currency signal, echo the user's
+  // original phrasing ("200 pesos a quien?") so it doesn't look like
+  // Sippy is about to send USDC face value. FX runs on the completing
+  // turn regardless; this is purely a display fix.
+  const word = localCurrency ? CURRENCY_WORD_BY_CODE[localCurrency] : undefined
+  const amt = word ? `${amount} ${word}` : formatCurrencyUSD(amount)
   const m = {
     en: () => `${amt} to whom? Send me the phone number.`,
     es: () => `${amt} a quien? Mandame el numero de telefono.`,

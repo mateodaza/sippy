@@ -24,9 +24,12 @@
  *   • The same exact retry sees the same variant (no flicker on resend).
  *   • Selection is deterministic — testable without seeding randomness.
  *
- * Spanish dialect (co/mx/ar/ve) layers extra dialect-flavored entries on
- * top of the neutral pool, matching the pattern already in
- * `formatUnknownCommandMessage`. Other languages get a single pool.
+ * Spanish stays neutral across LATAM dialects on purpose: regional slang
+ * particles (parce, pille, etc.) felt off in field testing on 2026-05-17,
+ * so the dialect-widening pools were removed. `dialect` is still accepted
+ * in the API so callers don't break, but it's currently ignored. If a
+ * future revisit adds back regional flavor, mirror the SUBTLE pattern in
+ * `formatUnknownCommandMessage` (vocab swaps like plata/dinero, not slang).
  *
  * Pure module: no DB, no clock, no I/O.
  */
@@ -85,47 +88,11 @@ const GIBBERISH_BASE: Record<Lang, string[]> = {
   ],
 }
 
-// Spanish dialect extras — appended to the neutral pool to widen variety
-// AND give regional users phrasing that feels native (plata vs dinero,
-// vos vs tu, etc.). Mirrors the dialect logic in
-// `formatUnknownCommandMessage` (messages.ts:863-871).
-const OOS_ES_DIALECT: Partial<Record<Dialect, string[]>> = {
-  co: [
-    `No es lo mio, parce — pero te puedo mostrar el saldo o enviar plata.`,
-    `Eso no lo manejo. Probemos con "saldo" o "envia 5 a ...".`,
-  ],
-  mx: [
-    `No es lo mio — pero te puedo mostrar el saldo o enviar dinero.`,
-    `Eso no lo hago. Probemos con "saldo" o "envia 5 a ...".`,
-  ],
-  ar: [
-    `No es lo mio — pero te puedo mostrar el saldo o enviar plata.`,
-    `Eso no lo manejo. Probemos con "saldo" o "envia 5 a ...".`,
-  ],
-  ve: [
-    `No es lo mio — pero te puedo mostrar el saldo o enviar plata.`,
-    `Eso no lo manejo. Probemos con "saldo" o "envia 5 a ...".`,
-  ],
-}
-
-const GIBBERISH_ES_DIALECT: Partial<Record<Dialect, string[]>> = {
-  co: [
-    `No te entendi, parce. Di "saldo" para ver cuanta plata tienes.`,
-    `No pille la idea. Probemos: "saldo", "enviar", o "ayuda".`,
-  ],
-  mx: [
-    `No te entendi. Di "saldo" para ver cuanto dinero tienes.`,
-    `No me cuadra. Probemos: "saldo", "enviar", o "ayuda".`,
-  ],
-  ar: [
-    `No te entendi. Deci "saldo" para ver cuanta plata tenes.`,
-    `No me cierra. Probemos: "saldo", "enviar", o "ayuda".`,
-  ],
-  ve: [
-    `No te entendi. Di "saldo" para ver cuanta plata tienes.`,
-    `No me cuadra. Probemos: "saldo", "enviar", o "ayuda".`,
-  ],
-}
+// Dialect-flavored pools intentionally empty — see module header for the
+// rationale. Kept as named exports so the `getVariantPool` shape (and the
+// `__testing` export the spec uses) stays stable for any future revisit.
+const OOS_ES_DIALECT: Partial<Record<Dialect, string[]>> = {}
+const GIBBERISH_ES_DIALECT: Partial<Record<Dialect, string[]>> = {}
 
 // ── Selector ────────────────────────────────────────────────────────────
 

@@ -184,6 +184,25 @@ export async function dispatchSmartMode(args: DispatchArgs): Promise<DispatcherO
   return { kind: 'fall_through', oosRedirect: null, classification }
 }
 
+/**
+ * Map of FX currency codes to the human word users typed. Mirrors the
+ * map in `messages.ts` so the SMART deterministic echo agrees with
+ * `formatAskForRecipient` on the legacy partial-send progress path —
+ * both must show "1000 pesos a quien?" (not "1000 a quien?" or
+ * "$1000.00 a quien?") when a local currency is in play, otherwise
+ * the user can't tell whether Sippy is about to send USDC at face value.
+ */
+const CURRENCY_WORD_BY_CODE: Record<string, string> = {
+  LOCAL: 'pesos',
+  BRL: 'reais',
+  PEN: 'soles',
+  HNL: 'lempiras',
+  GTQ: 'quetzales',
+  CRC: 'colones',
+  VES: 'bolivares',
+  PYG: 'guaranies',
+}
+
 function deterministicAmbiguousReply(
   c: SmartClassification,
   lang: 'en' | 'es' | 'pt'
@@ -195,7 +214,11 @@ function deterministicAmbiguousReply(
 
     if (hasAmount && !hasRecipient) {
       const amount = slots?.amount ?? slots?.localAmount
-      const formatted = amount != null ? `${amount}` : ''
+      const currencyWord = slots?.localCurrency
+        ? CURRENCY_WORD_BY_CODE[slots.localCurrency]
+        : undefined
+      const formatted =
+        amount != null ? (currencyWord ? `${amount} ${currencyWord}` : `${amount}`) : ''
       const m = {
         en: () => `${formatted} to whom? Send me the phone number or contact name.`,
         es: () => `${formatted} a quien? Mandame el numero o el nombre del contacto.`,
@@ -240,7 +263,13 @@ function pendingStateForAmbiguous(c: SmartClassification): SmartPendingState | u
     if (slots?.amount != null) {
       partial.amount = slots.amount
     } else if (slots?.localAmount != null && slots.localCurrency) {
+      // MUST also seed `localCurrency` — otherwise the next-turn resolver
+      // has no FX signal and the synthesized command sends face value as
+      // USDC (the May-17 "ok 1000 pesos → $1000.00 USDC" bug). Mirrors
+      // the action-path synthesizer at line 304-308 which sets both
+      // amount and localCurrency for the same reason.
       partial.amount = slots.localAmount
+      partial.localCurrency = slots.localCurrency
     }
     if (slots?.recipientRaw) {
       const canon = canonicalizePhone(slots.recipientRaw)

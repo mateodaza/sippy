@@ -688,13 +688,26 @@ export async function routeCommand(
             await sendMessageFn(phoneNumber, confirmPrompt, lang)
           }
         } else if (command.amount && !command.recipient) {
-          // Has amount, missing recipient → store partial, ask for phone or alias
+          // Has amount, missing recipient → store partial, ask for phone or alias.
+          // Persist `localCurrency` when present so the next-turn resolver
+          // can synthesize a complete send with FX still wired up — without
+          // this, "envia 200 pesos" with no recipient stored amount=200
+          // and the follow-up "+57…" produced a $200 USDC send (same
+          // class of bug as the SMART dispatcher ambiguous-seed path).
+          // Echo with the original currency word for the same reason the
+          // amount needs to display correctly mid-flow (see
+          // formatAskForRecipient header).
           partialSends.set(phoneNumber, {
             amount: command.amount,
+            localCurrency: command.localCurrency,
             timestamp: Date.now(),
             lang,
           })
-          await sendMessageFn(phoneNumber, formatAskForRecipient(command.amount, lang), lang)
+          await sendMessageFn(
+            phoneNumber,
+            formatAskForRecipient(command.amount, lang, command.localCurrency),
+            lang
+          )
         } else if (command.recipient && !command.amount) {
           // Has recipient, missing amount → store partial, ask for amount
           partialSends.set(phoneNumber, {
@@ -1656,7 +1669,7 @@ export default class WebhookController {
           (await getUserLanguage(from)) || resolved.partial.lang || getLanguageForPhone(from)
         const prompt =
           resolved.prompt === 'recipient'
-            ? formatAskForRecipient(resolved.partial.amount!, lang)
+            ? formatAskForRecipient(resolved.partial.amount!, lang, resolved.partial.localCurrency)
             : formatAskForAmount(resolved.partial.recipient!, lang)
         try {
           await sendTextMessage(from, prompt, lang)

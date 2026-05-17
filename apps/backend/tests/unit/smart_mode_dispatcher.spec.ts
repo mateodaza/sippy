@@ -294,6 +294,93 @@ test.group('dispatcher | ambiguous → reply', () => {
     assert.isTrue(out.pending.partial.sendIntent)
   })
 
+  test('local-currency amount (1000 pesos, no recipient) seeds partial with localCurrency', async ({
+    assert,
+  }) => {
+    // Regression for the May-17 "ok 1000 pesos → $1000.00 USDC" money bug.
+    // Classifier emits localAmount+localCurrency for "pesos"; dispatcher
+    // MUST seed both into the partial, otherwise the next-turn resolver
+    // synthesizes a USDC send at the LOCAL face value.
+    const client = mockClient({
+      category: 'ambiguous',
+      intent: 'send',
+      confidence: 0.7,
+      reasoning: 'send with local-currency amount, no recipient',
+      clarifying_question: '¿A quién?',
+      oos_redirect: null,
+      slots: { localAmount: 1000, localCurrency: 'LOCAL' },
+      detectedLang: 'es',
+    })
+
+    const out = await dispatchSmartMode({ ...BASE_ARGS, clientFactory: () => client })
+
+    assert.equal(out.kind, 'reply')
+    if (out.kind !== 'reply') return
+    assert.equal(out.pending?.kind, 'send')
+    if (out.pending?.kind !== 'send') return
+    assert.equal(out.pending.partial.amount, 1000, 'amount taken from localAmount')
+    assert.equal(
+      out.pending.partial.localCurrency,
+      'LOCAL',
+      'localCurrency MUST seed so FX runs on the completing turn'
+    )
+    assert.isTrue(out.pending.partial.sendIntent)
+    // Echo MUST surface the currency word so the user can tell Sippy
+    // didn't read "1000 pesos" as $1000 USDC. Pins the display polish
+    // from the May-17 audit.
+    assert.include(out.text, '1000 pesos', `echo dropped currency word: "${out.text}"`)
+  })
+
+  test('BRL local-currency amount also seeds localCurrency', async ({ assert }) => {
+    const client = mockClient({
+      category: 'ambiguous',
+      intent: 'send',
+      confidence: 0.7,
+      reasoning: 'send 50 reais, no recipient',
+      clarifying_question: '¿Pra quem?',
+      oos_redirect: null,
+      slots: { localAmount: 50, localCurrency: 'BRL' },
+      detectedLang: 'pt',
+    })
+
+    const out = await dispatchSmartMode({
+      ...BASE_ARGS,
+      preferredLang: 'pt',
+      clientFactory: () => client,
+    })
+
+    if (out.kind !== 'reply') throw new Error('expected reply')
+    if (out.pending?.kind !== 'send') throw new Error('expected send pending')
+    assert.equal(out.pending.partial.amount, 50)
+    assert.equal(out.pending.partial.localCurrency, 'BRL')
+    assert.include(out.text, '50 reais', `echo must include currency word: "${out.text}"`)
+  })
+
+  test('USDC amount (no currency word) does NOT set localCurrency on partial', async ({
+    assert,
+  }) => {
+    // Inverse check: when classifier returns `amount` (USDC), the partial
+    // must NOT have a localCurrency, otherwise the completing turn would
+    // mistakenly trigger FX on a USDC-denominated send.
+    const client = mockClient({
+      category: 'ambiguous',
+      intent: 'send',
+      confidence: 0.7,
+      reasoning: 'send 5 USDC, no recipient',
+      clarifying_question: '¿A quién?',
+      oos_redirect: null,
+      slots: { amount: 5 },
+      detectedLang: 'es',
+    })
+
+    const out = await dispatchSmartMode({ ...BASE_ARGS, clientFactory: () => client })
+
+    if (out.kind !== 'reply') throw new Error('expected reply')
+    if (out.pending?.kind !== 'send') throw new Error('expected send pending')
+    assert.equal(out.pending.partial.amount, 5)
+    assert.isUndefined(out.pending.partial.localCurrency, 'USDC send must not seed localCurrency')
+  })
+
   test('send missing both slots seeds send-intent partial', async ({ assert }) => {
     const client = mockClient({
       category: 'ambiguous',
