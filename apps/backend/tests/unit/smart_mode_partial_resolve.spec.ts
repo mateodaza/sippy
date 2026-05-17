@@ -34,7 +34,11 @@ import db from '@adonisjs/lucid/services/db'
 import type { PartialSend } from '#types/index'
 import { resolvePartialSend, resolvePendingInvite } from '#controllers/webhook_controller'
 import type { SmartPendingState } from '#services/smart_mode/dispatcher'
-import { formatAskForRecipient } from '#utils/messages'
+import {
+  formatAskForRecipient,
+  formatAmountBelowMinWithContext,
+  formatInsufficientBalanceRetryHint,
+} from '#utils/messages'
 
 const OWNER = '+573009999999'
 const RECIPIENT = '+573001234567'
@@ -482,5 +486,185 @@ test.group('formatAskForRecipient | currency-aware echo (P3)', () => {
     // word map, we'd rather show $X than crash or print "5 undefined".
     const out = formatAskForRecipient(5, 'en', 'ZZZ')
     assert.include(out, '$5')
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Post-error memory: formatAmountBelowMinWithContext (TOO_SMALL after FX)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// The May-17 transcript: "envia 200 pesos → +57... → El monto mínimo es
+// 0.10 USDC" was opaque — user couldn't tell that 200 pesos converted to
+// ~$0.05 and the recipient was preserved for retry. These tests pin the
+// context-aware copy the webhook now sends instead.
+
+test.group('formatAmountBelowMinWithContext | TOO_SMALL with context (P1)', () => {
+  test('ES with LOCAL currency names the amount + USD + recipient + currency word', ({
+    assert,
+  }) => {
+    const out = formatAmountBelowMinWithContext(
+      { localAmount: 200, localCurrency: 'LOCAL', usdcAmount: 0.05, recipientLabel: '***7266' },
+      'es'
+    )
+    assert.include(out, '200 pesos', 'must show original amount with currency word')
+    assert.include(out, '$0.05', 'must show USDC conversion so failure is obvious')
+    assert.include(out, '0.10 USDC', 'must show the minimum threshold')
+    assert.include(out, '***7266', 'must name the preserved recipient')
+    assert.include(out, 'pesos', 'must ask for amount IN THE SAME currency')
+  })
+
+  test('ES with BRL renders "reais"', ({ assert }) => {
+    const out = formatAmountBelowMinWithContext(
+      { localAmount: 50, localCurrency: 'BRL', usdcAmount: 0.08, recipientLabel: 'Carlos' },
+      'es'
+    )
+    assert.include(out, '50 reais')
+    assert.include(out, 'Carlos')
+  })
+
+  test('PT-BR variant uses Portuguese phrasing', ({ assert }) => {
+    const out = formatAmountBelowMinWithContext(
+      { localAmount: 100, localCurrency: 'BRL', usdcAmount: 0.09, recipientLabel: '***7266' },
+      'pt'
+    )
+    assert.include(out, '100 reais')
+    assert.include(out, 'Quanto')
+  })
+
+  test('falls back to plain USD copy when no local currency context', ({ assert }) => {
+    // Direct USDC sub-min (e.g. "envia 0.05") — no currency word to echo,
+    // but still includes the recipient + asks for a new amount.
+    const out = formatAmountBelowMinWithContext(
+      { usdcAmount: 0.05, recipientLabel: '***7266' },
+      'es'
+    )
+    assert.include(out, '$0.05')
+    assert.include(out, '***7266')
+    assert.notInclude(out, 'pesos', 'no currency word when none provided')
+  })
+
+  test('unknown currency code degrades gracefully (no "undefined" leak)', ({ assert }) => {
+    const out = formatAmountBelowMinWithContext(
+      { localAmount: 99, localCurrency: 'ZZZ', usdcAmount: 0.01, recipientLabel: 'X' },
+      'es'
+    )
+    assert.notInclude(out, 'undefined')
+    assert.include(out, '$0.01')
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Post-error memory: formatInsufficientBalanceRetryHint
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('formatInsufficientBalanceRetryHint | currency-aware retry suffix', () => {
+  test('with localCurrency, suggests smaller amount in the same currency', ({ assert }) => {
+    const out = formatInsufficientBalanceRetryHint(
+      { recipientLabel: '***7266', localCurrency: 'LOCAL' },
+      'es'
+    )
+    assert.include(out, 'pesos')
+    assert.include(out, '***7266')
+    assert.include(out, 'menor')
+  })
+
+  test('without localCurrency, just suggests smaller amount', ({ assert }) => {
+    const out = formatInsufficientBalanceRetryHint({ recipientLabel: '***7266' }, 'es')
+    assert.include(out, 'menor')
+    assert.include(out, '***7266')
+    assert.notInclude(out, 'pesos')
+  })
+
+  test('all three langs render', ({ assert }) => {
+    const en = formatInsufficientBalanceRetryHint({ recipientLabel: 'X' }, 'en')
+    const es = formatInsufficientBalanceRetryHint({ recipientLabel: 'X' }, 'es')
+    const pt = formatInsufficientBalanceRetryHint({ recipientLabel: 'X' }, 'pt')
+    assert.include(en, 'smaller')
+    assert.include(es, 'menor')
+    assert.include(pt, 'menor')
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Post-error memory: PartialSend re-seeded with recipient + currency
+// can be RESOLVED by a follow-up amount reply
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// The webhook re-seeds via `reseedRecoverableSendError` on TOO_SMALL /
+// insufficient-balance. The seeded shape is `{recipient, localCurrency}`
+// — the resolver must treat the next standalone amount reply as the
+// missing slot and complete the send WITH the inherited currency.
+
+test.group('partial_resolve | recoverable-error re-seed completes on retry', (group) => {
+  group.each.setup(mockNoAliasMatches)
+  group.each.teardown(restoreAlias)
+
+  test('re-seeded {recipient + LOCAL currency} + "1000" → complete preserving currency', async ({
+    assert,
+  }) => {
+    // Mirrors what reseedRecoverableSendError stores after TOO_SMALL.
+    // User retries with bare amount; resolver must inherit currency.
+    const reseeded: PartialSend = {
+      recipient: RECIPIENT,
+      localCurrency: 'LOCAL',
+      timestamp: Date.now(),
+      lang: 'es',
+    }
+    const out = await resolvePartialSend(reseeded, '1000', OWNER)
+    if (out?.kind !== 'complete') throw new Error(`expected complete, got ${out?.kind}`)
+    assert.equal(out.amount, 1000)
+    assert.equal(out.recipient, RECIPIENT)
+    assert.equal(
+      out.localCurrency,
+      'LOCAL',
+      'inherited currency must travel to the synthesized command for FX'
+    )
+  })
+
+  test('re-seeded + "1000 pesos" (currency echoed by user) also completes with LOCAL', async ({
+    assert,
+  }) => {
+    const reseeded: PartialSend = {
+      recipient: RECIPIENT,
+      localCurrency: 'LOCAL',
+      timestamp: Date.now(),
+      lang: 'es',
+    }
+    const out = await resolvePartialSend(reseeded, '1000 pesos', OWNER)
+    if (out?.kind !== 'complete') throw new Error(`expected complete, got ${out?.kind}`)
+    assert.equal(out.amount, 1000)
+    assert.equal(out.localCurrency, 'LOCAL')
+  })
+
+  test('re-seeded with BRL preserves BRL on retry', async ({ assert }) => {
+    const reseeded: PartialSend = {
+      recipient: RECIPIENT,
+      localCurrency: 'BRL',
+      timestamp: Date.now(),
+      lang: 'pt',
+    }
+    const out = await resolvePartialSend(reseeded, '500', OWNER)
+    if (out?.kind !== 'complete') throw new Error(`expected complete, got ${out?.kind}`)
+    assert.equal(out.localCurrency, 'BRL')
+  })
+
+  test('re-seeded with recipientRaw (unresolved alias) still asks for the missing amount', async ({
+    assert,
+  }) => {
+    // When the failed send had an unresolved alias, the re-seed carries
+    // recipientRaw forward. A bare amount reply on the retry should
+    // PROGRESS (we can resolve once we get the phone) — but a phone
+    // reply would skip ahead to complete. This pins the amount path.
+    const reseeded: PartialSend = {
+      recipientRaw: 'Carlos Mario',
+      localCurrency: 'LOCAL',
+      timestamp: Date.now(),
+      lang: 'es',
+    }
+    const out = await resolvePartialSend(reseeded, '500', OWNER)
+    if (out?.kind !== 'progress') throw new Error(`expected progress, got ${out?.kind}`)
+    assert.equal(out.partial.amount, 500)
+    assert.equal(out.partial.localCurrency, 'LOCAL')
+    assert.equal(out.prompt, 'recipient', 'still need to resolve the recipient')
   })
 })

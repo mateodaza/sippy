@@ -1412,6 +1412,82 @@ export function formatContactNotFound(name: string, lang: Lang): string {
   return m[lang]()
 }
 
+/**
+ * Friendlier TOO_SMALL message used when we know the user's original
+ * amount + currency + intended recipient. Replaces the bare
+ * "El monto mínimo es 0.10 USDC" with a line that:
+ *   1. Shows what they typed AND the USDC conversion (so the failure
+ *      reason is obvious — 200 pesos → ~$0.05 USDC).
+ *   2. Names the recipient (display name or masked phone).
+ *   3. Asks for a new amount in the SAME currency, signaling that Sippy
+ *      kept the recipient + currency context (the partial state was
+ *      re-seeded on the way out — see reseedRecoverableSendError).
+ *
+ * Falls back to `formatAmountTooSmallMessage` when context is missing.
+ */
+export function formatAmountBelowMinWithContext(
+  args: {
+    localAmount?: number
+    localCurrency?: string | null
+    usdcAmount: number
+    recipientLabel: string
+  },
+  lang: Lang
+): string {
+  const currencyWord =
+    args.localCurrency && args.localCurrency in CURRENCY_WORD_BY_CODE
+      ? CURRENCY_WORD_BY_CODE[args.localCurrency]
+      : null
+  // No local currency context — show plain USDC; still useful (names the
+  // recipient + asks for a new amount).
+  if (!currencyWord || args.localAmount == null) {
+    const m = {
+      en: () =>
+        `${formatCurrencyUSD(args.usdcAmount)} is below the 0.10 USDC minimum. How much do you want to send to ${args.recipientLabel}?`,
+      es: () =>
+        `${formatCurrencyUSD(args.usdcAmount)} es menos del minimo de 0.10 USDC. ¿Cuanto quieres enviar a ${args.recipientLabel}?`,
+      pt: () =>
+        `${formatCurrencyUSD(args.usdcAmount)} e menos do minimo de 0.10 USDC. Quanto voce quer enviar para ${args.recipientLabel}?`,
+    }
+    return m[lang]()
+  }
+  const m = {
+    en: () =>
+      `${args.localAmount} ${currencyWord} is about ${formatCurrencyUSD(args.usdcAmount)} USDC — below the 0.10 USDC minimum. How much ${currencyWord} do you want to send to ${args.recipientLabel}?`,
+    es: () =>
+      `${args.localAmount} ${currencyWord} son aproximadamente ${formatCurrencyUSD(args.usdcAmount)} USDC, menos del minimo de 0.10 USDC. ¿Cuanto quieres enviar a ${args.recipientLabel} en ${currencyWord}?`,
+    pt: () =>
+      `${args.localAmount} ${currencyWord} sao cerca de ${formatCurrencyUSD(args.usdcAmount)} USDC, menos do minimo de 0.10 USDC. Quanto voce quer enviar para ${args.recipientLabel} em ${currencyWord}?`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Short follow-up appended after `formatInsufficientBalanceMessage` when
+ * the send fired through a partial-resolution path (so we know the
+ * recipient and can keep them across the retry). The recipient hint is
+ * what tells the user "your context is preserved, just send a smaller
+ * amount" — without it the failure looks total.
+ */
+export function formatInsufficientBalanceRetryHint(
+  args: { recipientLabel: string; localCurrency?: string | null },
+  lang: Lang
+): string {
+  const currencyWord =
+    args.localCurrency && args.localCurrency in CURRENCY_WORD_BY_CODE
+      ? CURRENCY_WORD_BY_CODE[args.localCurrency]
+      : null
+  const suffix = currencyWord ? ` en ${currencyWord}` : ''
+  const en = currencyWord ? ` in ${currencyWord}` : ''
+  const pt = currencyWord ? ` em ${currencyWord}` : ''
+  const m = {
+    en: () => `Want to try a smaller amount${en} to ${args.recipientLabel}?`,
+    es: () => `Quieres intentar con un monto menor${suffix} a ${args.recipientLabel}?`,
+    pt: () => `Quer tentar um valor menor${pt} para ${args.recipientLabel}?`,
+  }
+  return m[lang]()
+}
+
 export function formatAmountError(code: AmountErrorCode, lang: Lang): string {
   switch (code) {
     case 'ZERO':

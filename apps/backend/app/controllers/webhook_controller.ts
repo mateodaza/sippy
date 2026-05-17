@@ -64,6 +64,8 @@ import {
   formatInviteAlreadyOnSippy,
   formatEmailNudge,
   formatInsufficientBalanceMessage,
+  formatAmountBelowMinWithContext,
+  formatInsufficientBalanceRetryHint,
   formatContactNotFound,
   formatPayConfirmationPrompt,
   formatPayQrLinkMessage,
@@ -173,6 +175,46 @@ const CONFIRM_THRESHOLD_DEFAULT = 5
 const ACTIVE_SEND_TIMEOUT_MS = 60_000 // safety valve — clears stuck sends
 const PENDING_TX_TTL_MS = 2 * 60 * 1000 // 2 minutes
 const PENDING_OVERWRITE_TTL_MS = 60_000 // 60 seconds for contact overwrite confirmation
+
+/**
+ * Friendly label for the recipient in retry copy. Display name wins
+ * (alias / pay-QR), otherwise mask the phone to last 4 — never leak
+ * the full number in chat copy when we can avoid it.
+ */
+function recipientLabelFor(command: ParsedCommand): string | null {
+  if (command.recipientDisplayName) return command.recipientDisplayName
+  if (command.recipient) return maskPhone(command.recipient)
+  if (command.recipientRaw) return command.recipientRaw
+  return null
+}
+
+/**
+ * Re-seed `partialSends` after a RECOVERABLE send error so the user can
+ * retry by sending just a replacement amount (or amount + currency word)
+ * and the resolver picks up where we left off — recipient, currency,
+ * pay-QR scan context all preserved across the retry.
+ *
+ * Per the 2026-05-17 design call: only fires for TOO_SMALL (post-FX) and
+ * insufficient-balance. Cancels, confirms, successful sends, self-sends,
+ * invalid phones, and ambiguous aliases MUST NOT re-seed (they're either
+ * terminal or already represented by a different partial state).
+ *
+ * No-op when neither `recipient` nor `recipientRaw` is set — there's
+ * nothing to preserve, and seeding a partial with only `localCurrency`
+ * would confuse the resolver about what to ask for next.
+ */
+function reseedRecoverableSendError(from: string, command: ParsedCommand, lang: Lang): void {
+  if (!command.recipient && !command.recipientRaw) return
+  partialSends.set(from, {
+    recipient: command.recipient,
+    recipientRaw: command.recipientRaw,
+    localCurrency: command.localCurrency,
+    recipientDisplayName: command.recipientDisplayName,
+    payQrScan: command.payQrScan,
+    timestamp: Date.now(),
+    lang,
+  })
+}
 
 // Non-financial intents that should accrue conversation context. Kept outside
 // processWebhook so SMART-routed and regex-routed paths share the same set —
@@ -496,7 +538,30 @@ export async function routeCommand(
             if (rate && rate > 0) {
               const usdcAmount = Math.round((command.localAmount / rate) * 100) / 100
               if (usdcAmount < 0.1) {
-                await sendMessageFn(phoneNumber, formatAmountError('TOO_SMALL', lang), lang)
+                // Context-aware error + re-seed so user can retry with a
+                // larger amount in the SAME currency to the SAME recipient.
+                // Falls back to the plain TOO_SMALL copy when we have no
+                // recipient context to preserve (e.g., classifier-only path
+                // that somehow reached send without a recipient — defensive).
+                const label = recipientLabelFor(command)
+                if (label) {
+                  reseedRecoverableSendError(phoneNumber, command, lang)
+                  await sendMessageFn(
+                    phoneNumber,
+                    formatAmountBelowMinWithContext(
+                      {
+                        localAmount: command.localAmount,
+                        localCurrency: command.localCurrency,
+                        usdcAmount,
+                        recipientLabel: label,
+                      },
+                      lang
+                    ),
+                    lang
+                  )
+                } else {
+                  await sendMessageFn(phoneNumber, formatAmountError('TOO_SMALL', lang), lang)
+                }
                 return
               }
               command.amount = usdcAmount
@@ -620,19 +685,28 @@ export async function routeCommand(
             try {
               const balance = await getEmbeddedBalance(phoneNumber)
               if (balance < command.amount) {
-                await sendMessageFn(
-                  phoneNumber,
-                  formatInsufficientBalanceMessage(
-                    {
-                      balance,
-                      needed: command.amount,
-                      localRate: rateCtx.senderRate,
-                      localCurrency: rateCtx.senderCurrency,
-                    },
-                    lang
-                  ),
+                // Re-seed so user can retry with a smaller amount to the
+                // SAME recipient. Pay-QR scans are also re-seeded — a
+                // payer at a register typically retries with the right
+                // amount rather than walking away.
+                const label = recipientLabelFor(command)
+                reseedRecoverableSendError(phoneNumber, command, lang)
+                const baseMsg = formatInsufficientBalanceMessage(
+                  {
+                    balance,
+                    needed: command.amount,
+                    localRate: rateCtx.senderRate,
+                    localCurrency: rateCtx.senderCurrency,
+                  },
                   lang
                 )
+                const fullMsg = label
+                  ? `${baseMsg}\n\n${formatInsufficientBalanceRetryHint(
+                      { recipientLabel: label, localCurrency: command.localCurrency },
+                      lang
+                    )}`
+                  : baseMsg
+                await sendMessageFn(phoneNumber, fullMsg, lang)
                 return
               }
             } catch (err) {
