@@ -194,12 +194,9 @@ export async function claimPendingPoapInvite(phoneNumber: string): Promise<{
 
   // CTE picks exactly ONE eligible row (with `FOR UPDATE … SKIP LOCKED` so a
   // concurrent call for the same phone doesn't pick the same row), then the
-  // outer UPDATE stamps `poap_invite_sent_at` on that single row.
-  //
-  // Why this matters: an earlier version did a plain `UPDATE … WHERE phone=?`
-  // and read `rows[0]` from RETURNING. If a user was linked to two eligible
-  // events, both rows got stamped but only the first was actually delivered
-  // — silent data loss. LIMIT 1 inside the CTE + locking is the fix.
+  // outer UPDATE stamps `poap_invite_sent_at` on that single row. Without
+  // LIMIT 1, every eligible event link gets stamped but only `rows[0]` is
+  // delivered — silent data loss.
   //
   // Ordering: most-recently-started event first so the freshest invite
   // wins; falls back to user-event-link creation time for deterministic
@@ -247,9 +244,19 @@ export async function claimPendingPoapInvite(phoneNumber: string): Promise<{
 /**
  * Undo the reservation made by claimPendingPoapInvite. Called when the
  * WhatsApp send fails so the invite stays eligible for the next payment.
+ *
+ * Named-object args (vs positional) because both fields are strings and
+ * swapping them silently no-ops the UPDATE — same pattern as captureReferral
+ * elsewhere in the codebase. Race note: if a parallel claim arrives between
+ * the failing send and this release, it sees `poap_invite_sent_at IS NOT NULL`
+ * and no-ops; the release then wipes the reservation, but the parallel
+ * claimer is already past the gate. Acceptable for this low-stakes path.
  */
-export async function releasePoapInvite(phoneNumber: string, eventSlug: string): Promise<void> {
-  const prefKey = await resolveUserPrefKey(phoneNumber)
+export async function releasePoapInvite(args: {
+  phoneNumber: string
+  eventSlug: string
+}): Promise<void> {
+  const prefKey = await resolveUserPrefKey(args.phoneNumber)
   await db.rawQuery(
     `UPDATE user_event_links uel
      SET poap_invite_sent_at = NULL
@@ -257,6 +264,6 @@ export async function releasePoapInvite(phoneNumber: string, eventSlug: string):
      WHERE uel.event_id = e.id
        AND uel.phone_number = ?
        AND e.slug = ?`,
-    [prefKey, eventSlug]
+    [prefKey, args.eventSlug]
   )
 }

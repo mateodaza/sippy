@@ -305,6 +305,7 @@ test.group('Group C | Confirm path concurrent protection', () => {
       recipient: '+573001234567',
       timestamp: Date.now(),
       lang: 'en',
+      payQrScan: false,
     }
     const pendingTxs = makePendingMap([[phone, pending]])
     const activeSendsSet = new Set<string>([phone])
@@ -348,6 +349,7 @@ test.group('Group C | Confirm path concurrent protection', () => {
       recipient: '+573001234567',
       timestamp: Date.now(),
       lang: 'en',
+      payQrScan: false,
     }
     const pendingTxs = makePendingMap([[phone, pending]])
     const activeSendsSet = new Set<string>()

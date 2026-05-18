@@ -607,6 +607,8 @@ export async function routeCommand(
               recipient: match.targetPhone,
               timestamp: Date.now(),
               lang,
+              // Alias-resolution path: by definition not a QR scan.
+              payQrScan: false,
             })
             const amtStr = formatAmountWithLocal(
               command.amount,

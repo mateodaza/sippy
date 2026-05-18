@@ -58,7 +58,10 @@ import {
  * the reservation if the WhatsApp send itself errors so a retry on the
  * user's next payment still has a chance to deliver.
  *
- * NEVER throws — caller doesn't await for behaviour, only to satisfy lint.
+ * Best-effort; swallows all errors. User-visible silent loss is possible if
+ * claim succeeds → send fails → release fails (the rare dual-failure path),
+ * so both the send-fail and release-fail branches log at error level so an
+ * operator sweeping logs can find the affected phone.
  */
 async function sendPoapInviteIfPending(phoneNumber: string, lang: Lang): Promise<void> {
   try {
@@ -77,12 +80,15 @@ async function sendPoapInviteIfPending(phoneNumber: string, lang: Lang): Promise
         `poap-invite.sent event=${invite.eventSlug} to=${maskPhone(phoneNumber)} lang=${lang}`
       )
     } catch (sendErr) {
-      logger.warn(
+      logger.error(
         { event: invite.eventSlug, to: maskPhone(phoneNumber), err: sendErr },
         'poap-invite.send-failed (releasing reservation for retry on next payment)'
       )
-      await releasePoapInvite(phoneNumber, invite.eventSlug).catch((relErr) =>
-        logger.error({ err: relErr }, 'poap-invite.release-failed')
+      await releasePoapInvite({ phoneNumber, eventSlug: invite.eventSlug }).catch((relErr) =>
+        logger.error(
+          { event: invite.eventSlug, to: maskPhone(phoneNumber), err: relErr },
+          'poap-invite.release-failed (POAP DM is permanently lost for this user)'
+        )
       )
     }
   } catch (err) {
