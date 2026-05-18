@@ -136,6 +136,27 @@ export const INTENT_CONDITIONS: IntentCondition[] = [
       'mi cuenta de gmail', // external account
     ],
   },
+  {
+    slug: 'referral_code',
+    description:
+      "User wants their Sippy Quest invite code (the code they share with friends to earn draw entries). Distinct from `pay_qr` — pay_qr is the code people use to PAY them, referral_code is the code people use to JOIN Sippy under them. Trigger phrases: 'mi código', 'mi código de referido', 'mi código de invitación', 'cómo invito a alguien', 'my referral code'.",
+    requiresSlots: [],
+    examples: [
+      'mi codigo',
+      'mi código',
+      'mi código de referido',
+      'mi código de invitación',
+      'cómo invito a alguien',
+      'cómo le doy mi código',
+      'my referral code',
+      'meu código de convite',
+    ],
+    notRoutedHere: [
+      'mi código de pago', // pay_qr — for receiving payments
+      'mi qr', // pay_qr
+      'invita a juan', // invite — needs a recipient (different intent)
+    ],
+  },
 ]
 
 /** Lookup helper. */

@@ -142,11 +142,17 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
   // suffix or an explicit "referido" / "invite" word. Anti-collision:
   // `pay_qr` already requires the `de pago|qr` suffix, so bare `mi
   // codigo` falls here cleanly.
+  //
+  // Trailing `\s*\??` tolerates the question-form ("Mi código ?",
+  // "Mi código de referido?") — without it, `parseMessageWithRegex`
+  // misses these and the LLM mis-classifies as settings/about (real
+  // 2026-05-18 transcript). Also wired into HIGH_CONFIDENCE_PRE_LLM_PATTERNS
+  // below so the LLM can never beat us to it even on conversational forms.
   referral_code: [
-    /^mi c[oó]digo$/i,
-    /^mi c[oó]digo (?:de )?(?:referido|invitaci[oó]n|invite|referral)$/i,
-    /^my (?:code|referral|invite code|referral code)$/i,
-    /^meu c[oó]digo(?: de convite)?$/i,
+    /^mi c[oó]digo\s*\??$/i,
+    /^mi c[oó]digo (?:de )?(?:referido|invitaci[oó]n|invite|referral)\s*\??$/i,
+    /^my (?:code|referral|invite code|referral code)\s*\??$/i,
+    /^meu c[oó]digo(?: de convite)?\s*\??$/i,
   ],
   // quest_status patterns deferred until the handler ships — keeping
   // them out of COMMAND_PATTERNS until then so the type stays a member
@@ -635,6 +641,16 @@ const HIGH_CONFIDENCE_PRE_LLM_PATTERNS: Array<[string, RegExp]> = [
   [
     'balance',
     /(?:^|\s)(mi (?:address|direcci[oó]n)|cu[aá]l es mi (?:address|direcci[oó]n|wallet)|direcci[oó]n de mi (?:wallet|billetera)|billetera p[uú]blica|wallet address|my address)(?:\s|$)/i,
+  ],
+  // Referral code — Sippy Quest invite code. Strict regex above also
+  // catches these (with `\s*\??$`), but punctuation/whitespace variants
+  // ("¿mi código?", "mi codigo!") still slip through. The pre-LLM gate
+  // normalizes punctuation before matching, so it catches every form
+  // that includes the keyword. Must NOT shadow pay_qr (`mi codigo de
+  // pago`) — that's owned by the strict pay_qr pattern that runs first.
+  [
+    'referral_code',
+    /(?:^|\s)(mi c[oó]digo(?: (?:de )?(?:referido|invitaci[oó]n|invite|referral))?|my (?:code|referral|invite code|referral code)|meu c[oó]digo(?: de convite)?)$/i,
   ],
 ]
 

@@ -572,6 +572,19 @@ test.group('Message Parser | referral_code command (strict regex)', () => {
     'meu código',
     'meu codigo de convite',
     'meu código de convite',
+    // Question-form variants — regression from 2026-05-18 transcript.
+    // `parseMessageWithRegex` calls `trim()` only (no punctuation
+    // strip), so the regex itself must tolerate trailing `?` and
+    // whitespace. Without this, "Mi código ?" falls through to the LLM
+    // and gets mis-classified.
+    'mi codigo?',
+    'mi código?',
+    'Mi código ?',
+    'mi codigo de referido?',
+    'Mi código de referido ?',
+    'my code?',
+    'my referral code?',
+    'meu código?',
   ]
   for (const input of REFERRAL_CASES) {
     test(`"${input}" routes to referral_code`, ({ assert }) => {

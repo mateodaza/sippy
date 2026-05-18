@@ -62,6 +62,13 @@ export const SMART_INTENT_SLUGS = [
   // had no `dashboard` intent to classify into). No slots needed — just
   // a deep-link action.
   'dashboard',
+  // referral_code — Sippy Quest invite code. Added after 2026-05-18
+  // transcript where "Mi código de referido ?" classified as settings
+  // and "Mi código ?" as about — semantically reasonable LLM guesses
+  // because Quest wasn't in the intent vocabulary. Principle: SMART
+  // must know about every bot capability or it will keep producing
+  // confident-wrong classifications. No slots needed.
+  'referral_code',
 ] as const
 
 export type SmartIntent = (typeof SMART_INTENT_SLUGS)[number]
