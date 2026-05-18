@@ -23,6 +23,7 @@ import {
   dispatchBracketToken,
 } from '#services/bracket_token.service'
 import { captureReferral, ensureReferralCode } from '#services/quest/referral.service'
+import { getUserQuestStatus } from '#services/quest/scoring.service'
 import { sendTextMessage, markAsReadWithTyping } from '#services/whatsapp.service'
 import {
   getUserLanguage,
@@ -39,6 +40,7 @@ import {
   formatSettingsMessage,
   formatDashboardMessage,
   formatReferralCodeMessage,
+  formatQuestStatusMessage,
   formatLanguageSetMessage,
   formatCommandErrorMessage,
   formatGreetingMessage,
@@ -1078,6 +1080,54 @@ export async function routeCommand(
           )
         } catch (err) {
           logger.error({ err, phone: maskPhone(phoneNumber) }, 'referral_code: ensure failed')
+          await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+        }
+        break
+      }
+
+      case 'quest_status': {
+        // Sippy Quest — show the user's current standing (entries +
+        // breakdown + rank). Same setup gating as `referral_code`:
+        // pre-setup users have no user_preferences row so the FK
+        // joins in `getUserQuestStatus` would silently miss; nudge to
+        // finish onboarding instead of surfacing a confusing "0/5".
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+          break
+        }
+        if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+          break
+        }
+        const currentEventSlug = 'pizza-day-ctg-2026'
+        try {
+          // Fetch code + status in parallel — they're independent
+          // reads and both are needed for the reply. Status query
+          // returns zero-state when the user hasn't earned entries
+          // yet so the share-link CTA still fires.
+          const [codeRow, status] = await Promise.all([
+            ensureReferralCode(phoneNumber, currentEventSlug),
+            getUserQuestStatus({ phone: phoneNumber, eventSlug: currentEventSlug }),
+          ])
+          await sendMessageFn(
+            phoneNumber,
+            formatQuestStatusMessage(
+              {
+                entries: status.entries,
+                cap: status.cap,
+                activity: status.activity,
+                referrals: status.referrals,
+                rank: status.rank,
+                totalRanked: status.totalRanked,
+                code: codeRow.code,
+              },
+              lang
+            ),
+            lang
+          )
+        } catch (err) {
+          logger.error({ err, phone: maskPhone(phoneNumber) }, 'quest_status: fetch failed')
           await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
         }
         break

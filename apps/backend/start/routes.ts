@@ -25,6 +25,7 @@ const WebhookAlchemyController = () => import('#controllers/webhook_alchemy_cont
 const OnrampController = () => import('#controllers/onramp_controller')
 const OfframpController = () => import('#controllers/offramp_controller')
 const EventController = () => import('#controllers/event_controller')
+const QuestController = () => import('#controllers/quest_controller')
 const QrScanController = () => import('#controllers/qr_scan_controller')
 const MyPayQrController = () => import('#controllers/my_pay_qr_controller')
 
@@ -52,6 +53,14 @@ router.get('/api/stats', [PublicStatsController, 'index']).use(middleware.ipThro
 
 // ── Public event lookup (IP-throttled, name/active/endsAt only) ──────────────
 router.get('/api/events/:slug', [EventController, 'getEventPublic']).use(middleware.ipThrottle())
+
+// ── Public Quest leaderboard (IP-throttled, masked phones only). Fed by
+//     apps/web /quest/[slug] page (server-side fetch). Phones are masked
+//     in the controller before serving so admin paths can still read raw
+//     FK-form phones via getLeaderboard() directly.
+router
+  .get('/api/quest/:slug/leaderboard', [QuestController, 'publicLeaderboard'])
+  .use(middleware.ipThrottle())
 
 // ── QR scan (public). Called by apps/web /q/:shortId page. ──────────────────
 // Throttle is intentionally controller-internal (per-shortId, not per-IP) so

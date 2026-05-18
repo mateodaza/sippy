@@ -352,3 +352,90 @@ test.group('smart_mode | conditions table coverage', () => {
     }
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Phase 2 vocabulary expansion (2026-05-18) — no-slot intents
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Audit thesis: "the model isn't smart enough — it should be aware of
+// every bot capability or it will keep producing confident-wrong
+// classifications". Five regex-only intents (start, settings, about,
+// list_contacts, withdraw) were folded into SMART so the LLM can route
+// conversational forms ('quiero retirar mi plata', 'qué eres?',
+// 'muéstrame mis contactos') deterministically.
+//
+// These tests pin the contract for every expanded intent:
+//   1. Is in SMART_INTENT_SLUGS (without these, the classifier prompt
+//      doesn't enumerate them and the LLM can't pick them).
+//   2. Has a conditions entry with:
+//        - non-empty description (drives the prompt)
+//        - 3+ examples (few-shot anchors)
+//        - at least 1 notRoutedHere (shows misroute risks were considered)
+//        - empty requiresSlots (no-slot family)
+//   3. Survives validateSmartAction without being downgraded to ambiguous
+//      (no missing required slots → action stays action).
+
+const PHASE_2_EXPANSION = ['start', 'settings', 'about', 'list_contacts', 'withdraw'] as const
+
+test.group('smart_mode | Phase 2 expansion contract', () => {
+  for (const slug of PHASE_2_EXPANSION) {
+    test(`${slug}: registered in SMART_INTENT_SLUGS`, ({ assert }) => {
+      assert.include(SMART_INTENT_SLUGS as readonly string[], slug)
+    })
+
+    test(`${slug}: has a complete INTENT_CONDITIONS entry`, ({ assert }) => {
+      const entry = INTENT_CONDITIONS.find((c) => c.slug === slug)
+      assert.exists(entry, `${slug} must have a conditions entry`)
+      assert.isAbove(
+        entry!.description.length,
+        20,
+        `${slug} description must explain the trigger phrases`
+      )
+      assert.isAtLeast(entry!.examples.length, 3, `${slug} must have 3+ few-shot examples`)
+      assert.isAtLeast(
+        entry!.notRoutedHere?.length ?? 0,
+        1,
+        `${slug} must declare 1+ misroute guard (notRoutedHere)`
+      )
+      assert.lengthOf(
+        entry!.requiresSlots,
+        0,
+        `${slug} is in the no-slot family — requiresSlots must be empty`
+      )
+    })
+
+    test(`${slug}: action classification stays as action (no slot downgrade)`, ({ assert }) => {
+      const c = makeClassification({
+        category: 'action',
+        intent: slug,
+        slots: undefined,
+      })
+      const validated = validateSmartAction(c)
+      assert.equal(
+        validated.category,
+        'action',
+        `${slug} has no required slots — action must not downgrade to ambiguous`
+      )
+      assert.equal(validated.intent, slug)
+    })
+  }
+
+  // Misroute regression: money paths must NOT route to withdraw. The
+  // `notRoutedHere` declarations are advisory in the prompt; this test
+  // is a structural check that the SMART_INTENT_SLUGS doesn't expose
+  // withdraw in a way the classifier could grab as a send substitute.
+  test('withdraw is in the no-slot family — cannot accept amount/recipient slots', ({ assert }) => {
+    const c = makeClassification({
+      category: 'action',
+      intent: 'withdraw',
+      // Even if the LLM hallucinates an amount + recipient on a withdraw
+      // intent, validateSmartAction must not accept those as required
+      // slots (withdraw has no required slots, so amount/recipient are
+      // ignored noise — they don't get propagated as a send).
+      slots: { amount: 50, recipientRaw: '+573001234567' },
+    })
+    const validated = validateSmartAction(c)
+    assert.equal(validated.intent, 'withdraw', 'intent must NOT silently rewrite to send')
+    assert.equal(validated.category, 'action')
+  })
+})

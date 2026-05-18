@@ -67,6 +67,12 @@ const DEFAULT_CLARIFICATIONS: Record<SmartIntent, Record<'amount' | 'recipientRa
   social: { amount: '', recipientRaw: '' },
   dashboard: { amount: '', recipientRaw: '' },
   referral_code: { amount: '', recipientRaw: '' },
+  quest_status: { amount: '', recipientRaw: '' },
+  start: { amount: '', recipientRaw: '' },
+  settings: { amount: '', recipientRaw: '' },
+  about: { amount: '', recipientRaw: '' },
+  list_contacts: { amount: '', recipientRaw: '' },
+  withdraw: { amount: '', recipientRaw: '' },
 }
 
 /**

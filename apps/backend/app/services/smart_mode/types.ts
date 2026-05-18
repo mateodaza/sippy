@@ -69,6 +69,22 @@ export const SMART_INTENT_SLUGS = [
   // must know about every bot capability or it will keep producing
   // confident-wrong classifications. No slots needed.
   'referral_code',
+  // quest_status — user asking about their Sippy Quest standing (entries,
+  // rank). Distinct from `referral_code`: status asks "how am I doing",
+  // referral_code asks "what's my code". Same no-slots shape.
+  'quest_status',
+  // ── Phase 2 no-slot intent expansion (2026-05-18) ─────────────────
+  // Audit theme: "the bot knows the feature exists but the classifier
+  // doesn't know about it, so conversational forms get mis-routed to
+  // greeting/about/settings". Adding the regex-only no-slot intents to
+  // SMART closes that gap without expanding the slot schema. Intents
+  // with required slots (language, privacy, save_contact, delete_contact,
+  // confirm, cancel) stay out — they need slot plumbing first.
+  'start',
+  'settings',
+  'about',
+  'list_contacts',
+  'withdraw',
 ] as const
 
 export type SmartIntent = (typeof SMART_INTENT_SLUGS)[number]

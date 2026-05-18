@@ -6,12 +6,15 @@
  * so adding a new intent = appending an entry here (no prompt edits).
  *
  * Scope is intentionally limited to intents with a safe slot shape — see
- * `SMART_INTENT_SLUGS` in types.ts for the gate. Intents like language /
- * privacy / save_contact / delete_contact / list_contacts / withdraw /
- * start / settings / about stay regex-only in Phase 1 because the slot
- * schema can't safely carry their required fields (detectedLanguage,
- * privacyAction, alias, phone). Add them back to SMART by extending the
- * slot schema AND the conditions entry AND golden cases all at once.
+ * `SMART_INTENT_SLUGS` in types.ts for the gate. The no-slot family
+ * (start, settings, about, list_contacts, withdraw, dashboard,
+ * referral_code, quest_status, balance, pay_qr, fund, history, help,
+ * greeting, social) lives in SMART because empty slots are trivially
+ * safe. Intents that REQUIRE slot data (language, privacy, save_contact,
+ * delete_contact, confirm, cancel) stay regex-only until the slot
+ * schema can safely carry their fields (detectedLanguage, privacyAction,
+ * alias, phone) — extending SMART for them is a slot + conditions +
+ * golden-cases change, never just the slugs list.
  *
  * Pattern lifted from Camello `intent-profiles.ts` + hive-mind
  * `intent-conditions.ts`. Each entry carries:
@@ -155,6 +158,135 @@ export const INTENT_CONDITIONS: IntentCondition[] = [
       'mi código de pago', // pay_qr — for receiving payments
       'mi qr', // pay_qr
       'invita a juan', // invite — needs a recipient (different intent)
+    ],
+  },
+  {
+    slug: 'quest_status',
+    description:
+      "User wants to know how they're doing on Sippy Quest — their current entries, rank, or progress toward the cap. Distinct from `referral_code` (which returns the share link): this asks ABOUT progress, not for the code itself. Trigger phrases: 'mi quest', 'mis entradas', 'cuántas entradas tengo', 'cómo voy en el quest', 'quest status', 'how am I doing'.",
+    requiresSlots: [],
+    examples: [
+      'mi quest',
+      'mis entradas',
+      'cuantas entradas tengo',
+      'cuántas entradas tengo?',
+      'como voy en el quest',
+      'cómo voy?',
+      'how am I doing',
+      'how many entries do I have',
+      'meu quest',
+      'quantas entradas tenho',
+    ],
+    notRoutedHere: [
+      'mi codigo', // referral_code — asking for the code, not status
+      'cuanto tengo', // balance — money balance, not quest entries
+      'mi saldo', // balance
+    ],
+  },
+  {
+    slug: 'start',
+    description:
+      "User wants to begin / start using Sippy. Typically a brand-new user typing 'start' or 'comenzar' as the very first message. The handler treats this as a green-light to send onboarding context (setup link for new users, dashboard for onboarded). DO NOT route 'send' or 'enviar' here — those carry value-transfer intent.",
+    requiresSlots: [],
+    examples: ['start', 'begin', 'comenzar', 'iniciar', 'começar', "let's start", 'empezar'],
+    notRoutedHere: [
+      'enviar', // → send (needs slots)
+      'start sending', // → send / ambiguous
+      'iniciar transferencia', // → send (transfer intent)
+    ],
+  },
+  {
+    slug: 'settings',
+    description:
+      "User wants to access Sippy settings (spending limit, revoke permission, export keys) — the /settings page. Trigger phrases: 'settings', 'configuración', 'ajustes', 'mis ajustes', 'cambiar mi límite', 'configurar Sippy'.",
+    requiresSlots: [],
+    examples: [
+      'settings',
+      'configuracion',
+      'configuración',
+      'ajustes',
+      'mis ajustes',
+      'configurar sippy',
+      'cambiar mi limite',
+      'configurações',
+    ],
+    notRoutedHere: [
+      'mi cuenta', // → dashboard (account hub, not settings)
+      'mi cuenta de banco', // bank account, off-topic
+      'cambiar idioma', // → language (slot-bearing, deferred)
+    ],
+  },
+  {
+    slug: 'about',
+    description:
+      "User wants to know what Sippy is / who it is / what it does. Identity questions: 'qué es Sippy', 'quién eres', 'what is sippy', 'about'. NOT a help request (help asks 'how do I do X', about asks 'what is this').",
+    requiresSlots: [],
+    examples: [
+      'about',
+      'what is sippy',
+      "what's sippy",
+      'que es sippy',
+      'qué es sippy',
+      'acerca',
+      'quien eres',
+      'quién eres?',
+      'who are you',
+      'sobre',
+      'o que é sippy',
+      'quem é você',
+    ],
+    notRoutedHere: [
+      'help', // → help (how-to, not what-is)
+      'ayuda', // → help
+      'como funciona enviar', // → help (operational)
+    ],
+  },
+  {
+    slug: 'list_contacts',
+    description:
+      'User wants to see their saved address-book contacts. Trigger phrases: "mis contactos", "my contacts", "agenda", "libreta", "phonebook", "address book", "meus contatos". Distinct from `save_contact`/`delete_contact` which carry slot data — this is the read-only list view.',
+    requiresSlots: [],
+    examples: [
+      'mis contactos',
+      'my contacts',
+      'contacts',
+      'agenda',
+      'libreta',
+      'phonebook',
+      'address book',
+      'meus contatos',
+      'muéstrame mis contactos',
+      'show me my contacts',
+    ],
+    notRoutedHere: [
+      'guarda a juan como amigo', // → save_contact (slot-bearing)
+      'borra a juan', // → delete_contact (slot-bearing)
+      'contacto de banco', // off-topic, not Sippy contacts
+    ],
+  },
+  {
+    slug: 'withdraw',
+    description:
+      "User wants to cash out / off-ramp from Sippy to fiat. Trigger phrases: 'retirar', 'sacar plata', 'cobrar', 'withdraw', 'cash out', 'offramp'. No slots: the off-ramp flow collects amount and method on its own page. DO NOT route 'send' / 'enviar' here — those go to a person, withdraw exits the platform.",
+    requiresSlots: [],
+    examples: [
+      'withdraw',
+      'cash out',
+      'offramp',
+      'retirar',
+      'retirarme',
+      'retiro',
+      'sacar',
+      'sacar mi plata',
+      'cobrar',
+      'quiero retirar',
+      'quiero sacar mi dinero',
+      'sacar usdc',
+    ],
+    notRoutedHere: [
+      'enviar 10 a juan', // → send (recipient = person)
+      'send 5 to carolina', // → send
+      'pagar a juan', // → send / pay
     ],
   },
 ]

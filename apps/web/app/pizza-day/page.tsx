@@ -99,29 +99,46 @@ export default function PizzaDayPage() {
           </p>
         </Section>
 
-        <Section number="4" title="Sippy Quest — el reto del evento">
+        <Section number="4" title="Sippy Quest — entradas al sorteo">
           <p>
-            <strong>Un solo reto:</strong> convence a la mayor cantidad de gente posible de que te
-            manden <span className="font-mono">$0.10</span> o más por Sippy. Cuentan personas
-            distintas, no monto. El que más amigos distintos lo logre, gana.
+            Sippy Quest es un sorteo. Acumulas <strong>entradas</strong> y al final del evento se
+            sortean ganadores entre todas las entradas válidas, al azar. No es por ranking — estar
+            en el primer puesto no garantiza premio.
+          </p>
+          <p className="mt-3">
+            Cómo sumas entradas (máximo <span className="font-mono">5</span> por persona):
+          </p>
+          <ul className="mt-2 space-y-2 text-base">
+            <li>
+              <strong>+1 entrada</strong> por asistir. Si ya tienes Sippy, escanea cualquier QR del
+              evento al llegar. Si no, escanea un QR o escríbele a Sippy en WhatsApp para crear tu
+              cuenta en Pizza Day.
+            </li>
+            <li>
+              <strong>+1 entrada</strong> por cada amigo que se una a Sippy con tu link de Quest y
+              también asista al evento.
+            </li>
+          </ul>
+          <p className="mt-3 text-sm text-[var(--text-secondary,#374151)]">
+            Pídele a Sippy <span className="font-mono">mi codigo</span> en WhatsApp y te manda tu
+            link personal. Cada amigo que entre con ese link suma una entrada para ti cuando llegue
+            al evento.
           </p>
           <p className="mt-3 text-sm text-[var(--text-secondary,#374151)]">
-            100 personas mandándote $0.10 valen más que 1 persona mandándote $100. Es un juego
-            social: pitch, networking, ser memorable.
+            Más entradas = más probabilidad de ganar.
           </p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            <Prize
-              amount="$80 USDC"
-              name="🥇 1° lugar"
-              criterion="Más personas distintas que te mandaron"
-            />
-            <Prize amount="$40 USDC" name="🥈 2° lugar" criterion="Segundo en personas distintas" />
-            <Prize amount="$20 USDC" name="🥉 3° lugar" criterion="Tercero en personas distintas" />
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <Link
+              href="/quest/pizza-day-ctg-2026"
+              className="inline-flex items-center justify-center rounded border-2 border-[var(--text-primary,#1A1A2E)] px-4 py-2 font-mono text-sm font-semibold hover:bg-[var(--text-primary,#1A1A2E)] hover:text-white"
+            >
+              Ver leaderboard en vivo →
+            </Link>
+            <span className="self-center text-xs text-[var(--text-muted,#6B7280)]">
+              o pregúntale a Sippy <span className="font-mono">mi quest</span> para ver tus entradas
+              y tu posición.
+            </span>
           </div>
-          <p className="mt-4 text-sm text-[var(--text-secondary,#374151)]">
-            No cuentan envíos a vendors ni a uno mismo. Mira el leaderboard en vivo en la pantalla
-            del evento o pregúntale a Sippy <span className="font-mono">leaderboard</span>.
-          </p>
         </Section>
 
         <Section number="5" title="Reclama tu POAP de Cartagena Onchain">
@@ -187,18 +204,6 @@ function Section({
       </h2>
       <div className="text-base leading-relaxed text-[var(--text-primary,#1A1A2E)]">{children}</div>
     </section>
-  )
-}
-
-function Prize({ amount, name, criterion }: { amount: string; name: string; criterion: string }) {
-  return (
-    <div className="rounded-md border-2 border-[var(--text-primary,#1A1A2E)] bg-[var(--bg-primary,#FFFFFF)] p-4">
-      <p className="font-mono text-xs uppercase tracking-widest text-[var(--text-muted,#6B7280)]">
-        {amount}
-      </p>
-      <p className="mt-1 text-lg font-bold">{name}</p>
-      <p className="mt-1 text-xs text-[var(--text-secondary,#374151)]">{criterion}</p>
-    </div>
   )
 }
 

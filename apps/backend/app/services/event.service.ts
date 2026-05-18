@@ -12,6 +12,7 @@ import { type LinkedAtStep, type LinkEventResponse } from '@sippy/shared'
 import Event from '#models/event'
 import { resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { maskPhone } from '#utils/phone'
+import { drainPendingReferral } from '#services/quest/referral.service'
 
 // Re-export the wire types so existing internal imports (`#services/event.service`)
 // keep working without each consumer needing to know about `@sippy/shared`.
@@ -84,6 +85,27 @@ export async function linkUserToEvent(
   logger.info(
     `event.link ${event.slug} <- ${maskPhone(prefKey)} (step=${linkedAtStep}${source ? `, source=${source}` : ''})`
   )
+
+  // Sippy Quest — drain any pending referral attribution captured before
+  // the user finished onboarding. Only fires on the 'done' transition
+  // because that's the moment the FK row in user_preferences becomes
+  // safe to reference from referral_attributions. Best-effort: a drain
+  // failure must not break event linking (we'd block onboarding over a
+  // bonus-mechanic write), so we swallow + log.
+  //
+  // Idempotent: drainPendingReferral is a no-op when no pending row
+  // exists, so re-calling on every link is safe even though we expect
+  // the row to vanish on the first 'done' link.
+  if (linkedAtStep === 'done') {
+    try {
+      await drainPendingReferral(prefKey)
+    } catch (err) {
+      logger.error(
+        { err, phone: maskPhone(prefKey), eventSlug: event.slug },
+        'event.link: drainPendingReferral failed (non-fatal)'
+      )
+    }
+  }
 
   const actions: string[] = []
   if (event.poapClaimUrl) actions.push('poap')

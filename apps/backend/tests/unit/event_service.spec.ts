@@ -286,6 +286,91 @@ test.group('event.service | linkUserToEvent', (group) => {
     const bindings = inserts[0].bindings as unknown[]
     assert.isNull(bindings[3], 'metadata binding should be null when no source')
   })
+
+  // ── Sippy Quest drain hook ────────────────────────────────────────────
+  //
+  // On `linkedAtStep === 'done'` we drain any pending referral row for
+  // this phone into a real attribution. The hook MUST:
+  //   - only fire on 'done' (not on 'returning', which is a re-tap of
+  //     a deep link by an already-onboarded user — no onboarding event)
+  //   - swallow drain errors (a Quest hiccup must never block onboarding)
+  //   - run AFTER the upsert succeeds (the FK from referral_attributions
+  //     to user_preferences would otherwise be premature)
+
+  test('drain hook: fires DELETE FROM pending_referrals on step=done', async ({ assert }) => {
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'done', 'qr-booth')
+
+    const drains = queriesMatching('DELETE FROM pending_referrals')
+    assert.equal(drains.length, 1, 'drain hook must fire exactly once on done')
+  })
+
+  test('drain hook: does NOT fire on step=returning', async ({ assert }) => {
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'returning', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'returning')
+
+    const drains = queriesMatching('DELETE FROM pending_referrals')
+    assert.equal(
+      drains.length,
+      0,
+      'returning is a deep-link re-tap, not an onboarding event — drain must not fire'
+    )
+  })
+
+  test('drain hook: passes the FK-form phone (not the canonical raw input)', async ({ assert }) => {
+    // resolveUserPrefKey is mocked so the canonical input is preserved
+    // (modern path). The drain hook should reuse that resolved key,
+    // not re-derive a different one — otherwise a future bare-row
+    // path would have the upsert and the drain looking at different
+    // phone forms.
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'done')
+
+    const drains = queriesMatching('DELETE FROM pending_referrals')
+    assert.equal(drains.length, 1)
+    // drainPendingReferral builds a CTE with $1 = phone. Last binding
+    // of the call is the phone key the drain SQL keys on.
+    const bindings = drains[0].bindings as unknown[]
+    assert.equal(bindings[0], '+573001234567', 'drain must key on the FK-form phone')
+  })
+
+  test('drain hook: a drain failure does NOT break the link result', async ({ assert }) => {
+    // Wrap the existing rawQuery mock so DELETE FROM pending_referrals
+    // throws while every other call passes. The caller (linkUserToEvent)
+    // must still return a successful linked: true response — Quest is a
+    // bonus mechanic, never the gate.
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: false }],
+    })
+    const wrapped = db.rawQuery
+    db.rawQuery = (async (sql: string, bindings?: unknown[]) => {
+      if (sql.includes('DELETE FROM pending_referrals')) {
+        throw new Error('simulated drain failure')
+      }
+      return wrapped(sql, bindings as any)
+    }) as any
+
+    const result = await linkUserToEvent('+573001234567', 'pizza-day', 'done')
+
+    assert.isTrue(result.linked, 'link must still succeed even when drain throws')
+  })
 })
 
 // ══════════════════════════════════════════════════════════════════════════════

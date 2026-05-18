@@ -154,11 +154,25 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^my (?:code|referral|invite code|referral code)\s*\??$/i,
     /^meu c[oó]digo(?: de convite)?\s*\??$/i,
   ],
-  // quest_status patterns deferred until the handler ships — keeping
-  // them out of COMMAND_PATTERNS until then so the type stays a member
-  // of ParsedCommand['command'] (downstream signature unchanged) but
-  // the parser doesn't route to a missing case (which would silently
-  // warn + drop the reply).
+  // quest_status — user asking how they're doing on Sippy Quest. Distinct
+  // from `referral_code` (which returns the share link) by keyword:
+  // status queries ask about ENTRIES / RANKING / PROGRESS, while
+  // referral_code asks for THE CODE itself. Strict patterns here cover
+  // the unambiguous forms; the pre-LLM gate below catches conversational
+  // wrapping ("cuantas entradas tengo?", "como voy en el quest?").
+  //
+  // Spanish-leaning vocabulary because Pizza Day is Cartagena-first; EN
+  // and PT included so non-LATAM testers + Brazil users land cleanly.
+  quest_status: [
+    /^(?:mi |mis )?(?:quest|entradas)\s*\??$/i,
+    /^(?:cu[aá]ntas?|cuanto)\s+entradas?\s*(?:tengo)?\s*\??$/i,
+    /^(?:c[oó]mo|como)\s+voy(?:\s+(?:en\s+)?(?:el\s+)?quest)?\s*\??$/i,
+    /^(?:my\s+)?(?:quest|entries)\s*\??$/i,
+    /^how\s+(?:am\s+i\s+doing|many\s+entries)\s*\??$/i,
+    /^(?:my\s+)?quest\s+(?:status|entries)\s*\??$/i,
+    /^(?:meu\s+|minhas\s+)?(?:quest|entradas)\s*\??$/i,
+    /^(?:quantas?)\s+entradas?\s*(?:tenho)?\s*\??$/i,
+  ],
 }
 
 /** Privacy patterns — each paired with the language it signals */
@@ -651,6 +665,16 @@ const HIGH_CONFIDENCE_PRE_LLM_PATTERNS: Array<[string, RegExp]> = [
   [
     'referral_code',
     /(?:^|\s)(mi c[oó]digo(?: (?:de )?(?:referido|invitaci[oó]n|invite|referral))?|my (?:code|referral|invite code|referral code)|meu c[oó]digo(?: de convite)?)$/i,
+  ],
+  // Quest status — "how am I doing on the quest". Anchored at end so
+  // a casual mention inside a longer sentence ("tengo el quest activo
+  // y…") doesn't hijack a different intent. Pre-LLM gate exists because
+  // the LLM occasionally classifies "como voy" as a greeting (it's
+  // ambiguous in isolation), and "mi quest" without verb is too short
+  // for reliable LLM intent.
+  [
+    'quest_status',
+    /(?:^|\s)((?:mi|mis|my|meu|minhas)\s+(?:quest|entradas|entries)|(?:cu[aá]nt[ao]s?|quantas?)\s+entradas?(?:\s+tengo|\s+tenho)?|(?:c[oó]mo|como)\s+voy(?:\s+(?:en\s+)?(?:el\s+)?quest)?|quest\s+status|how\s+am\s+i\s+doing|how\s+many\s+entries)$/i,
   ],
 ]
 

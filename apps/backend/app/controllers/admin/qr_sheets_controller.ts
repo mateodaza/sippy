@@ -83,13 +83,15 @@ export default class QrSheetsController {
       return response.notFound({ error: `Event '${slug}' not found or inactive` })
     }
 
-    // Only show THE general event QR (sourceTag IS NULL). Legacy assistant
-    // QRs minted under the old per-assistant pattern (sourceTag like
-    // 'asst-carolina', 'smoke-diego', etc.) stay in DB for audit but are
-    // hidden from this view — the product contract is now "one QR per
-    // event". Cleanup of legacy rows is a manual DB op (see runbook).
+    // Only show THE general event QR (sourceTag = 'venue' going forward,
+    // or NULL for pre-2026-05-18 rows that the backfill migration moves
+    // to 'venue'). Legacy assistant QRs minted under the old
+    // per-assistant pattern (sourceTag like 'asst-carolina',
+    // 'smoke-diego', etc.) stay in DB for audit but are hidden from
+    // this view — the product contract is now "one QR per event".
+    // Cleanup of legacy rows is a manual DB op (see runbook).
     const allLinks = await listEventQrLinks(slug)
-    let generalLink = allLinks.find((l) => l.sourceTag === null) ?? null
+    let generalLink = allLinks.find((l) => l.sourceTag === 'venue' || l.sourceTag === null) ?? null
 
     // Auto-provision on first read. The QR is conceptually a property of
     // the event — if the event exists, the QR exists. Lazy-create lets the
@@ -108,7 +110,13 @@ export default class QrSheetsController {
         const created = await createQrLink({
           kind: 'event',
           eventSlug: slug,
-          sourceTag: null,
+          // 'venue' tags this row as a physical, printed-sheet QR — read
+          // by the Quest scoring CTE as proof-of-attendance when an
+          // already-onboarded user scans it (linked_at_step='returning').
+          // Without a named tag, the social-link path (also 'returning')
+          // would be indistinguishable from a venue scan and existing
+          // users could farm attendance entries from home.
+          sourceTag: 'venue',
           displayName: event.name,
         })
         generalLink = created

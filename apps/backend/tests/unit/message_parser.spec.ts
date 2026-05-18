@@ -619,6 +619,114 @@ test.group('Message Parser | referral_code command (strict regex)', () => {
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Sippy Quest — quest_status command routing
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// `quest_status` answers "how am I doing on the Quest" (entries, rank).
+// Distinct from `referral_code` (which returns the share link) and from
+// `balance` (which is money, not entries). Strict regex covers the
+// canonical bot-keyword forms; pre-LLM gate (separate group) catches
+// conversational wrapping.
+
+test.group('Message Parser | quest_status command (strict regex)', () => {
+  const QUEST_STATUS_CASES = [
+    'mi quest',
+    'mis entradas',
+    'mi entradas',
+    'cuantas entradas tengo',
+    'cuántas entradas tengo',
+    'cuantas entradas',
+    'cómo voy',
+    'como voy',
+    'como voy en el quest',
+    'cómo voy en el quest',
+    'my quest',
+    'my entries',
+    'quest entries',
+    'quest status',
+    'how am I doing',
+    'how many entries',
+    'meu quest',
+    'minhas entradas',
+    'quantas entradas tenho',
+    'quantas entradas',
+    // Question-form variants
+    'mi quest?',
+    'mis entradas?',
+    'cuántas entradas tengo?',
+    'cómo voy?',
+    'quest status?',
+  ]
+  for (const input of QUEST_STATUS_CASES) {
+    test(`"${input}" routes to quest_status`, ({ assert }) => {
+      const result = parseMessageWithRegex(input)
+      assert.equal(result.command, 'quest_status', `${input} must route to quest_status`)
+    })
+  }
+
+  // Shadow guards: must NOT route balance / referral_code phrasing to
+  // quest_status. The cap is real money is balance, the cap is the
+  // code is referral_code. Status is its own thing.
+  const SHADOW_GUARDS: Array<{ input: string; expected: string }> = [
+    { input: 'mi saldo', expected: 'balance' },
+    { input: 'cuanto tengo', expected: 'balance' },
+    { input: 'mi codigo', expected: 'referral_code' },
+    { input: 'mi código de referido', expected: 'referral_code' },
+  ]
+  for (const c of SHADOW_GUARDS) {
+    test(`shadow guard: "${c.input}" routes to ${c.expected}, not quest_status`, ({ assert }) => {
+      const result = parseMessageWithRegex(c.input)
+      assert.equal(result.command, c.expected, `${c.input} must stay ${c.expected}`)
+    })
+  }
+})
+
+test.group('Message Parser | quest_status pre-LLM gate', () => {
+  const PRE_LLM_CASES = [
+    'mi quest',
+    'mis entradas',
+    'cuantas entradas tengo',
+    'cómo voy en el quest',
+    'como voy',
+    'quest status',
+    'how am I doing',
+    'how many entries',
+    'meu quest',
+    'quantas entradas tenho',
+    // Punctuation variants — pre-LLM gate strips ? before matching.
+    'mi quest?',
+    'cuántas entradas tengo?',
+    '¿cómo voy?',
+  ]
+  for (const input of PRE_LLM_CASES) {
+    test(`pre-LLM: "${input}" → quest_status`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      assert.exists(result, `${input} must match the pre-LLM gate`)
+      assert.equal(result?.command, 'quest_status')
+    })
+  }
+
+  // Shadow guards — quest_status pre-LLM regex must not eat unrelated
+  // phrases that mention "quest" or "entry" in a different context.
+  const SHADOW_GUARDS = [
+    'quest no es lo mio', // partial mention, not a status query
+    'mi entrada al evento', // singular `entrada` = event ticket (not entries)
+  ]
+  for (const input of SHADOW_GUARDS) {
+    test(`pre-LLM shadow guard: "${input}" → not quest_status`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      if (result) {
+        assert.notEqual(
+          result.command,
+          'quest_status',
+          `${input} should not match quest_status pre-LLM`
+        )
+      }
+    })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Pre-LLM gate — high-confidence patterns must beat the LLM
 // ══════════════════════════════════════════════════════════════════════════════
 //
@@ -676,11 +784,14 @@ test.group('Message Parser | Pre-LLM gate (P1)', () => {
     })
   }
 
-  // Negative: the pre-LLM gate is INTENTIONALLY narrow — only dashboard
-  // and address queries. Other intents (fund, withdraw, etc.) still go
-  // through the LLM and post-LLM loose path. If someone widens the
-  // gate, this test forces a deliberate decision.
-  test('pre-LLM gate is narrow: only dashboard + balance (address)', ({ assert }) => {
+  // Negative: the pre-LLM gate is INTENTIONALLY narrow — only the
+  // deterministic, no-slot intents (dashboard, balance/address,
+  // referral_code, quest_status). Money paths (send, withdraw, fund)
+  // MUST stay LLM-mediated so we never deterministically infer an
+  // amount from a typo. If someone widens the gate to a money intent,
+  // this test forces a deliberate decision.
+  test('pre-LLM gate stays no-slot only: never produces a money intent', ({ assert }) => {
+    const MONEY_INTENTS = new Set(['send', 'withdraw', 'fund', 'pay_qr', 'invite'])
     const seen = new Set<string>()
     for (const input of [
       ...DASHBOARD_PRE_LLM_CASES,
@@ -689,15 +800,20 @@ test.group('Message Parser | Pre-LLM gate (P1)', () => {
       'retirar plata',
       'cuanto tengo',
       'hola',
+      'mi codigo',
+      'mi quest',
+      'enviar 10 a +573001234567',
+      'send 5 to +12345678901',
     ]) {
       const result = matchHighConfidencePreLlm(input)
       if (result) seen.add(result.command)
     }
-    assert.deepEqual(
-      [...seen].sort(),
-      ['balance', 'dashboard'],
-      'pre-LLM gate should only ever produce dashboard or balance'
-    )
+    for (const intent of seen) {
+      assert.isFalse(
+        MONEY_INTENTS.has(intent),
+        `pre-LLM produced money intent "${intent}" — this MUST stay LLM-mediated`
+      )
+    }
   })
 })
 

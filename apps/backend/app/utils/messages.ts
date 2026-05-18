@@ -908,6 +908,95 @@ export function formatReferralCodeMessage(
 }
 
 /**
+ * Sippy Quest — status reply. Shows the user's current entries, what
+ * makes up that score, and (when they have any) their rank. Designed to
+ * land in WhatsApp at the size of one bubble, so the breakdown line is
+ * short and the call-to-action sits at the bottom.
+ *
+ * Rank rendering rules:
+ *   - entries = 0 → no rank shown ("aún no tienes entradas")
+ *   - entries > 0 → "#N de M" — gives them context for how competitive
+ *     the leaderboard is without exposing names
+ *
+ * The "share your link" line embeds the same `sippy.lat/r/<code>` URL
+ * shape as the `mi codigo` reply. Drift between the two would split
+ * the share funnel — keep both pointing at the redirect route.
+ *
+ * `shareUrl` is built by the caller (not derived here) because the
+ * caller already had to `ensureReferralCode` to fetch the code, and
+ * passing the resolved code keeps this function purely formatting.
+ * When a user has 0 entries we still show the share link — that's the
+ * primary action that converts zero → first entry.
+ */
+export function formatQuestStatusMessage(
+  args: {
+    entries: number
+    cap: number
+    activity: 0 | 1
+    referrals: number
+    rank: number | null
+    totalRanked: number
+    code: string
+  },
+  lang: Lang = 'en'
+): string {
+  const shareUrl = `${FRONTEND_URL}/r/${args.code}`
+  const rankLine =
+    args.rank !== null
+      ? {
+          en: `Rank: #${args.rank} of ${args.totalRanked}`,
+          es: `Posicion: #${args.rank} de ${args.totalRanked}`,
+          pt: `Posicao: #${args.rank} de ${args.totalRanked}`,
+        }[lang]
+      : null
+  const m = {
+    en: () => {
+      const lines = [
+        `*Your Quest: ${args.entries}/${args.cap} entries*`,
+        rankLine,
+        '',
+        `- Attended: ${args.activity ? '1' : '0'}`,
+        `- Friends joined: ${args.referrals}`,
+        '',
+        args.entries < args.cap
+          ? `Invite more to climb. Share:\n${shareUrl}`
+          : `Max entries reached. Good luck on the draw!`,
+      ].filter((l): l is string => l !== null)
+      return lines.join('\n')
+    },
+    es: () => {
+      const lines = [
+        `*Tu Quest: ${args.entries}/${args.cap} entradas*`,
+        rankLine,
+        '',
+        `- Asistencia: ${args.activity ? '1' : '0'}`,
+        `- Amigos unidos: ${args.referrals}`,
+        '',
+        args.entries < args.cap
+          ? `Invita mas y sube. Comparte:\n${shareUrl}`
+          : `Llegaste al maximo de entradas. Suerte en el sorteo!`,
+      ].filter((l): l is string => l !== null)
+      return lines.join('\n')
+    },
+    pt: () => {
+      const lines = [
+        `*Seu Quest: ${args.entries}/${args.cap} entradas*`,
+        rankLine,
+        '',
+        `- Presenca: ${args.activity ? '1' : '0'}`,
+        `- Amigos entraram: ${args.referrals}`,
+        '',
+        args.entries < args.cap
+          ? `Convide mais e suba. Compartilhe:\n${shareUrl}`
+          : `Atingiu o maximo de entradas. Boa sorte no sorteio!`,
+      ].filter((l): l is string => l !== null)
+      return lines.join('\n')
+    },
+  }
+  return m[lang]()
+}
+
+/**
  * Dashboard deep-link reply. The `/wallet` page is the authenticated app
  * hub: balance, activity, send, settings link. Bot keyword `dashboard` /
  * `mi cuenta` / `meu painel` routes here. Also appended (as a one-liner)
