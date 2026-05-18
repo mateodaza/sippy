@@ -37,6 +37,7 @@ import {
   buttonHelp,
 } from '#utils/messages'
 import { claimPendingPoapInvite, releasePoapInvite } from '#services/event.service'
+import { capture as posthogCapture } from '#services/posthog_service'
 import { toUserErrorMessage } from '#utils/errors'
 import { getUserLanguage } from '#services/db'
 import logger from '@adonisjs/core/services/logger'
@@ -65,31 +66,57 @@ import {
  */
 async function sendPoapInviteIfPending(phoneNumber: string, lang: Lang): Promise<void> {
   try {
-    const invite = await claimPendingPoapInvite(phoneNumber)
-    if (!invite) return
+    const outcome = await claimPendingPoapInvite(phoneNumber)
+    if (outcome.kind === 'none') return
+    if (outcome.kind === 'contended') {
+      // Parallel claim won the SKIP LOCKED race. The other caller will (or
+      // won't) deliver — we have nothing to do, but emit a PostHog event so
+      // ops can see the rate of double-payment within the same instant.
+      posthogCapture(phoneNumber, 'poap_invite_contended', {})
+      return
+    }
+    const { reservation } = outcome
     try {
       await sendTextMessage(
         phoneNumber,
         formatPoapClaimInvite(
-          { poapClaimUrl: invite.poapClaimUrl, eventName: invite.eventName },
+          { poapClaimUrl: reservation.poapClaimUrl, eventName: reservation.eventName },
           lang
         ),
         lang
       )
       logger.info(
-        `poap-invite.sent event=${invite.eventSlug} to=${maskPhone(phoneNumber)} lang=${lang}`
+        `poap-invite.sent event=${reservation.eventSlug} to=${maskPhone(phoneNumber)} lang=${lang}`
       )
+      posthogCapture(phoneNumber, 'poap_invite_sent', { event_slug: reservation.eventSlug })
     } catch (sendErr) {
       logger.error(
-        { event: invite.eventSlug, to: maskPhone(phoneNumber), err: sendErr },
+        { event: reservation.eventSlug, to: maskPhone(phoneNumber), err: sendErr },
         'poap-invite.send-failed (releasing reservation for retry on next payment)'
       )
-      await releasePoapInvite({ phoneNumber, eventSlug: invite.eventSlug }).catch((relErr) =>
+      posthogCapture(phoneNumber, 'poap_invite_send_failed', {
+        event_slug: reservation.eventSlug,
+        error: sendErr instanceof Error ? sendErr.message : String(sendErr),
+      })
+      await releasePoapInvite({ phoneNumber, eventSlug: reservation.eventSlug }).catch((relErr) => {
         logger.error(
-          { event: invite.eventSlug, to: maskPhone(phoneNumber), err: relErr },
+          {
+            event: reservation.eventSlug,
+            to: maskPhone(phoneNumber),
+            errClass: relErr instanceof Error ? relErr.constructor.name : typeof relErr,
+            err: relErr,
+          },
           'poap-invite.release-failed (POAP DM is permanently lost for this user)'
         )
-      )
+        // Dual-failure: claim succeeded → send failed → release failed.
+        // User will never get the POAP DM unless ops intervenes. The
+        // PostHog event is the only "5 of 200 attendees never got their
+        // POAP" signal the next morning.
+        posthogCapture(phoneNumber, 'poap_invite_release_failed', {
+          event_slug: reservation.eventSlug,
+          error: relErr instanceof Error ? relErr.message : String(relErr),
+        })
+      })
     }
   } catch (err) {
     logger.error({ err }, 'poap-invite.unexpected-error')

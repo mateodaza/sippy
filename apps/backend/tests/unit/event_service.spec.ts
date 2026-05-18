@@ -19,7 +19,13 @@ import { DateTime } from 'luxon'
 import db from '@adonisjs/lucid/services/db'
 import Event from '#models/event'
 import UserPreference from '#models/user_preference'
-import { getActiveEventBySlug, linkUserToEvent, markPoapClaimed } from '#services/event.service'
+import {
+  getActiveEventBySlug,
+  linkUserToEvent,
+  markPoapClaimed,
+  claimPendingPoapInvite,
+  releasePoapInvite,
+} from '#services/event.service'
 
 // ── DB mock infrastructure ──────────────────────────────────────────────────────
 
@@ -459,5 +465,161 @@ test.group('event.service | markPoapClaimed', (group) => {
       'RETURNING 1',
       'uses RETURNING for driver-agnostic row detection'
     )
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// claimPendingPoapInvite — atomic single-row reservation + race observability
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('event.service | claimPendingPoapInvite', (group) => {
+  group.each.setup(installDbMock)
+  group.each.teardown(() => {
+    restoreDbMock()
+    restoreModels()
+  })
+
+  test('returns kind=none when no eligible link exists and no rows in probe', async ({
+    assert,
+  }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    // Both UPDATE and probe SELECT return empty
+    setQueryResponse('UPDATE user_event_links uel', { rows: [] })
+    setQueryResponse('SELECT 1', { rows: [] })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.deepEqual(result, { kind: 'none' })
+  })
+
+  test('returns kind=contended when UPDATE misses but probe finds an eligible row', async ({
+    assert,
+  }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    // The locking UPDATE returns nothing (SKIP LOCKED took the only row),
+    // but the unlocked probe SELECT sees it.
+    setQueryResponse('UPDATE user_event_links uel', { rows: [] })
+    setQueryResponse('SELECT 1', { rows: [{ '?column?': 1 }] })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.deepEqual(result, { kind: 'contended' })
+  })
+
+  test('returns kind=reserved with event payload when UPDATE matches one row', async ({
+    assert,
+  }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('UPDATE user_event_links uel', {
+      rows: [
+        {
+          event_name: 'Pizza Day',
+          event_slug: 'pizza-day-ctg-2026',
+          poap_claim_url: 'https://poap.example/claim/abc',
+        },
+      ],
+    })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.equal(result.kind, 'reserved')
+    if (result.kind === 'reserved') {
+      assert.deepEqual(result.reservation, {
+        eventName: 'Pizza Day',
+        eventSlug: 'pizza-day-ctg-2026',
+        poapClaimUrl: 'https://poap.example/claim/abc',
+      })
+    }
+  })
+
+  test('reserved path does NOT issue the disambiguation SELECT probe', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('UPDATE user_event_links uel', {
+      rows: [
+        {
+          event_name: 'Pizza Day',
+          event_slug: 'pizza-day-ctg-2026',
+          poap_claim_url: 'https://poap.example/claim/abc',
+        },
+      ],
+    })
+
+    await claimPendingPoapInvite('+573001234567')
+
+    // The probe is only needed to disambiguate none vs contended — when
+    // UPDATE returned a row, we already know we won.
+    assert.equal(queriesMatching('SELECT 1').length, 0, 'no probe SELECT when UPDATE matched')
+  })
+
+  test('SQL: locking UPDATE contains LIMIT 1 + FOR UPDATE OF uel SKIP LOCKED (regression guard)', async ({
+    assert,
+  }) => {
+    // Pins the two clauses that make this single-row-reservation safe under
+    // concurrent payments. An earlier version stamped every eligible row and
+    // only delivered the first — silent data loss. Don't let that come back.
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('UPDATE user_event_links uel', { rows: [] })
+    setQueryResponse('SELECT 1', { rows: [] })
+
+    await claimPendingPoapInvite('+573001234567')
+
+    const updates = queriesMatching('UPDATE user_event_links uel')
+    assert.equal(updates.length, 1, 'exactly one UPDATE call')
+    assert.include(updates[0].sql, 'LIMIT 1', 'eligible CTE must cap at one row')
+    assert.include(
+      updates[0].sql,
+      'FOR UPDATE OF uel SKIP LOCKED',
+      'must lock the eligible row + skip-lock contended ones'
+    )
+    assert.include(
+      updates[0].sql,
+      'SET poap_invite_sent_at = now()',
+      'must stamp the reservation in the same UPDATE (not a separate query)'
+    )
+  })
+
+  test('binds resolved pref key (not raw input) — mirrors markPoapClaimed contract', async ({
+    assert,
+  }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('UPDATE user_event_links uel', { rows: [] })
+    setQueryResponse('SELECT 1', { rows: [] })
+
+    await claimPendingPoapInvite('+573001234567')
+
+    const updates = queriesMatching('UPDATE user_event_links uel')
+    assert.equal(
+      (updates[0].bindings as unknown[])[0],
+      '+573001234567',
+      'phone binding must be the pref key, not the raw input'
+    )
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// releasePoapInvite — undo reservation on send failure
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('event.service | releasePoapInvite', (group) => {
+  group.each.setup(installDbMock)
+  group.each.teardown(() => {
+    restoreDbMock()
+    restoreModels()
+  })
+
+  test('issues UPDATE … SET poap_invite_sent_at = NULL with both bindings', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    await releasePoapInvite({
+      phoneNumber: '+573001234567',
+      eventSlug: 'pizza-day-ctg-2026',
+    })
+
+    const updates = queriesMatching('UPDATE user_event_links uel')
+    assert.equal(updates.length, 1, 'exactly one release UPDATE')
+    assert.include(updates[0].sql, 'SET poap_invite_sent_at = NULL')
+    const bindings = updates[0].bindings as unknown[]
+    assert.equal(bindings[0], '+573001234567', 'phone binding')
+    assert.equal(bindings[1], 'pizza-day-ctg-2026', 'event slug binding')
   })
 })
