@@ -1057,17 +1057,19 @@ export async function routeCommand(
         // derive from the user's active cohort (most-recent user_event_links
         // row) to support concurrent campaigns.
         const currentEventSlug = 'pizza-day-ctg-2026'
-        const botNumber = env.get('SIPPY_WHATSAPP_NUMBER') ?? '14722261449'
         const maxEntries = env.get('QUEST_MAX_ENTRIES_PER_USER') ?? 5
         try {
           const codeRow = await ensureReferralCode(phoneNumber, currentEventSlug)
+          // Share URL is built inside `formatReferralCodeMessage` against
+          // `FRONTEND_URL` and points at `/r/<code>` on the web app — NOT
+          // a raw wa.me link. See the format function header for why
+          // (WhatsApp's anti-spam guard suppresses self-targeting wa.me
+          // URLs in bot replies; the web redirect sidesteps it).
           await sendMessageFn(
             phoneNumber,
             formatReferralCodeMessage(
               {
                 code: codeRow.code,
-                eventSlug: codeRow.eventSlug,
-                botNumber: String(botNumber),
                 maxEntries: Number(maxEntries),
               },
               lang

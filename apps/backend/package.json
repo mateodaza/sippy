@@ -9,7 +9,7 @@
     "./registry": "./.adonisjs/client/registry/index.ts"
   },
   "scripts": {
-    "start": "node bin/server.js",
+    "start": "node ace migration:run --force && node bin/server.js",
     "build": "vite build && node ace build",
     "dev": "node ace serve --watch",
     "test": "node ace test",

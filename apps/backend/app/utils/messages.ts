@@ -870,38 +870,39 @@ export function formatHistoryMessage(phoneNumber: string, lang: Lang = 'en'): st
 
 /**
  * Sippy Quest — referral-code reply. Returns the user's unique invite
- * code embedded in a wa.me share link that any friend can tap to land
- * in WhatsApp with the code pre-filled as a [REF-XXXXXX] bracket token.
- * Sippy then captures the attribution on the friend's first message
- * (silent — the welcome / greeting is the user-facing acknowledgment).
+ * code embedded in a share link friends can tap to land in WhatsApp
+ * with the code pre-filled as a [REF-XXXXXX] bracket token.
  *
- * Copy intent: explain what the code DOES (1 entry per invite, capped),
- * then make the share link the visual focus. Keep it short — WhatsApp
- * collapses long replies.
+ * Share URL points at `sippy.lat/r/<code>`, NOT raw wa.me. Background
+ * (2026-05-18 field bug): WhatsApp suppresses wa.me links that target
+ * the same bot sending the message — the user's chat showed
+ * "Comparte tu link: [link removed]" because Meta's anti-spam guard
+ * stripped the deeplink. Bouncing through our own domain (apps/web
+ * route `/r/[code]/route.ts` does the 302 to wa.me) sidesteps that
+ * filter and ALSO gives us a clean brand URL that renders correctly
+ * when shared on SMS, Twitter, copy-paste, etc.
  *
- * `botNumber` is the Sippy WhatsApp number digits only (no `+`), used
- * to build the wa.me URL. Falls back to the env-configured number if
- * unset by the caller.
+ * Drift warning: if the redirect route changes its URL shape, update
+ * here too — share-link tests pin the shape.
  */
 export function formatReferralCodeMessage(
-  args: { code: string; eventSlug: string; botNumber: string; maxEntries: number },
+  args: { code: string; maxEntries: number },
   lang: Lang = 'en'
 ): string {
-  const inviteText = `Hola Sippy! [REF-${args.code}]`
-  const waUrl = `https://wa.me/${args.botNumber.replace(/\D/g, '')}?text=${encodeURIComponent(inviteText)}`
+  const shareUrl = `${FRONTEND_URL}/r/${args.code}`
   const m = {
     en: () =>
       `Your Quest invite code: *${args.code}*\n\n` +
       `Each friend who joins with your code = 1 draw entry (max ${args.maxEntries}).\n\n` +
-      `Share your link:\n${waUrl}`,
+      `Share your link:\n${shareUrl}`,
     es: () =>
       `Tu codigo de Quest: *${args.code}*\n\n` +
       `Cada amigo que se una con tu codigo = 1 entrada al sorteo (max ${args.maxEntries}).\n\n` +
-      `Comparte tu link:\n${waUrl}`,
+      `Comparte tu link:\n${shareUrl}`,
     pt: () =>
       `Seu codigo do Quest: *${args.code}*\n\n` +
       `Cada amigo que entrar com seu codigo = 1 entrada no sorteio (max ${args.maxEntries}).\n\n` +
-      `Compartilhe seu link:\n${waUrl}`,
+      `Compartilhe seu link:\n${shareUrl}`,
   }
   return m[lang]()
 }

@@ -37,6 +37,7 @@ import {
   drainPendingReferral,
   __testing,
 } from '#services/quest/referral.service'
+import { formatReferralCodeMessage } from '#utils/messages'
 
 const REFERRER = '+573009999999'
 const REFEREE = '+573001234567'
@@ -600,6 +601,52 @@ test.group('generateCode | shape', () => {
     for (let i = 0; i < 1000; i++) {
       const code = __testing.generateCode()
       assert.notMatch(code, banned, `${code} contains a banned glyph`)
+    }
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// formatReferralCodeMessage — share URL shape pin
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Regression net for the 2026-05-18 "[link removed]" bug. The bot reply
+// showed "Comparte tu link: [link removed]" because WhatsApp suppresses
+// self-targeting wa.me URLs in bot messages. Fix routes the share link
+// through `/r/<code>` on the web app instead. Any drift (regressing to
+// raw wa.me, dropping the `/r/` prefix, or changing the code position
+// in the path) breaks the redirect contract with the web route — these
+// tests fail loudly if that happens.
+
+test.group('formatReferralCodeMessage | share URL shape', () => {
+  test('share URL points at /r/<code> on the web app (NOT raw wa.me)', ({ assert }) => {
+    const out = formatReferralCodeMessage({ code: '8PAFNU', maxEntries: 5 }, 'es')
+    assert.include(out, '/r/8PAFNU', 'share path must be /r/<code>')
+    assert.notInclude(
+      out,
+      'wa.me',
+      'raw wa.me URLs trigger WhatsApp suppression — never embed them'
+    )
+  })
+
+  test('en + pt copies share the same URL shape', ({ assert }) => {
+    for (const lang of ['en', 'pt'] as const) {
+      const out = formatReferralCodeMessage({ code: '8PAFNU', maxEntries: 5 }, lang)
+      assert.include(out, '/r/8PAFNU')
+      assert.notInclude(out, 'wa.me')
+    }
+  })
+
+  test('renders code + max entries verbatim in user-visible copy', ({ assert }) => {
+    const out = formatReferralCodeMessage({ code: 'XYZ234', maxEntries: 3 }, 'es')
+    assert.include(out, '*XYZ234*', 'code is bolded in the reply')
+    assert.include(out, 'max 3', 'max entries surfaced in copy')
+  })
+
+  test('no em-dashes in any language variant', ({ assert }) => {
+    // 2026-05-17 design rule: em-dashes mid-sentence read as AI-generated.
+    for (const lang of ['en', 'es', 'pt'] as const) {
+      const out = formatReferralCodeMessage({ code: 'ABCDEF', maxEntries: 5 }, lang)
+      assert.notInclude(out, '—', `em-dash leaked into ${lang} variant`)
     }
   })
 })
