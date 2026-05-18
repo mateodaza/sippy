@@ -156,9 +156,14 @@ test.group('quest.scoring | getUserQuestStatus | bindings + cap', (group) => {
   group.each.setup(installPrefMock)
   group.each.teardown(restorePrefMock)
 
-  test('passes event slug, cap, venue-source allowlist, and phone in that order', async ({
-    assert,
-  }) => {
+  test('binds event slug, cap, venue-source allowlist, and phone', async ({ assert }) => {
+    // Position-agnostic: db.ts expands reused $N placeholders into one
+    // binding per reference (post-2026-05-18 fix for the knex
+    // "Expected X bindings, saw Y" footgun). Asserting positions here
+    // would re-create the same brittleness the expansion code paths
+    // exist to absorb. Inclusion-based assertions verify every required
+    // value reaches the driver, regardless of how many times each
+    // placeholder was referenced in the SQL.
     mockResponder = () => ({ rows: [] })
 
     await getUserQuestStatus({ phone: PHONE, eventSlug: EVENT })
@@ -166,14 +171,12 @@ test.group('quest.scoring | getUserQuestStatus | bindings + cap', (group) => {
     const userCall = rawQueryCalls.find((c) => c.sql.includes('WHERE phone_number = ?'))
     assert.exists(userCall, 'should issue the per-user lookup')
     const bindings = userCall!.bindings as unknown[]
-    assert.equal(bindings[0], EVENT, '$1 = event slug')
-    assert.equal(bindings[1], getEntryCap(), '$2 = entry cap — drives LEAST() in SQL')
-    assert.deepEqual(
-      bindings[2],
-      ['venue'],
-      '$3 = venue-attendance source allowlist (array binding)'
-    )
-    assert.equal(bindings[3], PHONE, '$4 = FK-form phone')
+    assert.include(bindings, EVENT, 'must bind event slug')
+    assert.include(bindings, getEntryCap(), 'must bind entry cap (drives LEAST())')
+    // deepInclude needed because the venue allowlist is an array binding.
+    const sources = bindings.find((b) => Array.isArray(b))
+    assert.deepEqual(sources, ['venue'], 'must bind venue-attendance source allowlist')
+    assert.include(bindings, PHONE, 'must bind FK-form phone')
   })
 
   test('returns rank + entries + breakdown from the ranked CTE on hit', async ({ assert }) => {
@@ -359,7 +362,7 @@ test.group('quest.scoring | getLeaderboard', (group) => {
   group.each.setup(installPrefMock)
   group.each.teardown(restorePrefMock)
 
-  test('forwards limit as $4 binding (after venue allowlist) and orders by rank ASC', async ({
+  test('forwards limit (after venue allowlist expansion) and orders by rank ASC', async ({
     assert,
   }) => {
     mockResponder = () => ({ rows: [] })
@@ -370,8 +373,9 @@ test.group('quest.scoring | getLeaderboard', (group) => {
     const call = rawQueryCalls[0]
     assert.include(call.sql, 'ORDER BY rank ASC')
     const bindings = call.bindings as unknown[]
-    assert.deepEqual(bindings[2], ['venue'], '$3 = venue source allowlist')
-    assert.equal(bindings[3], 10, '$4 = limit')
+    const sources = bindings.find((b) => Array.isArray(b))
+    assert.deepEqual(sources, ['venue'], 'must bind venue source allowlist')
+    assert.include(bindings, 10, 'must bind limit')
   })
 
   test('clamps the limit to [1, 100] to prevent unbounded reads', async ({ assert }) => {
@@ -379,12 +383,12 @@ test.group('quest.scoring | getLeaderboard', (group) => {
 
     await getLeaderboard({ eventSlug: EVENT, limit: 500 })
     let bindings = rawQueryCalls[0].bindings as unknown[]
-    assert.equal(bindings[3], 100, 'limit > 100 clamps to 100')
+    assert.include(bindings, 100, 'limit > 100 clamps to 100')
 
     rawQueryCalls = []
     await getLeaderboard({ eventSlug: EVENT, limit: 0 })
     bindings = rawQueryCalls[0].bindings as unknown[]
-    assert.equal(bindings[3], 1, 'limit <= 0 clamps to 1')
+    assert.include(bindings, 1, 'limit <= 0 clamps to 1')
   })
 
   test('uses default limit of 20 when caller omits it', async ({ assert }) => {
@@ -393,7 +397,7 @@ test.group('quest.scoring | getLeaderboard', (group) => {
     await getLeaderboard({ eventSlug: EVENT })
 
     const bindings = rawQueryCalls[0].bindings as unknown[]
-    assert.equal(bindings[3], 20, 'default limit should be 20')
+    assert.include(bindings, 20, 'default limit should be 20')
   })
 
   test('returns rows shaped as LeaderboardRow', async ({ assert }) => {
@@ -492,8 +496,9 @@ test.group('quest.scoring | getQuestStats', (group) => {
 
     assert.equal(rawQueryCalls.length, 1, 'stats issues exactly one query')
     const bindings = rawQueryCalls[0].bindings as unknown[]
-    assert.equal(bindings[0], EVENT, '$1 = event slug')
-    assert.equal(bindings[1], getEntryCap(), '$2 = cap — must match LEAST() bound')
-    assert.deepEqual(bindings[2], ['venue'], '$3 = venue source allowlist')
+    assert.include(bindings, EVENT, 'must bind event slug')
+    assert.include(bindings, getEntryCap(), 'must bind cap (matches LEAST())')
+    const sources = bindings.find((b) => Array.isArray(b))
+    assert.deepEqual(sources, ['venue'], 'must bind venue source allowlist')
   })
 })

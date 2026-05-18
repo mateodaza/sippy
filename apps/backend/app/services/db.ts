@@ -21,10 +21,24 @@ export async function query<T = any>(
 ): Promise<{ rows: T[]; rowCount: number }> {
   const start = Date.now()
   try {
-    // Lucid rawQuery uses ? placeholders (knex convention), not PostgreSQL $1 syntax.
-    // Convert $1, $2, ... to ? for compatibility with migrated Express queries.
-    const knexText = text.replace(/\$\d+/g, '?')
-    const result = await db.rawQuery(knexText, params ?? [])
+    // Lucid rawQuery uses ? placeholders (knex convention), not PostgreSQL
+    // $1 syntax. We translate pg-style → knex-style, but with one wrinkle:
+    // pg allows REUSED $N (a single binding referenced N times), while knex
+    // demands one binding per ?. A naive `replace(/\$\d+/g, '?')` turns
+    // every reference into its own ? and knex then throws
+    // "Expected X bindings, saw Y" because the ? count > bindings length.
+    //
+    // 2026-05-18 incident: quest scoring CTE used $1 three times and $3
+    // twice (event slug + venue-source allowlist), produced 8 ?s against
+    // 4 bindings, and every `mi quest` reply errored with "Algo salio
+    // mal". The expansion below preserves $N reuse semantics by emitting
+    // a fresh binding per reference, keyed by the 1-indexed pg position.
+    const expandedBindings: unknown[] = []
+    const knexText = text.replace(/\$(\d+)/g, (_match, indexStr: string) => {
+      expandedBindings.push(params?.[Number(indexStr) - 1])
+      return '?'
+    })
+    const result = await db.rawQuery(knexText, expandedBindings)
     const duration = Date.now() - start
     logger.info(`Query executed in ${duration}ms`)
     // rowCount is provided by the pg driver for DML statements (UPDATE/INSERT/DELETE).
