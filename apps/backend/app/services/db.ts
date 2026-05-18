@@ -22,22 +22,44 @@ export async function query<T = any>(
   const start = Date.now()
   try {
     // Lucid rawQuery uses ? placeholders (knex convention), not PostgreSQL
-    // $1 syntax. We translate pg-style → knex-style, but with one wrinkle:
-    // pg allows REUSED $N (a single binding referenced N times), while knex
-    // demands one binding per ?. A naive `replace(/\$\d+/g, '?')` turns
-    // every reference into its own ? and knex then throws
-    // "Expected X bindings, saw Y" because the ? count > bindings length.
+    // $1 syntax. We translate pg-style → knex-style, but with two wrinkles:
     //
-    // 2026-05-18 incident: quest scoring CTE used $1 three times and $3
-    // twice (event slug + venue-source allowlist), produced 8 ?s against
-    // 4 bindings, and every `mi quest` reply errored with "Algo salio
-    // mal". The expansion below preserves $N reuse semantics by emitting
-    // a fresh binding per reference, keyed by the 1-indexed pg position.
+    //   (a) Placeholder reuse. pg allows the same $N to be referenced N
+    //       times with a single binding (`WHERE a = $1 OR b = $1`); knex
+    //       demands one binding per ?. A naive `replace(/\$\d+/g, '?')`
+    //       turns every reference into its own ? and knex then throws
+    //       "Expected X bindings, saw Y" — root cause of incident #1
+    //       on 2026-05-18 (every `mi quest` reply errored with "Algo
+    //       salio mal"). We fix this by expanding the bindings array as
+    //       we replace, so each emitted ? carries its own copy of the
+    //       indexed value.
+    //
+    //   (b) $N inside SQL comments. A blanket regex also matches `$N` in
+    //       `--` and `/* */` comment text. After comment stripping, pg
+    //       sees a "hole" in the numbered parameter sequence (e.g. real
+    //       placeholders at $1,$2,$4..$8 with $3 absent) and errors with
+    //       "could not determine data type of parameter $3" — root cause
+    //       of incident #2 on 2026-05-18 (the post-fix-#1 retry still
+    //       errored because scoring.service.ts had `-- e.slug = $1` in a
+    //       comment that documented the bind). We fix this by making the
+    //       regex comment-aware: comment runs are matched as a whole and
+    //       passed through unchanged, with no binding pushed.
+    //
+    // String-literal awareness is intentionally NOT added. No call site
+    // in this codebase embeds `$N` inside a SQL string literal (would be
+    // an anti-pattern — pg parameters are how you parameterize, not via
+    // string concatenation). If that ever becomes a need, this regex
+    // would need a third alternative for `'...'` runs.
     const expandedBindings: unknown[] = []
-    const knexText = text.replace(/\$(\d+)/g, (_match, indexStr: string) => {
-      expandedBindings.push(params?.[Number(indexStr) - 1])
-      return '?'
-    })
+    const knexText = text.replace(
+      /--[^\n]*|\/\*[\s\S]*?\*\/|\$(\d+)/g,
+      (match, indexStr: string | undefined) => {
+        // Comment runs (`--...` or `/* ... */`): leave intact, push no binding.
+        if (indexStr === undefined) return match
+        expandedBindings.push(params?.[Number(indexStr) - 1])
+        return '?'
+      }
+    )
     const result = await db.rawQuery(knexText, expandedBindings)
     const duration = Date.now() - start
     logger.info(`Query executed in ${duration}ms`)

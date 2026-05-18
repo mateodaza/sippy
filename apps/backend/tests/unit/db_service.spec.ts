@@ -144,3 +144,70 @@ test.group('db.query | $N translation | placeholder reuse', (group) => {
     assert.deepEqual(lastCall!.bindings, ['c', 'c', 'a'])
   })
 })
+
+// ══════════════════════════════════════════════════════════════════════════════
+// $N inside SQL COMMENTS — the 2026-05-18 follow-on footgun
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// After fix #1 (placeholder reuse expansion), every `mi quest` reply
+// still errored — this time with pg `42P18: could not determine data
+// type of parameter $3`. Root cause: the scoring CTE documented its
+// bindings with `-- e.slug = $1` comments, and the blanket `$N` regex
+// matched the comment text too. Knex renumbered all 8 ?'s sequentially,
+// pg stripped the comment, and the bindings/placeholder set went
+// out of sync at the position that used to hold the comment.
+//
+// The translator must skip `$N` inside `--` and `/* */` comments. These
+// tests pin both forms.
+
+test.group('db.query | $N translation | comment skip', (group) => {
+  group.each.setup(installCapture)
+  group.each.teardown(restore)
+
+  test('$N inside a -- comment is NOT bound or translated', async ({ assert }) => {
+    await query('-- the $1 binding\nSELECT $1', ['x'])
+
+    // The real $1 (after the comment) gets translated to ? and bound.
+    // The $1 in the comment text stays as-is and gets no binding.
+    assert.deepEqual(lastCall!.bindings, ['x'], 'only the real $1 produces a binding')
+    assert.include(lastCall!.sql, '$1', 'comment text passes through unchanged (still contains $1)')
+    assert.include(lastCall!.sql, 'SELECT ?', 'real $1 outside the comment translates to ?')
+  })
+
+  test('$N inside a /* */ block comment is NOT bound or translated', async ({ assert }) => {
+    await query('/* sets $2 for the WHERE */ SELECT $1 WHERE x = $2', ['a', 'b'])
+
+    // Only the two real $N references produce bindings. The $2 inside
+    // the block comment stays in the comment text and is ignored.
+    assert.deepEqual(lastCall!.bindings, ['a', 'b'])
+  })
+
+  test('mixed real + comment $N counts only the real ones (the prod CTE shape)', async ({
+    assert,
+  }) => {
+    // Simulates the exact scoring.service.ts pattern: a SQL comment
+    // documenting `e.slug = $1` between two real placeholder branches.
+    // Pre-fix this would have caused pg to error with 42P18 because the
+    // comment's $N was treated as a placeholder, pg stripped it during
+    // parsing, and the parameter list developed a hole.
+    const sql = `
+      SELECT *
+      FROM t
+      WHERE a = $1
+        AND ANY($2::text[])
+      -- the $1 join keeps both branches anchored to the same event
+      UNION
+      SELECT * FROM u WHERE b = $1 AND c = $2
+    `
+    await query(sql, ['eventSlug', ['venue']])
+
+    // 4 real $ references → 4 bindings (with reuse expansion):
+    //   $1 (real), $2 (real), $1 (real, post-comment), $2 (real, post-comment)
+    assert.lengthOf(
+      lastCall!.bindings,
+      4,
+      'comment $1 must NOT be counted; only the 4 real references produce bindings'
+    )
+    assert.deepEqual(lastCall!.bindings, ['eventSlug', ['venue'], 'eventSlug', ['venue']])
+  })
+})
