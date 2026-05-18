@@ -33,6 +33,26 @@ import { query } from '#services/db'
 import { canonicalizePhone, maskPhone } from '#utils/phone'
 import { resolveUserPrefKey } from '#utils/user_pref_lookup'
 
+// ── Quest namespace ─────────────────────────────────────────────────────
+
+/**
+ * Sippy Quest is a GLOBAL mechanic, not event-scoped. A user has ONE
+ * referral code for life (not one per event). The `referral_codes` table
+ * still carries `event_slug` for historical reasons + future per-event
+ * campaigns (e.g. a seasonal limited-edition code), but the default
+ * namespace for the user-facing share link is this sentinel.
+ *
+ * Naming rationale: `event_slug` is misleading — for the global code,
+ * there's no event. Treat the column as a "campaign namespace" and the
+ * 'global' value as the always-on campaign. Renaming the column is a
+ * post-Pizza-Day cleanup.
+ *
+ * Drift guard: any new call site that constructs a referral code MUST
+ * use this constant (or be a deliberate per-event campaign opt-in). Do
+ * not hardcode 'global' inline — that would defeat the rename later.
+ */
+export const GLOBAL_REFERRAL_CAMPAIGN = 'global'
+
 // ── Code generation ─────────────────────────────────────────────────────
 
 // Crockford-style base32 alphabet, NO ambiguous glyphs (0/1/I/L/O dropped).
@@ -99,11 +119,15 @@ export type CaptureOutcome =
 // ── ensureReferralCode ──────────────────────────────────────────────────
 
 /**
- * Get or generate the referral code for (phone, event). One code per
- * (user, event) by unique index — second call returns the existing row.
+ * Get or generate the user's Sippy Quest referral code. One code per
+ * USER, lifetime — the Quest is global, not per-event (see
+ * GLOBAL_REFERRAL_CAMPAIGN). The optional `eventSlug` parameter exists
+ * only for future per-event campaign opt-ins; the default is the global
+ * namespace and that's what `mi codigo` and `mi quest` return.
+ *
  * Safe to call on every `mi codigo` request and on onboarding completion;
  * a write race between the two would resolve via the UNIQUE constraint
- * and yield the existing row on retry.
+ * (phone_number, event_slug) and yield the existing row on retry.
  *
  * Two-tier phone handling (per SH-003 legacy-row compat):
  *   1. Canonicalize input to validate + reject garbage at entry.
@@ -121,7 +145,7 @@ export type CaptureOutcome =
  */
 export async function ensureReferralCode(
   phoneNumber: string,
-  eventSlug: string
+  eventSlug: string = GLOBAL_REFERRAL_CAMPAIGN
 ): Promise<ReferralCodeRow> {
   const canon = canonicalizePhone(phoneNumber)
   if (!canon) {
@@ -213,6 +237,15 @@ export async function lookupReferralCode(code: string): Promise<ReferralCodeRow 
  * attribution (refereee already onboarded) and pending-write (referee
  * still onboarding) based on `refereeOnboarded`.
  *
+ * `attributionEventSlug` is the event this attribution should be tagged
+ * under — typically the currently-active event at the moment the
+ * referee texted [REF-XXX]. The CODE'S namespace (`codeRow.eventSlug`,
+ * usually 'global' under the post-2026-05-18 GLOBAL_REFERRAL_CAMPAIGN
+ * design) is intentionally NOT used here: codes are global, attributions
+ * record the event where the referee landed. The scoring CTE filters by
+ * attribution event_slug for the prize-draw scope, so a wrong tag here
+ * would hide otherwise-valid referrals.
+ *
  * Anti-gaming guards (enforced here, not in schema):
  *   - Self-referral: same phone for referrer + referee → rejected.
  *   - Code unknown: silent no-op (just log).
@@ -228,6 +261,7 @@ export async function captureReferral(args: {
   code: string
   refereePhone: string
   refereeOnboarded: boolean
+  attributionEventSlug: string
 }): Promise<CaptureOutcome> {
   // Canonicalize the referee phone — webhook callers pass `from` from
   // WhatsApp payloads (E.164 with `+`). canonical is used for the
@@ -291,21 +325,21 @@ export async function captureReferral(args: {
         (referee_phone, referrer_phone, referral_code, event_slug)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (referee_phone) DO NOTHING`,
-      [fkKeyReferee, fkKeyReferrer, codeRow.code, codeRow.eventSlug]
+      [fkKeyReferee, fkKeyReferrer, codeRow.code, args.attributionEventSlug]
     )
     logger.info(
       {
         referee: maskPhone(canonReferee),
         referrer: maskPhone(canonReferrer),
         code: codeRow.code,
-        eventSlug: codeRow.eventSlug,
+        attributionEventSlug: args.attributionEventSlug,
       },
       'quest.referral: attributed'
     )
     return {
       kind: 'attributed',
       referrerPhone: canonReferrer,
-      eventSlug: codeRow.eventSlug,
+      eventSlug: args.attributionEventSlug,
     }
   }
 
@@ -320,20 +354,21 @@ export async function captureReferral(args: {
        SET referral_code = EXCLUDED.referral_code,
            event_slug = EXCLUDED.event_slug,
            captured_at = now()`,
-    [fkKeyReferee, codeRow.code, codeRow.eventSlug]
+    [fkKeyReferee, codeRow.code, args.attributionEventSlug]
   )
   logger.info(
     {
       referee: maskPhone(canonReferee),
       referrer: maskPhone(canonReferrer),
       code: codeRow.code,
+      attributionEventSlug: args.attributionEventSlug,
     },
     'quest.referral: pending (referee not onboarded yet)'
   )
   return {
     kind: 'pending',
     referrerPhone: canonReferrer,
-    eventSlug: codeRow.eventSlug,
+    eventSlug: args.attributionEventSlug,
   }
 }
 
@@ -346,13 +381,23 @@ export async function captureReferral(args: {
  * the read-decide-write happens atomically; no separate transaction
  * needed.
  *
+ * `attributionEventSlug` is the event the referee just attended (i.e.
+ * the slug passed to `linkUserToEvent` when step='done'). It OVERRIDES
+ * whatever event the pending row was originally captured under — the
+ * attribution should record where the referee actually showed up, not
+ * the campaign namespace of the code (which is usually 'global' under
+ * the post-2026-05-18 design). Same invariant as captureReferral above.
+ *
  * Idempotent: if no pending row exists, no-op. If the referee already
  * has an attribution (somehow), the INSERT silently no-ops via the
  * ON CONFLICT clause, and the DELETE still clears the pending row.
  *
  * Returns `null` when nothing was drained, otherwise the attribution row.
  */
-export async function drainPendingReferral(refereePhone: string): Promise<{
+export async function drainPendingReferral(
+  refereePhone: string,
+  attributionEventSlug: string
+): Promise<{
   referrerPhone: string
   code: string
   eventSlug: string
@@ -373,23 +418,23 @@ export async function drainPendingReferral(refereePhone: string): Promise<{
   }>(
     `WITH p AS (
        DELETE FROM pending_referrals WHERE phone_number = $1
-       RETURNING referral_code, event_slug
+       RETURNING referral_code
      ),
      c AS (
-       SELECT p.referral_code, p.event_slug, rc.phone_number AS referrer_phone
+       SELECT p.referral_code, rc.phone_number AS referrer_phone
        FROM p JOIN referral_codes rc ON rc.code = p.referral_code
      ),
      ins AS (
        INSERT INTO referral_attributions
          (referee_phone, referrer_phone, referral_code, event_slug)
-       SELECT $1, c.referrer_phone, c.referral_code, c.event_slug
+       SELECT $1, c.referrer_phone, c.referral_code, $2
        FROM c
        WHERE c.referrer_phone != $1
        ON CONFLICT (referee_phone) DO NOTHING
        RETURNING referrer_phone, referral_code, event_slug
      )
      SELECT referrer_phone, referral_code, event_slug FROM ins`,
-    [fkKey]
+    [fkKey, attributionEventSlug]
   )
   if (drained.rows.length === 0) return null
   const row = drained.rows[0]

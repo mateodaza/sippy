@@ -98,7 +98,13 @@ export async function linkUserToEvent(
   // the row to vanish on the first 'done' link.
   if (linkedAtStep === 'done') {
     try {
-      await drainPendingReferral(prefKey)
+      // Pass the slug being linked as the attribution-event tag. The
+      // pending row was captured under whatever slug was active at the
+      // time of the inbound [REF-XXX] text, but the actual attribution
+      // should record where the referee SHOWED UP — which is this event.
+      // Matches the captureReferral signature so the two write paths
+      // produce semantically equivalent attribution rows.
+      await drainPendingReferral(prefKey, event.slug)
     } catch (err) {
       logger.error(
         { err, phone: maskPhone(prefKey), eventSlug: event.slug },

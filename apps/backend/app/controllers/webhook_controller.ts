@@ -1046,6 +1046,11 @@ export async function routeCommand(
         // request via ensureReferralCode). Gated on setup status because
         // pre-setup users don't have a `user_preferences` row yet, and
         // `referral_codes.phone_number` FK-references that table.
+        //
+        // No event slug: the Quest is global, the code is one-per-user-
+        // lifetime (see GLOBAL_REFERRAL_CAMPAIGN). The prize draw is
+        // event-scoped (see scoring service), but the share code itself
+        // outlives any specific event.
         const s = await resolveStatus()
         if (s === 'new_user') {
           await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
@@ -1055,13 +1060,9 @@ export async function routeCommand(
           await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
           break
         }
-        // Current event slug is hardcoded for Pizza Day MVP. Post-event,
-        // derive from the user's active cohort (most-recent user_event_links
-        // row) to support concurrent campaigns.
-        const currentEventSlug = 'pizza-day-ctg-2026'
         const maxEntries = env.get('QUEST_MAX_ENTRIES_PER_USER') ?? 5
         try {
-          const codeRow = await ensureReferralCode(phoneNumber, currentEventSlug)
+          const codeRow = await ensureReferralCode(phoneNumber)
           // Share URL is built inside `formatReferralCodeMessage` against
           // `FRONTEND_URL` and points at `/r/<code>` on the web app — NOT
           // a raw wa.me link. See the format function header for why
@@ -1100,14 +1101,19 @@ export async function routeCommand(
           await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
           break
         }
+        // Quest standing is shown for the currently-active prize event
+        // (Pizza Day). The CODE returned in the share-link CTA is global
+        // (one per user, lifetime) — only the entries / rank are scoped
+        // to this event's draw. Post-Pizza-Day, resolve the active event
+        // dynamically from `events` table rather than hardcoding.
         const currentEventSlug = 'pizza-day-ctg-2026'
         try {
-          // Fetch code + status in parallel — they're independent
-          // reads and both are needed for the reply. Status query
-          // returns zero-state when the user hasn't earned entries
-          // yet so the share-link CTA still fires.
+          // Fetch global code + event-scoped status in parallel — both
+          // are independent reads needed for the reply. Status query
+          // returns zero-state when the user hasn't earned entries yet
+          // so the share-link CTA still fires.
           const [codeRow, status] = await Promise.all([
-            ensureReferralCode(phoneNumber, currentEventSlug),
+            ensureReferralCode(phoneNumber),
             getUserQuestStatus({ phone: phoneNumber, eventSlug: currentEventSlug }),
           ])
           await sendMessageFn(
@@ -1791,10 +1797,16 @@ export default class WebhookController {
       text = referralExtracted.stripped
       try {
         const senderPref = await findUserPrefByPhone(from)
+        // attributionEventSlug = the event this referral lands under.
+        // Codes are global (GLOBAL_REFERRAL_CAMPAIGN), but attributions
+        // record where the referee actually showed up so the prize-draw
+        // scoring can filter. Hardcoded for Pizza Day MVP; resolve from
+        // the currently-active event post-event.
         const capture = await captureReferral({
           code: referralExtracted.code,
           refereePhone: from,
           refereeOnboarded: !!senderPref,
+          attributionEventSlug: 'pizza-day-ctg-2026',
         })
         logger.info(
           { phone: maskPhone(from), code: referralExtracted.code, capture: capture.kind },

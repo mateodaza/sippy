@@ -35,6 +35,7 @@ import {
   ensureReferralCode,
   captureReferral,
   drainPendingReferral,
+  GLOBAL_REFERRAL_CAMPAIGN,
   __testing,
 } from '#services/quest/referral.service'
 import { formatReferralCodeMessage } from '#utils/messages'
@@ -143,6 +144,57 @@ test.group('ensureReferralCode | idempotent', (group) => {
     assert.equal(inserts.length, 1, 'INSERT fires only once across both calls')
   })
 
+  test('GLOBAL namespace: single-arg call mints under the global campaign', async ({ assert }) => {
+    // 2026-05-18 design alignment: Quest is global, not event-scoped. A
+    // user gets ONE referral code for life. The webhook calls
+    // `ensureReferralCode(phone)` with no event arg; the default must
+    // be GLOBAL_REFERRAL_CAMPAIGN so the existing-row SELECT keys on
+    // the same namespace the mint path uses. A drift here would mint a
+    // fresh code on every `mi codigo` and break distributed share links.
+    let lastInsertBindings: unknown[] | undefined
+    let lastSelectBindings: unknown[] | undefined
+    mockResponder = (sql: string) => {
+      if (sql.includes('SELECT') && sql.includes('FROM referral_codes')) {
+        lastSelectBindings = rawQueryCalls[rawQueryCalls.length - 1].bindings
+        return { rows: [] } // force the INSERT path
+      }
+      if (sql.includes('INSERT INTO referral_codes')) {
+        lastInsertBindings = rawQueryCalls[rawQueryCalls.length - 1].bindings
+        return {
+          rows: [
+            {
+              code: 'GLOB42',
+              phone_number: REFERRER,
+              event_slug: GLOBAL_REFERRAL_CAMPAIGN,
+            },
+          ],
+        }
+      }
+      return { rows: [] }
+    }
+
+    const out = await ensureReferralCode(REFERRER) // no event arg
+
+    assert.equal(out.eventSlug, GLOBAL_REFERRAL_CAMPAIGN, 'returned row is in the global namespace')
+    assert.equal(
+      lastSelectBindings?.[1],
+      GLOBAL_REFERRAL_CAMPAIGN,
+      'SELECT must look up by global namespace, not a per-event slug'
+    )
+    assert.equal(
+      lastInsertBindings?.[2],
+      GLOBAL_REFERRAL_CAMPAIGN,
+      'INSERT must mint under the global namespace'
+    )
+  })
+
+  test('GLOBAL constant value is "global" (rename detector)', ({ assert }) => {
+    // If someone renames the constant value, downstream SQL (migration
+    // 0024 backfill, scoring CTE filter intent) silently goes out of
+    // sync. Pin the literal so a rename has to be deliberate + audited.
+    assert.equal(GLOBAL_REFERRAL_CAMPAIGN, 'global')
+  })
+
   test('falls through to retry on PK collision then succeeds', async ({ assert }) => {
     // SELECT (none) → INSERT collides → INSERT succeeds.
     let insertCount = 0
@@ -208,6 +260,7 @@ test.group('captureReferral | pending vs attributed', (group) => {
       code: 'ABC234',
       refereePhone: REFEREE,
       refereeOnboarded: false,
+      attributionEventSlug: EVENT,
     })
     assert.equal(out.kind, 'pending')
     if (out.kind !== 'pending') return
@@ -229,6 +282,7 @@ test.group('captureReferral | pending vs attributed', (group) => {
       code: 'ABC234',
       refereePhone: REFEREE,
       refereeOnboarded: true,
+      attributionEventSlug: EVENT,
     })
     assert.equal(out.kind, 'attributed')
     const last = rawQueryCalls[rawQueryCalls.length - 1]
@@ -252,6 +306,7 @@ test.group('captureReferral | anti-gaming', (group) => {
       code: 'ABC234',
       refereePhone: REFEREE,
       refereeOnboarded: true,
+      attributionEventSlug: EVENT,
     })
     assert.equal(out.kind, 'self_referral')
     // No attribution / pending writes after the lookup.
@@ -272,6 +327,7 @@ test.group('captureReferral | anti-gaming', (group) => {
       code: 'ABC234',
       refereePhone: REFEREE,
       refereeOnboarded: true,
+      attributionEventSlug: EVENT,
     })
     assert.equal(out.kind, 'already_attributed')
     const writes = rawQueryCalls.filter(
@@ -291,6 +347,7 @@ test.group('captureReferral | anti-gaming', (group) => {
       code: 'NOPE99',
       refereePhone: REFEREE,
       refereeOnboarded: true,
+      attributionEventSlug: EVENT,
     })
     assert.equal(out.kind, 'unknown_code')
     assert.equal(rawQueryCalls.length, 1, 'only the lookup query fires for unknown codes')
@@ -324,6 +381,7 @@ test.group('captureReferral | bare vs E.164 self-ref guard', (group) => {
       code: 'ABC234',
       refereePhone: '+573009999999', // E.164 form of the same person
       refereeOnboarded: true,
+      attributionEventSlug: EVENT,
     })
     assert.equal(out.kind, 'self_referral', 'bare vs E.164 mismatch must NOT bypass self-ref')
   })
@@ -336,6 +394,7 @@ test.group('captureReferral | bare vs E.164 self-ref guard', (group) => {
       code: 'ABC234',
       refereePhone: '573009999999',
       refereeOnboarded: true,
+      attributionEventSlug: EVENT,
     })
     assert.equal(out.kind, 'self_referral')
   })
@@ -345,6 +404,7 @@ test.group('captureReferral | bare vs E.164 self-ref guard', (group) => {
       code: 'ABC234',
       refereePhone: 'not-a-phone',
       refereeOnboarded: true,
+      attributionEventSlug: EVENT,
     })
     assert.equal(out.kind, 'unknown_code')
     assert.equal(rawQueryCalls.length, 0, 'invalid phone short-circuits before any DB call')
@@ -367,6 +427,7 @@ test.group('captureReferral | bare vs E.164 self-ref guard', (group) => {
       code: 'ABC234',
       refereePhone: '+573001234567', // E.164 input
       refereeOnboarded: true,
+      attributionEventSlug: EVENT,
     })
     const insertCall = rawQueryCalls.find((c) =>
       c.sql.includes('INSERT INTO referral_attributions')
@@ -397,7 +458,7 @@ test.group('drainPendingReferral | bare vs E.164 input', (group) => {
         rows: [{ referrer_phone: '+573009999999', referral_code: 'ABC234', event_slug: EVENT }],
       },
     ])
-    const out = await drainPendingReferral('573001234567') // bare digits
+    const out = await drainPendingReferral('573001234567', EVENT) // bare digits
     assert.exists(out)
     const call = rawQueryCalls[0]
     assert.equal(
@@ -408,7 +469,7 @@ test.group('drainPendingReferral | bare vs E.164 input', (group) => {
   })
 
   test('invalid phone returns null without touching DB', async ({ assert }) => {
-    const out = await drainPendingReferral('garbage')
+    const out = await drainPendingReferral('garbage', EVENT)
     assert.isNull(out)
     assert.equal(rawQueryCalls.length, 0)
   })
@@ -469,6 +530,7 @@ test.group('FK compat | bare user_preferences rows', (group) => {
       code: 'ABC234',
       refereePhone: '+573001234567', // canonical input
       refereeOnboarded: true,
+      attributionEventSlug: EVENT,
     })
     const insertCall = rawQueryCalls.find((c) =>
       c.sql.includes('INSERT INTO referral_attributions')
@@ -493,6 +555,7 @@ test.group('FK compat | bare user_preferences rows', (group) => {
       code: 'ABC234',
       refereePhone: '+573009999999', // E.164 same person
       refereeOnboarded: true,
+      attributionEventSlug: EVENT,
     })
     assert.equal(out.kind, 'self_referral')
     const writes = rawQueryCalls.filter(
@@ -512,7 +575,7 @@ test.group('FK compat | bare user_preferences rows', (group) => {
         rows: [{ referrer_phone: '573009999999', referral_code: 'ABC234', event_slug: EVENT }],
       },
     ])
-    const out = await drainPendingReferral('+573001234567')
+    const out = await drainPendingReferral('+573001234567', EVENT)
     assert.exists(out)
     const call = rawQueryCalls[0]
     assert.equal(
@@ -545,7 +608,7 @@ test.group('drainPendingReferral | atomicity + idempotency', (group) => {
         ],
       },
     ])
-    const out = await drainPendingReferral(REFEREE)
+    const out = await drainPendingReferral(REFEREE, EVENT)
     assert.exists(out)
     if (!out) return
     assert.equal(out.referrerPhone, REFERRER)
@@ -560,7 +623,7 @@ test.group('drainPendingReferral | atomicity + idempotency', (group) => {
 
   test('idempotent: no pending row → returns null, no writes asserted', async ({ assert }) => {
     respondInSequence([{ rows: [] }])
-    const out = await drainPendingReferral(REFEREE)
+    const out = await drainPendingReferral(REFEREE, EVENT)
     assert.isNull(out)
     // The single CTE still fires (the SQL is unconditional), but returns
     // zero rows when nothing pending. Critical invariant: returns null,
@@ -572,7 +635,7 @@ test.group('drainPendingReferral | atomicity + idempotency', (group) => {
     // themselves (race / data corruption), the CTE's `WHERE c.referrer_phone != $1`
     // filter prevents the attribution insert. Mock that no row comes back.
     respondInSequence([{ rows: [] }])
-    const out = await drainPendingReferral(REFEREE)
+    const out = await drainPendingReferral(REFEREE, EVENT)
     assert.isNull(out, 'self-referral edge in pending must not produce an attribution')
   })
 })
