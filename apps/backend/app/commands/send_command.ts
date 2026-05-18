@@ -31,10 +31,12 @@ import {
   formatDailyLimitExceededMessage,
   formatTieredDailyLimitExceededMessage,
   formatSpendingLimitInfo,
+  formatPoapClaimInvite,
   buttonNeedAnythingElse,
   buttonBalance,
   buttonHelp,
 } from '#utils/messages'
+import { claimPendingPoapInvite, releasePoapInvite } from '#services/event.service'
 import { toUserErrorMessage } from '#utils/errors'
 import { getUserLanguage } from '#services/db'
 import logger from '@adonisjs/core/services/logger'
@@ -49,6 +51,45 @@ import {
   formatInviteDailyLimitReached,
 } from '#utils/messages'
 
+/**
+ * Fire-and-forget POAP claim-link DM after a successful payment. Atomically
+ * reserves the invite (claimPendingPoapInvite stamps poap_invite_sent_at in
+ * the same UPDATE so two parallel sends can't double-send), and releases
+ * the reservation if the WhatsApp send itself errors so a retry on the
+ * user's next payment still has a chance to deliver.
+ *
+ * NEVER throws — caller doesn't await for behaviour, only to satisfy lint.
+ */
+async function sendPoapInviteIfPending(phoneNumber: string, lang: Lang): Promise<void> {
+  try {
+    const invite = await claimPendingPoapInvite(phoneNumber)
+    if (!invite) return
+    try {
+      await sendTextMessage(
+        phoneNumber,
+        formatPoapClaimInvite(
+          { poapClaimUrl: invite.poapClaimUrl, eventName: invite.eventName },
+          lang
+        ),
+        lang
+      )
+      logger.info(
+        `poap-invite.sent event=${invite.eventSlug} to=${maskPhone(phoneNumber)} lang=${lang}`
+      )
+    } catch (sendErr) {
+      logger.warn(
+        { event: invite.eventSlug, to: maskPhone(phoneNumber), err: sendErr },
+        'poap-invite.send-failed (releasing reservation for retry on next payment)'
+      )
+      await releasePoapInvite(phoneNumber, invite.eventSlug).catch((relErr) =>
+        logger.error({ err: relErr }, 'poap-invite.release-failed')
+      )
+    }
+  } catch (err) {
+    logger.error({ err }, 'poap-invite.unexpected-error')
+  }
+}
+
 export async function handleSendCommand(
   fromPhoneNumber: string,
   amount: number,
@@ -57,7 +98,11 @@ export async function handleSendCommand(
   senderRate: number | null,
   senderCurrency: string | null,
   recipientRate: number | null,
-  recipientCurrency: string | null
+  recipientCurrency: string | null,
+  /** True when the user reached this send by scanning a Pay QR. Gates
+   * post-transfer side-effects that should only fire for QR-initiated
+   * payments (e.g. event-POAP claim-link DM). */
+  fromQrScan: boolean = false
 ): Promise<boolean> {
   logger.info(
     `SEND command: ${maskPhone(fromPhoneNumber)} -> ${maskPhone(toPhoneNumber)} (${amount} USD)`
@@ -83,7 +128,8 @@ export async function handleSendCommand(
         senderRate,
         senderCurrency,
         recipientRate,
-        recipientCurrency
+        recipientCurrency,
+        fromQrScan
       )
     }
 
@@ -238,6 +284,13 @@ export async function handleSendCommand(
 
     await sendTextMessage(fromPhoneNumber, successMessage, lang)
 
+    // POAP claim-link DM. Best-effort, isolated from the rest of the
+    // post-transfer flow: only fires for pay-QR-initiated payments to a
+    // user linked to an active event with a POAP URL that hasn't already
+    // been pinged. Chat-typed sends never trigger this — scanning a QR is
+    // the "I'm at this event" signal.
+    if (fromQrScan) void sendPoapInviteIfPending(fromPhoneNumber, lang)
+
     // Notify recipient via template message (works outside 24h session window)
     const recipientLang =
       (await getUserLanguage(toPhoneNumber)) || getLanguageForPhone(toPhoneNumber)
@@ -304,7 +357,8 @@ async function handleEmbeddedSend(
   senderRate: number | null,
   senderCurrency: string | null,
   recipientRate: number | null,
-  recipientCurrency: string | null
+  recipientCurrency: string | null,
+  fromQrScan: boolean = false
 ): Promise<boolean> {
   if (!senderWallet.spendPermissionHash) {
     await sendTextMessage(fromPhoneNumber, formatSetupRequiredMessage(fromPhoneNumber, lang), lang)
@@ -444,6 +498,13 @@ async function handleEmbeddedSend(
     } catch (notifyError) {
       logger.error('Failed to send success notification to sender: %o', notifyError)
     }
+
+    // POAP claim-link DM. Best-effort, isolated from the rest of the
+    // post-transfer flow: only fires for pay-QR-initiated payments to a
+    // user linked to an active event with a POAP URL that hasn't already
+    // been pinged. Chat-typed sends never trigger this — scanning a QR is
+    // the "I'm at this event" signal.
+    if (fromQrScan) void sendPoapInviteIfPending(fromPhoneNumber, lang)
 
     // Notify recipient via template message (works outside 24h session window)
     try {

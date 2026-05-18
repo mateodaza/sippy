@@ -173,3 +173,90 @@ export async function markPoapClaimed(phoneNumber: string, slug: string): Promis
   if ((existing.rows?.length ?? 0) > 0) return { status: 'already-claimed' }
   return { status: 'not-linked' }
 }
+
+/**
+ * Atomically reserves a POAP claim-link invite for a phone, returning the
+ * event + URL if there is one pending. Conditions: phone is linked to an
+ * active event (within its date window), `poap_claim_url IS NOT NULL`, POAP
+ * not yet claimed, and the invite hasn't already been sent. Stamps
+ * `poap_invite_sent_at = now()` in the same UPDATE so two concurrent
+ * successful sends can't double-fire the WhatsApp message.
+ *
+ * Returns null when there's nothing to send — caller should treat as a
+ * silent no-op.
+ */
+export async function claimPendingPoapInvite(phoneNumber: string): Promise<{
+  eventName: string
+  eventSlug: string
+  poapClaimUrl: string
+} | null> {
+  const prefKey = await resolveUserPrefKey(phoneNumber)
+
+  // CTE picks exactly ONE eligible row (with `FOR UPDATE … SKIP LOCKED` so a
+  // concurrent call for the same phone doesn't pick the same row), then the
+  // outer UPDATE stamps `poap_invite_sent_at` on that single row.
+  //
+  // Why this matters: an earlier version did a plain `UPDATE … WHERE phone=?`
+  // and read `rows[0]` from RETURNING. If a user was linked to two eligible
+  // events, both rows got stamped but only the first was actually delivered
+  // — silent data loss. LIMIT 1 inside the CTE + locking is the fix.
+  //
+  // Ordering: most-recently-started event first so the freshest invite
+  // wins; falls back to user-event-link creation time for deterministic
+  // tiebreak when starts_at is NULL.
+  const res = await db.rawQuery(
+    `WITH eligible AS (
+       SELECT uel.event_id, uel.phone_number, e.name, e.slug, e.poap_claim_url
+       FROM user_event_links uel
+       JOIN events e ON e.id = uel.event_id
+       WHERE uel.phone_number = ?
+         AND uel.poap_invite_sent_at IS NULL
+         AND uel.poap_claimed = FALSE
+         AND e.active = TRUE
+         AND e.poap_claim_url IS NOT NULL
+         AND (e.starts_at IS NULL OR e.starts_at <= now())
+         AND (e.ends_at IS NULL OR e.ends_at >= now())
+       ORDER BY e.starts_at DESC NULLS LAST, uel.created_at DESC
+       LIMIT 1
+       FOR UPDATE OF uel SKIP LOCKED
+     )
+     UPDATE user_event_links uel
+     SET poap_invite_sent_at = now()
+     FROM eligible
+     WHERE uel.event_id = eligible.event_id
+       AND uel.phone_number = eligible.phone_number
+     RETURNING eligible.name AS event_name,
+               eligible.slug AS event_slug,
+               eligible.poap_claim_url AS poap_claim_url`,
+    [prefKey]
+  )
+
+  const row = res.rows?.[0] as
+    | { event_name: string; event_slug: string; poap_claim_url: string }
+    | undefined
+  if (!row) return null
+
+  logger.info(`event.poap-invite-reserved ${row.event_slug} -> ${maskPhone(prefKey)}`)
+  return {
+    eventName: row.event_name,
+    eventSlug: row.event_slug,
+    poapClaimUrl: row.poap_claim_url,
+  }
+}
+
+/**
+ * Undo the reservation made by claimPendingPoapInvite. Called when the
+ * WhatsApp send fails so the invite stays eligible for the next payment.
+ */
+export async function releasePoapInvite(phoneNumber: string, eventSlug: string): Promise<void> {
+  const prefKey = await resolveUserPrefKey(phoneNumber)
+  await db.rawQuery(
+    `UPDATE user_event_links uel
+     SET poap_invite_sent_at = NULL
+     FROM events e
+     WHERE uel.event_id = e.id
+       AND uel.phone_number = ?
+       AND e.slug = ?`,
+    [prefKey, eventSlug]
+  )
+}

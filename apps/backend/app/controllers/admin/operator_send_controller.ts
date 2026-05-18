@@ -42,6 +42,12 @@ import { formatOperatorPaymentReceived, type Lang } from '#utils/messages'
 
 const DEFAULT_MAX_PER_TX = 100
 const DEFAULT_MAX_PER_HOUR = 500
+// Default ceiling for the operator's amount dropdown. The page hard-codes
+// the base options [0.5, 1, 2, 3, 4, 5]; setting EVENT_LIMIT_USABLE_AIRDROP
+// to a higher integer extends the menu by 1-USDC steps up to that ceiling
+// (e.g. 8 → adds 6, 7, 8). Values <= 5 are ignored so the default menu is
+// always preserved.
+const DEFAULT_DROPDOWN_MAX_USDC = 5
 
 /**
  * NaN-safe env-var → number. `Number('not-a-number')` returns NaN, and
@@ -56,10 +62,17 @@ function parseCapEnv(envName: string, dflt: number): number {
   return Number.isFinite(n) && n > 0 ? n : dflt
 }
 
-function getCaps(): { perTx: number; perHour: number } {
+function getCaps(): { perTx: number; perHour: number; dropdownMaxUsdc: number } {
+  // EVENT_LIMIT_USABLE_AIRDROP only widens the menu — never narrows it. If
+  // someone sets it to 2 by mistake the operator still gets the default
+  // $0.50–$5 options. Whole numbers only; we floor to the nearest int
+  // because the menu extends in 1-USDC increments.
+  const rawDropdownMax = parseCapEnv('EVENT_LIMIT_USABLE_AIRDROP', DEFAULT_DROPDOWN_MAX_USDC)
+  const dropdownMaxUsdc = Math.max(DEFAULT_DROPDOWN_MAX_USDC, Math.floor(rawDropdownMax))
   return {
     perTx: parseCapEnv('OPERATOR_MAX_PER_TX_USDC', DEFAULT_MAX_PER_TX),
     perHour: parseCapEnv('OPERATOR_MAX_PER_HOUR_USDC', DEFAULT_MAX_PER_HOUR),
+    dropdownMaxUsdc,
   }
 }
 
@@ -92,6 +105,9 @@ interface ShowSendProps {
     perTxUsdc: number
     perHourUsdc: number
     spentLastHourUsdc: number
+    /** Largest USDC amount the operator can pick from the dropdown. Driven
+     * by EVENT_LIMIT_USABLE_AIRDROP env (≥5, ints only). Defaults to 5. */
+    dropdownMaxUsdc: number
   }
   recentSends: RecentSend[]
   /** When ?to=<phone> is provided, pre-fill the form. */
@@ -170,7 +186,12 @@ export default class OperatorSendController {
       const props: ShowSendProps = {
         event: null,
         wallet: null,
-        caps: { perTxUsdc: caps.perTx, perHourUsdc: caps.perHour, spentLastHourUsdc: 0 },
+        caps: {
+          perTxUsdc: caps.perTx,
+          perHourUsdc: caps.perHour,
+          spentLastHourUsdc: 0,
+          dropdownMaxUsdc: caps.dropdownMaxUsdc,
+        },
         recentSends: [],
         prefillRecipientPhone: null,
         flash: (session.flashMessages.all() as ShowSendProps['flash']) ?? null,
@@ -209,6 +230,7 @@ export default class OperatorSendController {
         perTxUsdc: caps.perTx,
         perHourUsdc: caps.perHour,
         spentLastHourUsdc,
+        dropdownMaxUsdc: caps.dropdownMaxUsdc,
       },
       recentSends,
       prefillRecipientPhone: prefill,

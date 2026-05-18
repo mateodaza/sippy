@@ -34,6 +34,10 @@ export interface PendingTransaction {
   recipient: string // canonical E.164 phone
   timestamp: number // Date.now()
   lang: Lang // user's lang at time of send command
+  // Set when this pending confirm originated from a pay-QR scan. Carried
+  // across the confirm step so post-transfer flows (e.g. event-POAP claim
+  // DM) can fire only on QR-initiated sends, not on chat-typed sends.
+  payQrScan?: boolean
 }
 
 export interface PartialSend {

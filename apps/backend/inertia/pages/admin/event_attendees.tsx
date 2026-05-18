@@ -522,25 +522,26 @@ export default function EventAttendeesPage({
                   </td>
                   <td className="px-4 py-3 admin-text">{formatDateTime(a.linkedAt)}</td>
                   <td className="px-4 py-3">
-                    {a.operatorSend.sent ? (
-                      <span
-                        className="font-mono text-xs text-emerald-700"
-                        title={
-                          a.operatorSend.lastSentAt
-                            ? `Last send: ${formatDateTime(a.operatorSend.lastSentAt)}`
-                            : undefined
-                        }
-                      >
-                        ✓ ${a.operatorSend.totalAmountUsdc.toFixed(2)} sent
-                      </span>
-                    ) : (
+                    <div className="flex flex-col items-start gap-1">
                       <Link
                         href={`/admin/operator/send?to=${encodeURIComponent(a.phoneNumberRaw)}`}
                         className="inline-block rounded-md border border-current px-3 py-1 font-mono text-xs uppercase tracking-[0.1em] text-crypto-hover hover:bg-crypto-hover hover:text-white"
                       >
-                        Send $
+                        {a.operatorSend.sent ? 'Send again' : 'Send $'}
                       </Link>
-                    )}
+                      {a.operatorSend.sent && (
+                        <span
+                          className="font-mono text-xs text-emerald-700"
+                          title={
+                            a.operatorSend.lastSentAt
+                              ? `Last send: ${formatDateTime(a.operatorSend.lastSentAt)}`
+                              : undefined
+                          }
+                        >
+                          ✓ ${a.operatorSend.totalAmountUsdc.toFixed(2)} sent
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
