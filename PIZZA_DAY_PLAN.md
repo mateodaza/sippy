@@ -25,7 +25,7 @@ Pizza Day isn't only an event. It's a stress test for five reusable Sippy primit
 
 1. **Event onboarding + RSVP flow** (PR #19 foundation). QR-tagged sign-up with per-event welcome message, POAP link delivery, source tracking per assistant. Becomes the reusable "Sippy-hosted event" infrastructure for any future partner event.
 2. **Vendor mode** (street-vendor payments PoC). Labeled Sippy accounts as merchants, receiving USDC from attendees. First real-world test of Sippy as a payment rail for street vendors, food carts, neighborhood shops.
-3. **Sippy Quest** (event-scoped engagement). Leaderboards, prizes, P2P incentives scoped to an event. Reusable framework for activating attendees at any Sippy-supported event.
+3. **Sippy Quest** (global engagement mechanic; per-event prize draws). Entries-based raffle infrastructure shipped 2026-05-18: lifetime-global referral codes, atomic capture/drain of pending referrals, scoring CTE with attendance + referee gates, public leaderboard at `/quest/<event-slug>`. Pizza Day inaugurates the system; future events plug in by registering a new `events` row + setting up venue QRs — no schema or scoring changes needed.
 4. **AI Smart Mode** (smarter parser). LLM-first parsing with regex fallback. Event-scoped rollout this round, but the groundwork carries forward to broader users.
 5. **QR primitive v1** (account-level capability). Pay / event / referral QRs with versioning, revocation, and unified attribution. Pizza Day consumes the admin bulk-generator for assistant printables; full spec lives in [QR_SYSTEM_SPEC.md](QR_SYSTEM_SPEC.md). The user-facing "Pay me" and vendor signage variants ship in parallel.
 
@@ -54,7 +54,7 @@ Each is a feature worth building on its own merit. Pizza Day is the forcing func
 - **Vendor model.** 2 labeled Sippy accounts marked `type=vendor`. Excluded from Quest scoring. Doubles as PoC for street-vendor onboarding.
 - **Exchange model.** 2–3 preloaded Sippy accounts marked `type=exchange`. Staffed by 2–3 people. Hold USDC float, send to attendees in exchange for cash. Excluded from Quest scoring (otherwise their tx count tops the leaderboard). Distinct from vendor wallets to keep accounting clean.
 - **Onramp at venue:** Cash → exchange wallet rep → USDC to attendee Sippy wallet. No Colurs.
-- **POAP UX.** After onboarding, two buttons: "Claim to my Sippy address" (default, one-click) or "Claim to my own wallet" (paste address). Default-to-Sippy keeps the funnel tight while giving users agency.
+- **POAP UX.** Cartagena Onchain mints; Sippy DMs the claim link. **Trigger:** first successful Pay-QR-initiated payment at the event (not first onboarding) — scanning a pay-QR is the "I'm actively here at the event" signal. **Mechanism:** atomic SELECT-FOR-UPDATE-SKIP-LOCKED in `claimPendingPoapInvite` so concurrent payments can't double-fire the DM; failure-to-deliver releases the reservation so the next payment retries. **Status (2026-05-18):** lives in Carlos's PR #23 (in review). Once merged + deployed, the DM contains Cartagena's `poapClaimUrl` and the user can claim to any wallet (Sippy or their own). No "two buttons" UI — the link in the DM is the entire surface.
 - **SMART_MODE flag.** Per-user or per-event env. Parser tries LLM (Llama 4 Scout) first, regex fallback on failure. Never degrades current behavior. Enable for users tagged with `source=pizza-day`.
 - **Gas refuel "toteado".** Top up `GasRefuel.sol` on Arbitrum One before May 22. 200 cold wallets = lots of first-tx gas.
 - **Privacy.** Covered by existing onboarding ToS. No extra QR-side consent needed.
@@ -88,7 +88,7 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 - [x] **Vendor + Exchange Quest exclusion.** Shipped: `getQuestExcludedPhones()` in `app/utils/special_accounts.ts` derives merchants from `qr_links WHERE kind='pay' AND status='active'` (issuance is the merchant declaration — no vendor env list) and UNIONs with `PIZZA_DAY_EXCHANGE_PHONES` env for cash-booth staff. Exchange phones supplied by Mateo when staff identities land **Mon May 18**.
 
-- [ ] **Quest endpoint**: single leaderboard query, top 10 by `quest_score` (distinct senders per recipient, ≥$0.10 each). See "Quest leaderboard — SQL" section above for the exact shape. Confirm `transfers` column names against the onchain table schema; may need `phone_registry` bridge if attribution is wallet-keyed. Filter excluded phones via the util from the item above.
+- [x] **Quest endpoint + scoring service.** Shipped 2026-05-18 as `apps/backend/app/services/quest/scoring.service.ts` (`getUserQuestStatus`, `getLeaderboard`, `getQuestStats`) + `apps/backend/app/controllers/quest_controller.ts` exposing `GET /api/quest/:slug/leaderboard` (public, IP-throttled, masked phones). Single CTE drives all three reads. The original "distinct senders, ≥$0.10" design was replaced by the entries-based raffle (see Quest section above) — no `transfers` join needed, scoring derives from `user_event_links` + `referral_attributions`.
 
 - [ ] **Event Operator Dashboard (unified).** Extends the existing `/admin/qr-sheets/:eventSlug` page into a single operator surface. Three sections:
   1. **Live attendees list** — polls `user_event_links` for the event (or pushes via SSE if simple); shows each attendee with source-tag, onboarding timestamp, wallet status.
@@ -119,6 +119,10 @@ Print + distribute one vendor sheet per booth. Attendee scans → lands in Whats
 #### Already shipped
 
 - [x] **PR #19 baseline merged** on main (commit `0f37178`) — `events` + `user_event_links` tables, `linkUserToEvent`, `markPoapClaimed`, retroactive linking for returning users, source attribution.
+- [x] **Quest foundation (2026-05-18).** Migration `0022_create_quest_tables` (referral_codes, referral_attributions, pending_referrals); `referral.service.ts` with atomic capture/drain + self-referral guard + FK-form phone handling; `bracket_token.service.ts` `[REF-XXXXXX]` extraction; `mi codigo` webhook handler; `sippy.lat/r/<code>` redirect route (WhatsApp anti-spam workaround).
+- [x] **Quest scoring + leaderboard (2026-05-18).** `scoring.service.ts` with entries-based CTE + cap + rank; `mi quest` webhook handler; `quest_controller.ts` public endpoint; `apps/web/app/quest/[slug]/page.tsx` public leaderboard. Migration `0023_backfill_event_qr_source_tag` flips printed event QRs to `source_tag='venue'` so existing-user venue scans credit attendance.
+- [x] **Quest globalization (2026-05-18).** Migration `0024_promote_referral_codes_to_global` flips per-event codes to a global namespace; `ensureReferralCode(phone)` defaults to global; attribution still records the actual event where capture/drain happened. One code per user, lifetime — survives across future events.
+- [x] **Pizza-day attendee guide** at `apps/web/app/pizza-day/page.tsx`. Updated to the entries-based mechanic + links to `/quest/pizza-day-ctg-2026`.
 
 #### Backlog (not a Pizza Day blocker — close when you can)
 
@@ -127,11 +131,11 @@ Print + distribute one vendor sheet per booth. Attendee scans → lands in Whats
 ### Mateo (UI / ops / content)
 
 - [~] Generate Pizza Day assistant sheets via QR admin endpoint (consumes QR v1; see [QR_SYSTEM_SPEC.md](QR_SYSTEM_SPEC.md)). _QR primitive v1 code-complete (migrations 0018+0019, scan endpoint, admin sheets page, runtime path validated via curl). Awaiting browser smoke + the actual print run after vendor phones land May 18. Each printable QR encodes `${FRONTEND_URL}/q/<short-id>?v=1` and on scan redirects into WhatsApp with a `[short-id]` code. Payload metadata stored in `qr_links`: `{kind: 'event', event_slug: 'pizza-day-ctg-2026', source_tag: 'assistant-NN'}`._
-- [ ] Public leaderboard page (top 10 MVP + top 10 Connector + live counters)
+- [x] Public leaderboard page. Shipped 2026-05-18 as `apps/web/app/quest/[slug]/page.tsx` — server-rendered with 60s ISR, top 20 masked, live counters (entries + participants), draw-mechanic copy, CTA to WhatsApp. Brand-polished (cheetah blue accents, draw date in hero) on the same day. Single leaderboard, not the old MVP/Connector split.
 - [~] **Vendor mode receiver UI** (mobile-first dashboard) — **Mateo's solo lane this week**, while Carlos builds the unified operator dashboard in parallel. Design locked May 15:
   - **Attendee scan flow:** scan vendor QR (`kind='pay'`) → WhatsApp opens with `[short-id]` → bot asks "¿Cuánto pagar a {vendorName}?" → user types amount → confirm → send. (Carlos's pay-dispatch lane, conditional on Saturday call.)
   - **Vendor receive flow:** on each incoming payment, Sippy bot sends the vendor a WhatsApp message like `"+$5 USDC de Sippy_user_4521 → ver: sippy.lat/vendor"`. The link opens the mobile dashboard.
-  - **Vendor dashboard** (new mobile-first page at apps/web `/vendor`, auth-gated by phone): today's tx count, total received USDC, last 10 transactions with sender + amount + timestamp. Auto-refresh every 30s. ~2 hours to build. Reads from the same onchain.transfer source the Quest endpoint uses.
+  - **Vendor dashboard** (new mobile-first page at apps/web `/vendor`, auth-gated by phone): today's tx count, total received USDC, last 10 transactions with sender + amount + timestamp. Auto-refresh every 30s. ~2 hours to build. Reads vendor's incoming payments from the on-chain transfer indexer (separate data source from Quest scoring — Quest derives from `referral_attributions` + `user_event_links`, not from on-chain transfers).
 - [x] Spanish `/pizza-day` in-app doc. _Server Component at `apps/web/app/pizza-day/page.tsx`. Covers conseguir USDC, mandar plata, pagar pizza/bebidas, Quest premios, POAP claim, ayuda. Mobile-first, brand-aligned. Will be live on next apps/web deploy at `https://www.sippy.lat/pizza-day`._
 - ~~Live monitoring dashboard~~ → **merged into Carlos's Event Operator Dashboard** (unified surface, see his tracker)
 - [x] Backup plan doc + printed fallback materials. _Backup plans table above. Printable WhatsApp-number flyer at `apps/web/app/pizza-day/flyer/page.tsx` — public URL `https://www.sippy.lat/pizza-day/flyer` once deployed. Cmd/Ctrl+P → print. Hand out as catch-all when sheets get lost / Wi-Fi dies._
@@ -153,89 +157,69 @@ Print + distribute one vendor sheet per booth. Attendee scans → lands in Whats
 
 ## Sippy Quest
 
-**One task. Top 3 winners.** P2P usage is at zero today (per project memory). Pizza Day seeds it. Attendees arrive with small USDC stacks (pizza price + a small extra from Cartagena), so the Quest can't depend on having lots of money — the skill has to be social, not financial.
+**Entries-based raffle. Winners drawn at random from valid entries — not "top of leaderboard wins."** Designed as a global, ongoing Sippy mechanic that Pizza Day inaugurates; the leaderboard URL is event-scoped (`/quest/pizza-day-ctg-2026`) for this season's draw but the per-user referral code is lifetime-global (carries forward to future events).
 
-### The game: "convince others to give you their extras"
+> **History:** earlier drafts of this section described a volume-based "convince others to send you ≥$0.10" mechanic with distinct-senders scoring and a top-3 leaderboard-wins prize structure. Replaced 2026-05-18 with the entries-based raffle described below. Volume-based scoring is no longer in the code — do NOT explain the old mechanic to operators or attendees.
 
-Single mechanic, anyone can play with $0:
+### The game: collect entries, win the raffle
 
-- Pitch / socialize / ask other attendees to send you ≥$0.10
-- Distinct senders are what counts
-- The 3 attendees with the most distinct senders win
+Each attendee can collect up to **5 entries** for Pizza Day's draw. Two ways to earn an entry:
 
-**Design intent:** 100 people sending you $0.10 each is worth more than 1 person sending you $100. The game rewards reach and charm, not size of any single ask.
+1. **+1 entry — Asistir.** Show up at the venue and scan any printed Sippy QR (or, for new users, complete onboarding at the event). The scoring credit fires on the `linked_at_step='done'` (new user) or `linked_at_step='returning' + metadata.source='venue'` (existing user) link. Off-venue social-link taps don't count.
+2. **+1 entry per friend — Traer amigos.** Share your personal referral link (`sippy.lat/r/<code>`). Each friend who joins Sippy through your link **AND** also attends the event credits you with one entry. Their attendance is the trigger; their joining alone doesn't count.
 
-### Scoring
+Max 5 entries per person. The cap is exposed via `QUEST_MAX_ENTRIES_PER_USER` env (default 5) and applied in SQL via `LEAST(raw_entries, $cap)`.
 
-```
-quest_score = COUNT(DISTINCT sender_phone)
-              WHERE recipient_phone = <you>
-                AND amount >= 0.10 USDC
-                AND sender_phone in event_attendees
-                AND sender_phone NOT IN (vendor_phones + exchange_phones)
-                AND created_at BETWEEN <event_start> AND <event_end>
-```
+### Scoring (deterministic, derived at query time)
 
-- $0.10 minimum per incoming send to qualify (filters out zero-amount transactions; tiny enough that anyone can give one)
-- Distinct senders only (one $5 send and ten $5 sends from the same person both = 1)
-- Vendor + exchange phones excluded (would otherwise distort everything)
-- Self-sends excluded
+Entries are derived at query time from two tables:
+
+- `user_event_links` for the attendance branch (`linked_at_step='done'` OR `'returning' + metadata->>'source' = ANY('{venue}')`)
+- `referral_attributions` for the referrals branch (same attendance gate applied to the referee's link to the SAME event)
+
+Both branches are scoped to the current event slug. Self-referrals are blocked at capture time by the `referee_phone != referrer_phone` PK constraint + service-layer guard. There is no separate "exclusion list" anymore — vendor/exchange phones simply don't accumulate entries because they're not referring or being referred under the Quest flow.
+
+Single source of truth: `getLeaderboard()`, `getUserQuestStatus()`, `getQuestStats()` in `apps/backend/app/services/quest/scoring.service.ts`. All three share one CTE so the math can't drift between the in-WhatsApp `mi quest` reply, the public leaderboard, and the totals counters.
+
+### Winners: random draw, not top-of-leaderboard
+
+The leaderboard shows entries ranking for engagement, but **winners are drawn at random from all valid entries** — more entries = more probability, not "highest entries wins." This is the strictly-pinned product contract; the leaderboard page repeats it in plain Spanish at `/quest/pizza-day-ctg-2026` so attendees can't reasonably misread it.
 
 ### Prizes
 
-| Place  | Prize    |
-| ------ | -------- |
-| 🥇 1st | $80 USDC |
-| 🥈 2nd | $40 USDC |
-| 🥉 3rd | $20 USDC |
-
-**Total prize budget: $140** (from $2K marketing). Leaves ~$1.86K for printing, post-event content, paid social. Smaller pot intentionally — the fun is the social game, not the money. $80 is still meaningful for the winner.
+Prize amounts + winner count TBD by Mateo + Carlos. Hold under $140 total per the $2K marketing budget allocation. Whatever the split, the random-draw mechanic decouples prize structure from leaderboard rank (you can have 1 winner or 5 winners, prize amounts can be equal or tiered, doesn't change the scoring math).
 
 ### Why this works
 
-- One rule, one sentence. Anyone can explain it at the door.
-- Wealth-blind. You don't need to arrive with money to win — you need to convince people to send you theirs.
-- Social by design. The mechanic IS the engagement. Networking, pitching, performing.
-- Anti-spam via the $0.10 minimum + distinct-sender rule (filters zero-amount, lets anyone with any USDC participate).
-- P2P seeding still happens — every qualifying send is real P2P traffic.
+- One rule, one sentence: "show up + bring friends, more entries means more chance."
+- Wealth-blind. You don't need any money to play — physical attendance + a couple of friends is enough.
+- Survives the "everyone gets 5 entries" edge case. If 200 people max out, you have 1000 entries and the random draw still produces a clean winner.
+- No "the bot is wrong about my points" disputes — entries are deterministic from on-chain attendance + DB attribution; no fuzzy distinct-sender counting.
+- Quest infrastructure is reusable for future Sippy events (M2 weekly tasks model).
 
 ### Quest leaderboard — SQL
 
-The Quest player is the RECIPIENT (the one being "convinced"). Senders are the people they convinced. Both must be event attendees. Vendor + exchange phones excluded both ways. Self-sends excluded. Event time-window applied. $0.10 minimum per qualifying send.
+The scoring CTE lives in [`apps/backend/app/services/quest/scoring.service.ts`](apps/backend/app/services/quest/scoring.service.ts). Three exports share it:
 
-```sql
--- :excluded_phones is the union of active pay-QR owners (merchants — derived
--- from `qr_links WHERE kind='pay' AND status='active'`) + PIZZA_DAY_EXCHANGE_PHONES,
--- produced by `getQuestExcludedPhones()` in app/utils/special_accounts.ts and
--- passed as a TEXT[] bind. Empty array = no exclusions.
-SELECT recipient_phone, COUNT(DISTINCT sender_phone) AS quest_score
-FROM transfers t
-JOIN user_event_links uel_s ON uel_s.phone_number = t.sender_phone
-JOIN user_event_links uel_r ON uel_r.phone_number = t.recipient_phone
-JOIN events e ON e.id = uel_s.event_id AND e.id = uel_r.event_id
-WHERE e.slug = 'pizza-day-ctg-2026'
-  AND t.amount >= 0.10
-  AND NOT (t.sender_phone   = ANY(:excluded_phones))
-  AND NOT (t.recipient_phone = ANY(:excluded_phones))
-  AND t.sender_phone != t.recipient_phone
-  AND t.created_at BETWEEN <event_start> AND <event_end>
-GROUP BY recipient_phone
-ORDER BY quest_score DESC
-LIMIT 10;
-```
+- `getUserQuestStatus({ phone, eventSlug })` — for the `mi quest` WhatsApp reply
+- `getLeaderboard({ eventSlug, limit })` — for the public page top-N
+- `getQuestStats(eventSlug)` — for the totals counters on the public page
 
-Top 3 by `quest_score` win prizes. Same query feeds the live projector leaderboard.
+Per-user entries are capped via `LEAST(raw_entries, $cap)`; ranks are computed with `RANK() OVER (ORDER BY entries DESC, phone_number ASC)` for deterministic tiebreaking. Anti-farming: the activity branch only counts `linked_at_step='done'` OR (`'returning'` + `metadata->>'source' = ANY('{venue}')`), where `venue` is the source tag the QR sheets controller stamps on the printed event QR. Twitter / SMS deep-link taps don't qualify as attendance.
 
-_Note: column names in `transfers` need Carlos to confirm against the onchain table schema. Shape above assumes phone-keyed attribution; if attribution is wallet-keyed, the join needs `phone_registry` to bridge wallet → phone. `amount >= 0.10` assumes USDC in whole-dollar units; adjust if onchain table stores raw 6-decimal form (`amount >= 100_000`)._
-
-Returns a leader for the Connector prize. Same query feeds the public leaderboard.
+If you need to debug, the relevant SQL is in `scoring.service.ts` under the `ENTRIES_CTE` constant. Don't try to re-derive it from `transfers` — the old volume-based query in earlier drafts of this doc is gone.
 
 ### Leaderboard UX
 
-- Public URL, refresh every 30s
-- Top 10 by score, first name + last-4 of phone (privacy-aware)
-- Live counters for the projector at venue: total attendees, total tx, total USDC volume
-- Renders Connector score separately from MVP score so people see both races
+Live at `/quest/pizza-day-ctg-2026`:
+
+- Public URL, ISR with 60s revalidate (snappy + cheap)
+- Top 20, masked phones (`+57 *** 4567`), no names
+- Counters: total entries in play + total participants
+- Explicit "Cómo se eligen ganadores" panel — pins the draw-mechanic copy so the page reads correctly even for a first-time visitor
+- CTA: deep-link to WhatsApp prefilled with `Hola Sippy! mi quest` so the user lands in their own standing
+
+User-side: `mi quest` in WhatsApp returns `Tu Quest: X/5 entradas` + breakdown (`Asistencia: 1`, `Amigos unidos: N`) + rank. `mi codigo` returns the user's lifetime-global referral code + share URL.
 
 ---
 
@@ -248,7 +232,7 @@ Mobile-friendly admin page, refresh 15–30s:
 - Total tx count + USDC volume
 - Vendor account balances (both vendors)
 - Exchange wallet USDC floats (all 2–3) — alert when any drops below threshold
-- Top 5 Quest leaders (MVP) + top 5 Connectors
+- **Quest totals**: total entries in play + total participants (mirrors the public leaderboard counters at `/quest/pizza-day-ctg-2026`). One race, not two — the old MVP/Connector split is gone; entries are unified under the entries-based raffle.
 - PostHog error rate, last 5 min
 - SMART_MODE fallback rate (regex hits / total parses)
 - Last 10 onboardings: timestamp, assistant ID, success/fail
@@ -260,6 +244,7 @@ PostHog alerts to Mateo's phone for:
 - Backend 5xx
 - SMART_MODE fallback rate climbing above threshold
 - Vendor account balance dropping (in case of pre-funding model)
+- Quest scoring CTE errors (would surface as empty leaderboard + `quest.scoring: leaderboard query failed` in backend logs — `getLeaderboard` swallows errors and returns `[]`, so an empty board mid-event with active onboardings is the symptom)
 
 ---
 
@@ -290,6 +275,8 @@ A single tactical card for **Fri May 22, 2026**. Pin this; everything else in th
   - All printed assistant sheets render correctly.
   - **Fallback QR is in the list** (source_tag `assistant-fallback`). If missing, generate it now.
 - [ ] Open WhatsApp on a test phone. Open one printed QR's `/q/<short-id>` URL. Confirm it deeplinks into a chat with Sippy (not into "choose contact").
+- [ ] Open `sippy.lat/quest/pizza-day-ctg-2026` in a browser. Confirm counters render (will be `0` / `0` pre-event, with the "Aún no hay entradas" empty state — that's correct).
+- [ ] Send `mi codigo` and `mi quest` to Sippy from a test phone. Confirm replies render correctly (code returned, `0/5` entries shown).
 - [ ] Confirm each exchange wallet has its preloaded USDC float.
 - [ ] Open the live monitoring dashboard in a browser tab. Leave it visible.
 - [ ] Distribute QR sheets to assistants. Each assistant gets one labeled sheet + a copy of the fallback.
@@ -299,14 +286,16 @@ A single tactical card for **Fri May 22, 2026**. Pin this; everything else in th
 - [ ] **Onboarding rate** (monitoring dashboard): expect spikes when waves arrive. Investigate if rate drops to zero unexpectedly.
 - [ ] **PostHog error rate**: alert threshold already set on Mateo's phone. Investigate any spike.
 - [ ] **Exchange wallet floats**: alert fires at <$100 USDC. Top up from treasury wallet on the fly.
-- [ ] **Quest leaderboard projector**: refresh visible to attendees, drives engagement.
+- [ ] **Quest leaderboard projector**: project `sippy.lat/quest/pizza-day-ctg-2026` on a venue screen. The page ISR-revalidates every 60s; manual refresh shows the latest. Drives engagement and reminds attendees how entries work.
+- [ ] **Explain the Quest mechanic correctly**: "Show up + bring friends. Up to 5 entries each. Winners are drawn at random from valid entries — not 'top of leaderboard wins.'" The leaderboard page repeats this verbatim under "Cómo se eligen ganadores". Do NOT describe the old "convince others to send you $0.10" mechanic (volume-based scoring is no longer in the code).
 - [ ] **Failure response**: refer to Backup plans section below for the specific failure mode.
 
 ### End of event
 
-- [ ] **Snapshot Quest leaderboard** at the cutoff time. Pin the 3 prize winners (Pizza MVP, Connector, First Mover) for payout.
+- [ ] **Snapshot Quest leaderboard** at the cutoff time. Screenshot the `/quest/pizza-day-ctg-2026` page. Pin the total entries + total participants counter for the post-event recap.
+- [ ] **Run the random draw** from the qualifying entries. Whatever prize structure was locked (TBD: count + amounts, capped at $140 total), winners are drawn from valid entries — NOT top-N of the leaderboard. Source: the `referral_attributions` + `user_event_links` data backing the scoring query at event-end.
 - [ ] **Capture screenshots**: leaderboard final state, monitoring dashboard final counters, any noteworthy moments. Needed for the post-event recap.
-- [ ] Disburse Quest prizes (3 × USDC transfers from treasury).
+- [ ] Disburse Quest prizes (USDC transfers from treasury).
 - [ ] Drain exchange wallet floats back to treasury (or leave for next event).
 
 ---
@@ -328,7 +317,7 @@ Pre-deploy verification for the QR primitive. **Status as of May 15, 2026: all i
 - [ ] `SIPPY_WHATSAPP_NUMBER=14722261449` — drives wa.me deeplink. If unset, code falls back to the same canonical via `SIPPY_WHATSAPP_NUMBER_FALLBACK` constant, but explicit is safer.
 - [ ] `SIPPY_EVENT_QR_OWNER_PHONE` (optional) — prefills the owner phone field in `/admin/qr-sheets/<slug>`. Convenience only.
 - ~~`PIZZA_DAY_VENDOR_PHONES`~~ — **removed**. Vendor identity is now derived from `qr_links WHERE kind='pay' AND status='active'` (issuance is the merchant declaration). Generate vendor sheets via `/admin/pay-sheets` instead.
-- [ ] `PIZZA_DAY_EXCHANGE_PHONES` — comma-separated E.164 list of the 2–3 exchange staff phones. Quest exclusion reads this. Phones land Mon May 18.
+- [ ] `PIZZA_DAY_EXCHANGE_PHONES` — comma-separated E.164 list of the 2–3 exchange staff phones. Used by `getQuestExcludedPhones()` in `app/utils/special_accounts.ts` for any non-Quest-scoring exclusion contexts (e.g. operator dashboards, vendor stats). **Note (2026-05-18):** the new entries-based Quest scoring does NOT use this exclusion list — vendors/exchange wallets simply don't accumulate entries because they're not in the referral graph. Env still useful for other surfaces. Phones land Mon May 18.
 
 ### Frontend env vars (`sippy-web` service on Railway)
 
