@@ -186,68 +186,15 @@ test.group('pollR2pPayments | orphaned initiating_payment', (group) => {
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
-// 2. Stuck paid order → atomic claim → triggers bridge
+// 2. Stuck paid order → bridge
 // ══════════════════════════════════════════════════════════════════════════════
-
-test.group('pollR2pPayments | stuck paid → bridge', (group) => {
-  group.each.setup(setupMocks)
-  group.each.teardown(teardownMocks)
-
-  test('atomically claims paid → initiating_bridge and attempts bridge', async ({ assert }) => {
-    // Recovery sweep: no orphaned orders
-    rawQueryResponses.set("status = 'initiating_payment'", { rows: [] })
-    // Stuck bridge query: one paid order
-    rawQueryResponses.set("status IN ('paid', 'initiating_bridge')", {
-      rows: [{ external_id: 'ext-paid-1', status: 'paid', lifi_tx_hash: null }],
-    })
-    // Atomic claim UPDATE ... RETURNING id — succeeds
-    rawQueryResponses.set("SET status = 'initiating_bridge'", {
-      rows: [{ id: 'order-2' }],
-    })
-    // Main poll loop: no pending orders (use colurs_payment_id IS NOT NULL to uniquely match)
-    rawQueryResponses.set('colurs_payment_id IS NOT NULL', { rows: [] })
-
-    await pollR2pPayments()
-
-    // Verify the atomic claim was attempted
-    const claimCall = rawQueryCalls.find(
-      (c) =>
-        c.sql.includes("status = 'initiating_bridge'") &&
-        c.sql.includes("status = 'paid'") &&
-        c.sql.includes('RETURNING id')
-    )
-    assert.exists(claimCall, 'should have issued atomic claim UPDATE paid → initiating_bridge')
-    assert.include(claimCall!.bindings as unknown[], 'ext-paid-1')
-  })
-
-  test('sets bridge_failed if triggerBridge throws', async ({ assert }) => {
-    // Recovery sweep: no orphaned orders
-    rawQueryResponses.set("status = 'initiating_payment'", { rows: [] })
-    // Stuck bridge query: one paid order
-    rawQueryResponses.set("status IN ('paid', 'initiating_bridge')", {
-      rows: [{ external_id: 'ext-paid-fail', status: 'paid', lifi_tx_hash: null }],
-    })
-    // Atomic claim succeeds
-    rawQueryResponses.set("SET status = 'initiating_bridge'", {
-      rows: [{ id: 'order-3' }],
-    })
-    // bridge_failed UPDATE (will be matched after triggerBridge fails)
-    rawQueryResponses.set("status = 'bridge_failed'", { rows: [{ id: 'order-3' }] })
-    // Main poll loop: no pending orders
-    rawQueryResponses.set('colurs_payment_id IS NOT NULL', { rows: [] })
-
-    // triggerBridge is dynamically imported — it will fail because the service
-    // depends on env vars / real DB. The catch block should set bridge_failed.
-    await pollR2pPayments()
-
-    const failCall = rawQueryCalls.find(
-      (c) =>
-        c.sql.includes("status = 'bridge_failed'") && c.sql.includes("status = 'initiating_bridge'")
-    )
-    assert.exists(failCall, 'should mark bridge_failed when triggerBridge throws')
-    assert.include(failCall!.bindings as unknown[], 'ext-paid-fail')
-  })
-})
+//
+// REMOVED 2026-05-18: the `paid → initiating_bridge` atomic claim now
+// lives in `poll_dispersion_movements.ts` (it became a COP-side concern
+// after the dispersion-job split). Tests for that transition belong in
+// `poll_dispersion_movements.spec.ts`. Leaving an empty section header
+// here as a breadcrumb so anyone scanning for "stuck paid" knows where
+// the coverage moved to.
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 3. Stuck initiating_bridge with no hash → bridge_failed
@@ -260,8 +207,11 @@ test.group('pollR2pPayments | stuck initiating_bridge → bridge_failed', (group
   test('marks bridge_failed when initiating_bridge with no lifi_tx_hash', async ({ assert }) => {
     // Recovery sweep: no orphaned orders
     rawQueryResponses.set("status = 'initiating_payment'", { rows: [] })
-    // Stuck bridge query: one initiating_bridge order with no hash
-    rawQueryResponses.set("status IN ('paid', 'initiating_bridge')", {
+    // Stuck bridge query — match on the distinctive "2 minutes" interval clause
+    // in the SELECT (recoverStuckBridgeOrders). The earlier key based on a
+    // "paid, initiating_bridge" IN-list was stale — that branch moved out of
+    // this job in the 2026-05 dispersion-job split.
+    rawQueryResponses.set("interval '2 minutes'", {
       rows: [{ external_id: 'ext-no-hash', status: 'initiating_bridge', lifi_tx_hash: null }],
     })
     // Main poll loop: no pending orders
@@ -294,8 +244,9 @@ test.group('pollR2pPayments | stuck bridging → needs_reconciliation', (group) 
   test('marks needs_reconciliation when bridging with hash is >2h old', async ({ assert }) => {
     // Recovery sweep: no orphaned orders
     rawQueryResponses.set("status = 'initiating_payment'", { rows: [] })
-    // Stuck bridge query: one bridging order with a hash
-    rawQueryResponses.set("status IN ('paid', 'initiating_bridge')", {
+    // Stuck bridge SELECT — see note above; key on "2 minutes" interval
+    // which is unique to recoverStuckBridgeOrders' WHERE clause.
+    rawQueryResponses.set("interval '2 minutes'", {
       rows: [
         {
           external_id: 'ext-bridging-old',
@@ -373,7 +324,7 @@ test.group('pollR2pPayments | succeeded persists amountUsdt', (group) => {
     global.fetch = makeMockFetch([
       { url: '/token/', response: { access: jwt, refresh: 'fake-refresh' } },
       {
-        url: '/api/reload/r2p/status/mm-123/',
+        url: '/api/reload/r2p/preview/mm-123/',
         response: {
           money_movement_id: 'mm-123',
           status: 'succeeded',
@@ -419,7 +370,7 @@ test.group('pollR2pPayments | succeeded persists amountUsdt', (group) => {
     global.fetch = makeMockFetch([
       { url: '/token/', response: { access: jwt, refresh: 'fake-refresh' } },
       {
-        url: '/api/reload/r2p/status/mm-456/',
+        url: '/api/reload/r2p/preview/mm-456/',
         response: {
           money_movement_id: 'mm-456',
           status: 'succeeded',
