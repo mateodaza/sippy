@@ -6,7 +6,12 @@
  */
 
 import { test } from '@japa/runner'
-import { parseMessage, parseMessageWithRegex } from '#utils/message_parser'
+import {
+  parseMessage,
+  parseMessageWithRegex,
+  matchLooseCommand,
+  matchHighConfidencePreLlm,
+} from '#utils/message_parser'
 
 test.group('Message Parser | Exact Commands (Regex Compatibility)', () => {
   const tests = [
@@ -444,4 +449,216 @@ test.group('Message Parser | Partial-amount currency capture', () => {
       )
     })
   }
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Loose dashboard routing — discoverability fix from 2026-05-18
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// User transcript: "No hay un Dashboard?" got back "you can check balance
+// here" — the bot didn't know about the dashboard it had just learned to
+// link to. Strict regex only matches exact tokens (`dashboard` alone);
+// conversational forms fell through. These tests pin the loose patterns
+// that catch the natural phrasings users actually type.
+//
+// `matchLooseCommand` runs as Step 4 in `parseMessage` (after LLM). We
+// test it directly because the LLM-on path is non-deterministic in CI.
+
+test.group('Message Parser | Loose dashboard routing (P0 discoverability)', () => {
+  const DASHBOARD_LOOSE_CASES = [
+    'no hay un dashboard?',
+    'y no hay un panel?',
+    'como entro a mi cuenta',
+    'donde esta mi panel',
+    'hay dashboard?',
+    'mi cuenta',
+    'panel',
+    'meu painel',
+  ]
+  for (const input of DASHBOARD_LOOSE_CASES) {
+    test(`"${input}" routes to dashboard via loose match`, ({ assert }) => {
+      const result = matchLooseCommand(input)
+      assert.exists(result, `${input} must match a loose pattern`)
+      assert.equal(result?.command, 'dashboard')
+    })
+  }
+
+  // Shadow guard — "mi cuenta de banco" / "mi cuenta de gmail" are NOT
+  // about the Sippy dashboard. The loose pattern requires `mi cuenta` to
+  // be at end-of-string (after punctuation strip) to avoid this shadow.
+  // If this breaks, the regex got too greedy and a real user will get a
+  // wrong-route reply.
+  const SHADOW_GUARD_CASES = [
+    'mi cuenta de banco',
+    'mi cuenta de gmail',
+    'cuenta de ahorros',
+    'panel de yeso',
+  ]
+  for (const input of SHADOW_GUARD_CASES) {
+    test(`shadow guard: "${input}" does NOT route to dashboard`, ({ assert }) => {
+      const result = matchLooseCommand(input)
+      if (result) {
+        assert.notEqual(
+          result.command,
+          'dashboard',
+          `${input} must NOT shadow into dashboard (got ${result.command})`
+        )
+      }
+    })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Address queries route to balance (balance reply already includes address)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// User transcript: "Sabes cuál es mi address pública?" → routed to
+// settings (wrong). Per design call, route address-style queries to
+// balance — the existing reply already shows `Billetera: 0x...` so no
+// new format function is needed.
+
+test.group('Message Parser | Address queries → balance', () => {
+  const ADDRESS_LOOSE_CASES = [
+    'mi address',
+    'mi direccion',
+    'mi dirección',
+    'cual es mi direccion',
+    'cuál es mi dirección',
+    'cual es mi wallet',
+    'cual es mi address',
+    'direccion de mi wallet',
+    'dirección de mi billetera',
+    'billetera publica',
+    'billetera pública',
+    'wallet address',
+    'my address',
+  ]
+  for (const input of ADDRESS_LOOSE_CASES) {
+    test(`"${input}" routes to balance via loose match`, ({ assert }) => {
+      const result = matchLooseCommand(input)
+      assert.exists(result, `${input} must match a loose pattern`)
+      assert.equal(result?.command, 'balance')
+    })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Pre-LLM gate — high-confidence patterns must beat the LLM
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Audit P1 from 2026-05-18: post-LLM loose patterns don't fire when the LLM
+// returns a wrong-but-valid command. The May-17/18 transcripts proved
+// dashboard and address queries get misclassified into settings. The fix
+// is a Step 1.5 in `parseMessage` that runs `matchHighConfidencePreLlm`
+// BEFORE the LLM gets a chance. These tests pin both the pattern set and
+// the structural ordering — if either drifts, the original bug returns.
+
+test.group('Message Parser | Pre-LLM gate (P1)', () => {
+  const DASHBOARD_PRE_LLM_CASES = [
+    'no hay un dashboard?',
+    'y no hay un panel?',
+    'como entro a mi cuenta',
+    'hay dashboard?',
+    'mi cuenta',
+    'panel',
+  ]
+  for (const input of DASHBOARD_PRE_LLM_CASES) {
+    test(`pre-LLM: "${input}" → dashboard`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      assert.exists(result, `${input} must match the pre-LLM gate`)
+      assert.equal(result?.command, 'dashboard')
+    })
+  }
+
+  const ADDRESS_PRE_LLM_CASES = [
+    'mi address',
+    'cual es mi direccion',
+    'cuál es mi dirección',
+    'billetera publica',
+    'wallet address',
+    'my address',
+  ]
+  for (const input of ADDRESS_PRE_LLM_CASES) {
+    test(`pre-LLM: "${input}" → balance`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      assert.exists(result, `${input} must match the pre-LLM gate`)
+      assert.equal(result?.command, 'balance')
+    })
+  }
+
+  // Shadow guards still hold pre-LLM (same patterns as post-LLM).
+  const PRE_LLM_SHADOW_GUARDS = [
+    'mi cuenta de banco',
+    'mi cuenta de gmail',
+    'cuenta de ahorros',
+    'panel de yeso',
+  ]
+  for (const input of PRE_LLM_SHADOW_GUARDS) {
+    test(`pre-LLM shadow guard: "${input}" → null`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      assert.isNull(result, `${input} must NOT match the pre-LLM gate`)
+    })
+  }
+
+  // Negative: the pre-LLM gate is INTENTIONALLY narrow — only dashboard
+  // and address queries. Other intents (fund, withdraw, etc.) still go
+  // through the LLM and post-LLM loose path. If someone widens the
+  // gate, this test forces a deliberate decision.
+  test('pre-LLM gate is narrow: only dashboard + balance (address)', ({ assert }) => {
+    const seen = new Set<string>()
+    for (const input of [
+      ...DASHBOARD_PRE_LLM_CASES,
+      ...ADDRESS_PRE_LLM_CASES,
+      'agregar saldo',
+      'retirar plata',
+      'cuanto tengo',
+      'hola',
+    ]) {
+      const result = matchHighConfidencePreLlm(input)
+      if (result) seen.add(result.command)
+    }
+    assert.deepEqual(
+      [...seen].sort(),
+      ['balance', 'dashboard'],
+      'pre-LLM gate should only ever produce dashboard or balance'
+    )
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Production-path integration: parseMessage routes through the pre-LLM
+// gate when LLM is disabled (most direct test we can do without mocking
+// the LLM service in ESM).
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('Message Parser | parseMessage pre-LLM integration', (group) => {
+  let originalUseLlm: string | undefined
+  group.each.setup(() => {
+    originalUseLlm = process.env.USE_LLM
+    process.env.USE_LLM = 'false' // disable LLM so we hit pre-LLM + post-LLM only
+  })
+  group.each.teardown(() => {
+    if (originalUseLlm === undefined) delete process.env.USE_LLM
+    else process.env.USE_LLM = originalUseLlm
+  })
+
+  test('parseMessage("no hay un dashboard?") → dashboard (pre-LLM wins)', async ({ assert }) => {
+    const result = await parseMessage('no hay un dashboard?')
+    assert.equal(result.command, 'dashboard')
+  })
+
+  test('parseMessage("como entro a mi cuenta") → dashboard', async ({ assert }) => {
+    const result = await parseMessage('como entro a mi cuenta')
+    assert.equal(result.command, 'dashboard')
+  })
+
+  test('parseMessage("cual es mi address") → balance', async ({ assert }) => {
+    const result = await parseMessage('cual es mi address')
+    assert.equal(result.command, 'balance')
+  })
+
+  test('parseMessage("mi cuenta de banco") does NOT route to dashboard', async ({ assert }) => {
+    const result = await parseMessage('mi cuenta de banco')
+    assert.notEqual(result.command, 'dashboard')
+  })
 })

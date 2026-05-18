@@ -117,6 +117,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `📇 *Contacts* — save, delete, or list contacts (e.g. "save mom +573...")\n\n` +
       `📲 *Get your pay code* — say "my qr" or "pay qr"\n\n` +
       `👋 *Invite a friend* — give me their number\n\n` +
+      `📊 *Dashboard / web app* — see balance, activity, actions (say "dashboard")\n\n` +
       `⚙️ *Change settings or limits* — ask for settings\n\n` +
       `🌐 *Switch language* — just tell me which one\n\n` +
       `Add funds: ${FUND_URL}`,
@@ -128,6 +129,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `📇 *Contactos* — guardar, borrar o ver contactos (ej. "guardar mamá +573...")\n\n` +
       `📲 *Tu codigo de pago* — di "mi qr" o "mi codigo de pago"\n\n` +
       `👋 *Invitar a un amigo* — dame su numero\n\n` +
+      `📊 *Dashboard / panel web* — saldo, actividad y acciones (di "dashboard")\n\n` +
       `⚙️ *Cambiar ajustes o limites* — pideme los ajustes\n\n` +
       `🌐 *Cambiar idioma* — solo dime cual\n\n` +
       `Agregar fondos: ${FUND_URL}`,
@@ -139,6 +141,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `📇 *Contatos* — salvar, apagar ou ver contatos (ex. "salvar mãe +5511...")\n\n` +
       `📲 *Seu codigo de pagamento* — diz "meu qr" ou "meu codigo de pagamento"\n\n` +
       `👋 *Convidar um amigo* — me da o numero\n\n` +
+      `📊 *Dashboard / painel web* — saldo, atividade e acoes (diz "dashboard")\n\n` +
       `⚙️ *Mudar ajustes ou limites* — pede os ajustes\n\n` +
       `🌐 *Mudar idioma* — so me diz qual\n\n` +
       `Adicionar fundos: ${FUND_URL}`,

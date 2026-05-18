@@ -311,6 +311,31 @@ const OUT_OF_SCOPE_CASES: GoldenCase[] = [
     minConfidence: 0.6,
     notes: "Pizza-Day-adjacent question — Sippy isn't the event organizer",
   },
+  {
+    // Shadow guard for the `dashboard` intent. The loose regex in
+    // `message_parser.ts` is end-anchored to avoid matching "mi cuenta"
+    // mid-sentence; this golden case ensures the SMART classifier also
+    // doesn't fall for it. If a future prompt tweak starts routing this
+    // to dashboard (because of the "cuenta" keyword overlap), the eval
+    // catches it before users see "Tu dashboard: ..." for a question
+    // about their bank account.
+    id: 'oos-06',
+    text: 'cuál es mi cuenta de banco',
+    lang: 'es',
+    expectedCategory: 'out_of_scope',
+    expectedIntent: null,
+    minConfidence: 0.6,
+    notes: 'shadow guard for dashboard intent — bank account is not the Sippy hub',
+  },
+  {
+    id: 'oos-07',
+    text: 'cuál es mi cuenta de gmail',
+    lang: 'es',
+    expectedCategory: 'out_of_scope',
+    expectedIntent: null,
+    minConfidence: 0.6,
+    notes: 'shadow guard for dashboard intent — external account, not Sippy',
+  },
 ]
 
 // ──────────────────────────────────────────────────────────────────────────

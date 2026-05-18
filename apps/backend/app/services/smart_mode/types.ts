@@ -56,6 +56,12 @@ export const SMART_INTENT_SLUGS = [
   'help',
   'greeting',
   'social',
+  // dashboard — the web hub at /wallet. Added after the May-17 transcript
+  // where users asked "no hay un dashboard?" / "como accedo a mi cuenta?"
+  // and got told "no, just check balance here" (the LLM-generated reply
+  // had no `dashboard` intent to classify into). No slots needed — just
+  // a deep-link action.
+  'dashboard',
 ] as const
 
 export type SmartIntent = (typeof SMART_INTENT_SLUGS)[number]

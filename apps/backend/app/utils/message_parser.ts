@@ -166,9 +166,24 @@ const LOOSE_COMMAND_PATTERNS: Array<[string, RegExp]> = [
     'fund',
     /(?:^|\s)(fund|fundear|add funds|add money|deposit|top.?up|agregar (?:fondos|plata|dinero|saldo)|agregar$|recargar|depositar|adicionar (?:fundos|dinheiro|saldo)|cargar|carregar)(?:\s|$)/i,
   ],
+  // balance — also catches "address" / "dirección" / "billetera pública"
+  // queries because the balance reply already includes the wallet address.
+  // The May-17 transcript showed users asking "Sabes cuál es mi address?"
+  // and getting routed to settings (wrong). Per design call, route these
+  // to balance rather than building a dedicated `address` intent.
   [
     'balance',
-    /(?:^|\s)(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi|mi (?:wallet|billetera|cartera)|my wallet|minha carteira)(?:\s|$)/i,
+    /(?:^|\s)(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi|mi (?:wallet|billetera|cartera)|my wallet|minha carteira|mi (?:address|direcci[oó]n)|cu[aá]l es mi (?:address|direcci[oó]n|wallet)|direcci[oó]n de mi (?:wallet|billetera)|billetera p[uú]blica|wallet address|my address)(?:\s|$)/i,
+  ],
+  // dashboard — the web hub at /wallet. Matches END-of-string only so a
+  // benign phrase like "mi cuenta de banco" doesn't shadow into dashboard
+  // (it'd otherwise match "mi cuenta" mid-sentence). Catches the natural
+  // conversational forms users actually type: "no hay un dashboard?",
+  // "y no hay un panel?", "como entro a mi cuenta". Fuzzier phrasing
+  // ("¿cómo accedo a mi cuenta?") is left to SMART MODE.
+  [
+    'dashboard',
+    /(?:^|\s)(dashboard|panel|mi (?:cuenta|app)|meu painel|meu app|home|my app)\??\s*$/i,
   ],
   // pay_qr — surface the user's pay-QR link. Trigger phrases focus on
   // "how can someone pay me" / "my QR" / "my pay code". Placed above help
@@ -571,10 +586,72 @@ function matchPartialSend(text: string): ParsedCommand | null {
 }
 
 /**
+ * High-confidence loose patterns that MUST run BEFORE the LLM. These
+ * are conversational forms of routing queries (dashboard, address) that
+ * the LLM has historically misclassified into settings/help (real
+ * transcript bugs from 2026-05-17 and 2026-05-18). Running them pre-LLM
+ * is deterministic, zero-cost, and prevents an LLM "valid but wrong"
+ * classification from beating us to the answer.
+ *
+ * Kept as a separate array from `LOOSE_COMMAND_PATTERNS` (rather than
+ * extracted into shared constants) because the two serve different
+ * roles — this one is the pre-LLM gate for high-confidence cases, that
+ * one is the post-LLM safety net for broader read-only intents. The
+ * duplication is intentional; same patterns appear there too as a
+ * defense-in-depth fallback if a future refactor accidentally removes
+ * this Step 1.5 call.
+ *
+ * Membership criteria:
+ *   - Unambiguous: cannot reasonably mean anything else in context
+ *   - End-anchored or otherwise shadow-guarded so benign phrases like
+ *     "mi cuenta de banco" don't match (covered by the spec tests)
+ *   - Pre-existing LLM misclassification proven by a real transcript
+ */
+const HIGH_CONFIDENCE_PRE_LLM_PATTERNS: Array<[string, RegExp]> = [
+  // Dashboard — natural-language asking about the web hub. End-anchored.
+  [
+    'dashboard',
+    /(?:^|\s)(dashboard|panel|mi (?:cuenta|app)|meu painel|meu app|home|my app)\??\s*$/i,
+  ],
+  // Address queries → balance (existing reply already shows the wallet
+  // address). NOT end-anchored because phrases like "mi address" /
+  // "wallet address" can sit anywhere in a question.
+  [
+    'balance',
+    /(?:^|\s)(mi (?:address|direcci[oó]n)|cu[aá]l es mi (?:address|direcci[oó]n|wallet)|direcci[oó]n de mi (?:wallet|billetera)|billetera p[uú]blica|wallet address|my address)(?:\s|$)/i,
+  ],
+]
+
+/**
+ * Match high-confidence patterns that should beat the LLM. Returns null
+ * when no pattern fires — caller falls through to Step 2 (send
+ * normalizer) and onward to LLM classification.
+ *
+ * Exported for direct testing.
+ */
+export function matchHighConfidencePreLlm(text: string): ParsedCommand | null {
+  const normalized = text
+    .trim()
+    .toLowerCase()
+    .replace(/[?!.,;:¿¡]+/g, '')
+    .trim()
+  for (const [command, pattern] of HIGH_CONFIDENCE_PRE_LLM_PATTERNS) {
+    if (pattern.test(normalized)) {
+      return { command: command as ParsedCommand['command'], originalText: text }
+    }
+  }
+  return null
+}
+
+/**
  * Try loose keyword matching for read-only commands.
  * Only fires when strict regex returned 'unknown'.
+ *
+ * Exported for direct testing — production `parseMessage` calls this as
+ * Step 4 (after LLM), so unit tests need a way to verify the loose
+ * patterns without the LLM happening to classify first.
  */
-function matchLooseCommand(text: string): ParsedCommand | null {
+export function matchLooseCommand(text: string): ParsedCommand | null {
   const normalized = text
     .trim()
     .toLowerCase()
@@ -765,6 +842,20 @@ export async function parseMessage(
     const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: 'skipped' }
     if (ctx) {
       logParse(ctx, result, 'regex', 'regex-matched', Date.now() - startTime)
+    }
+    return result
+  }
+
+  // Step 1.5: High-confidence pre-LLM loose patterns. Catches dashboard +
+  // address conversational queries before the LLM gets a chance to
+  // misclassify them (real transcript bugs: "no hay un dashboard?" →
+  // settings, "mi address" → settings). Same patterns are also in
+  // LOOSE_COMMAND_PATTERNS as a post-LLM safety net.
+  const preLlmResult = matchHighConfidencePreLlm(text)
+  if (preLlmResult) {
+    const result: ParsedCommand = { ...preLlmResult, usedLLM: false, llmStatus: 'skipped' }
+    if (ctx) {
+      logParse(ctx, result, 'regex', 'pre-llm-loose-matched', Date.now() - startTime)
     }
     return result
   }

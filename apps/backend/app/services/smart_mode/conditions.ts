@@ -117,6 +117,25 @@ export const INTENT_CONDITIONS: IntentCondition[] = [
     requiresSlots: [],
     examples: ['gracias', 'ok', 'dale', 'thanks', 'perfecto'],
   },
+  {
+    slug: 'dashboard',
+    description:
+      'User wants to access the web dashboard / account hub at /wallet. Covers "do you have a dashboard?", "how do I access my account?", "is there a panel?". DO NOT route here for `mi cuenta de banco` (bank account) or any non-Sippy account reference.',
+    requiresSlots: [],
+    examples: [
+      'mi cuenta',
+      'panel',
+      'dashboard',
+      'como entro a mi cuenta',
+      'no hay un dashboard?',
+      'meu painel',
+      'how do I access my account',
+    ],
+    notRoutedHere: [
+      'mi cuenta de banco', // bank account, not Sippy
+      'mi cuenta de gmail', // external account
+    ],
+  },
 ]
 
 /** Lookup helper. */

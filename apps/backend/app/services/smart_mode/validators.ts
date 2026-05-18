@@ -65,6 +65,7 @@ const DEFAULT_CLARIFICATIONS: Record<SmartIntent, Record<'amount' | 'recipientRa
   help: { amount: '', recipientRaw: '' },
   greeting: { amount: '', recipientRaw: '' },
   social: { amount: '', recipientRaw: '' },
+  dashboard: { amount: '', recipientRaw: '' },
 }
 
 /**
