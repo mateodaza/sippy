@@ -543,6 +543,69 @@ test.group('Message Parser | Address queries → balance', () => {
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Sippy Quest — referral_code command routing + pay_qr shadow guard
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Critical no-shadow rule: the existing `mi codigo de pago` MUST keep
+// routing to `pay_qr` (it's been the pay-QR keyword for months). Adding
+// `mi codigo` for referrals would silently break pay-QR if the patterns
+// weren't anchored carefully. pay_qr requires the `de pago|qr` suffix,
+// referral_code matches BARE `mi codigo` only — these tests pin both
+// sides so a future regex tweak can't reintroduce the shadow.
+
+test.group('Message Parser | referral_code command (strict regex)', () => {
+  const REFERRAL_CASES = [
+    'mi codigo',
+    'mi código',
+    'MI CODIGO',
+    'mi codigo de referido',
+    'mi código de referido',
+    'mi codigo de invitacion',
+    'mi código de invitación',
+    'mi codigo invite',
+    'mi código referral',
+    'my code',
+    'my referral',
+    'my invite code',
+    'my referral code',
+    'meu codigo',
+    'meu código',
+    'meu codigo de convite',
+    'meu código de convite',
+  ]
+  for (const input of REFERRAL_CASES) {
+    test(`"${input}" routes to referral_code`, ({ assert }) => {
+      const result = parseMessageWithRegex(input)
+      assert.equal(result.command, 'referral_code', `${input} must route to referral_code`)
+    })
+  }
+
+  // Shadow guard — pay_qr must remain the owner of `mi codigo de pago`
+  // and friends, since that wording predates the referral feature and
+  // is documented in user-facing help copy.
+  const PAY_QR_KEEP_CASES = [
+    'mi codigo de pago',
+    'mi código de pago',
+    'mi qr de pago',
+    'mi qr',
+    'meu codigo de pagamento',
+    'meu qr de pagamento',
+    'como me pagan',
+    'cómo me pagan',
+    'pay qr',
+    'pay code',
+    'my pay qr',
+    'my pay code',
+  ]
+  for (const input of PAY_QR_KEEP_CASES) {
+    test(`shadow guard: "${input}" still routes to pay_qr (not referral_code)`, ({ assert }) => {
+      const result = parseMessageWithRegex(input)
+      assert.equal(result.command, 'pay_qr', `${input} must stay pay_qr`)
+    })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Pre-LLM gate — high-confidence patterns must beat the LLM
 // ══════════════════════════════════════════════════════════════════════════════
 //

@@ -30,6 +30,7 @@
 
 import { test } from '@japa/runner'
 import db from '@adonisjs/lucid/services/db'
+import UserPreference from '#models/user_preference'
 import {
   ensureReferralCode,
   captureReferral,
@@ -79,6 +80,30 @@ function respondInSequence(responses: Array<MockResponse | ((sql: string) => Moc
   }
 }
 
+// ── UserPreference mock ─────────────────────────────────────────────────
+//
+// `resolveUserPrefKey` calls `UserPreference.findBy('phoneNumber', ...)`
+// to decide whether a bare-digit legacy row exists. Default mock returns
+// null → resolveUserPrefKey returns the canonical input (modern behavior).
+// Individual tests override via `setBareRowExists(true)` to exercise the
+// SH-003 legacy-row code path.
+
+let origFindBy: typeof UserPreference.findBy
+let bareRowExists = false
+function installPrefMock() {
+  bareRowExists = false
+  origFindBy = UserPreference.findBy
+  ;(
+    UserPreference as unknown as { findBy: (col: string, val: string) => Promise<unknown> }
+  ).findBy = async () => (bareRowExists ? { phoneNumber: '' } : null)
+}
+function restorePrefMock() {
+  UserPreference.findBy = origFindBy
+}
+function setBareRowExists(v: boolean) {
+  bareRowExists = v
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // ensureReferralCode
 // ══════════════════════════════════════════════════════════════════════════════
@@ -86,6 +111,8 @@ function respondInSequence(responses: Array<MockResponse | ((sql: string) => Moc
 test.group('ensureReferralCode | idempotent', (group) => {
   group.each.setup(installDbMock)
   group.each.teardown(restoreDbMock)
+  group.each.setup(installPrefMock)
+  group.each.teardown(restorePrefMock)
 
   test('returns existing row on second call (no INSERT)', async ({ assert }) => {
     // First call: SELECT finds nothing → INSERT returns the row.
@@ -164,6 +191,8 @@ test.group('ensureReferralCode | idempotent', (group) => {
 test.group('captureReferral | pending vs attributed', (group) => {
   group.each.setup(installDbMock)
   group.each.teardown(restoreDbMock)
+  group.each.setup(installPrefMock)
+  group.each.teardown(restorePrefMock)
 
   test('referee NOT onboarded → writes to pending_referrals', async ({ assert }) => {
     respondInSequence([
@@ -210,6 +239,8 @@ test.group('captureReferral | pending vs attributed', (group) => {
 test.group('captureReferral | anti-gaming', (group) => {
   group.each.setup(installDbMock)
   group.each.teardown(restoreDbMock)
+  group.each.setup(installPrefMock)
+  group.each.teardown(restorePrefMock)
 
   test('self-referral blocked (referrer === referee)', async ({ assert }) => {
     respondInSequence([
@@ -266,12 +297,240 @@ test.group('captureReferral | anti-gaming', (group) => {
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Phone-format normalization — self-ref + attribution checks must NOT
+// be fooled by bare-digit vs E.164 mismatches across callers
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Audit P2 (2026-05-18): if one side is bare digits and the other is
+// E.164, naive `===` would miss the self-referral. canonicalizePhone is
+// called at every public entry point so both sides land in the same
+// canonical form before comparison.
+
+test.group('captureReferral | bare vs E.164 self-ref guard', (group) => {
+  group.each.setup(installDbMock)
+  group.each.teardown(restoreDbMock)
+  group.each.setup(installPrefMock)
+  group.each.teardown(restorePrefMock)
+
+  test('referrer stored bare ("573009999999"), referee passed E.164 → still self-ref', async ({
+    assert,
+  }) => {
+    respondInSequence([
+      // lookup returns code with bare-digit owner
+      { rows: [{ code: 'ABC234', phone_number: '573009999999', event_slug: EVENT }] },
+    ])
+    const out = await captureReferral({
+      code: 'ABC234',
+      refereePhone: '+573009999999', // E.164 form of the same person
+      refereeOnboarded: true,
+    })
+    assert.equal(out.kind, 'self_referral', 'bare vs E.164 mismatch must NOT bypass self-ref')
+  })
+
+  test('referrer E.164, referee bare → still self-ref', async ({ assert }) => {
+    respondInSequence([
+      { rows: [{ code: 'ABC234', phone_number: '+573009999999', event_slug: EVENT }] },
+    ])
+    const out = await captureReferral({
+      code: 'ABC234',
+      refereePhone: '573009999999',
+      refereeOnboarded: true,
+    })
+    assert.equal(out.kind, 'self_referral')
+  })
+
+  test('invalid referee phone returns unknown_code (no DB writes)', async ({ assert }) => {
+    const out = await captureReferral({
+      code: 'ABC234',
+      refereePhone: 'not-a-phone',
+      refereeOnboarded: true,
+    })
+    assert.equal(out.kind, 'unknown_code')
+    assert.equal(rawQueryCalls.length, 0, 'invalid phone short-circuits before any DB call')
+  })
+
+  test('attribution write uses FK-safe forms (referrer = stored FK key, not always canonical)', async ({
+    assert,
+  }) => {
+    // codeRow.phoneNumber is the stored FK key (bare here). The write
+    // must use it verbatim — not canonicalize it — or the FK to
+    // user_preferences breaks for legacy bare-digit rows. Referee
+    // resolves via resolveUserPrefKey (returns canonical here because
+    // UserPreference.findBy is mocked to null → no bare row).
+    respondInSequence([
+      { rows: [{ code: 'ABC234', phone_number: '573009999999', event_slug: EVENT }] },
+      { rows: [] }, // no existing attribution
+      { rows: [] }, // INSERT
+    ])
+    await captureReferral({
+      code: 'ABC234',
+      refereePhone: '+573001234567', // E.164 input
+      refereeOnboarded: true,
+    })
+    const insertCall = rawQueryCalls.find((c) =>
+      c.sql.includes('INSERT INTO referral_attributions')
+    )
+    assert.exists(insertCall, 'attribution insert must fire')
+    if (!insertCall) return
+    const [referee, referrer] = insertCall.bindings as string[]
+    assert.equal(
+      referee,
+      '+573001234567',
+      'referee = canonical FK key (no bare row exists for this phone)'
+    )
+    assert.equal(referrer, '573009999999', 'referrer = stored FK key verbatim from codeRow (bare)')
+  })
+})
+
+test.group('drainPendingReferral | bare vs E.164 input', (group) => {
+  group.each.setup(installDbMock)
+  group.each.teardown(restoreDbMock)
+  group.each.setup(installPrefMock)
+  group.each.teardown(restorePrefMock)
+
+  test('bare-digit input resolves to FK-safe form before DELETE/INSERT', async ({ assert }) => {
+    // No bare row exists (default mock) → resolveUserPrefKey returns
+    // canonical. Bare-digit input gets canonicalized + resolved to '+...'.
+    respondInSequence([
+      {
+        rows: [{ referrer_phone: '+573009999999', referral_code: 'ABC234', event_slug: EVENT }],
+      },
+    ])
+    const out = await drainPendingReferral('573001234567') // bare digits
+    assert.exists(out)
+    const call = rawQueryCalls[0]
+    assert.equal(
+      (call.bindings as string[])[0],
+      '+573001234567',
+      'no bare row exists → drain uses canonical FK key'
+    )
+  })
+
+  test('invalid phone returns null without touching DB', async ({ assert }) => {
+    const out = await drainPendingReferral('garbage')
+    assert.isNull(out)
+    assert.equal(rawQueryCalls.length, 0)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FK-safety against legacy bare-digit user_preferences rows (audit P1)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Audit P1 (2026-05-18): canonical-only writes broke FK against legacy
+// rows still keyed as bare digits (pre-SH-003 backfill). The fix: writes
+// resolve to the FK key via `resolveUserPrefKey`, comparisons stay on
+// canonical. These tests pin both halves so a future "drop the
+// resolveUserPrefKey indirection" refactor without finishing the
+// backfill fails LOUDLY here, not silently in prod with FK errors.
+
+test.group('FK compat | bare user_preferences rows', (group) => {
+  group.each.setup(installDbMock)
+  group.each.teardown(restoreDbMock)
+  group.each.setup(installPrefMock)
+  group.each.teardown(restorePrefMock)
+
+  test('ensureReferralCode writes the BARE FK key when bare row exists', async ({ assert }) => {
+    // Bare row exists in user_preferences → resolveUserPrefKey returns
+    // bare digits so the FK constraint resolves cleanly.
+    setBareRowExists(true)
+    respondInSequence([
+      { rows: [] }, // SELECT: no existing code
+      { rows: [{ code: 'ABC234', phone_number: '573009999999', event_slug: EVENT }] }, // INSERT returns
+    ])
+    const out = await ensureReferralCode('+573009999999', EVENT)
+    assert.equal(out.code, 'ABC234')
+
+    const insertCall = rawQueryCalls.find((c) => c.sql.includes('INSERT INTO referral_codes'))
+    assert.exists(insertCall, 'INSERT must fire')
+    if (!insertCall) return
+    const [, phone] = insertCall.bindings as string[]
+    assert.equal(
+      phone,
+      '573009999999',
+      'bare FK key written when legacy row exists (no `+` prefix)'
+    )
+  })
+
+  test('captureReferral writes attribution with BARE FK key when referee bare row exists', async ({
+    assert,
+  }) => {
+    setBareRowExists(true)
+    respondInSequence([
+      // lookup code (referrer already stored bare, as a sibling legacy row)
+      { rows: [{ code: 'ABC234', phone_number: '573009999999', event_slug: EVENT }] },
+      // no existing attribution
+      { rows: [] },
+      // INSERT attribution
+      { rows: [] },
+    ])
+    await captureReferral({
+      code: 'ABC234',
+      refereePhone: '+573001234567', // canonical input
+      refereeOnboarded: true,
+    })
+    const insertCall = rawQueryCalls.find((c) =>
+      c.sql.includes('INSERT INTO referral_attributions')
+    )
+    assert.exists(insertCall)
+    if (!insertCall) return
+    const [referee, referrer] = insertCall.bindings as string[]
+    assert.equal(referee, '573001234567', 'referee FK key uses bare form (legacy row)')
+    assert.equal(referrer, '573009999999', 'referrer FK key from stored codeRow (bare)')
+  })
+
+  test('self-ref STILL blocks across bare/E.164 even with bare legacy row', async ({ assert }) => {
+    // Critical safety: even with the FK-key indirection, the self-ref
+    // check stays on canonical comparison, so the same person can't
+    // game it by exploiting a format mismatch.
+    setBareRowExists(true)
+    respondInSequence([
+      // codeRow is bare; referee input is canonical for the SAME person
+      { rows: [{ code: 'ABC234', phone_number: '573009999999', event_slug: EVENT }] },
+    ])
+    const out = await captureReferral({
+      code: 'ABC234',
+      refereePhone: '+573009999999', // E.164 same person
+      refereeOnboarded: true,
+    })
+    assert.equal(out.kind, 'self_referral')
+    const writes = rawQueryCalls.filter(
+      (c) =>
+        c.sql.includes('INSERT INTO referral_attributions') ||
+        c.sql.includes('INSERT INTO pending_referrals')
+    )
+    assert.equal(writes.length, 0, 'self-ref must NOT touch attribution tables')
+  })
+
+  test('drainPendingReferral resolves to BARE FK key when bare legacy row exists', async ({
+    assert,
+  }) => {
+    setBareRowExists(true)
+    respondInSequence([
+      {
+        rows: [{ referrer_phone: '573009999999', referral_code: 'ABC234', event_slug: EVENT }],
+      },
+    ])
+    const out = await drainPendingReferral('+573001234567')
+    assert.exists(out)
+    const call = rawQueryCalls[0]
+    assert.equal(
+      (call.bindings as string[])[0],
+      '573001234567',
+      'drain uses bare FK key when legacy row exists for the referee'
+    )
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
 // drainPendingReferral
 // ══════════════════════════════════════════════════════════════════════════════
 
 test.group('drainPendingReferral | atomicity + idempotency', (group) => {
   group.each.setup(installDbMock)
   group.each.teardown(restoreDbMock)
+  group.each.setup(installPrefMock)
+  group.each.teardown(restorePrefMock)
 
   test('atomic move: returns the drained attribution row', async ({ assert }) => {
     respondInSequence([

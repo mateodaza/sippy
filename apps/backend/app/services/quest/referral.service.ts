@@ -27,28 +27,50 @@
  * at draw time.
  */
 
+import { randomBytes } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import { query } from '#services/db'
-import { maskPhone } from '#utils/phone'
+import { canonicalizePhone, maskPhone } from '#utils/phone'
+import { resolveUserPrefKey } from '#utils/user_pref_lookup'
 
 // ── Code generation ─────────────────────────────────────────────────────
 
 // Crockford-style base32 alphabet, NO ambiguous glyphs (0/1/I/L/O dropped).
 // Matches the alphabet used by QR short-ids so the visual/UX feel is
-// consistent across all Sippy-issued codes.
+// consistent across all Sippy-issued codes (see qr_short_id.service.ts).
 const CODE_ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
 const CODE_LENGTH = 6
-// 31^6 = ~887M space; collision probability with 10K codes is < 1 in 100M.
-// Retry-on-collision (UNIQUE constraint on `referral_codes.code` is the PK)
-// handles the rare case without app-level effort.
+// 31^6 ≈ 887M code space. Birthday-collision approximation: with N
+// active codes, expected first-collision count is ~sqrt(π * 887M / 2)
+// ≈ 37K codes — so at our likely scale (hundreds → low thousands) the
+// per-generation collision odds are negligible, but NOT astronomically
+// small. DB retry-on-PK-collision below handles whichever ones do hit.
 const MAX_GENERATION_RETRIES = 5
 
+/**
+ * Generate a single referral code using cryptographic randomness with
+ * byte-mask rejection sampling. Mirrors `generateShortId` in
+ * qr_short_id.service.ts — same alphabet, same sampling discipline, same
+ * unbiased distribution. No `Math.random()`: referral codes drive Quest
+ * prize entries, so the same crypto-random standard as QR short-ids
+ * applies even though they aren't auth secrets.
+ *
+ * Per-byte acceptance rate: 31/32 (mask gives [0, 31], 31 is rejected).
+ * Almost always finishes the inner loop in one pass.
+ */
 function generateCode(): string {
-  let out = ''
-  for (let i = 0; i < CODE_LENGTH; i++) {
-    out += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]
+  let result = ''
+  while (result.length < CODE_LENGTH) {
+    const buf = randomBytes(CODE_LENGTH * 2)
+    for (let i = 0; i < buf.length && result.length < CODE_LENGTH; i++) {
+      const idx = buf[i] & 31
+      if (idx < CODE_ALPHABET.length) {
+        result += CODE_ALPHABET[idx]
+      }
+      // else: rejected slot — discard byte and continue.
+    }
   }
-  return out
+  return result
 }
 
 // ── Public types ────────────────────────────────────────────────────────
@@ -83,12 +105,30 @@ export type CaptureOutcome =
  * a write race between the two would resolve via the UNIQUE constraint
  * and yield the existing row on retry.
  *
- * @throws when too many collisions in a row (extremely unlikely; logged).
+ * Two-tier phone handling (per SH-003 legacy-row compat):
+ *   1. Canonicalize input to validate + reject garbage at entry.
+ *   2. Resolve to the FK-safe form via `resolveUserPrefKey` — returns
+ *      bare digits when a bare row exists in `user_preferences`,
+ *      canonical E.164 otherwise. This is what goes into the SQL so the
+ *      FK to `user_preferences(phone_number)` always resolves.
+ *
+ * Without step 2, an `ensureReferralCode('+57...')` against a prod row
+ * stored as bare digits would fail with an FK violation. Remove the
+ * resolveUserPrefKey indirection only after the SH-003 backfill is
+ * confirmed (same condition that gates the helper itself).
+ *
+ * @throws when phone fails to canonicalize, or after too many collisions.
  */
 export async function ensureReferralCode(
   phoneNumber: string,
   eventSlug: string
 ): Promise<ReferralCodeRow> {
+  const canon = canonicalizePhone(phoneNumber)
+  if (!canon) {
+    throw new Error(`ensureReferralCode: invalid phone ${maskPhone(phoneNumber)}`)
+  }
+  phoneNumber = await resolveUserPrefKey(canon)
+
   // Fast path: already exists.
   const existing = await query<{
     code: string
@@ -189,29 +229,57 @@ export async function captureReferral(args: {
   refereePhone: string
   refereeOnboarded: boolean
 }): Promise<CaptureOutcome> {
+  // Canonicalize the referee phone — webhook callers pass `from` from
+  // WhatsApp payloads (E.164 with `+`). canonical is used for the
+  // self-ref COMPARISON (immune to bare-vs-E.164 drift).
+  const canonReferee = canonicalizePhone(args.refereePhone)
+  if (!canonReferee) {
+    logger.warn(
+      { phone: maskPhone(args.refereePhone) },
+      'quest.referral: capture — invalid referee phone, no-op'
+    )
+    return { kind: 'unknown_code' }
+  }
+
   const codeRow = await lookupReferralCode(args.code)
   if (!codeRow) {
     logger.info({ code: args.code }, 'quest.referral: capture — unknown_code')
     return { kind: 'unknown_code' }
   }
 
-  if (codeRow.phoneNumber === args.refereePhone) {
+  // Two-tier resolution:
+  //   • canonical form (`canon*`) for COMPARISON (self-ref, dedup logging)
+  //   • FK-safe form (`fkKey*` via resolveUserPrefKey) for SQL writes
+  //
+  // Without the second tier, an `INSERT … VALUES (referee, referrer, …)`
+  // with canonical E.164 against a legacy `user_preferences` row stored
+  // as bare digits would fail with an FK violation. Remove this
+  // indirection only after the SH-003 backfill is confirmed (same
+  // condition that gates `resolveUserPrefKey` itself).
+  const canonReferrer = canonicalizePhone(codeRow.phoneNumber) ?? codeRow.phoneNumber
+  if (canonReferrer === canonReferee) {
     logger.info(
-      { code: args.code, phone: maskPhone(args.refereePhone) },
+      { code: args.code, phone: maskPhone(canonReferee) },
       'quest.referral: capture — self_referral blocked'
     )
     return { kind: 'self_referral' }
   }
 
+  const fkKeyReferee = await resolveUserPrefKey(canonReferee)
+  // codeRow.phoneNumber IS the FK key by construction (ensureReferralCode
+  // wrote it that way). Use it directly for writes — don't re-resolve.
+  const fkKeyReferrer = codeRow.phoneNumber
+
   // Already attributed? PK protects us either way; checking first lets
-  // us return a distinct outcome for log clarity.
+  // us return a distinct outcome for log clarity. Look up by FK key so
+  // a row written by a prior format-variant code path still matches.
   const existing = await query<{ referrer_phone: string }>(
     `SELECT referrer_phone FROM referral_attributions WHERE referee_phone = $1 LIMIT 1`,
-    [args.refereePhone]
+    [fkKeyReferee]
   )
   if (existing.rows.length > 0) {
     logger.info(
-      { referee: maskPhone(args.refereePhone) },
+      { referee: maskPhone(canonReferee) },
       'quest.referral: capture — already_attributed (no-op)'
     )
     return { kind: 'already_attributed' }
@@ -223,12 +291,12 @@ export async function captureReferral(args: {
         (referee_phone, referrer_phone, referral_code, event_slug)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (referee_phone) DO NOTHING`,
-      [args.refereePhone, codeRow.phoneNumber, codeRow.code, codeRow.eventSlug]
+      [fkKeyReferee, fkKeyReferrer, codeRow.code, codeRow.eventSlug]
     )
     logger.info(
       {
-        referee: maskPhone(args.refereePhone),
-        referrer: maskPhone(codeRow.phoneNumber),
+        referee: maskPhone(canonReferee),
+        referrer: maskPhone(canonReferrer),
         code: codeRow.code,
         eventSlug: codeRow.eventSlug,
       },
@@ -236,13 +304,15 @@ export async function captureReferral(args: {
     )
     return {
       kind: 'attributed',
-      referrerPhone: codeRow.phoneNumber,
+      referrerPhone: canonReferrer,
       eventSlug: codeRow.eventSlug,
     }
   }
 
   // Not onboarded yet — durable pending row. Overwrites on conflict so
-  // a fresh scan from the same phone updates to the latest code.
+  // a fresh scan from the same phone updates to the latest code. Uses
+  // the FK key form to stay consistent with what the drain step will
+  // look for once onboarding completes (drain also resolves to FK).
   await query(
     `INSERT INTO pending_referrals (phone_number, referral_code, event_slug)
      VALUES ($1, $2, $3)
@@ -250,19 +320,19 @@ export async function captureReferral(args: {
        SET referral_code = EXCLUDED.referral_code,
            event_slug = EXCLUDED.event_slug,
            captured_at = now()`,
-    [args.refereePhone, codeRow.code, codeRow.eventSlug]
+    [fkKeyReferee, codeRow.code, codeRow.eventSlug]
   )
   logger.info(
     {
-      referee: maskPhone(args.refereePhone),
-      referrer: maskPhone(codeRow.phoneNumber),
+      referee: maskPhone(canonReferee),
+      referrer: maskPhone(canonReferrer),
       code: codeRow.code,
     },
     'quest.referral: pending (referee not onboarded yet)'
   )
   return {
     kind: 'pending',
-    referrerPhone: codeRow.phoneNumber,
+    referrerPhone: canonReferrer,
     eventSlug: codeRow.eventSlug,
   }
 }
@@ -287,6 +357,15 @@ export async function drainPendingReferral(refereePhone: string): Promise<{
   code: string
   eventSlug: string
 } | null> {
+  // Two-tier resolution (same rule as captureReferral): canonicalize to
+  // reject garbage, then resolve to the FK-safe form via
+  // resolveUserPrefKey. The DELETE keys on phone_number which was
+  // stored as the FK key at capture time; the INSERT references
+  // user_preferences via FK. Both must match the actual row form.
+  const canon = canonicalizePhone(refereePhone)
+  if (!canon) return null
+  const fkKey = await resolveUserPrefKey(canon)
+
   const drained = await query<{
     referrer_phone: string
     referral_code: string
@@ -310,13 +389,13 @@ export async function drainPendingReferral(refereePhone: string): Promise<{
        RETURNING referrer_phone, referral_code, event_slug
      )
      SELECT referrer_phone, referral_code, event_slug FROM ins`,
-    [refereePhone]
+    [fkKey]
   )
   if (drained.rows.length === 0) return null
   const row = drained.rows[0]
   logger.info(
     {
-      referee: maskPhone(refereePhone),
+      referee: maskPhone(fkKey),
       referrer: maskPhone(row.referrer_phone),
       code: row.referral_code,
       eventSlug: row.event_slug,

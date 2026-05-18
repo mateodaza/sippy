@@ -64,18 +64,20 @@ export default class extends BaseSchema {
       `)
 
       // ── referral_attributions ─────────────────────────────────────────
-      // referee_phone is PK — a person can only be referred ONCE.
-      // event_slug scopes the attribution; the same person could later be
-      // attributed to a different event (different campaign) without a
-      // schema change, because the (referee_phone, event_slug) combo
-      // doesn't have to be unique — but for Pizza Day MVP it effectively
-      // is (one row per referee, one event).
+      // referee_phone is PK — a person can only EVER be referred ONCE.
+      // This is lifetime write-once attribution, not per-event: if you
+      // were referred to Pizza Day by Alice, you cannot later be
+      // re-attributed to Bob for a different campaign. event_slug here
+      // records WHICH event the original attribution happened under, not
+      // a re-attribution dimension. If post-event we want per-campaign
+      // re-attribution, schema change required (composite PK).
       //
       // Foreign key to user_preferences via referrer/referee phones.
-      // Event link is enforced at query time (the draw eligibility check
-      // joins on user_event_links), not in the schema, so attribution
-      // can be written before the event-link row exists (referrer hasn't
-      // checked in yet — covered in design notes).
+      // Event-attendance + vendor/exchange exclusion are enforced at
+      // query time (the draw eligibility check joins on user_event_links)
+      // — not in the schema, so attribution can be written before the
+      // event-link row exists (referrer hasn't checked in yet at the
+      // venue — covered in design notes).
       await db.rawQuery(`
         CREATE TABLE IF NOT EXISTS referral_attributions (
           referee_phone   TEXT PRIMARY KEY REFERENCES user_preferences(phone_number) ON DELETE CASCADE,
