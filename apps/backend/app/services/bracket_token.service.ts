@@ -42,6 +42,19 @@ import {
  */
 const BRACKET_TOKEN_PATTERN = /\[([23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8})\]/
 
+/**
+ * Matches a referral token `[REF-XXXXXX]` — 6-char Crockford-alphabet
+ * code, case-insensitive on input (we generate uppercase but accept both
+ * to survive WhatsApp auto-capitalize quirks).
+ *
+ * Distinct prefix (`REF-`) AND different length (10 chars total inside
+ * the brackets vs 8 for QR) means it cannot collide with `BRACKET_TOKEN_PATTERN`
+ * by construction — but per the 2026-05-18 audit, parse referrals FIRST
+ * regardless so any future widening of either pattern can't accidentally
+ * route a referral through the QR dispatcher.
+ */
+const REFERRAL_TOKEN_PATTERN = /\[REF-([23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6})\]/i
+
 // ── Extraction ──────────────────────────────────────────────────────────────
 
 export interface ExtractedToken {
@@ -75,6 +88,39 @@ export function extractBracketToken(text: string): ExtractedToken {
   const stripped = text.replace(full, ' ').replace(/\s+/g, ' ').trim()
 
   return { shortId, stripped }
+}
+
+// ── Referral token extraction ───────────────────────────────────────────────
+
+export interface ExtractedReferral {
+  /** Uppercase 6-char referral code from the first `[REF-XXXXXX]` match,
+   *  or null if none found. Normalized to uppercase regardless of input case. */
+  code: string | null
+  /** Text with the matched `[REF-…]` (including the brackets) stripped, and
+   *  any surrounding whitespace collapsed. `stripped === text` when no match. */
+  stripped: string
+}
+
+/**
+ * Pull the first `[REF-XXXXXX]` referral token out of the message text.
+ * Called BEFORE `extractBracketToken` in the webhook so a future widening
+ * of the QR pattern can't accidentally route a referral through the QR
+ * dispatcher. The two patterns can't collide today (REF prefix, 6-char
+ * payload vs 8-char Crockford for QR), but parsing-order discipline keeps
+ * that property explicit.
+ *
+ * Pure function — no DB, no side effects.
+ */
+export function extractReferralToken(text: string): ExtractedReferral {
+  if (!text) return { code: null, stripped: text }
+
+  const match = text.match(REFERRAL_TOKEN_PATTERN)
+  if (!match) return { code: null, stripped: text }
+
+  const [full, rawCode] = match
+  const stripped = text.replace(full, ' ').replace(/\s+/g, ' ').trim()
+
+  return { code: rawCode.toUpperCase(), stripped }
 }
 
 // ── Dispatch ────────────────────────────────────────────────────────────────

@@ -17,7 +17,12 @@ import type { WebhookPayload, ParsedCommand, PendingTransaction, PartialSend } f
 import '#types/container'
 import type { Lang } from '#utils/messages'
 import { parseMessage, parseAndValidateAmount } from '#utils/message_parser'
-import { extractBracketToken, dispatchBracketToken } from '#services/bracket_token.service'
+import {
+  extractBracketToken,
+  extractReferralToken,
+  dispatchBracketToken,
+} from '#services/bracket_token.service'
+import { captureReferral, ensureReferralCode } from '#services/quest/referral.service'
 import { sendTextMessage, markAsReadWithTyping } from '#services/whatsapp.service'
 import {
   getUserLanguage,
@@ -33,6 +38,7 @@ import {
   formatHistoryMessage,
   formatSettingsMessage,
   formatDashboardMessage,
+  formatReferralCodeMessage,
   formatLanguageSetMessage,
   formatCommandErrorMessage,
   formatGreetingMessage,
@@ -1033,6 +1039,48 @@ export async function routeCommand(
         break
       }
 
+      case 'referral_code': {
+        // Sippy Quest — return the user's invite code (generate on first
+        // request via ensureReferralCode). Gated on setup status because
+        // pre-setup users don't have a `user_preferences` row yet, and
+        // `referral_codes.phone_number` FK-references that table.
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+          break
+        }
+        if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+          break
+        }
+        // Current event slug is hardcoded for Pizza Day MVP. Post-event,
+        // derive from the user's active cohort (most-recent user_event_links
+        // row) to support concurrent campaigns.
+        const currentEventSlug = 'pizza-day-ctg-2026'
+        const botNumber = env.get('SIPPY_WHATSAPP_NUMBER') ?? '14722261449'
+        const maxEntries = env.get('QUEST_MAX_ENTRIES_PER_USER') ?? 5
+        try {
+          const codeRow = await ensureReferralCode(phoneNumber, currentEventSlug)
+          await sendMessageFn(
+            phoneNumber,
+            formatReferralCodeMessage(
+              {
+                code: codeRow.code,
+                eventSlug: codeRow.eventSlug,
+                botNumber: String(botNumber),
+                maxEntries: Number(maxEntries),
+              },
+              lang
+            ),
+            lang
+          )
+        } catch (err) {
+          logger.error({ err, phone: maskPhone(phoneNumber) }, 'referral_code: ensure failed')
+          await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+        }
+        break
+      }
+
       case 'greeting': {
         const s = await resolveStatus()
         const text = command.originalText ?? ''
@@ -1674,6 +1722,40 @@ export default class WebhookController {
     // means an attendee scans a QR, sees nothing, scans again, still nothing.
     // The catch mirrors the contact-card pattern above: log, send a generic
     // error fallback, mark processed, return.
+    // ── Referral token [REF-XXXXXX] ────────────────────────────────────
+    // Runs BEFORE the QR bracket extractor — the two patterns can't
+    // collide today (prefix + length differ) but parsing-order discipline
+    // keeps that property explicit so any future widening of either
+    // pattern can't accidentally route a referral through the QR path.
+    //
+    // Capture is silent: we record the attribution (or stash it pending
+    // if the user hasn't finished onboarding) and let downstream parsing
+    // continue on the stripped text. No reply, no markProcessed — the
+    // user typed `[REF-XXX]` because they were invited; the welcome /
+    // greeting / setup-nudge that fires from the stripped text IS the
+    // user-facing acknowledgment.
+    const referralExtracted = extractReferralToken(text)
+    if (referralExtracted.code) {
+      text = referralExtracted.stripped
+      try {
+        const senderPref = await findUserPrefByPhone(from)
+        const capture = await captureReferral({
+          code: referralExtracted.code,
+          refereePhone: from,
+          refereeOnboarded: !!senderPref,
+        })
+        logger.info(
+          { phone: maskPhone(from), code: referralExtracted.code, capture: capture.kind },
+          'webhook: referral captured'
+        )
+      } catch (err) {
+        // Referral capture must never block message processing — log and
+        // continue with the stripped text. Worst case: an attribution
+        // intent is dropped, which is better than swallowing the message.
+        logger.error({ err, phone: maskPhone(from) }, 'webhook: referral capture threw')
+      }
+    }
+
     const { shortId, stripped } = extractBracketToken(text)
     if (shortId) {
       const bracketLang: Lang = (await getUserLanguage(from)) || getLanguageForPhone(from)

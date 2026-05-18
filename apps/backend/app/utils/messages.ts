@@ -869,6 +869,44 @@ export function formatHistoryMessage(phoneNumber: string, lang: Lang = 'en'): st
 }
 
 /**
+ * Sippy Quest — referral-code reply. Returns the user's unique invite
+ * code embedded in a wa.me share link that any friend can tap to land
+ * in WhatsApp with the code pre-filled as a [REF-XXXXXX] bracket token.
+ * Sippy then captures the attribution on the friend's first message
+ * (silent — the welcome / greeting is the user-facing acknowledgment).
+ *
+ * Copy intent: explain what the code DOES (1 entry per invite, capped),
+ * then make the share link the visual focus. Keep it short — WhatsApp
+ * collapses long replies.
+ *
+ * `botNumber` is the Sippy WhatsApp number digits only (no `+`), used
+ * to build the wa.me URL. Falls back to the env-configured number if
+ * unset by the caller.
+ */
+export function formatReferralCodeMessage(
+  args: { code: string; eventSlug: string; botNumber: string; maxEntries: number },
+  lang: Lang = 'en'
+): string {
+  const inviteText = `Hola Sippy! [REF-${args.code}]`
+  const waUrl = `https://wa.me/${args.botNumber.replace(/\D/g, '')}?text=${encodeURIComponent(inviteText)}`
+  const m = {
+    en: () =>
+      `Your Quest invite code: *${args.code}*\n\n` +
+      `Each friend who joins with your code = 1 draw entry (max ${args.maxEntries}).\n\n` +
+      `Share your link:\n${waUrl}`,
+    es: () =>
+      `Tu codigo de Quest: *${args.code}*\n\n` +
+      `Cada amigo que se una con tu codigo = 1 entrada al sorteo (max ${args.maxEntries}).\n\n` +
+      `Comparte tu link:\n${waUrl}`,
+    pt: () =>
+      `Seu codigo do Quest: *${args.code}*\n\n` +
+      `Cada amigo que entrar com seu codigo = 1 entrada no sorteio (max ${args.maxEntries}).\n\n` +
+      `Compartilhe seu link:\n${waUrl}`,
+  }
+  return m[lang]()
+}
+
+/**
  * Dashboard deep-link reply. The `/wallet` page is the authenticated app
  * hub: balance, activity, send, settings link. Bot keyword `dashboard` /
  * `mi cuenta` / `meu painel` routes here. Also appended (as a one-liner)

@@ -87,6 +87,8 @@ export interface ParsedCommand {
     | 'list_contacts'
     | 'withdraw'
     | 'dashboard'
+    | 'referral_code'
+    | 'quest_status'
     | 'unknown'
   amount?: number
   recipient?: string

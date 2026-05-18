@@ -137,6 +137,22 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^meu (?:c[oó]digo|qr) de pagamento$/i,
     /^como me pagam\??$/i,
   ],
+  // referral_code — user's Sippy Quest referral code. Distinct from
+  // `pay_qr` (which is `mi codigo de pago`) by requiring either no
+  // suffix or an explicit "referido" / "invite" word. Anti-collision:
+  // `pay_qr` already requires the `de pago|qr` suffix, so bare `mi
+  // codigo` falls here cleanly.
+  referral_code: [
+    /^mi c[oó]digo$/i,
+    /^mi c[oó]digo (?:de )?(?:referido|invitaci[oó]n|invite|referral)$/i,
+    /^my (?:code|referral|invite code|referral code)$/i,
+    /^meu c[oó]digo(?: de convite)?$/i,
+  ],
+  // quest_status patterns deferred until the handler ships — keeping
+  // them out of COMMAND_PATTERNS until then so the type stays a member
+  // of ParsedCommand['command'] (downstream signature unchanged) but
+  // the parser doesn't route to a missing case (which would silently
+  // warn + drop the reply).
 }
 
 /** Privacy patterns — each paired with the language it signals */

@@ -187,4 +187,22 @@ export default await Env.create(new URL('../', import.meta.url), {
   // of fixed templates. Templates remain the fallback if the composer
   // fails or returns sanitizer-rejected text. Money paths NEVER touch this.
   SMART_MODE_COMPOSER_ENABLED: Env.schema.string.optional(),
+
+  // ── Sippy Quest (Pizza Day inauguration) ─────────────────────────────
+  // Event-scoped quest. Two parts:
+  //   • Task 1 (gate): a qualifying send/receive (≥ $0.10) with another
+  //     event attendee DURING the event window. Counterparty must be
+  //     event-linked, not a vendor/exchange, not self, distinct phone.
+  //   • Entries: 1 per successful referral, capped at
+  //     QUEST_MAX_ENTRIES_PER_USER. Draw picks N winners post-event.
+  //
+  // Window timestamps are ISO 8601 with timezone — UTC works, but
+  // explicit Cartagena offset (e.g. 2026-05-22T17:00:00-05:00) reads
+  // cleaner. Both START and END are required to score Task 1; if either
+  // is unset the Quest endpoint reports "not yet open" rather than
+  // crash. Lets us deploy the code before the schedule lands.
+  PIZZA_DAY_EVENT_START_AT: Env.schema.string.optional(),
+  PIZZA_DAY_EVENT_END_AT: Env.schema.string.optional(),
+  // Caps the whale-inviter outcome. 5 chosen by design call 2026-05-18.
+  QUEST_MAX_ENTRIES_PER_USER: Env.schema.number.optional(),
 })
