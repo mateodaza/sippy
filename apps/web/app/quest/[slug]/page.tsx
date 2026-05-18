@@ -105,10 +105,15 @@ export default async function QuestLeaderboardPage({
       <article className="mx-auto max-w-2xl px-6 py-10 sm:py-14">
         {/* Hero */}
         <header className="mb-10 border-b-2 border-[var(--text-primary,#1A1A2E)] pb-8">
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--text-muted,#6B7280)]">
+          <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--brand-primary,#00AFD7)]">
             Sippy Quest · Leaderboard
           </p>
           <h1 className="mt-2 text-3xl font-bold leading-tight sm:text-4xl">{event.name}</h1>
+          {event.endsAt && (
+            <p className="mt-3 font-mono text-xs uppercase tracking-wider text-[var(--text-muted,#6B7280)]">
+              Sorteo: {formatDrawDate(event.endsAt)}
+            </p>
+          )}
           <p className="mt-4 text-sm text-[var(--text-secondary,#374151)] sm:text-base">
             Top entradas. Los ganadores se sortean entre entradas válidas, no por ranking.
           </p>
@@ -122,15 +127,22 @@ export default async function QuestLeaderboardPage({
 
         {/* Leaderboard */}
         <section className="mb-10">
-          <h2 className="mb-4 text-sm font-mono uppercase tracking-wider text-[var(--text-muted,#6B7280)]">
-            Top {leaderboard.length || 20}
-          </h2>
+          {/* Hide "Top N" until there's actually a leaderboard. The earlier
+              `leaderboard.length || 20` showed "Top 20" against an empty list,
+              which implied 20 slots and read as a count. Suppress when empty;
+              show the real count once entries exist. */}
+          {!isEmpty && (
+            <h2 className="mb-4 text-sm font-mono uppercase tracking-wider text-[var(--text-muted,#6B7280)]">
+              Top {leaderboard.length}
+            </h2>
+          )}
 
           {isEmpty ? (
-            <div className="rounded border-2 border-dashed border-[var(--text-muted,#6B7280)] px-6 py-10 text-center">
+            <div className="rounded border-2 border-dashed border-[var(--brand-primary,#00AFD7)] px-6 py-10 text-center">
               <p className="text-base font-semibold">Aún no hay entradas.</p>
               <p className="mt-2 text-sm text-[var(--text-secondary,#374151)]">
-                Sé el primero. Escríbele a Sippy <span className="font-mono">mi codigo</span> y
+                Sé el primero. Escríbele a Sippy{' '}
+                <code className="font-mono text-[var(--brand-primary,#00AFD7)]">mi codigo</code> y
                 comparte tu link.
               </p>
             </div>
@@ -163,13 +175,15 @@ export default async function QuestLeaderboardPage({
         </section>
 
         {/* Draw mechanic — explicit */}
-        <section className="mb-10 rounded border-2 border-[var(--text-primary,#1A1A2E)] bg-[var(--bg-secondary,rgba(0,0,0,0.04))] px-5 py-4">
-          <h2 className="text-sm font-mono uppercase tracking-wider">Cómo se eligen ganadores</h2>
+        <section className="mb-10 rounded border-2 border-[var(--text-primary,#1A1A2E)] bg-[rgba(0,175,215,0.06)] px-5 py-4">
+          <h2 className="text-sm font-mono uppercase tracking-wider text-[var(--brand-primary,#00AFD7)]">
+            Cómo se eligen ganadores
+          </h2>
           <p className="mt-2 text-sm text-[var(--text-secondary,#374151)]">
-            Cada participante puede juntar hasta {cap} entradas: 1 por asistir (escanear un QR del
-            evento al llegar) y 1 por cada amigo que se una con su link y también asista. Los
-            ganadores se sortean al azar entre TODAS las entradas válidas, no por puesto en el
-            ranking.
+            Cada participante puede juntar hasta <strong>{cap} entradas</strong>: 1 por asistir
+            (escanear un QR del evento al llegar) y 1 por cada amigo que se una con tu link y
+            también asista. Los ganadores se sortean al azar entre TODAS las entradas válidas, no
+            por puesto en el ranking.
           </p>
           <p className="mt-2 text-xs text-[var(--text-muted,#6B7280)]">
             Más entradas = más probabilidad. Estar #1 no garantiza premio.
@@ -180,7 +194,7 @@ export default async function QuestLeaderboardPage({
         <section className="mb-10">
           <Link
             href={WA_HOLA}
-            className="block w-full rounded border-2 border-[var(--text-primary,#1A1A2E)] bg-[var(--text-primary,#1A1A2E)] px-6 py-4 text-center font-mono text-base font-semibold text-white transition hover:opacity-90"
+            className="block w-full rounded border-2 border-[var(--brand-primary,#00AFD7)] bg-[var(--brand-primary,#00AFD7)] px-6 py-4 text-center font-mono text-base font-semibold text-white transition hover:bg-[var(--brand-primary-hover,#0098BD)]"
           >
             Ver mis entradas en Sippy
           </Link>
@@ -203,9 +217,24 @@ function Counter({ label, value }: { label: string; value: number }) {
       <p className="font-mono text-xs uppercase tracking-wider text-[var(--text-muted,#6B7280)]">
         {label}
       </p>
-      <p className="mt-1 font-mono text-3xl font-bold tabular-nums sm:text-4xl">
+      <p className="mt-1 font-mono text-3xl font-bold tabular-nums text-[var(--brand-primary,#00AFD7)] sm:text-4xl">
         {value.toLocaleString('es-CO')}
       </p>
     </div>
   )
+}
+
+/**
+ * Format the event endsAt timestamp as a short Spanish draw date.
+ * Example: "22 de mayo" (no year — current-season context implied).
+ * Falls back to the raw ISO if parsing fails so the hero never throws.
+ */
+function formatDrawDate(iso: string): string {
+  try {
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return iso
+    return d.toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })
+  } catch {
+    return iso
+  }
 }
