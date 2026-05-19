@@ -13,6 +13,7 @@ import Event from '#models/event'
 import { resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { maskPhone } from '#utils/phone'
 import { drainPendingReferral } from '#services/quest/referral.service'
+import { VENUE_ATTENDANCE_SOURCES } from '#services/quest/scoring.service'
 
 // Re-export the wire types so existing internal imports (`#services/event.service`)
 // keep working without each consumer needing to know about `@sippy/shared`.
@@ -87,16 +88,35 @@ export async function linkUserToEvent(
   )
 
   // Sippy Quest — drain any pending referral attribution captured before
-  // the user finished onboarding. Only fires on the 'done' transition
-  // because that's the moment the FK row in user_preferences becomes
-  // safe to reference from referral_attributions. Best-effort: a drain
-  // failure must not break event linking (we'd block onboarding over a
-  // bonus-mechanic write), so we swallow + log.
+  // the user attended this event. Fires on any GENUINE attendance:
   //
+  //   • 'done' — new user finished onboarding via the venue QR flow
+  //     (bracket dispatcher deferred the link, /setup completed it).
+  //   • 'returning' AND source ∈ venue allowlist — already-onboarded
+  //     user physically scanned the venue QR.
+  //
+  // The 'returning + venue' branch closes the 2026-05-18 bug where a
+  // viral-referral attendee (signs up via /r/<code>, then attends) was
+  // landing as `linked_at_step='returning'` and the original `done`-only
+  // gate skipped drain — their referrer lost credit even though the
+  // friend showed up. We use the same venue-source allowlist the scoring
+  // CTE uses so the two write/read paths share one anti-farming rule.
+  //
+  // Off-venue 'returning' (Twitter/SMS deep-link tap from home) stays
+  // out: drain shouldn't fire on a remote tap any more than it should
+  // credit attendance. Same fail-closed posture as scoring.
+  //
+  // Best-effort: a drain failure must not break event linking (we'd
+  // block onboarding over a bonus-mechanic write), so we swallow + log.
   // Idempotent: drainPendingReferral is a no-op when no pending row
-  // exists, so re-calling on every link is safe even though we expect
-  // the row to vanish on the first 'done' link.
-  if (linkedAtStep === 'done') {
+  // exists, so re-calling on every venue link is safe.
+  const isVenueAttendance =
+    linkedAtStep === 'done' ||
+    (linkedAtStep === 'returning' &&
+      source !== null &&
+      (VENUE_ATTENDANCE_SOURCES as readonly string[]).includes(source))
+
+  if (isVenueAttendance) {
     try {
       // Pass the slug being linked as the attribution-event tag. The
       // pending row was captured under whatever slug was active at the

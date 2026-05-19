@@ -289,13 +289,23 @@ test.group('event.service | linkUserToEvent', (group) => {
 
   // ── Sippy Quest drain hook ────────────────────────────────────────────
   //
-  // On `linkedAtStep === 'done'` we drain any pending referral row for
+  // On a genuine attendance write we drain any pending referral row for
   // this phone into a real attribution. The hook MUST:
-  //   - only fire on 'done' (not on 'returning', which is a re-tap of
-  //     a deep link by an already-onboarded user — no onboarding event)
+  //   - fire on 'done' (new user onboarding completed at the event)
+  //   - fire on 'returning' AND source ∈ venue allowlist (existing user
+  //     physically scanned a venue QR — including the viral-referral
+  //     attendee who onboarded via /r/<code> and only later showed up)
+  //   - NOT fire on 'returning' with no source or a non-venue source
+  //     (Twitter/SMS deep-link tap from home — anti-farming, mirrors
+  //     the scoring CTE's allowlist exactly)
   //   - swallow drain errors (a Quest hiccup must never block onboarding)
   //   - run AFTER the upsert succeeds (the FK from referral_attributions
   //     to user_preferences would otherwise be premature)
+  //
+  // The 'returning + venue' branch was added 2026-05-18 to close the
+  // viral-referral attribution gap: pre-fix, a friend-shared `/r/<code>`
+  // sign-up that later attended landed as 'returning' and skipped drain,
+  // costing the referrer credit.
 
   test('drain hook: fires DELETE FROM pending_referrals on step=done', async ({ assert }) => {
     mockEvent(makeEvent())
@@ -310,7 +320,35 @@ test.group('event.service | linkUserToEvent', (group) => {
     assert.equal(drains.length, 1, 'drain hook must fire exactly once on done')
   })
 
-  test('drain hook: does NOT fire on step=returning', async ({ assert }) => {
+  test('drain hook: fires on step=returning + source=venue (viral-referral attendance)', async ({
+    assert,
+  }) => {
+    // The Pizza Day viral path: a friend taps /r/<code>, signs up via
+    // /setup (no event link yet because /r/ carries no event slug),
+    // then later scans the printed venue QR. Bracket dispatcher sees an
+    // already-onboarded user and writes step='returning' with
+    // source='venue' (the qr_sheets-controller default). Drain MUST
+    // fire here or the referrer never gets credit for bringing them.
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'returning', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'returning', 'venue')
+
+    const drains = queriesMatching('DELETE FROM pending_referrals')
+    assert.equal(
+      drains.length,
+      1,
+      'returning + venue source is genuine attendance — drain must fire to credit the referrer'
+    )
+  })
+
+  test('drain hook: does NOT fire on step=returning with no source', async ({ assert }) => {
+    // Returning with a null source = pre-venue-tag legacy path or a
+    // non-bracket deep-link write. Without an explicit venue marker we
+    // can't distinguish from a remote tap; fail closed = no drain.
     mockEvent(makeEvent())
     mockUserPref({ phoneNumber: '+573001234567' })
     setQueryResponse('SELECT linked_at_step, poap_claimed', {
@@ -323,7 +361,31 @@ test.group('event.service | linkUserToEvent', (group) => {
     assert.equal(
       drains.length,
       0,
-      'returning is a deep-link re-tap, not an onboarding event — drain must not fire'
+      'returning without an explicit venue source must not drain (anti-farming, fail-closed)'
+    )
+  })
+
+  test('drain hook: does NOT fire on step=returning + non-venue source (anti-farming)', async ({
+    assert,
+  }) => {
+    // Twitter / SMS / any social deep-link tap arrives as returning
+    // with a non-venue source. These come from REMOTE taps, not the
+    // physical venue — crediting attendance from them would re-open
+    // the farming hole the venue allowlist exists to close. Mirrors the
+    // scoring CTE's same rule for symmetric semantics.
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'returning', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'returning', 'twitter')
+
+    const drains = queriesMatching('DELETE FROM pending_referrals')
+    assert.equal(
+      drains.length,
+      0,
+      'non-venue source on returning must not drain — anti-farming gate'
     )
   })
 
