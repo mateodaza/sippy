@@ -166,7 +166,7 @@ Print + distribute one vendor sheet per booth. Attendee scans → lands in Whats
 Each attendee can collect up to **5 entries** for Pizza Day's draw. Two ways to earn an entry:
 
 1. **+1 entry — Asistir.** Show up at the venue and scan any printed Sippy QR (or, for new users, complete onboarding at the event). The scoring credit fires on the `linked_at_step='done'` (new user) or `linked_at_step='returning' + metadata.source='venue'` (existing user) link. Off-venue social-link taps don't count.
-2. **+1 entry per friend — Traer amigos.** Share your personal referral link (`sippy.lat/r/<code>`). Each friend who joins Sippy through your link **AND** also attends the event credits you with one entry. Their attendance is the trigger; their joining alone doesn't count.
+2. **+1 entry per friend — Traer amigos a Sippy.** Share your personal referral link (`sippy.lat/r/<code>`). Each friend who joins Sippy through your link credits you with one entry — **whether or not they attend the event**. Product rule (2026-05-18 update, was attendance-gated earlier): Sippy benefits from any new user joining anywhere; mom-from-Bogotá counts toward the referrer's Pizza Day entries the same way a friend physically at the venue does. The viral acquisition reward is the point.
 
 Max 5 entries per person. The cap is exposed via `QUEST_MAX_ENTRIES_PER_USER` env (default 5) and applied in SQL via `LEAST(raw_entries, $cap)`.
 
@@ -174,10 +174,12 @@ Max 5 entries per person. The cap is exposed via `QUEST_MAX_ENTRIES_PER_USER` en
 
 Entries are derived at query time from two tables:
 
-- `user_event_links` for the attendance branch (`linked_at_step='done'` OR `'returning' + metadata->>'source' = ANY('{venue}')`)
-- `referral_attributions` for the referrals branch (same attendance gate applied to the referee's link to the SAME event)
+- `user_event_links` for the attendance branch (`linked_at_step='done'` OR `'returning' + metadata->>'source' = ANY('{venue}')`) — your OWN +1 still requires you to attend.
+- `referral_attributions` for the referrals branch — straight count of attribution rows, no attendance check on the referee. The FK from `referral_attributions` to `user_preferences` enforces "the referee is a real Sippy user with a wallet."
 
-Both branches are scoped to the current event slug. Self-referrals are blocked at capture time by the `referee_phone != referrer_phone` PK constraint + service-layer guard. There is no separate "exclusion list" anymore — vendor/exchange phones simply don't accumulate entries because they're not referring or being referred under the Quest flow.
+Both branches are scoped to the current event slug (the attribution's `event_slug` is the campaign the referee was invited under — captured at `captureReferral` time and preserved through drain). Self-referrals are blocked at capture time by the `referee_phone != referrer_phone` PK constraint + service-layer guard. There is no separate "exclusion list" — vendor/exchange phones simply don't accumulate entries because they're not referring or being referred under the Quest flow.
+
+**Drain hook**: `drainPendingReferral(phone)` fires at wallet registration (`POST /api/register-wallet`, the "joined Sippy" moment) AND as a best-effort fallback on genuine venue attendance writes. The pending row's own `event_slug` is preserved on drain — callers don't override it.
 
 Single source of truth: `getLeaderboard()`, `getUserQuestStatus()`, `getQuestStats()` in `apps/backend/app/services/quest/scoring.service.ts`. All three share one CTE so the math can't drift between the in-WhatsApp `mi quest` reply, the public leaderboard, and the totals counters.
 

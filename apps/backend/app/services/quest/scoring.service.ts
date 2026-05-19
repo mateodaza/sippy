@@ -144,29 +144,21 @@ const ENTRIES_CTE = `
 
     UNION ALL
 
-    -- Referee must be attending the SAME event as the attribution. Two
-    -- constraints together pin that:
-    --   1. e.slug = $1 on the uel side: the referees attendance link is
-    --      for this event (not some other event they happen to be linked
-    --      to). Without this, a referee linked-done to event B but
-    --      referred under event A would count toward the referrers
-    --      event-A entries — wrong once we run a second event.
-    --   2. Attendance rule mirrors the activity branch above: 'done'
-    --      counts, or 'returning' with a venue source. A referee who
-    --      taps a Twitter link from home doesnt count as attended, so
-    --      neither does their referrer earn an entry from them.
+    -- Referee credit: any attribution row counts, no attendance check.
+    -- Product rule (2026-05-18): friends count when they JOIN SIPPY
+    -- through your link, whether or not they attend the event. Sippy
+    -- benefits more from a new user joining anywhere than from someone
+    -- showing up to a single event — the viral acquisition reward is
+    -- the point. The FK from referral_attributions to user_preferences
+    -- already enforces "the referee is a real Sippy user."
+    --
+    -- Self-referrals are blocked at capture time (PK + service guard);
+    -- vendor/exchange phones naturally don't accumulate referrals
+    -- because they aren't in the referral graph. No exclusion list
+    -- needed here.
     SELECT ra.referrer_phone AS phone_number, 1 AS c, 0 AS activity, 1 AS refs
     FROM referral_attributions ra
-    JOIN user_event_links uel ON uel.phone_number = ra.referee_phone
-    JOIN events e ON e.id = uel.event_id AND e.slug = $1
     WHERE ra.event_slug = $1
-      AND (
-        uel.linked_at_step = 'done'
-        OR (
-          uel.linked_at_step = 'returning'
-          AND uel.metadata->>'source' = ANY($3::text[])
-        )
-      )
   ),
   agg AS (
     SELECT phone_number,

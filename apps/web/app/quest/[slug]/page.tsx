@@ -181,9 +181,9 @@ export default async function QuestLeaderboardPage({
           </h2>
           <p className="mt-2 text-sm text-[var(--text-secondary,#374151)]">
             Cada participante puede juntar hasta <strong>{cap} entradas</strong>: 1 por asistir
-            (escanear un QR del evento al llegar) y 1 por cada amigo que se una con tu link y
-            también asista. Los ganadores se sortean al azar entre TODAS las entradas válidas, no
-            por puesto en el ranking.
+            (escanear un QR del evento al llegar) y 1 por cada amigo que se una a Sippy con tu link
+            — vengan o no al evento. Los ganadores se sortean al azar entre TODAS las entradas
+            válidas, no por puesto en el ranking.
           </p>
           <p className="mt-2 text-xs text-[var(--text-muted,#6B7280)]">
             Más entradas = más probabilidad. Estar #1 no garantiza premio.

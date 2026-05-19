@@ -458,7 +458,7 @@ test.group('drainPendingReferral | bare vs E.164 input', (group) => {
         rows: [{ referrer_phone: '+573009999999', referral_code: 'ABC234', event_slug: EVENT }],
       },
     ])
-    const out = await drainPendingReferral('573001234567', EVENT) // bare digits
+    const out = await drainPendingReferral('573001234567') // bare digits
     assert.exists(out)
     const call = rawQueryCalls[0]
     assert.equal(
@@ -469,7 +469,7 @@ test.group('drainPendingReferral | bare vs E.164 input', (group) => {
   })
 
   test('invalid phone returns null without touching DB', async ({ assert }) => {
-    const out = await drainPendingReferral('garbage', EVENT)
+    const out = await drainPendingReferral('garbage')
     assert.isNull(out)
     assert.equal(rawQueryCalls.length, 0)
   })
@@ -575,7 +575,7 @@ test.group('FK compat | bare user_preferences rows', (group) => {
         rows: [{ referrer_phone: '573009999999', referral_code: 'ABC234', event_slug: EVENT }],
       },
     ])
-    const out = await drainPendingReferral('+573001234567', EVENT)
+    const out = await drainPendingReferral('+573001234567')
     assert.exists(out)
     const call = rawQueryCalls[0]
     assert.equal(
@@ -608,7 +608,7 @@ test.group('drainPendingReferral | atomicity + idempotency', (group) => {
         ],
       },
     ])
-    const out = await drainPendingReferral(REFEREE, EVENT)
+    const out = await drainPendingReferral(REFEREE)
     assert.exists(out)
     if (!out) return
     assert.equal(out.referrerPhone, REFERRER)
@@ -623,7 +623,7 @@ test.group('drainPendingReferral | atomicity + idempotency', (group) => {
 
   test('idempotent: no pending row → returns null, no writes asserted', async ({ assert }) => {
     respondInSequence([{ rows: [] }])
-    const out = await drainPendingReferral(REFEREE, EVENT)
+    const out = await drainPendingReferral(REFEREE)
     assert.isNull(out)
     // The single CTE still fires (the SQL is unconditional), but returns
     // zero rows when nothing pending. Critical invariant: returns null,
@@ -635,7 +635,7 @@ test.group('drainPendingReferral | atomicity + idempotency', (group) => {
     // themselves (race / data corruption), the CTE's `WHERE c.referrer_phone != $1`
     // filter prevents the attribution insert. Mock that no row comes back.
     respondInSequence([{ rows: [] }])
-    const out = await drainPendingReferral(REFEREE, EVENT)
+    const out = await drainPendingReferral(REFEREE)
     assert.isNull(out, 'self-referral edge in pending must not produce an attribution')
   })
 })

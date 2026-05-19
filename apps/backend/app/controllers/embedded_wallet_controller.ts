@@ -29,6 +29,7 @@ import {
 } from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
 import { registerWalletWithAlchemy } from '#services/alchemy.service'
+import { drainPendingReferral } from '#services/quest/referral.service'
 import { exportEventSchema, webSendEventSchema, sendFromWebBodySchema } from '#types/schemas'
 import { NETWORK, USDC_ADDRESSES, USDC_DECIMALS } from '#config/network'
 import UserPreference from '#models/user_preference'
@@ -119,6 +120,23 @@ export default class EmbeddedWalletController {
       } catch (err) {
         logger.error('Failed to check/notify invite senders: %o', err)
         // Non-critical -- wallet registration succeeds regardless
+      }
+
+      // Sippy Quest — drain pending referrals now that the user has a real
+      // wallet. Wallet registration is the canonical "joined Sippy" moment
+      // (first-message language detection isn't enough; texting once doesn't
+      // make you a real user). The pending row stamped its own event_slug
+      // at capture time — drain preserves that, so the attribution lands
+      // under the campaign the referee was originally invited to, not
+      // whatever event happens to be active now. Best-effort: a drain
+      // failure must not block wallet registration.
+      try {
+        await drainPendingReferral(canonicalPhone)
+      } catch (err) {
+        logger.error(
+          { err, phone: maskPhone(canonicalPhone) },
+          'registerWallet: drainPendingReferral failed (non-fatal)'
+        )
       }
 
       // Auto-refuel new wallet with gas if needed

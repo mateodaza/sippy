@@ -115,8 +115,8 @@ export default function PizzaDayPage() {
               cuenta en Pizza Day.
             </li>
             <li>
-              <strong>+1 entrada</strong> por cada amigo que se una a Sippy con tu link de Quest y
-              también asista al evento.
+              <strong>+1 entrada</strong> por cada amigo que se una a Sippy con tu link de Quest —
+              vengan o no al evento. Si tu mamá se une desde Bogotá, te cuenta.
             </li>
           </ul>
           <p className="mt-3 text-sm text-[var(--text-secondary,#374151)]">

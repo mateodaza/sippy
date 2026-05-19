@@ -206,26 +206,37 @@ test.group('quest.scoring | getUserQuestStatus | bindings + cap', (group) => {
     assert.equal(status.totalRanked, 120)
   })
 
-  test('SQL constrains the referee branch to the SAME event as the attribution', async ({
+  test('referee branch does NOT join user_event_links (relaxed mechanic, 2026-05-18)', async ({
     assert,
   }) => {
-    // Audit P1 (2026-05-18): without the `JOIN events e ON ... AND e.slug = $1`
-    // on the referee side, a referee who showed up at event B but was
-    // referred under event A would still count toward event-A entries.
-    // Single-event Pizza Day MVP can't hit this, but the constraint
-    // must stay in the SQL so a future second event doesn't break the math.
+    // Product rule: friends count when they JOIN Sippy through your link,
+    // whether or not they attend the event. The earlier scoring CTE
+    // joined user_event_links on the referee side to enforce "referee
+    // must attend" — that gate was removed because Sippy benefits more
+    // from a new user joining anywhere than from one showing up to one
+    // event. Pin the absence: the FROM clause for the referee branch
+    // must read `FROM referral_attributions ra WHERE ra.event_slug = $1`
+    // with no `JOIN user_event_links` after it. The activity branch
+    // still uses uel, so we anchor the assertion on the referral
+    // attributions FROM clause specifically.
     mockResponder = () => ({ rows: [] })
 
     await getUserQuestStatus({ phone: PHONE, eventSlug: EVENT })
 
     const userCall = rawQueryCalls.find((c) => c.sql.includes('WHERE phone_number = ?'))
     assert.exists(userCall, 'should issue per-user lookup')
-    // The referee branch must JOIN events with e.slug = $1 — pin the
-    // exact shape so a refactor that drops it fails this test.
-    assert.include(
-      userCall!.sql,
-      'JOIN events e ON e.id = uel.event_id AND e.slug = ?',
-      'referee branch must constrain uel to the same event as the attribution'
+    const sql = userCall!.sql
+    // Anchor: the referee branch starts at this FROM clause.
+    const idx = sql.indexOf('FROM referral_attributions ra')
+    assert.notEqual(idx, -1, 'must have a referee branch')
+    // The 60 chars after `FROM referral_attributions ra` should be the
+    // WHERE clause directly, NOT a `JOIN user_event_links`. If a future
+    // refactor re-adds the attendance gate, this test catches it.
+    const tail = sql.slice(idx, idx + 200)
+    assert.notInclude(
+      tail,
+      'JOIN user_event_links',
+      'referee branch must NOT join user_event_links — attendance is not required for referral credit'
     )
   })
 
@@ -332,12 +343,20 @@ test.group('quest.scoring | activity branch SQL shape', (group) => {
     )
   })
 
-  test('referee branch ALSO requires attendance (done OR returning+venue)', async ({ assert }) => {
-    // The referee-attendance gate is symmetric with the activity gate.
-    // If a referee shows up only via Twitter deep-link, the referrer
-    // shouldn't earn an entry from them. Symmetry test: the same
-    // `linked_at_step = 'returning' AND metadata->>'source' = ANY(...)`
-    // clause must appear at least twice in the CTE.
+  test('attendance gating lives ONLY on the activity branch (not the referee branch)', async ({
+    assert,
+  }) => {
+    // Pre-2026-05-18: the same `linked_at_step = 'returning'` gate appeared
+    // twice — once for activity, once for referee attendance. Both branches
+    // required attendance.
+    //
+    // Post-relaxation: only the activity branch gates on attendance (it
+    // still does — your OWN +1 entry still requires you to attend). The
+    // referee branch counts attributions outright. So `'returning'` must
+    // appear EXACTLY ONCE in the CTE.
+    //
+    // If a future refactor re-introduces the symmetric gate on the referee
+    // side, this assertion catches it.
     mockResponder = () => ({ rows: [] })
 
     await getUserQuestStatus({ phone: PHONE, eventSlug: EVENT })
@@ -346,9 +365,45 @@ test.group('quest.scoring | activity branch SQL shape', (group) => {
     const occurrences = sql.split("uel.linked_at_step = 'returning'").length - 1
     assert.equal(
       occurrences,
-      2,
-      "both activity and referee branches must gate 'returning' on venue source"
+      1,
+      "only the activity branch should gate on 'returning' — referee branch no longer requires attendance"
     )
+  })
+
+  test('mom-from-Bogotá case: attribution row alone credits referrer (no event link needed)', async ({
+    assert,
+  }) => {
+    // Product contract pin (2026-05-18): if a referrer (PHONE) has a
+    // referral_attributions row pointing at them, they get +1 entry —
+    // even if the referee never shows up to any event. This is the
+    // viral-acquisition reward the relaxed mechanic exists to deliver.
+    //
+    // The test drives the CTE result for PHONE directly: no event link
+    // for PHONE on the activity side (activity=0), but one referral
+    // attribution credits them (referrals=1, entries=1).
+    mockResponder = (sql: string) => {
+      if (sql.includes('WHERE phone_number = ?')) {
+        return {
+          rows: [
+            {
+              entries: 1,
+              activity: 0,
+              referrals: 1,
+              rank: '1',
+              total_ranked: '1',
+            },
+          ],
+        }
+      }
+      return { rows: [] }
+    }
+
+    const status = await getUserQuestStatus({ phone: PHONE, eventSlug: EVENT })
+
+    assert.equal(status.entries, 1, 'attribution alone earns +1 entry, no attendance required')
+    assert.equal(status.activity, 0, 'no own-attendance')
+    assert.equal(status.referrals, 1, 'one credited referee')
+    assert.equal(status.rank, 1)
   })
 })
 

@@ -118,13 +118,12 @@ export async function linkUserToEvent(
 
   if (isVenueAttendance) {
     try {
-      // Pass the slug being linked as the attribution-event tag. The
-      // pending row was captured under whatever slug was active at the
-      // time of the inbound [REF-XXX] text, but the actual attribution
-      // should record where the referee SHOWED UP — which is this event.
-      // Matches the captureReferral signature so the two write paths
-      // produce semantically equivalent attribution rows.
-      await drainPendingReferral(prefKey, event.slug)
+      // Drain uses the pending row's own event_slug (the campaign the
+      // referee was captured under), not this event slug. linkUserToEvent
+      // is now a best-effort fallback for users who never visit /setup —
+      // primary drain is at /setup completion (see auth flow), which fires
+      // even for referees who join Sippy but never attend any event.
+      await drainPendingReferral(prefKey)
     } catch (err) {
       logger.error(
         { err, phone: maskPhone(prefKey), eventSlug: event.slug },

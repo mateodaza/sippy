@@ -375,18 +375,21 @@ export async function captureReferral(args: {
 // ── drainPendingReferral ────────────────────────────────────────────────
 
 /**
- * Called by the event service when a user completes onboarding. If a
- * pending referral row exists for this phone, convert it to an
- * attribution and delete the pending row. Single SQL `WITH` cascade so
- * the read-decide-write happens atomically; no separate transaction
- * needed.
+ * Called when a referee transitions from "pending" to "real Sippy user"
+ * — currently from /setup completion and (as a best-effort fallback)
+ * from `linkUserToEvent` on genuine attendance writes. Converts any
+ * pending referral row for this phone into a real attribution row and
+ * deletes the pending row. Single SQL `WITH` cascade so the
+ * read-decide-write happens atomically; no separate transaction needed.
  *
- * `attributionEventSlug` is the event the referee just attended (i.e.
- * the slug passed to `linkUserToEvent` when step='done'). It OVERRIDES
- * whatever event the pending row was originally captured under — the
- * attribution should record where the referee actually showed up, not
- * the campaign namespace of the code (which is usually 'global' under
- * the post-2026-05-18 design). Same invariant as captureReferral above.
+ * Attribution event slug: the **pending row's own** `event_slug`. The
+ * pending row captured the intent — "this referee came through
+ * referrer X for campaign Y" — at the moment of the inbound
+ * [REF-XXX] text. Drain preserves that intent verbatim. Callers don't
+ * pass an attribution slug because doing so would couple every
+ * downstream caller (setup, linkUserToEvent, future paths) to whichever
+ * campaign happens to be active at drain time — exactly the coupling we
+ * removed when going global.
  *
  * Idempotent: if no pending row exists, no-op. If the referee already
  * has an attribution (somehow), the INSERT silently no-ops via the
@@ -394,10 +397,7 @@ export async function captureReferral(args: {
  *
  * Returns `null` when nothing was drained, otherwise the attribution row.
  */
-export async function drainPendingReferral(
-  refereePhone: string,
-  attributionEventSlug: string
-): Promise<{
+export async function drainPendingReferral(refereePhone: string): Promise<{
   referrerPhone: string
   code: string
   eventSlug: string
@@ -418,23 +418,23 @@ export async function drainPendingReferral(
   }>(
     `WITH p AS (
        DELETE FROM pending_referrals WHERE phone_number = $1
-       RETURNING referral_code
+       RETURNING referral_code, event_slug
      ),
      c AS (
-       SELECT p.referral_code, rc.phone_number AS referrer_phone
+       SELECT p.referral_code, p.event_slug, rc.phone_number AS referrer_phone
        FROM p JOIN referral_codes rc ON rc.code = p.referral_code
      ),
      ins AS (
        INSERT INTO referral_attributions
          (referee_phone, referrer_phone, referral_code, event_slug)
-       SELECT $1, c.referrer_phone, c.referral_code, $2
+       SELECT $1, c.referrer_phone, c.referral_code, c.event_slug
        FROM c
        WHERE c.referrer_phone != $1
        ON CONFLICT (referee_phone) DO NOTHING
        RETURNING referrer_phone, referral_code, event_slug
      )
      SELECT referrer_phone, referral_code, event_slug FROM ins`,
-    [fkKey, attributionEventSlug]
+    [fkKey]
   )
   if (drained.rows.length === 0) return null
   const row = drained.rows[0]
