@@ -58,7 +58,16 @@ test.group('A | Confirm priority: overwrite vs transaction', () => {
   test('A-01: both pending → money transfer wins, overwrite discarded', async ({ assert }) => {
     // Set up both pending states
     const pendingTxs = makePendingMap([
-      [PHONE_A, { amount: 50, recipient: '+573001234567', timestamp: Date.now(), lang: 'en' }],
+      [
+        PHONE_A,
+        {
+          amount: 50,
+          recipient: '+573001234567',
+          timestamp: Date.now(),
+          lang: 'en',
+          payQrScan: false,
+        },
+      ],
     ])
     pendingContactOverwrites.set(PHONE_A, {
       alias: 'mom',
@@ -137,7 +146,16 @@ test.group('A | Confirm priority: overwrite vs transaction', () => {
 
   test('A-03: expired overwrite + valid tx → tx executes normally', async ({ assert }) => {
     const pendingTxs = makePendingMap([
-      [PHONE_A, { amount: 10, recipient: '+573001234567', timestamp: Date.now(), lang: 'en' }],
+      [
+        PHONE_A,
+        {
+          amount: 10,
+          recipient: '+573001234567',
+          timestamp: Date.now(),
+          lang: 'en',
+          payQrScan: false,
+        },
+      ],
     ])
     // Expired overwrite (timestamp far in the past)
     pendingContactOverwrites.set(PHONE_A, {
@@ -272,7 +290,16 @@ test.group('B | Contact command routing', () => {
 test.group('C | Cancel clears all pending state', () => {
   test('C-01: cancel clears pendingTx, pendingOverwrite, and partialSend', async ({ assert }) => {
     const pendingTxs = makePendingMap([
-      [PHONE_A, { amount: 10, recipient: '+573001234567', timestamp: Date.now(), lang: 'en' }],
+      [
+        PHONE_A,
+        {
+          amount: 10,
+          recipient: '+573001234567',
+          timestamp: Date.now(),
+          lang: 'en',
+          payQrScan: false,
+        },
+      ],
     ])
     pendingContactOverwrites.set(PHONE_A, {
       alias: 'mom',

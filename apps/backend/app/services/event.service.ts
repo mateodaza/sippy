@@ -199,3 +199,137 @@ export async function markPoapClaimed(phoneNumber: string, slug: string): Promis
   if ((existing.rows?.length ?? 0) > 0) return { status: 'already-claimed' }
   return { status: 'not-linked' }
 }
+
+/**
+ * Outcome of a `claimPendingPoapInvite` call.
+ *  - `reserved`  — exactly one eligible row found + atomically stamped; caller
+ *                  should send the WhatsApp DM.
+ *  - `contended` — eligible row existed but the `FOR UPDATE … SKIP LOCKED`
+ *                  guard handed it to a parallel call. Caller treats as a
+ *                  silent no-op but ops can monitor the rate as a signal that
+ *                  the user is double-paying within the same instant.
+ *  - `none`      — phone simply isn't linked to any eligible event right now.
+ */
+export type PoapInviteOutcome =
+  | {
+      kind: 'reserved'
+      reservation: { eventName: string; eventSlug: string; poapClaimUrl: string }
+    }
+  | { kind: 'contended' }
+  | { kind: 'none' }
+
+/**
+ * Atomically reserves a POAP claim-link invite for a phone. Conditions: phone
+ * is linked to an active event (within its date window), `poap_claim_url IS
+ * NOT NULL`, POAP not yet claimed, and the invite hasn't already been sent.
+ * Stamps `poap_invite_sent_at = now()` in the same UPDATE so two concurrent
+ * successful sends can't double-fire the WhatsApp message.
+ */
+export async function claimPendingPoapInvite(phoneNumber: string): Promise<PoapInviteOutcome> {
+  const prefKey = await resolveUserPrefKey(phoneNumber)
+
+  // CTE picks exactly ONE eligible row (with `FOR UPDATE … SKIP LOCKED` so a
+  // concurrent call for the same phone doesn't pick the same row), then the
+  // outer UPDATE stamps `poap_invite_sent_at` on that single row. Without
+  // LIMIT 1, every eligible event link gets stamped but only `rows[0]` is
+  // delivered — silent data loss.
+  //
+  // Ordering: most-recently-started event first so the freshest invite
+  // wins; falls back to user-event-link creation time for deterministic
+  // tiebreak when starts_at is NULL.
+  const res = await db.rawQuery(
+    `WITH eligible AS (
+       SELECT uel.event_id, uel.phone_number, e.name, e.slug, e.poap_claim_url
+       FROM user_event_links uel
+       JOIN events e ON e.id = uel.event_id
+       WHERE uel.phone_number = ?
+         AND uel.poap_invite_sent_at IS NULL
+         AND uel.poap_claimed = FALSE
+         AND e.active = TRUE
+         AND e.poap_claim_url IS NOT NULL
+         AND (e.starts_at IS NULL OR e.starts_at <= now())
+         AND (e.ends_at IS NULL OR e.ends_at >= now())
+       ORDER BY e.starts_at DESC NULLS LAST, uel.created_at DESC
+       LIMIT 1
+       FOR UPDATE OF uel SKIP LOCKED
+     )
+     UPDATE user_event_links uel
+     SET poap_invite_sent_at = now()
+     FROM eligible
+     WHERE uel.event_id = eligible.event_id
+       AND uel.phone_number = eligible.phone_number
+     RETURNING eligible.name AS event_name,
+               eligible.slug AS event_slug,
+               eligible.poap_claim_url AS poap_claim_url`,
+    [prefKey]
+  )
+
+  const row = res.rows?.[0] as
+    | { event_name: string; event_slug: string; poap_claim_url: string }
+    | undefined
+
+  if (row) {
+    logger.info(`event.poap-invite-reserved ${row.event_slug} -> ${maskPhone(prefKey)}`)
+    return {
+      kind: 'reserved',
+      reservation: {
+        eventName: row.event_name,
+        eventSlug: row.event_slug,
+        poapClaimUrl: row.poap_claim_url,
+      },
+    }
+  }
+
+  // UPDATE matched nothing. Two scenarios: (a) no eligible row exists at all,
+  // (b) every eligible row is locked by a parallel claimant. Re-issue the
+  // SELECT *without* the lock to disambiguate; if it returns a row, someone
+  // else won the race. This is observability-only — caller still no-ops.
+  const probe = await db.rawQuery(
+    `SELECT 1
+     FROM user_event_links uel
+     JOIN events e ON e.id = uel.event_id
+     WHERE uel.phone_number = ?
+       AND uel.poap_invite_sent_at IS NULL
+       AND uel.poap_claimed = FALSE
+       AND e.active = TRUE
+       AND e.poap_claim_url IS NOT NULL
+       AND (e.starts_at IS NULL OR e.starts_at <= now())
+       AND (e.ends_at IS NULL OR e.ends_at >= now())
+     LIMIT 1`,
+    [prefKey]
+  )
+
+  if ((probe.rows?.length ?? 0) > 0) {
+    logger.warn(`event.poap-invite-contended ${maskPhone(prefKey)} (parallel claim won the race)`)
+    return { kind: 'contended' }
+  }
+
+  return { kind: 'none' }
+}
+
+/**
+ * Undo the reservation made by claimPendingPoapInvite. Called when the
+ * WhatsApp send fails so the invite stays eligible for the next payment.
+ *
+ * Named-object args (vs positional) because both fields are strings and
+ * swapping them silently no-ops the UPDATE — same pattern as captureReferral
+ * elsewhere in the codebase. Race note: if a parallel claim arrives between
+ * the failing send and this release, it sees `poap_invite_sent_at IS NOT NULL`
+ * and no-ops; the release then wipes the reservation, but the parallel
+ * claimer is already past the gate. Acceptable for this low-stakes path.
+ */
+export async function releasePoapInvite(args: {
+  phoneNumber: string
+  eventSlug: string
+}): Promise<void> {
+  const prefKey = await resolveUserPrefKey(args.phoneNumber)
+  await db.rawQuery(
+    `UPDATE user_event_links uel
+     SET poap_invite_sent_at = NULL
+     FROM events e
+     WHERE uel.event_id = e.id
+       AND uel.phone_number = ?
+       AND e.slug = ?`,
+    [prefKey, args.eventSlug]
+  )
+}

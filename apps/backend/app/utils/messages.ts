@@ -423,6 +423,32 @@ export function formatOperatorPaymentReceived(
   return m[lang]()
 }
 
+/**
+ * Sent to a user right after their first successful payment at an event
+ * that has a POAP claim link configured. One-shot per user-event pair —
+ * gated by `user_event_links.poap_invite_sent_at`.
+ */
+export function formatPoapClaimInvite(
+  params: { poapClaimUrl: string; eventName: string },
+  lang: Lang = 'en'
+): string {
+  const m = {
+    en: () =>
+      `🎉 Thanks for paying at ${params.eventName}! Claim your POAP here:\n` +
+      `${params.poapClaimUrl}\n\n` +
+      `You can use your Sippy wallet or any other wallet you have.`,
+    es: () =>
+      `🎉 Gracias por pagar en ${params.eventName}! Reclama tu POAP aqui:\n` +
+      `${params.poapClaimUrl}\n\n` +
+      `Puedes usar tu billetera Sippy o cualquier otra que tengas.`,
+    pt: () =>
+      `🎉 Obrigado por pagar em ${params.eventName}! Resgate seu POAP aqui:\n` +
+      `${params.poapClaimUrl}\n\n` +
+      `Voce pode usar sua carteira Sippy ou qualquer outra que tenha.`,
+  }
+  return m[lang]()
+}
+
 // --- About ---
 
 export function formatAboutMessage(lang: Lang = 'en'): string {
@@ -1602,7 +1628,7 @@ export function formatAmountBelowMinWithContext(
       : null
   // No local currency context — show plain USDC; still useful (names the
   // recipient + asks for a new amount).
-  if (!currencyWord || args.localAmount == null) {
+  if (!currencyWord || args.localAmount === undefined) {
     const m = {
       en: () =>
         `${formatCurrencyUSD(args.usdcAmount)} is below the 0.10 USDC minimum. How much do you want to send to ${args.recipientLabel}?`,

@@ -38,6 +38,9 @@ interface Props {
     perTxUsdc: number
     perHourUsdc: number
     spentLastHourUsdc: number
+    /** Largest USDC step exposed in the amount dropdown. Driven by the
+     * EVENT_LIMIT_USABLE_AIRDROP env; ≥5, ints only. */
+    dropdownMaxUsdc: number
   }
   recentSends: RecentSend[]
   prefillRecipientPhone: string | null
@@ -229,6 +232,16 @@ export default function OperatorSendPage({
       setSubmitting(false)
     }
   }
+
+  // Dropdown values: base steps + 1-USDC steps from 6 up to the
+  // EVENT_LIMIT_USABLE_AIRDROP ceiling that backend already clamped to ≥5.
+  const amountOptions: string[] = (() => {
+    const base = ['0.5', '1', '2', '3', '4', '5']
+    if (caps.dropdownMaxUsdc <= 5) return base
+    const extra: string[] = []
+    for (let n = 6; n <= caps.dropdownMaxUsdc; n++) extra.push(String(n))
+    return base.concat(extra)
+  })()
 
   const remainingHour = Math.max(0, caps.perHourUsdc - caps.spentLastHourUsdc)
   const amountNum = Number.parseFloat(amount)
@@ -428,32 +441,28 @@ export default function OperatorSendPage({
             <label htmlFor="amount" className="spec-label block">
               Amount (USDC)
             </label>
-            <input
+            <select
               id="amount"
-              type="number"
-              step="0.01"
-              min="0.01"
-              max={caps.perTxUsdc}
               value={amount}
               onChange={(e) => {
                 setAmount(e.target.value)
                 setConfirming(false)
                 setDuplicateBlock(null)
               }}
-              placeholder="0.00"
               className="mt-1 w-full rounded border border-[var(--admin-border-subtle)] bg-[var(--admin-surface)] px-3 py-2 font-mono text-sm admin-text"
               required
-            />
+            >
+              <option value="">Select amount…</option>
+              {amountOptions.map((v) => (
+                <option key={v} value={v}>
+                  ${Number(v).toFixed(2)} USDC
+                </option>
+              ))}
+            </select>
             <div className="mt-1 flex flex-wrap gap-4 font-mono text-xs text-neutral-500">
-              <span>Per-tx cap: ${caps.perTxUsdc.toFixed(0)}</span>
               <span>Hour cap remaining: ${remainingHour.toFixed(2)}</span>
             </div>
-            {amountExceedsTxCap && (
-              <p className="mt-1 text-xs text-red-700">
-                Exceeds per-tx cap of ${caps.perTxUsdc.toFixed(0)}
-              </p>
-            )}
-            {amountExceedsHourCap && !amountExceedsTxCap && (
+            {amountExceedsHourCap && (
               <p className="mt-1 text-xs text-red-700">
                 Would exceed hourly cap (${remainingHour.toFixed(2)} remaining)
               </p>

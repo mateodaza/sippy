@@ -607,6 +607,8 @@ export async function routeCommand(
               recipient: match.targetPhone,
               timestamp: Date.now(),
               lang,
+              // Alias-resolution path: by definition not a QR scan.
+              payQrScan: false,
             })
             const amtStr = formatAmountWithLocal(
               command.amount,
@@ -753,6 +755,7 @@ export async function routeCommand(
               recipient: command.recipient,
               timestamp: Date.now(),
               lang,
+              payQrScan: isPayQrScan,
             })
             // displayName is required by createQrLink at issuance time, so
             // missing it on a pay-QR confirm means something is drifting
@@ -985,7 +988,8 @@ export async function routeCommand(
               rateCtx.senderRate,
               rateCtx.senderCurrency,
               rateCtx.recipientRate,
-              rateCtx.recipientCurrency
+              rateCtx.recipientCurrency,
+              pending.payQrScan === true
             )
           } finally {
             clearTimeout(safetyTimer)

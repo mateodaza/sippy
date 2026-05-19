@@ -416,6 +416,7 @@ test.group('Group D | routeCommand confirm handler', () => {
       recipient: '+573001234567',
       timestamp: Date.now(),
       lang: 'en',
+      payQrScan: false,
     }
     const pendingTxs = makePendingMap([[phone, pending]])
     let sendHandlerCalled = false
@@ -456,6 +457,7 @@ test.group('Group D | routeCommand confirm handler', () => {
       recipient: '+573001234567',
       timestamp: Date.now(),
       lang: 'en',
+      payQrScan: false,
     }
     const pendingTxs = makePendingMap([[phone, pending]])
     const capturedMessages: string[] = []
@@ -498,6 +500,7 @@ test.group('Group D | routeCommand confirm handler', () => {
       recipient: '+573001234567',
       timestamp: Date.now(),
       lang: 'en',
+      payQrScan: false,
     }
     const pendingTxs = makePendingMap([[phone, pending]])
     const capturedMessages: string[] = []
@@ -541,6 +544,7 @@ test.group('Group D | routeCommand confirm handler', () => {
       recipient: '+573001234567',
       timestamp: Date.now(),
       lang: 'en',
+      payQrScan: false,
     }
     const pendingTxs = makePendingMap([[phone, pending]])
     let sendHandlerCallCount = 0
@@ -639,6 +643,7 @@ test.group('Group D | routeCommand confirm handler', () => {
       recipient: '+573001234567',
       timestamp: Date.now() - 3 * 60 * 1000, // 3 minutes ago
       lang: 'en',
+      payQrScan: false,
     }
     const pendingTxs = makePendingMap([[phone, expired]])
     let sendHandlerCalled = false
@@ -686,6 +691,7 @@ test.group('Group E | routeCommand cancel handler', () => {
       recipient: '+573001234567',
       timestamp: Date.now(),
       lang: 'en',
+      payQrScan: false,
     }
     const pendingTxs = makePendingMap([[phone, pending]])
     const capturedMessages: string[] = []
@@ -751,6 +757,7 @@ test.group('Group F | dispatchCommand clears pending on unrelated command', () =
       recipient: '+573001234567',
       timestamp: Date.now(),
       lang: 'en',
+      payQrScan: false,
     }
     const pendingTxs = makePendingMap([[phone, pending]])
 

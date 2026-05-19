@@ -33,6 +33,9 @@ export default class UserEventLink extends BaseModel {
   @column()
   declare poapTxOrId: string | null
 
+  @column.dateTime()
+  declare poapInviteSentAt: DateTime | null
+
   @column({
     prepare: (value: Record<string, unknown> | null) => (value ? JSON.stringify(value) : null),
   })
