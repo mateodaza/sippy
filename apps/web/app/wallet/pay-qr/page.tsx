@@ -8,6 +8,7 @@ import { getStoredToken } from '@/lib/auth'
 import { useSessionGuard } from '@/lib/useSessionGuard'
 import { ChannelPicker, ResendButton } from '@/components/shared/ChannelPicker'
 import { SippyPhoneInput } from '@/components/ui/phone-input'
+import { WHATSAPP_BOT_NUMBER } from '@/lib/constants'
 import { CDPProviderDefault } from '../../providers/cdp-provider'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || ''
@@ -49,6 +50,35 @@ function PayQrContent() {
     if (phoneFromUrl) setReAuthPhone(phoneFromUrl)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Payer-redirect: `/wallet/pay-qr?phone=<X>` is exclusively a SHARE
+  // link — anyone who opens it (owner OR a payer, authenticated OR not)
+  // gets bounced to WhatsApp with a send-intent prefill. The bot takes
+  // over from there (asks for amount → confirm → pay).
+  //
+  // Why ALWAYS redirect, not just when unauthenticated:
+  //   - A non-owner authenticated user (signed in to their own Sippy
+  //     account) would otherwise hit the owner's dashboard view and see
+  //     either their OWN pay-QR (wrong) or an auth wall asking them to
+  //     re-auth as the URL phone (also wrong — they came here to pay,
+  //     not to take over the owner's account).
+  //   - Treating the phone-param URL as a one-way share link removes
+  //     all the auth-disambiguation complexity. Simple rule: presence
+  //     of `?phone=` means "this is for paying that person."
+  //
+  // Owner dashboard moved: the owner reaches their pay-QR dashboard via
+  // `/wallet` (the unified hub) → "My Pay QR" — that path serves the
+  // dashboard view authenticated against THEIR session, no URL phone
+  // disambiguation needed. The bot reply for `mi qr` should surface
+  // both URLs: the share link (this URL) and the dashboard path.
+  useEffect(() => {
+    if (isCheckingSession) return
+    if (!phoneFromUrl) return
+    if (typeof window === 'undefined') return
+    const text = `Hola Sippy! pagar a ${phoneFromUrl}`
+    const waUrl = `https://wa.me/${WHATSAPP_BOT_NUMBER}?text=${encodeURIComponent(text)}`
+    window.location.replace(waUrl)
+  }, [isCheckingSession, phoneFromUrl])
 
   const [link, setLink] = useState<PayLink | null>(null)
   const [loading, setLoading] = useState(false)
@@ -198,6 +228,17 @@ function PayQrContent() {
     return (
       <main className="min-h-screen flex items-center justify-center p-6 bg-[var(--bg-primary)]">
         <p className="font-mono text-sm text-[var(--text-secondary)]">Cargando…</p>
+      </main>
+    )
+  }
+
+  // Phone in URL = share link → page-mount useEffect bounced to WhatsApp.
+  // Render a brief holding state so we don't flash the dashboard or
+  // auth form before the navigation lands.
+  if (phoneFromUrl) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-6 bg-[var(--bg-primary)]">
+        <p className="font-mono text-sm text-[var(--text-secondary)]">Abriendo WhatsApp…</p>
       </main>
     )
   }

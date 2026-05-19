@@ -340,23 +340,36 @@ export function formatQrLookupTransientErrorMessage(lang: Lang = 'en'): string {
 }
 
 /**
- * Surface the user's `/wallet/pay-qr` URL when they ask "how do I get
- * paid?" / "mi codigo de pago" / "pay qr" etc. The page mints (or
- * returns the existing) pay-QR for the authenticated user.
+ * Surface the user's pay-QR share URL when they ask "how do I get paid?"
+ * / "mi codigo de pago" / "pay qr" etc.
+ *
+ * The URL `/wallet/pay-qr?phone=<X>` is treated by the web app as a
+ * SHARE LINK — anyone (owner, payer, authenticated or not) who opens it
+ * gets bounced to WhatsApp with a send-intent prefill. It is NOT a
+ * dashboard view. Don't suggest the owner click it to "see" or "print"
+ * their QR — that would just open WhatsApp to pay themselves.
+ *
+ * Owner dashboard (view / mint / print / edit display name) lives at
+ * `/wallet` (the unified hub) — surfaced as a secondary URL below so
+ * the owner can find it when they need to print.
  */
 export function formatPayQrLinkMessage(phoneNumber: string, lang: Lang = 'en'): string {
   const params = new URLSearchParams({ phone: phoneNumber })
-  const url = `${FRONTEND_URL}/wallet/pay-qr?${params.toString()}`
+  const shareUrl = `${FRONTEND_URL}/wallet/pay-qr?${params.toString()}`
+  const dashboardUrl = `${FRONTEND_URL}/wallet?phone=${encodeURIComponent(phoneNumber)}`
   const m = {
     en: () =>
-      `Your pay code lives here:\n${url}\n\n` +
-      `Generate it once, print it or share the link — anyone who scans it pays you on Sippy.`,
+      `Your pay link — share this with anyone who wants to pay you:\n${shareUrl}\n\n` +
+      `Whoever opens it lands in WhatsApp ready to send you USDC.\n\n` +
+      `To view or print the QR, open your dashboard:\n${dashboardUrl}`,
     es: () =>
-      `Tu codigo de pago vive aqui:\n${url}\n\n` +
-      `Generalo una vez, imprimelo o comparte el enlace — quien lo escanee te paga por Sippy.`,
+      `Tu link de pago — compártelo con quien te quiera pagar:\n${shareUrl}\n\n` +
+      `Quien lo abra cae en WhatsApp listo para enviarte USDC.\n\n` +
+      `Para ver o imprimir el QR, abre tu dashboard:\n${dashboardUrl}`,
     pt: () =>
-      `Seu codigo de pagamento mora aqui:\n${url}\n\n` +
-      `Gere uma vez, imprima ou compartilhe o link — quem escaneia te paga pelo Sippy.`,
+      `Seu link de pagamento — compartilhe com quem quer te pagar:\n${shareUrl}\n\n` +
+      `Quem abrir cai no WhatsApp pronto para te enviar USDC.\n\n` +
+      `Para ver ou imprimir o QR, abra seu painel:\n${dashboardUrl}`,
   }
   return m[lang]()
 }
