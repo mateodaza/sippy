@@ -39,6 +39,8 @@ import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup
 import { canonicalizePhone, maskPhone } from '#utils/phone'
 import { sendTextMessage } from '#services/whatsapp.service'
 import { formatOperatorPaymentReceived, type Lang } from '#utils/messages'
+import { getAdminLang } from '#utils/admin_lang'
+import { adminErrors } from '#utils/admin_messages'
 
 const DEFAULT_MAX_PER_TX = 100
 const DEFAULT_MAX_PER_HOUR = 500
@@ -316,28 +318,36 @@ export default class OperatorSendController {
    * row stays 'pending' forever. A janitor job can sweep ancient pending
    * rows but isn't critical for the event-day cadence.
    */
-  async send({ auth, request, response }: HttpContext) {
+  async send(ctx: HttpContext) {
+    const { auth, request, response } = ctx
     const user = auth.user!
     const caps = getCaps()
+    // Localize JSON error responses with the operator's admin-UI lang. The
+    // frontend renders `body.error` directly into localFlash, so the wire
+    // payload itself has to be already-translated.
+    const adminLang = getAdminLang(ctx)
 
     const wallet = await getOperatorWalletForUser(user.id)
     if (!wallet) {
-      return response.badRequest({ error: 'No event wallet assigned to this account' })
+      return response.badRequest({ error: adminErrors.noEventWallet(adminLang) })
     }
     if (!wallet.active) {
-      return response.badRequest({ error: 'Event wallet is revoked' })
+      return response.badRequest({ error: adminErrors.eventWalletRevoked(adminLang) })
     }
 
     let body: { recipientPhone: string; amountUsdc: number }
     try {
       body = await request.validateUsing(sendBodyValidator)
     } catch (err) {
-      return response.badRequest({ error: 'Invalid request body', detail: (err as Error).message })
+      return response.badRequest({
+        error: adminErrors.invalidRequestBody(adminLang),
+        detail: (err as Error).message,
+      })
     }
 
     const recipientCanonical = canonicalizePhone(body.recipientPhone)
     if (!recipientCanonical) {
-      return response.badRequest({ error: 'Invalid recipient phone' })
+      return response.badRequest({ error: adminErrors.invalidRecipientPhone(adminLang) })
     }
     const recipientPrefKey = await resolveUserPrefKey(recipientCanonical)
 
@@ -351,7 +361,7 @@ export default class OperatorSendController {
       .first()
     if (!linkRow) {
       return response.badRequest({
-        error: 'Recipient is not registered for this event',
+        error: adminErrors.recipientNotInEvent(adminLang),
       })
     }
 
@@ -359,14 +369,14 @@ export default class OperatorSendController {
     const recipientWallet = await getUserWallet(recipientPrefKey)
     if (!recipientWallet?.walletAddress) {
       return response.badRequest({
-        error: 'Recipient wallet not found (phone_registry row missing)',
+        error: adminErrors.recipientWalletNotFound(adminLang),
       })
     }
 
     // Per-tx cap is purely numeric, no race possible — check eagerly.
     if (body.amountUsdc > caps.perTx) {
       return response.badRequest({
-        error: `Amount exceeds per-transaction cap of $${caps.perTx} USDC`,
+        error: adminErrors.amountExceedsPerTxCap(caps.perTx, adminLang),
       })
     }
 
@@ -426,9 +436,15 @@ export default class OperatorSendController {
             | undefined
           if (dup) {
             const err = new Error(
-              `Recipient already received $${dup.amount_usdc} USDC for event ` +
-                `'${wallet.eventSlug}' (status=${dup.status}, send id=${dup.id}). ` +
-                `Pass override=true to force a re-send.`
+              adminErrors.duplicateRecipient(
+                {
+                  amount: String(dup.amount_usdc),
+                  eventSlug: wallet.eventSlug,
+                  status: dup.status,
+                  sendId: dup.id,
+                },
+                adminLang
+              )
             )
             ;(err as any).code = 'DUPLICATE_RECIPIENT'
             ;(err as any).existingSend = dup
@@ -448,7 +464,7 @@ export default class OperatorSendController {
         if (spentLastHour + body.amountUsdc > caps.perHour) {
           // Throw to roll back the (empty) transaction; controller catches.
           const err = new Error(
-            `Hourly cap of $${caps.perHour} USDC exceeded (spent: ${spentLastHour}, attempted: ${body.amountUsdc})`
+            adminErrors.hourlyCapExceeded(caps.perHour, spentLastHour, body.amountUsdc, adminLang)
           )
           ;(err as any).code = 'HOURLY_CAP_EXCEEDED'
           ;(err as any).spentLastHour = spentLastHour
@@ -485,7 +501,7 @@ export default class OperatorSendController {
         })
       }
       logger.error({ operator_id: user.id, err }, 'operator_send.reserve-failed')
-      return response.status(500).send({ error: 'Failed to reserve send slot' })
+      return response.status(500).send({ error: adminErrors.failedToReserveSendSlot(adminLang) })
     }
 
     logger.info(
@@ -530,7 +546,8 @@ export default class OperatorSendController {
       return response.status(500).send({
         success: false,
         sendId: sendRowId,
-        error: errorReason,
+        error: adminErrors.submitFailed(errorReason, adminLang),
+        detail: errorReason,
       })
     }
 
@@ -552,8 +569,7 @@ export default class OperatorSendController {
       return response.status(500).send({
         success: false,
         sendId: sendRowId,
-        error:
-          'CDP returned no userOpHash. Row marked pending — DO NOT retry. Contact admin to reconcile against Arbiscan.',
+        error: adminErrors.cdpNoUserOpHash(adminLang),
       })
     }
 
@@ -661,11 +677,8 @@ export default class OperatorSendController {
         txHash: submitted.userOpHash,
         status: 'submitted',
         note: isReverted
-          ? 'userOp completed but reverted on-chain — recipient did NOT receive USDC. ' +
-            'Audit row left as "submitted" (do not retry without admin reconciliation). ' +
-            'Check the userOp hash on the explorer.'
-          : 'Transaction submitted but confirmation timed out. ' +
-            'Check the userOp hash on the explorer or refresh in a few seconds.',
+          ? adminErrors.walletNoteReverted(adminLang)
+          : adminErrors.walletNoteTimeout(adminLang),
       })
     }
   }

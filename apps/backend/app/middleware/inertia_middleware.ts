@@ -3,6 +3,7 @@ import type { NextFn } from '@adonisjs/core/types/http'
 import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
+import { getAdminLang } from '#utils/admin_lang'
 
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
   async share(ctx: HttpContext) {
@@ -76,6 +77,10 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
         error: ctx.session?.flashMessages.get('error'),
       },
       indexerStatus,
+      // Admin UI language ('es' | 'en'), driven by sippy_admin_lang cookie.
+      // Defaults to 'es'. Read on every request so the toggle takes effect
+      // on the next page load via router.reload after the cookie flips.
+      adminLang: getAdminLang(ctx),
     }
   }
 

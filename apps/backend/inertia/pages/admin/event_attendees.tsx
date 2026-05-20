@@ -14,6 +14,7 @@ import { useState } from 'react'
 import { Link } from '@adonisjs/inertia/react'
 import { Head, router, usePage } from '@inertiajs/react'
 import AdminLayout from '../../layouts/admin_layout.js'
+import { getEventAttendeesStrings, type AdminLang } from '../../lib/operator_strings.js'
 
 interface Attendee {
   /** Already-masked for display; do NOT use for API actions. */
@@ -363,8 +364,11 @@ export default function EventAttendeesPage({
   availableOperators,
 }: Props) {
   const { meta } = attendees
-  const auth = (usePage().props as any).auth as { role?: string } | null
+  const pageProps = usePage().props as { auth?: { role?: string }; adminLang?: AdminLang }
+  const auth = pageProps.auth ?? null
   const isAdmin = auth?.role === 'admin'
+  const lang: AdminLang = pageProps.adminLang ?? 'es'
+  const t = getEventAttendeesStrings(lang)
 
   const goToPage = (p: number) => {
     router.get(
@@ -378,17 +382,17 @@ export default function EventAttendeesPage({
 
   return (
     <AdminLayout>
-      <Head title={`Attendees — ${event.name}`} />
+      <Head title={t.headTitle(event.name)} />
 
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="font-sans text-3xl font-bold uppercase tracking-[0.05em] admin-text">
-            Event Attendees
+            {t.heading}
           </h1>
           <p className="spec-label mt-1">
             {event.name} · {event.slug}
-            {event.endsAt ? ` · ends ${new Date(event.endsAt).toLocaleDateString()}` : ''}
-            {event.active ? '' : ' · INACTIVE'}
+            {event.endsAt ? t.endsLabel(new Date(event.endsAt).toLocaleDateString()) : ''}
+            {event.active ? '' : t.inactiveTag}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -397,15 +401,15 @@ export default function EventAttendeesPage({
             aria-hidden="true"
           />
           <span className="font-mono text-[13px] font-bold tracking-[0.12em] text-crypto-hover">
-            {counts.total} ONBOARDED
+            {t.onboardedSummary(counts.total)}
           </span>
           <button
             type="button"
             onClick={() => goToPage(meta.page)}
             className="rounded-md border border-current px-4 py-2 font-mono text-xs uppercase tracking-[0.1em] hover:bg-current hover:text-white"
-            aria-label="Refresh"
+            aria-label={t.refresh}
           >
-            Refresh
+            {t.refresh}
           </button>
         </div>
       </div>
@@ -424,19 +428,15 @@ export default function EventAttendeesPage({
 
       {/* Top-row stats. Four key metrics every operator needs on glance. */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Total onboarded" value={counts.total} />
+        <StatCard label={t.statTotalOnboarded} value={counts.total} />
+        <StatCard label={t.statStepDone} value={counts.byStep.done} sub={t.statStepDoneSub} />
         <StatCard
-          label="Step: done (here)"
-          value={counts.byStep.done}
-          sub="onboarded at the event"
-        />
-        <StatCard
-          label="Step: returning"
+          label={t.statStepReturning}
           value={counts.byStep.returning}
-          sub="already had a wallet"
+          sub={t.statStepReturningSub}
         />
         <StatCard
-          label="POAPs claimed"
+          label={t.statPoapsClaimed}
           value={`${counts.poap.claimed} / ${counts.total}`}
           sub={`${claimRate}%`}
           tone={claimRate >= 50 ? 'good' : 'warn'}
@@ -447,9 +447,9 @@ export default function EventAttendeesPage({
           "(no source)" bucket captures organic / typed-Hola-Sippy without a
           QR scan, useful for tuning the channel mix post-event. */}
       <div className="panel-frame mb-6 p-4">
-        <p className="spec-label mb-3">By assistant / source tag</p>
+        <p className="spec-label mb-3">{t.bySourceHeading}</p>
         {counts.bySource.length === 0 ? (
-          <p className="font-mono text-sm text-neutral-500">No attribution data yet.</p>
+          <p className="font-mono text-sm text-neutral-500">{t.bySourceEmpty}</p>
         ) : (
           <ul className="divide-y divide-[var(--admin-border-subtle)]">
             {counts.bySource.map((row) => (
@@ -458,7 +458,7 @@ export default function EventAttendeesPage({
                 className="flex items-center justify-between py-2 font-mono text-sm"
               >
                 <span className="admin-text">
-                  {row.source ?? <em className="text-neutral-500">(no source)</em>}
+                  {row.source ?? <em className="text-neutral-500">{t.bySourceNone}</em>}
                 </span>
                 <span className="font-bold text-crypto-hover">{row.count}</span>
               </li>
@@ -473,12 +473,12 @@ export default function EventAttendeesPage({
         <table className="w-full text-left font-mono text-sm">
           <thead>
             <tr className="border-b border-[var(--admin-border-subtle)] bg-[var(--admin-surface)]">
-              <th className="px-4 py-3 spec-label">Phone</th>
-              <th className="px-4 py-3 spec-label">Step</th>
-              <th className="px-4 py-3 spec-label">Source</th>
-              <th className="px-4 py-3 spec-label">POAP</th>
-              <th className="px-4 py-3 spec-label">Linked at</th>
-              <th className="px-4 py-3 spec-label">Send</th>
+              <th className="px-4 py-3 spec-label">{t.thPhone}</th>
+              <th className="px-4 py-3 spec-label">{t.thStep}</th>
+              <th className="px-4 py-3 spec-label">{t.thSource}</th>
+              <th className="px-4 py-3 spec-label">{t.thPoap}</th>
+              <th className="px-4 py-3 spec-label">{t.thLinkedAt}</th>
+              <th className="px-4 py-3 spec-label">{t.thSend}</th>
             </tr>
           </thead>
           <tbody>
@@ -488,7 +488,7 @@ export default function EventAttendeesPage({
                   colSpan={6}
                   className="px-4 py-12 text-center font-mono text-sm text-neutral-500"
                 >
-                  No attendees yet.
+                  {t.noAttendees}
                 </td>
               </tr>
             ) : (
@@ -507,7 +507,7 @@ export default function EventAttendeesPage({
                           : 'bg-sky-100 text-sky-800'
                       }`}
                     >
-                      {a.linkedAtStep ?? 'unknown'}
+                      {t.stepLabel(a.linkedAtStep)}
                     </span>
                   </td>
                   <td className="px-4 py-3 admin-text">
@@ -527,18 +527,18 @@ export default function EventAttendeesPage({
                         href={`/admin/operator/send?to=${encodeURIComponent(a.phoneNumberRaw)}`}
                         className="inline-block rounded-md border border-current px-3 py-1 font-mono text-xs uppercase tracking-[0.1em] text-crypto-hover hover:bg-crypto-hover hover:text-white"
                       >
-                        {a.operatorSend.sent ? 'Send again' : 'Send $'}
+                        {a.operatorSend.sent ? t.sendAgainButton : t.sendButton}
                       </Link>
                       {a.operatorSend.sent && (
                         <span
                           className="font-mono text-xs text-emerald-700"
                           title={
                             a.operatorSend.lastSentAt
-                              ? `Last send: ${formatDateTime(a.operatorSend.lastSentAt)}`
+                              ? t.lastSent(formatDateTime(a.operatorSend.lastSentAt))
                               : undefined
                           }
                         >
-                          ✓ ${a.operatorSend.totalAmountUsdc.toFixed(2)} sent
+                          {t.sentTotal(a.operatorSend.totalAmountUsdc.toFixed(2))}
                         </span>
                       )}
                     </div>
@@ -555,7 +555,7 @@ export default function EventAttendeesPage({
       {meta.lastPage > 1 ? (
         <div className="mt-4 flex items-center justify-between font-mono text-xs">
           <span className="text-neutral-500">
-            Page {meta.page} of {meta.lastPage} · {meta.perPage} per page
+            {t.pageOf(meta.page, meta.lastPage, meta.perPage)}
           </span>
           <div className="flex gap-2">
             <button
@@ -564,7 +564,7 @@ export default function EventAttendeesPage({
               disabled={meta.page <= 1}
               className="rounded-md border border-current px-3 py-1 uppercase tracking-[0.1em] hover:bg-current hover:text-white disabled:opacity-30"
             >
-              Prev
+              {t.prev}
             </button>
             <button
               type="button"
@@ -572,21 +572,21 @@ export default function EventAttendeesPage({
               disabled={meta.page >= meta.lastPage}
               className="rounded-md border border-current px-3 py-1 uppercase tracking-[0.1em] hover:bg-current hover:text-white disabled:opacity-30"
             >
-              Next
+              {t.next}
             </button>
           </div>
         </div>
       ) : null}
 
       <p className="mt-6 font-mono text-xs text-neutral-500">
-        JSON feed:{' '}
+        {t.jsonFeedHint(event.slug)}
         <Link
           href={`/admin/events/${encodeURIComponent(event.slug)}/attendees`}
           className="underline"
         >
           /admin/events/{event.slug}/attendees
         </Link>{' '}
-        — send <code>Accept: application/json</code>.
+        — <code>Accept: application/json</code>.
       </p>
     </AdminLayout>
   )
