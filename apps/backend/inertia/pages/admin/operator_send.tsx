@@ -249,12 +249,60 @@ export default function OperatorSendPage({
   }
 
   async function doSend(override = false) {
-    if (lookup.kind !== 'valid') return
     const amountNum = Number.parseFloat(amount)
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
       setLocalFlash({ kind: 'error', text: t.amountMustBePositive })
       return
     }
+
+    // Address-mode branch: superadmin pasted a 0x address into the
+    // recipient field. Route through the drain endpoint (which is
+    // already superadmin-gated and accepts a partial amount). Skip
+    // phone canonicalization / event-link / recipient-wallet lookup.
+    if (addressMode && superadminOverride) {
+      setSubmitting(true)
+      setLocalFlash(null)
+      try {
+        const xsrf = readXsrfToken()
+        const res = await fetch(
+          `/admin/events/${encodeURIComponent(superadminOverride.eventSlug)}/operator-wallet/drain`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}),
+            },
+            body: JSON.stringify({
+              destinationAddress: recipientTrimmed,
+              amountUsdc: amountNum,
+            }),
+          }
+        )
+        const body = await res.json()
+        if (!res.ok) {
+          setLocalFlash({ kind: 'error', text: body?.error ?? t.sendFailedFallback })
+          return
+        }
+        const short = `${recipientTrimmed.slice(0, 8)}…${recipientTrimmed.slice(-6)}`
+        setLocalFlash({
+          kind: 'success',
+          text: `Sent $${amountNum.toFixed(2)} USDC to ${short} (tx: ${(body.txHash ?? '').slice(0, 10)}…)`,
+        })
+        resetForm()
+        setTimeout(() => window.location.reload(), 1500)
+      } catch (err) {
+        setLocalFlash({
+          kind: 'error',
+          text: err instanceof Error ? err.message : t.networkError,
+        })
+      } finally {
+        setSubmitting(false)
+      }
+      return
+    }
+
+    if (lookup.kind !== 'valid') return
     setSubmitting(true)
     setLocalFlash(null)
     if (override) setDuplicateBlock(null)
@@ -331,12 +379,30 @@ export default function OperatorSendPage({
   const amountValid = Number.isFinite(amountNum) && amountNum > 0
   const amountExceedsTxCap = amountValid && amountNum > caps.perTxUsdc
   const amountExceedsHourCap = amountValid && amountNum > remainingHour
-  const canSend =
-    lookup.kind === 'valid' &&
+
+  // Address-mode: superadmin pasted a 0x address into the recipient field.
+  // Routes the send through the drain endpoint (which already accepts
+  // {destinationAddress, amountUsdc} and is superadmin-gated). Bypasses
+  // event-link / phone canonicalization / recipient-wallet lookup because
+  // we're not paying an attendee — we're moving USDC to a specific
+  // address. Caps don't apply to the drain path; balance is the only cap.
+  const recipientTrimmed = recipientPhone.trim()
+  const isAddressInput = /^0x[a-fA-F0-9]{40}$/.test(recipientTrimmed)
+  const addressMode = !!superadminOverride && isAddressInput
+  const amountExceedsBalance =
+    addressMode &&
     amountValid &&
-    !amountExceedsTxCap &&
-    !amountExceedsHourCap &&
-    !!wallet?.active
+    wallet?.balanceUsdc !== null &&
+    wallet?.balanceUsdc !== undefined &&
+    amountNum > wallet.balanceUsdc
+
+  const canSend = addressMode
+    ? isAddressInput && amountValid && !amountExceedsBalance && !!wallet?.active
+    : lookup.kind === 'valid' &&
+      amountValid &&
+      !amountExceedsTxCap &&
+      !amountExceedsHourCap &&
+      !!wallet?.active
 
   return (
     <AdminLayout>
@@ -365,10 +431,20 @@ export default function OperatorSendPage({
             Superadmin override
           </p>
           <p className="mt-1 font-mono text-sm">
-            You are sending through the operator wallet for event{' '}
-            <span className="font-bold">{superadminOverride.eventSlug}</span>. Hourly cap and
-            duplicate-recipient guard apply as if the assigned operator were sending. Audit row will
-            be attributed to the assigned operator; check server logs for the caller id.
+            Sending through the operator wallet for{' '}
+            <span className="font-bold">{superadminOverride.eventSlug}</span>. Caps and
+            duplicate-recipient guard still apply (same as the assigned operator). Paste a 0x
+            address in the recipient field to send directly to a wallet — that path uses the drain
+            endpoint and only the wallet balance limits it.
+          </p>
+          <p className="mt-2 font-mono text-[11px]">
+            Need to revoke or full-drain?{' '}
+            <a
+              href={`/admin/events/${encodeURIComponent(superadminOverride.eventSlug)}/attendees`}
+              className="font-bold underline"
+            >
+              Manage wallet on attendees page →
+            </a>
           </p>
         </div>
       )}
@@ -546,12 +622,12 @@ export default function OperatorSendPage({
         >
           <div>
             <label htmlFor="recipientPhone" className="spec-label block">
-              {t.recipientPhoneLabel}
+              {addressMode ? 'Destination address' : t.recipientPhoneLabel}
             </label>
             <div className="mt-1 flex gap-2">
               <input
                 id="recipientPhone"
-                type="tel"
+                type="text"
                 value={recipientPhone}
                 onChange={(e) => {
                   setRecipientPhone(e.target.value)
@@ -559,19 +635,43 @@ export default function OperatorSendPage({
                   setConfirming(false)
                   setDuplicateBlock(null)
                 }}
-                placeholder="+573001234567"
+                placeholder={superadminOverride ? '+573001234567 or 0x…' : '+573001234567'}
                 className="flex-1 rounded border border-[var(--admin-border-subtle)] bg-[var(--admin-surface)] px-3 py-2 font-mono text-sm admin-text"
                 required
               />
-              <button
-                type="button"
-                onClick={() => doLookup()}
-                disabled={lookup.kind === 'loading' || !recipientPhone.trim()}
-                className="rounded-md border border-current px-4 py-2 font-mono text-xs uppercase tracking-[0.1em] hover:bg-current hover:text-white disabled:opacity-50"
-              >
-                {lookup.kind === 'loading' ? t.lookupLoading : t.lookupButton}
-              </button>
+              {/* Hide Buscar in address-mode — no recipient lookup needed
+                  when sending directly to a 0x address. Make it visually
+                  prominent in phone mode (it was invisible against the
+                  neutral text color). */}
+              {!addressMode && (
+                <button
+                  type="button"
+                  onClick={() => doLookup()}
+                  disabled={lookup.kind === 'loading' || !recipientPhone.trim()}
+                  className="rounded-md bg-brand px-4 py-2 font-mono text-xs font-bold uppercase tracking-[0.1em] text-white hover:bg-brand-hover disabled:opacity-50"
+                >
+                  {lookup.kind === 'loading' ? t.lookupLoading : t.lookupButton}
+                </button>
+              )}
             </div>
+            {/* Address-mode hint: explain that this path uses drain and
+                skips the event-link safety check. */}
+            {addressMode && (
+              <p className="mt-2 font-mono text-xs text-amber-700">
+                Address mode — will send through the drain endpoint. No event-link or
+                duplicate-recipient checks; only the wallet balance limits the amount.
+              </p>
+            )}
+            {/* Show address-format hint when user pasted something that
+                looks like an address but isn't a valid 0x40-hex. */}
+            {superadminOverride &&
+              !addressMode &&
+              recipientTrimmed.startsWith('0x') &&
+              recipientTrimmed.length > 2 && (
+                <p className="mt-2 font-mono text-xs text-red-700">
+                  Looks like an address but isn't a valid 0x + 40 hex chars.
+                </p>
+              )}
             {lookup.kind === 'valid' && (
               <p className="mt-2 text-sm text-emerald-700">
                 {t.attendeeFound(formatDateTime(lookup.attendee.linkedAt), lookup.attendee.source)}
@@ -618,9 +718,17 @@ export default function OperatorSendPage({
             <div className="mt-1 flex flex-wrap gap-4 font-mono text-xs text-neutral-500">
               <span>{t.hourCapFootnote(remainingHour.toFixed(2))}</span>
             </div>
-            {amountExceedsHourCap && (
+            {/* Caps only apply to the phone-send path. In address-mode the
+                drain endpoint runs and the only ceiling is the wallet
+                balance — surface that instead. */}
+            {!addressMode && amountExceedsHourCap && (
               <p className="mt-1 text-xs text-red-700">
                 {t.amountExceedsHourCap(remainingHour.toFixed(2))}
+              </p>
+            )}
+            {addressMode && amountExceedsBalance && (
+              <p className="mt-1 text-xs text-red-700">
+                Amount exceeds wallet balance ( ${wallet?.balanceUsdc?.toFixed(2) ?? '0.00'}).
               </p>
             )}
           </div>
@@ -632,9 +740,18 @@ export default function OperatorSendPage({
               confirming ? 'bg-red-600 hover:bg-red-700' : 'bg-crypto-hover'
             }`}
           >
-            {submitting
-              ? t.sendingButton
-              : confirming
+            {(() => {
+              if (submitting) return t.sendingButton
+              // Address-mode: show shortened 0x… label, no event-attendee
+              // confirmation. Confirming = second click before send fires.
+              if (addressMode) {
+                const short = `${recipientTrimmed.slice(0, 8)}…${recipientTrimmed.slice(-6)}`
+                const amt = amountValid ? amountNum.toFixed(2) : '0.00'
+                return confirming
+                  ? `Confirm: send $${amt} USDC to ${short}`
+                  : `Send $${amt} USDC to ${short}`
+              }
+              return confirming
                 ? t.confirmSend(
                     amountNum.toFixed(2),
                     maskPhone(lookup.kind === 'valid' ? lookup.phone : '')
@@ -642,7 +759,8 @@ export default function OperatorSendPage({
                 : t.sendCta(
                     amountValid ? amountNum.toFixed(2) : '0.00',
                     lookup.kind === 'valid' ? maskPhone(lookup.phone) : '…'
-                  )}
+                  )
+            })()}
           </button>
         </form>
       )}

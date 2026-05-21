@@ -39,7 +39,12 @@ import { getUserWallet } from '#services/cdp_wallet.service'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { canonicalizePhone, maskPhone } from '#utils/phone'
 import { type Lang } from '#utils/messages'
-import { notifyPaymentReceived } from '#services/notification.service'
+import {
+  notifyPaymentReceived,
+  notifyEventAnnouncement,
+  formatOperatorDropBody,
+} from '#services/notification.service'
+import { claimPendingPoapInvite, releasePoapInvite } from '#services/event.service'
 import { getAdminLang } from '#utils/admin_lang'
 import { adminErrors } from '#utils/admin_messages'
 import { isSuperAdmin } from '#utils/super_admin'
@@ -252,6 +257,118 @@ async function notifyRecipientPoap(
       'operator_send.poap-notify-failed (on-chain send still succeeded)'
     )
   }
+}
+
+/**
+ * Combined orchestrator that replaces the two-message flow when Meta has
+ * approved the `event_announcement` template for the recipient's language.
+ *
+ * Flow:
+ *   1. Resolve recipient lang. If EN/ES (template approved), attempt the
+ *      combined path; else go straight to the two-message fallback.
+ *   2. Atomically reserve a POAP code via `claimPendingPoapInvite`. If a
+ *      code is reserved, build the body with `formatOperatorDropBody`
+ *      (payment receipt + POAP claim link) and send via
+ *      `notifyEventAnnouncement`. Success → return; one message delivered.
+ *   3. On template failure (Meta rejects, rate-limits, returns false),
+ *      release the POAP reservation and fall through to the two-message
+ *      flow so the user still gets payment_received + a fresh POAP DM.
+ *   4. If no POAP is available ('none', 'contended', 'pool_exhausted'),
+ *      skip the combined attempt and use the legacy flow — payment
+ *      notification only, plus the pool-exhausted text message if
+ *      relevant. Same end-state as before this template existed.
+ *
+ * Best-effort: never throws — operator UI must not see a 500 over a
+ * notification failure.
+ *
+ * Audit: logs each branch so post-event reconciliation can count which
+ * recipients got the combined vs split flow.
+ */
+async function notifyOperatorDrop(args: {
+  recipientPhone: string
+  amountUsdc: number
+  eventName: string
+  eventSlug: string
+  sendId: number | string
+  txHash: string
+  sippyWalletAddress: string
+}): Promise<void> {
+  let lang: Lang = 'es'
+  try {
+    const pref = await findUserPrefByPhone(args.recipientPhone)
+    lang = (pref?.preferredLanguage as Lang | undefined) ?? 'es'
+  } catch {
+    // Lang lookup failure → keep default 'es' and continue. The send is
+    // already on-chain, the notification path must not block.
+  }
+
+  // event_announcement is approved for EN and ES only (as of May 2026).
+  // PT recipients keep getting the two-message flow until the PT version
+  // is approved.
+  const templateApproved = lang === 'en' || lang === 'es'
+
+  if (templateApproved) {
+    try {
+      const outcome = await claimPendingPoapInvite(args.recipientPhone)
+      if (outcome.kind === 'reserved') {
+        const body = formatOperatorDropBody({
+          amount: args.amountUsdc.toFixed(2),
+          asset: 'USDC',
+          poapClaimUrl: outcome.reservation.poapClaimUrl,
+          sippyWalletAddress: args.sippyWalletAddress,
+          lang,
+        })
+        const sent = await notifyEventAnnouncement({
+          recipientPhone: args.recipientPhone,
+          eventName: outcome.reservation.eventName,
+          body,
+          lang,
+        })
+        if (sent) {
+          logger.info(
+            `operator_send.combined-sent send_id=${args.sendId} to=${maskPhone(args.recipientPhone)} lang=${lang} event=${outcome.reservation.eventSlug}`
+          )
+          return
+        }
+        // Template send failed AFTER the POAP was reserved. Release the
+        // reservation so the fallback flow can claim a fresh code from
+        // the pool and send poap_claim_invite normally. Without this
+        // release, the user would lose their POAP entirely.
+        logger.warn(
+          `operator_send.combined-failed send_id=${args.sendId} — releasing POAP reservation and falling back to two-message flow`
+        )
+        await releasePoapInvite({
+          phoneNumber: args.recipientPhone,
+          eventSlug: outcome.reservation.eventSlug,
+        }).catch((relErr) => {
+          logger.error(
+            { send_id: args.sendId, err: relErr },
+            'operator_send.combined-release-failed (POAP may be permanently lost for this user)'
+          )
+        })
+      }
+      // 'none' / 'contended' / 'pool_exhausted': nothing to combine.
+      // Drop through to the two-message flow — payment_received fires,
+      // and sendPoapInviteIfPending handles the pool-exhausted text
+      // message + contended/none no-op identically to before.
+    } catch (err) {
+      logger.warn(
+        { send_id: args.sendId, recipient: maskPhone(args.recipientPhone), err },
+        'operator_send.combined-orchestrator-error (falling back to two-message flow)'
+      )
+    }
+  }
+
+  // Two-message fallback: identical to the pre-template behavior.
+  await notifyRecipientOfPayment({
+    recipientPhone: args.recipientPhone,
+    amountUsdc: args.amountUsdc,
+    eventName: args.eventName,
+    eventSlug: args.eventSlug,
+    sendId: args.sendId,
+    txHash: args.txHash,
+  })
+  await notifyRecipientPoap(args.recipientPhone, args.sippyWalletAddress)
 }
 
 async function loadRecentSends(operatorUserId: number, eventSlug: string): Promise<RecentSend[]> {
@@ -789,19 +906,23 @@ export default class OperatorSendController {
         .select('name')
         .first()
         .catch(() => null)
-      void notifyRecipientOfPayment({
+      // Notify recipient via the combined orchestrator. For EN/ES it
+      // attempts the approved `event_announcement` template (one message
+      // covering payment receipt + POAP claim); for PT, or when the
+      // template send fails, it falls back to the legacy two-message
+      // flow (payment_received + poap_claim_invite). One-shot per
+      // attendee+event for the POAP component — subsequent operator
+      // sends to the same attendee skip the POAP path inside the
+      // orchestrator.
+      void notifyOperatorDrop({
         recipientPhone: recipientCanonical,
         amountUsdc: body.amountUsdc,
         eventName: eventRow?.name ?? wallet.eventSlug,
         eventSlug: wallet.eventSlug,
         sendId: sendRowId,
         txHash,
+        sippyWalletAddress: recipientWallet.walletAddress,
       })
-      // POAP claim-link DM. One-shot per attendee+event (gated by
-      // user_event_links.poap_invite_sent_at). The recipient gets the
-      // POAP only on the FIRST operator send to them — subsequent sends
-      // (override, top-up) silently no-op.
-      void notifyRecipientPoap(recipientCanonical, recipientWallet.walletAddress)
 
       return response.ok({
         success: true,
