@@ -174,6 +174,53 @@ function ThemeToggle() {
   )
 }
 
+/**
+ * Bilingual toggle, rendered globally in the admin layout header.
+ *
+ * The cookie is server-readable (plain, not signed) so the Inertia
+ * middleware's share() hook can localize props on the next page load.
+ * After a click we trigger `router.reload()` so the server re-evaluates
+ * every component prop with the new lang — much simpler than threading
+ * the value through every React subtree client-side.
+ *
+ * Scope of what actually changes when toggled: operator_send.tsx,
+ * event_attendees.tsx, the operator-only sidebar nav labels, and JSON
+ * error responses from operator_send_controller. Other admin pages
+ * (users, analytics, roles, dashboard root, OperatorWalletPanel) remain
+ * English regardless of the toggle state — they are admin-only surfaces.
+ */
+function LangToggle() {
+  const page = usePage<{ adminLang?: 'es' | 'en' }>()
+  const current = page.props.adminLang ?? 'es'
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  function toggle() {
+    const next: 'es' | 'en' = current === 'es' ? 'en' : 'es'
+    // max-age = 1 year. Cookie name kept in sync with admin_lang.ts.
+    document.cookie = `sippy_admin_lang=${next}; path=/; max-age=31536000; samesite=lax`
+    router.reload()
+  }
+
+  if (!mounted) return <div className="h-7 w-9" />
+
+  return (
+    <button
+      onClick={toggle}
+      className="flex h-7 min-w-9 items-center justify-center rounded px-1.5 font-mono text-[10px] font-bold tracking-[0.1em] transition-colors focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
+      style={{
+        borderColor: 'var(--admin-border)',
+        color: 'var(--admin-text-muted)',
+        border: '1px solid var(--admin-border)',
+      }}
+      title={current === 'es' ? 'Cambiar a inglés' : 'Switch to Spanish'}
+      aria-label={current === 'es' ? 'Cambiar a inglés' : 'Switch to Spanish'}
+    >
+      {current === 'es' ? 'ES' : 'EN'}
+    </button>
+  )
+}
+
 function PollerStatus({
   indexerStatus,
   isAdmin,
@@ -247,13 +294,21 @@ function PollerStatus({
 }
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const { auth, flash, indexerStatus } = usePage().props as unknown as {
+  const { auth, flash, indexerStatus, adminLang } = usePage().props as unknown as {
     auth: AuthUser | null
     flash: FlashMessages
     indexerStatus: IndexerStatus | null
+    adminLang?: 'es' | 'en'
   }
   const currentPath = usePage().url
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const lang: 'es' | 'en' = adminLang ?? 'es'
+  // Operator-nav labels live alongside everything else operator-facing.
+  // The rest of the sidebar (admin-only nav) stays English by decision.
+  const operatorNavLabels =
+    lang === 'es'
+      ? { send: 'ENVIAR', attendees: 'ASISTENTES', qrSheets: 'HOJAS QR' }
+      : { send: 'SEND', attendees: 'ATTENDEES', qrSheets: 'QR SHEETS' }
 
   function isActive(href: string) {
     if (href === '/admin') return currentPath === '/admin'
@@ -271,7 +326,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           const items = [
             {
               href: '/admin/operator/send',
-              label: 'SEND',
+              label: operatorNavLabels.send,
               icon: (
                 <svg
                   className="h-4 w-4"
@@ -293,7 +348,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             items.push(
               {
                 href: `/admin/events/${encodeURIComponent(slug)}/attendees`,
-                label: 'ATTENDEES',
+                label: operatorNavLabels.attendees,
                 icon: (
                   <svg
                     className="h-4 w-4"
@@ -314,7 +369,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               },
               {
                 href: `/admin/qr-sheets/${encodeURIComponent(slug)}`,
-                label: 'QR SHEETS',
+                label: operatorNavLabels.qrSheets,
                 icon: (
                   <svg
                     className="h-4 w-4"
@@ -374,6 +429,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </svg>
         </div>
         <div className="flex items-center gap-2">
+          <LangToggle />
           <ThemeToggle />
           {/* Close button — mobile only */}
           <button
