@@ -105,6 +105,35 @@ export function formatDateUTC(date: Date): string {
 // Message catalog
 // ============================================================================
 
+// --- Pizza Day ---
+
+/**
+ * Pizza Day Cartagena 2026 — answer to "qué es pizza day?" style questions.
+ *
+ * Warm one-liner + deep-link to the in-app guide. The guide has all the
+ * operational detail (when, where, how to pay, Quest rules) so this
+ * reply stays short on purpose. URL flips to ?lang=en so the in-app
+ * toggle starts on EN when the bot is already speaking EN.
+ */
+export function formatPizzaDayMessage(lang: Lang = 'en'): string {
+  const url = lang === 'en' ? `${FRONTEND_URL}/pizza-day?lang=en` : `${FRONTEND_URL}/pizza-day`
+  const m = {
+    en: () =>
+      `🍕 Pizza Day Cartagena 2026, Friday May 22. Sippy is the payments rail: ` +
+      `swap cash for USDC at our stand, pay vendors by scanning their QR. ` +
+      `Full guide:\n${url}`,
+    es: () =>
+      `🍕 Pizza Day Cartagena 2026, viernes 22 de mayo. Sippy es la billetera del evento: ` +
+      `cambias efectivo por USDC en nuestro stand y le pagas a los puestos escaneando su QR. ` +
+      `Guía completa:\n${url}`,
+    pt: () =>
+      `🍕 Pizza Day Cartagena 2026, sexta-feira 22 de maio. Sippy é a carteira do evento: ` +
+      `troque dinheiro por USDC no nosso stand e pague aos vendedores escaneando o QR deles. ` +
+      `Guia completo:\n${url}`,
+  }
+  return m[lang]()
+}
+
 // --- Help ---
 
 export function formatHelpMessage(lang: Lang = 'en'): string {
@@ -1426,42 +1455,122 @@ export function formatCommandErrorMessage(lang: Lang = 'en'): string {
 
 // --- Greeting (regex-matched, zero LLM cost) ---
 
+// Pick one variant at random. Tiny helper — purely for adding warmth +
+// variety to the deterministic copy. No persistence: a user sending
+// "hola" twice in a row gets two different greetings, which actually
+// reads more human than always-identical.
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+/**
+ * Greeting reply — used when SMART/regex routes to `greeting`. Warm,
+ * open-ended ("¿qué necesitas?"), never a closed yes/no question.
+ *
+ * Multiple variants per (lang, dialect) so the same user sending two
+ * greetings in a row doesn't get a copy-paste reply. Variety comes from
+ * the variant pool, not from the LLM — keeps personality without the
+ * pseudo-promise bug class that bit us 2026-05-21.
+ */
 export function formatGreetingMessage(lang: Lang = 'en', dialect: Dialect = 'neutral'): string {
   if (lang === 'es' && dialect !== 'neutral') {
-    const d: Record<string, string> = {
-      co: `Hola! Que necesitas? Puedo ver tu saldo o enviar plata — solo dime.`,
-      mx: `Hola! Que necesitas? Puedo ver tu saldo o enviar dinero — solo dime.`,
-      ar: `Hola! Que necesitas? Puedo ver tu saldo o enviar plata — solo decime.`,
-      ve: `Hola! Que necesitas? Puedo ver tu saldo o enviar plata — solo dime.`,
+    const d: Record<string, string[]> = {
+      co: [
+        `Hola! ¿Qué necesitas? Te muestro tu saldo o te ayudo a enviar plata, tú me dices.`,
+        `Heyy. Por aquí estoy. Saldo, enviar plata, tu QR, lo que necesites.`,
+        `Hola hola! ¿En qué te ayudo? Te muestro saldo, te ayudo a enviar, o te paso tu QR.`,
+        `Buenas! ¿Qué hacemos? Saldo, enviar plata, QR, todo desde aquí.`,
+      ],
+      mx: [
+        `Hola! ¿Qué necesitas? Te muestro tu saldo o te ayudo a enviar dinero, tú me dices.`,
+        `Eyy. Por aquí ando. Saldo, enviar, tu QR, lo que necesites.`,
+        `Hola hola! ¿En qué te ayudo? Saldo, enviar dinero, o te paso tu QR.`,
+        `Qué tal! ¿Qué hacemos? Saldo, enviar, QR, todo desde aquí.`,
+      ],
+      ar: [
+        `Hola! ¿Qué necesitás? Te muestro tu saldo o te ayudo a enviar plata, decime nomás.`,
+        `Heyy. Por acá estoy. Saldo, enviar plata, tu QR, lo que necesites.`,
+        `Hola hola! ¿En qué te ayudo? Te muestro saldo, te ayudo a enviar, o te paso tu QR.`,
+        `Buenas! ¿Qué hacemos? Saldo, enviar plata, QR, todo desde acá.`,
+      ],
+      ve: [
+        `Hola! ¿Qué necesitas? Te muestro tu saldo o te ayudo a enviar plata, tú me dices.`,
+        `Heyy. Por aquí estoy. Saldo, enviar plata, tu QR, lo que necesites.`,
+        `Hola hola! ¿En qué te ayudo? Te muestro saldo, te ayudo a enviar, o te paso tu QR.`,
+        `Buenas! ¿Qué hacemos? Saldo, enviar plata, QR, todo desde aquí.`,
+      ],
     }
-    if (d[dialect]) return d[dialect]
+    if (d[dialect]) return pick(d[dialect])
   }
-  const m = {
-    en: () => `Hey! What do you need? I can check your balance or send money — just tell me.`,
-    es: () => `Hola! Que necesitas? Puedo ver tu saldo o enviar dinero — solo dime.`,
-    pt: () => `Oi! O que precisa? Posso ver seu saldo ou enviar dinheiro — so me diz.`,
+  const m: Record<Lang, string[]> = {
+    en: [
+      `Hey! What do you need? I can check your balance or help you send, just tell me.`,
+      `Hello! Around if you need anything. Balance, send money, your QR, your call.`,
+      `Heyy. What's up? Balance, send, QR, pick one.`,
+      `Hi! How can I help? Balance, send, your QR, just say the word.`,
+    ],
+    es: [
+      `Hola! ¿Qué necesitas? Te muestro tu saldo o te ayudo a enviar dinero, tú me dices.`,
+      `Heyy. Por aquí estoy. Saldo, enviar dinero, tu QR, lo que necesites.`,
+      `Hola hola! ¿En qué te ayudo? Te muestro saldo, te ayudo a enviar, o te paso tu QR.`,
+      `Buenas! ¿Qué hacemos? Saldo, enviar dinero, QR, todo desde aquí.`,
+    ],
+    pt: [
+      `Oi! O que precisa? Posso ver seu saldo ou ajudar a enviar dinheiro, só me diz.`,
+      `Eaí! Tô por aqui. Saldo, enviar, seu QR, o que precisar.`,
+      `Olá! Em que ajudo? Saldo, enviar dinheiro, seu QR, é só falar.`,
+    ],
   }
-  return m[lang]()
+  return pick(m[lang])
 }
 
 // --- Social phrases (regex-matched, zero LLM cost) ---
 
+/**
+ * Social acknowledgement — "gracias", "ok", "listo" type messages.
+ * Short, warm, never a follow-up question. Multiple variants per
+ * dialect so back-to-back acks don't feel templated.
+ */
 export function formatSocialReplyMessage(lang: Lang = 'en', dialect: Dialect = 'neutral'): string {
   if (lang === 'es' && dialect !== 'neutral') {
-    const d: Record<string, string> = {
-      co: `Listo. Aqui estoy por si necesitas algo.`,
-      mx: `Dale. Aqui estoy por si necesitas algo.`,
-      ar: `Dale. Aca estoy por si necesitas algo.`,
-      ve: `Dale. Aqui estoy por si necesitas algo.`,
+    const d: Record<string, string[]> = {
+      co: [
+        `Listo. Por aquí estoy si necesitas algo.`,
+        `Bacano. Cualquier cosa, me avisas.`,
+        `Vale. Aquí ando.`,
+      ],
+      mx: [
+        `Dale. Aquí estoy si necesitas algo.`,
+        `Sale. Cualquier cosa me dices.`,
+        `Listo. Por acá ando.`,
+      ],
+      ar: [
+        `Dale. Acá estoy si necesitás algo.`,
+        `Joya. Cualquier cosa me decís.`,
+        `Listo. Por acá ando.`,
+      ],
+      ve: [
+        `Dale. Aquí estoy si necesitas algo.`,
+        `Chévere. Cualquier cosa me avisas.`,
+        `Listo. Por aquí ando.`,
+      ],
     }
-    if (d[dialect]) return d[dialect]
+    if (d[dialect]) return pick(d[dialect])
   }
-  const m = {
-    en: () => `Got it. I'm here if you need anything.`,
-    es: () => `Dale. Aqui estoy por si necesitas algo.`,
-    pt: () => `Beleza. To aqui se precisar.`,
+  const m: Record<Lang, string[]> = {
+    en: [
+      `Got it. I'm here if you need anything.`,
+      `Cool, holler if you need something.`,
+      `Sounds good. Around if you need me.`,
+    ],
+    es: [
+      `Dale. Aquí estoy si necesitas algo.`,
+      `Listo. Cualquier cosa me dices.`,
+      `Genial. Por aquí ando.`,
+    ],
+    pt: [`Beleza. Tô aqui se precisar.`, `Tranquilo. Por aqui.`, `Show. Qualquer coisa me chama.`],
   }
-  return m[lang]()
+  return pick(m[lang])
 }
 
 // --- Media messages (non-text) ---

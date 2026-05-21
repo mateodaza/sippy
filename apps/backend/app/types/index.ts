@@ -95,6 +95,7 @@ export interface ParsedCommand {
     | 'dashboard'
     | 'referral_code'
     | 'quest_status'
+    | 'pizza_day'
     | 'unknown'
   amount?: number
   recipient?: string

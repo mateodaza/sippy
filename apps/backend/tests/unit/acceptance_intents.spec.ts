@@ -45,6 +45,14 @@ const cases: Array<{ input: string; expected: string; why?: string }> = [
   { input: 'como voy en el quest', expected: 'quest_status' },
   { input: 'how am I doing', expected: 'quest_status' },
 
+  // 6. pizza_day — added after a real user asked "Que es el pizza day?"
+  //    and the bot routed to out_of_scope. Now an explicit intent.
+  { input: 'pizza day', expected: 'pizza_day' },
+  { input: 'que es pizza day', expected: 'pizza_day' },
+  { input: 'que es el pizza day', expected: 'pizza_day' },
+  { input: 'Que es el pizza day?', expected: 'pizza_day', why: 'real transcript form' },
+  { input: 'what is pizza day', expected: 'pizza_day', why: 'EN' },
+
   // Sanity — known no-collision commands stayed put
   { input: 'ayuda', expected: 'help' },
   { input: 'historial', expected: 'history' },

@@ -40,6 +40,7 @@ import { detectLanguage, PERSIST_THRESHOLD } from '#utils/language'
 import {
   formatHelpMessage,
   formatAboutMessage,
+  formatPizzaDayMessage,
   formatInvalidSendFormat,
   formatHistoryMessage,
   formatSettingsMessage,
@@ -551,6 +552,13 @@ export async function routeCommand(
         break
       }
 
+      case 'pizza_day': {
+        // Replies regardless of setup status — Pizza Day info is useful
+        // even to brand-new users (it's literally the event Sippy is at).
+        await sendMessageFn(phoneNumber, formatPizzaDayMessage(lang), lang)
+        break
+      }
+
       case 'pay_qr': {
         const s = await resolveStatus()
         if (s === 'new_user') {
@@ -1035,19 +1043,18 @@ export async function routeCommand(
         if (!pending || Date.now() - pending.timestamp > PENDING_TX_TTL_MS) {
           if (pending) pendingTxs.delete(phoneNumber) // clean up expired entry
           // No pending tx — "dale"/"sí"/"va" is just acknowledgment, not a real confirm.
-          // Treat like social instead of showing confusing "No pending transfer."
+          // Use the deterministic social reply rather than the LLM-generated
+          // path: an LLM here can produce ungrounded suggestions ("¿revisamos
+          // tu saldo?") with no state machine behind them, leading the user
+          // to retype "si" again and get another disconnected reply. Until
+          // we add a real `pendingSuggestion` store, no LLM follow-up.
           const s = await resolveStatus()
           if (s === 'new_user') {
             await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
           } else if (s === 'embedded_incomplete') {
             await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
           } else {
-            const text = command.originalText ?? ''
-            const raw = text
-              ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
-              : null
-            const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
-            await sendMessageFn(phoneNumber, reply || formatSocialReplyMessage(lang, dialect), lang)
+            await sendMessageFn(phoneNumber, formatSocialReplyMessage(lang, dialect), lang)
           }
         } else {
           // Guard 2: concurrent-send check — BEFORE consuming pending tx
@@ -1239,15 +1246,15 @@ export async function routeCommand(
       }
 
       case 'greeting': {
+        // Deterministic copy only. The LLM-generated greeting path was
+        // producing ungrounded action-questions ("¿revisamos tu saldo?")
+        // with no state machine behind them, so user affirmations ("muy
+        // bien si") landed back in this case with nothing to bind to.
+        // Until a `pendingSuggestion` store exists for non-money intents,
+        // greetings stay on the deterministic formatter — open-ended
+        // ("¿qué necesitas?") rather than closed yes/no traps.
         const s = await resolveStatus()
-        const text = command.originalText ?? ''
-        const raw = text
-          ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
-          : null
-        const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
-        if (reply) {
-          await sendMessageFn(phoneNumber, reply, lang)
-        } else if (s === 'new_user') {
+        if (s === 'new_user') {
           await sendMessageFn(phoneNumber, formatGreetingNewUser(phoneNumber, lang), lang)
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatGreetingIncomplete(phoneNumber, lang), lang)
@@ -1258,15 +1265,9 @@ export async function routeCommand(
       }
 
       case 'social': {
+        // Same bug class as greeting: see note above. Always deterministic.
         const s = await resolveStatus()
-        const text = command.originalText ?? ''
-        const raw = text
-          ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
-          : null
-        const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
-        if (reply) {
-          await sendMessageFn(phoneNumber, reply, lang)
-        } else if (s === 'new_user') {
+        if (s === 'new_user') {
           await sendMessageFn(phoneNumber, formatGreetingNewUser(phoneNumber, lang), lang)
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatGreetingIncomplete(phoneNumber, lang), lang)

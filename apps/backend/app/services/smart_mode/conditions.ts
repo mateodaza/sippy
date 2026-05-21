@@ -242,6 +242,28 @@ export const INTENT_CONDITIONS: IntentCondition[] = [
     ],
   },
   {
+    slug: 'pizza_day',
+    description:
+      "User is asking about Pizza Day Cartagena 2026 — the event Sippy is the payments layer for. Distinct from `about` (which asks about Sippy itself). Trigger phrases: '¿qué es pizza day?', 'pizza day', 'cuéntame del pizza day', 'info pizza day', 'how does pizza day work'. The handler replies with a one-line description + the deep-link to /pizza-day.",
+    requiresSlots: [],
+    examples: [
+      'pizza day',
+      'que es pizza day',
+      'qué es el pizza day',
+      'que es el pizza day',
+      'cuéntame del pizza day',
+      'info pizza day',
+      'how does pizza day work',
+      "what's pizza day",
+      'que tal pizza day',
+    ],
+    notRoutedHere: [
+      'que es sippy', // → about
+      'how do I pay at pizza day', // → help (operational how-to)
+      'paga 5 a pizza', // → send (transactional)
+    ],
+  },
+  {
     slug: 'list_contacts',
     description:
       'User wants to see their saved address-book contacts. Trigger phrases: "mis contactos", "my contacts", "agenda", "libreta", "phonebook", "address book", "meus contatos". Distinct from `save_contact`/`delete_contact` which carry slot data — this is the read-only list view.',

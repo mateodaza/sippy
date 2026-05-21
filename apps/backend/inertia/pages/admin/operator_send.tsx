@@ -49,6 +49,15 @@ interface Props {
    *  wallet via ?event=<slug>. Page surfaces a banner and POSTs eventSlug
    *  back so the controller resolves the same wallet. */
   superadminOverride: { eventSlug: string } | null
+  /** Populated when the superadmin lands here without `?event=` and has no
+   *  wallet of their own. Lets them pick which event to act through. */
+  superadminWalletPicker: Array<{
+    eventSlug: string
+    eventName: string | null
+    walletAddress: string
+    operatorEmail: string | null
+    operatorFullName: string | null
+  }> | null
   flash: { error?: string; success?: string } | null
 }
 
@@ -155,6 +164,7 @@ export default function OperatorSendPage({
   recentSends,
   prefillRecipientPhone,
   superadminOverride,
+  superadminWalletPicker,
   flash,
 }: Props) {
   const lang = ((usePage().props as { adminLang?: AdminLang }).adminLang ?? 'es') as AdminLang
@@ -404,6 +414,55 @@ export default function OperatorSendPage({
               {t.spentLastHour(caps.spentLastHourUsdc.toFixed(2))}
             </p>
           </div>
+        </div>
+      ) : superadminWalletPicker && superadminWalletPicker.length > 0 ? (
+        // Superadmin landed here with no `?event=` override. Render a picker
+        // of active operator wallets so they can choose one to act through.
+        // Selecting routes back to /admin/operator/send?event=<slug>, which
+        // hits the wallet-present branch.
+        <div className="panel-frame mb-6 p-4">
+          <p className="spec-label mb-1">Pick an event wallet to send through</p>
+          <p className="mb-3 font-mono text-xs text-neutral-500">
+            Superadmin override. Same caps and duplicate-recipient guard apply as if the assigned
+            operator were sending.
+          </p>
+          <ul className="divide-y divide-[var(--admin-border-subtle)]">
+            {superadminWalletPicker.map((row) => (
+              <li
+                key={row.eventSlug}
+                className="flex flex-wrap items-center justify-between gap-3 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-mono text-sm font-bold admin-text">
+                    {row.eventName ?? row.eventSlug}
+                  </p>
+                  <p className="font-mono text-[11px] text-neutral-500">
+                    {row.eventSlug} · op: {row.operatorFullName ?? row.operatorEmail ?? 'unknown'}
+                  </p>
+                  <p className="mt-1 font-mono text-[10px] break-all text-neutral-500">
+                    {row.walletAddress}
+                  </p>
+                </div>
+                <a
+                  href={`/admin/operator/send?event=${encodeURIComponent(row.eventSlug)}`}
+                  className="shrink-0 rounded-md border border-crypto-hover px-3 py-1.5 font-mono text-xs uppercase tracking-[0.1em] text-crypto-hover hover:bg-crypto-hover hover:text-white"
+                >
+                  Send through this wallet
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : superadminWalletPicker && superadminWalletPicker.length === 0 ? (
+        // Superadmin, but no active operator wallets exist anywhere yet.
+        <div
+          className="panel-frame mb-6 border-l-4 border-amber-600 bg-amber-50 p-4 text-amber-900"
+          role="alert"
+        >
+          <p className="font-semibold">No active operator wallets</p>
+          <p className="mt-1 text-sm">
+            Provision an operator on an event's attendees page first, then come back here.
+          </p>
         </div>
       ) : (
         <div

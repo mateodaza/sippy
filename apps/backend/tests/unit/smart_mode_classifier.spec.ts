@@ -124,8 +124,13 @@ test.group('classifier | primary success', () => {
     })
 
     assert.isTrue(
-      calls[0].systemPrompt?.includes("Sippy's intent classifier") ?? false,
-      'system prompt includes the classifier identity'
+      // Accept any phrasing that establishes Sippy as the bot whose
+      // routing/intents this prompt drives. Exact wording was tightened
+      // for warmth on 2026-05-21; the contract is "identity established",
+      // not "exact string present".
+      /Sippy/i.test(calls[0].systemPrompt ?? '') &&
+        /intent|routing|classif/i.test(calls[0].systemPrompt ?? ''),
+      'system prompt establishes Sippy intent/routing identity'
     )
     assert.isTrue(
       calls[0].systemPrompt?.includes('Required slots: amount, recipientRaw') ?? false,

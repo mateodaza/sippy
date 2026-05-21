@@ -160,6 +160,18 @@ interface ShowSendProps {
    * for ordinary operator sessions.
    */
   superadminOverride: { eventSlug: string } | null
+  /**
+   * Populated for the superadmin only when they land on /admin/operator/send
+   * with no `?event=` override (so the page would otherwise be blank). Lets
+   * them pick a wallet to act through. Null for everyone else.
+   */
+  superadminWalletPicker: Array<{
+    eventSlug: string
+    eventName: string | null
+    walletAddress: string
+    operatorEmail: string | null
+    operatorFullName: string | null
+  }> | null
   flash: { error?: string; success?: string } | null
 }
 
@@ -256,6 +268,34 @@ export default class OperatorSendController {
     if (!wallet) {
       // Operator (or admin acting as operator) with no assignment. UI
       // surfaces this clearly — the form is disabled, send is blocked.
+      //
+      // For the superadmin specifically, fetch the active operator-wallet
+      // list so the page can render a "pick an event" panel. This makes
+      // the SEND sidebar entry a real entry point instead of a dead end.
+      const walletPicker = isSuperAdmin(user.email)
+        ? await db
+            .from('event_operator_wallets as eow')
+            .leftJoin('events as e', 'e.slug', 'eow.event_slug')
+            .leftJoin('admin_users as au', 'au.id', 'eow.operator_user_id')
+            .where('eow.active', true)
+            .orderBy('e.starts_at', 'desc')
+            .select(
+              'eow.event_slug as event_slug',
+              'e.name as event_name',
+              'eow.wallet_address as wallet_address',
+              'au.email as operator_email',
+              'au.full_name as operator_full_name'
+            )
+            .then((rows: any[]) =>
+              rows.map((r) => ({
+                eventSlug: r.event_slug,
+                eventName: r.event_name ?? null,
+                walletAddress: r.wallet_address,
+                operatorEmail: r.operator_email ?? null,
+                operatorFullName: r.operator_full_name ?? null,
+              }))
+            )
+        : null
       const props: ShowSendProps = {
         event: null,
         wallet: null,
@@ -268,6 +308,7 @@ export default class OperatorSendController {
         recentSends: [],
         prefillRecipientPhone: null,
         superadminOverride: null,
+        superadminWalletPicker: walletPicker,
         flash: (session.flashMessages.all() as ShowSendProps['flash']) ?? null,
       }
       return inertia.render('admin/operator_send', props)
@@ -313,6 +354,8 @@ export default class OperatorSendController {
       recentSends,
       prefillRecipientPhone: prefill,
       superadminOverride: override ? { eventSlug: wallet.eventSlug } : null,
+      // Picker is only meaningful on the "no wallet" branch.
+      superadminWalletPicker: null,
       flash: (session.flashMessages.all() as ShowSendProps['flash']) ?? null,
     }
     return inertia.render('admin/operator_send', props)

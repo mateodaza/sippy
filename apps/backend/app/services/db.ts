@@ -295,6 +295,11 @@ export async function setUserLanguage(
 // ============================================================================
 
 export interface ContextMessage {
+  // Currently only inbound user messages are persisted. Resolving
+  // affirmations like "muy bien si" against prior bot turns would
+  // require also storing assistant messages + adding them to the SMART
+  // prompt — see backlog item "pendingSuggestion state machine +
+  // assistant context" tied to the 2026-05-21 incident. Not shipped.
   role: 'user'
   content: string
 }

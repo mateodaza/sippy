@@ -10,6 +10,10 @@ interface AuthUser {
   initials: string
   /** Populated for `role === 'operator'`. Drives nav scoping. */
   assignedEventSlug?: string | null
+  /** True for `admin@sippy.lat` (SUPER_ADMIN_EMAIL). Surfaces the
+   *  cross-event SEND nav entry — regular admins don't get it because
+   *  they can't act through another operator's wallet anyway. */
+  isSuperAdmin?: boolean
 }
 
 interface FlashMessages {
@@ -315,6 +319,30 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     return currentPath.startsWith(href)
   }
 
+  // Superadmin-only SEND entry — opens the operator UI cross-event so
+  // admin@sippy.lat can pick a wallet to act through. Renders BEFORE the
+  // generic admin nav so it's visually near the top. Regular admins don't
+  // see this because the controller would refuse any override they tried.
+  const superadminSendItem = {
+    href: '/admin/operator/send',
+    label: 'SEND',
+    icon: (
+      <svg
+        className="h-4 w-4"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <line x1="22" y1="2" x2="11" y2="13" />
+        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+      </svg>
+    ),
+  }
+
   // Role-aware nav. Operators see ONLY their send page, their assigned
   // event's attendees, and the same event's QR sheets. All other admin
   // surfaces (users, analytics, roles, dashboard root) are hidden.
@@ -392,7 +420,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           }
           return items
         })()
-      : navItems
+      : auth?.isSuperAdmin
+        ? [superadminSendItem, ...navItems]
+        : navItems
 
   const sidebarContent = (
     <>

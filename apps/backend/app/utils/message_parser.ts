@@ -177,6 +177,17 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(?:meu\s+|minhas\s+)?(?:quest|entradas)\s*\??$/i,
     /^(?:quantas?)\s+entradas?\s*(?:tenho)?\s*\??$/i,
   ],
+  // pizza_day — user asking about the Pizza Day Cartagena 2026 event.
+  // Distinct from `about` (which is "what is Sippy"); pizza_day is "what
+  // is the event Sippy is at". Handler returns the deep-link to the in-app
+  // /pizza-day guide. ES-first vocabulary, EN/PT included for completeness.
+  pizza_day: [
+    /^(?:pizza\s?day|pizzaday)\s*\??$/i,
+    /^(?:qu[eé]|que)\s+es\s+(?:el\s+)?pizza\s?day\s*\??$/i,
+    /^(?:what\s+is|what's|whats)\s+(?:the\s+)?pizza\s?day\s*\??$/i,
+    /^(?:info|infos|cu[eé]ntame|cuentame|h[aá]blame|hablame|dime)\s+(?:de(?:l)?\s+)?pizza\s?day\s*\??$/i,
+    /^(?:o\s+que\s+[eé]|o\s+que\s+e)\s+(?:o\s+)?pizza\s?day\s*\??$/i,
+  ],
 }
 
 /** Privacy patterns — each paired with the language it signals */
@@ -701,6 +712,14 @@ const HIGH_CONFIDENCE_PRE_LLM_PATTERNS: Array<[string, RegExp]> = [
   [
     'quest_status',
     /(?:^|\s)((?:mi|mis|my|meu|minhas)\s+(?:quest|entradas|entries)|(?:cu[aá]nt[ao]s?|quantas?)\s+entradas?(?:\s+tengo|\s+tenho)?|(?:c[oó]mo|como)\s+voy(?:\s+(?:en\s+)?(?:el\s+)?quest)?|quest\s+status|how\s+am\s+i\s+doing|how\s+many\s+entries)$/i,
+  ],
+  // Pizza Day — bot must answer "qué es pizza day" etc. without the LLM
+  // re-classifying it as out_of_scope (real bug from 2026-05-21
+  // transcript: "Que es el pizza day?" → "no sé de pizza day"). Strict
+  // pre-LLM gate ensures the dedicated handler always wins.
+  [
+    'pizza_day',
+    /(?:^|\s)(pizza\s?day|pizzaday|(?:qu[eé]|que)\s+es\s+(?:el\s+)?pizza\s?day|(?:what\s+is|what's|whats)\s+(?:the\s+)?pizza\s?day|(?:o\s+que\s+[eé])\s+(?:o\s+)?pizza\s?day)\??\s*$/i,
   ],
 ]
 

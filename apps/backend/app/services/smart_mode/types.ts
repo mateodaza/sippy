@@ -85,6 +85,12 @@ export const SMART_INTENT_SLUGS = [
   'about',
   'list_contacts',
   'withdraw',
+  // pizza_day — direct question about the Pizza Day Cartagena 2026 event.
+  // Added after a real user asked "¿Qué es el pizza day?" and the bot
+  // routed to out_of_scope ("no sé de pizza day"). The event is something
+  // Sippy *does* know about; we have a dedicated /pizza-day guide.
+  // No slots needed — just return the deep-link + a one-line description.
+  'pizza_day',
 ] as const
 
 export type SmartIntent = (typeof SMART_INTENT_SLUGS)[number]
