@@ -75,13 +75,65 @@ const TEMPLATES = {
   friendInvite: 'friend_invite',
   inviteCompleted: 'invite_completed',
   setupCompleted: 'setup_completed',
+  /**
+   * POAP claim-link DM. Sent to an attendee whose operator-send confirmed
+   * on-chain at an event with a pool of mint URLs (e.g. Pizza Day's 300).
+   *
+   * Includes the user's Sippy wallet address as a copy-paste convenience:
+   * POAP's claim page asks for an address to mint to, and many attendees
+   * won't have a wallet outside Sippy.
+   *
+   * Submit in Meta Business Manager → WhatsApp → Message Templates:
+   *   Name: poap_claim_invite
+   *   Category: Utility (Marketing also works but Utility approves faster)
+   *   Languages: en, es, pt_BR
+   *   Variables: {{1}} = event name
+   *              {{2}} = POAP claim URL
+   *              {{3}} = user's Sippy wallet address (0x…)
+   *   Body (en):
+   *     "🎉 Welcome to {{1}}! Claim your POAP here:
+   *     {{2}}
+   *
+   *     If POAP asks for an address, paste your Sippy wallet:
+   *     {{3}}
+   *
+   *     Or use any other wallet you have."
+   *   Body (es):
+   *     "🎉 ¡Bienvenido a {{1}}! Reclama tu POAP aquí:
+   *     {{2}}
+   *
+   *     Si POAP te pide una dirección, pega tu billetera Sippy:
+   *     {{3}}
+   *
+   *     O usa cualquier otra billetera que tengas."
+   *   Body (pt_BR):
+   *     "🎉 Bem-vindo ao {{1}}! Resgate seu POAP aqui:
+   *     {{2}}
+   *
+   *     Se o POAP pedir um endereço, cole sua carteira Sippy:
+   *     {{3}}
+   *
+   *     Ou use qualquer outra carteira que tenha."
+   *
+   * No buttons needed — POAP URL is in the body. Approval is typically
+   * <24h for Utility templates. Free-text fallback fires if the template
+   * isn't yet approved (works inside the 24h customer-service window).
+   */
+  poapClaimInvite: 'poap_claim_invite',
 } as const
 
 /**
  * Notify a recipient that they received a payment via WhatsApp template message.
  *
  * Template: payment_received
- * Variables: {{1}} = amount + asset (e.g., "10.00 USDC"), {{2}} = sender masked phone
+ * Variables: {{1}} = amount + asset (e.g., "10.00 USDC"),
+ *            {{2}} = sender masked phone OR `senderDisplay` (unmasked).
+ *
+ * `senderDisplay`, when provided, replaces the auto-masked phone in {{2}}.
+ * Used by operator sends where {{2}} should read as the event ("Pizza
+ * Day Cartagena 2026") rather than a `Piz***2026`-style mask of the
+ * event string. For chat-to-chat sends, leave it undefined so the phone
+ * gets masked for privacy.
  *
  * Best-effort: logs errors but never throws.
  */
@@ -90,18 +142,34 @@ export async function notifyPaymentReceived(opts: {
   amount: string
   asset: string
   senderPhone: string
+  /** When set, used verbatim as the template's `from` var (no masking). */
+  senderDisplay?: string
   txHash: string
   lang: string
   localRate?: number | null
   localCurrency?: string | null
 }): Promise<void> {
-  const { recipientPhone, amount, asset, senderPhone, txHash, lang, localRate, localCurrency } =
-    opts
+  const {
+    recipientPhone,
+    amount,
+    asset,
+    senderPhone,
+    senderDisplay,
+    txHash,
+    lang,
+    localRate,
+    localCurrency,
+  } = opts
   const templateLang = TEMPLATE_LANG_MAP[lang] || 'en'
 
-  // Mask sender phone for privacy: +573001234567 → +57***4567
-  const masked =
-    senderPhone.length > 4 ? `${senderPhone.slice(0, 3)}***${senderPhone.slice(-4)}` : senderPhone
+  // For operator sends, `senderDisplay` overrides the masked-phone behavior
+  // so {{2}} can be the event name (or any non-phone identifier). For
+  // chat-to-chat sends, fall back to masking `senderPhone`.
+  const masked = senderDisplay
+    ? senderDisplay
+    : senderPhone.length > 4
+      ? `${senderPhone.slice(0, 3)}***${senderPhone.slice(-4)}`
+      : senderPhone
 
   // Include local currency equivalent: "0.54 USDC (~2,000 COP)"
   let amountWithAsset = `${amount} ${asset.toUpperCase()}`
@@ -137,6 +205,66 @@ export async function notifyPaymentReceived(opts: {
     }
   } catch (error) {
     logger.error('Failed to send payment notification to %s: %o', maskPhone(recipientPhone), error)
+  }
+}
+
+/**
+ * Notify an attendee with their POAP claim link via WhatsApp template message.
+ *
+ * Template: poap_claim_invite (see TEMPLATES doc for body definition).
+ * Variables: {{1}} = event name, {{2}} = unique POAP claim URL,
+ *            {{3}} = user's Sippy wallet address (so they can paste it
+ *                    into POAP's claim form if they don't have another).
+ *
+ * Return value semantics: `true` means **Meta accepted the send for
+ * processing** (200 response + message_id), NOT confirmed delivery to
+ * the user's handset. Post-acceptance failures (template revoked between
+ * approval and use, recipient blocked, network blip on Meta's side)
+ * arrive asynchronously via the status webhook and are logged in
+ * webhook_controller.ts, not surfaced here. `false` means a synchronous
+ * rejection — almost always "template not yet approved" or a 4xx like
+ * 131047 (re-engagement / 24h window). The caller may try a free-text
+ * fallback before deciding whether to release the reserved POAP code.
+ *
+ * Best-effort: logs errors but never throws.
+ */
+export async function notifyPoapClaimInvite(opts: {
+  recipientPhone: string
+  eventName: string
+  poapClaimUrl: string
+  sippyWalletAddress: string
+  lang: string
+}): Promise<boolean> {
+  const { recipientPhone, eventName, poapClaimUrl, sippyWalletAddress, lang } = opts
+  const templateLang = TEMPLATE_LANG_MAP[lang] || 'en'
+
+  try {
+    const result = await sendTemplateMessage(
+      recipientPhone,
+      TEMPLATES.poapClaimInvite,
+      templateLang,
+      [
+        {
+          type: 'body',
+          parameters: [
+            { type: 'text', text: eventName },
+            { type: 'text', text: poapClaimUrl },
+            { type: 'text', text: sippyWalletAddress },
+          ],
+        },
+      ]
+    )
+    if (result) {
+      logger.info(`POAP invite template sent to ${maskPhone(recipientPhone)} (event=${eventName})`)
+      return true
+    }
+    logger.warn(
+      `POAP invite template failed for ${maskPhone(recipientPhone)} — template may not be approved yet`
+    )
+    return false
+  } catch (error) {
+    logger.error('Failed to send POAP invite template to %s: %o', maskPhone(recipientPhone), error)
+    return false
   }
 }
 

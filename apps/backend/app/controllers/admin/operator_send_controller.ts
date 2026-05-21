@@ -38,8 +38,8 @@ import {
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { findUserPrefByPhone, resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { canonicalizePhone, maskPhone } from '#utils/phone'
-import { sendTextMessage } from '#services/whatsapp.service'
-import { formatOperatorPaymentReceived, type Lang } from '#utils/messages'
+import { type Lang } from '#utils/messages'
+import { notifyPaymentReceived } from '#services/notification.service'
 import { getAdminLang } from '#utils/admin_lang'
 import { adminErrors } from '#utils/admin_messages'
 import { isSuperAdmin } from '#utils/super_admin'
@@ -176,11 +176,19 @@ interface ShowSendProps {
 }
 
 /**
- * Send the post-confirm receipt to the recipient on WhatsApp. Fully
- * isolated from the request lifecycle — must NEVER throw upwards because
- * the on-chain send already succeeded and the operator's UI must not see
- * a 500 over a notification failure. Errors are logged; recipient can fall
- * back to *balance* in chat.
+ * Send the post-confirm receipt to the recipient on WhatsApp via the
+ * pre-approved `payment_received` HSM template — works OUTSIDE the 24h
+ * customer-service window (critical for operator sends where the
+ * attendee may not have messaged Sippy recently).
+ *
+ * The template's {{2}} variable is "sender" — for operator sends we use
+ * `senderDisplay` (the unmasked event name) so the message reads as
+ * "Recibiste $X de Pizza Day Cartagena 2026" instead of the phone-style
+ * mask "Piz***2026" that notifyPaymentReceived would otherwise apply.
+ *
+ * Fully isolated from the request lifecycle: must NEVER throw upwards
+ * because the on-chain send already succeeded and the operator's UI
+ * must not see a 500 over a notification failure.
  */
 async function notifyRecipientOfPayment(args: {
   recipientPhone: string
@@ -188,12 +196,22 @@ async function notifyRecipientOfPayment(args: {
   eventName: string
   eventSlug: string
   sendId: number | string
+  txHash: string
 }): Promise<void> {
   try {
     const pref = await findUserPrefByPhone(args.recipientPhone)
     const lang: Lang = (pref?.preferredLanguage as Lang | undefined) ?? 'es'
-    const message = formatOperatorPaymentReceived(args.amountUsdc, args.eventName, lang)
-    await sendTextMessage(args.recipientPhone, message, lang)
+    await notifyPaymentReceived({
+      recipientPhone: args.recipientPhone,
+      amount: args.amountUsdc.toFixed(2),
+      asset: 'USDC',
+      // senderPhone is unused when senderDisplay is set; left here for
+      // type compat with the helper signature.
+      senderPhone: '',
+      senderDisplay: args.eventName,
+      txHash: args.txHash,
+      lang,
+    })
     logger.info(
       `operator_send.notified send_id=${args.sendId} to=${maskPhone(args.recipientPhone)} lang=${lang}`
     )
@@ -220,11 +238,14 @@ async function notifyRecipientOfPayment(args: {
  * does NOT throw — eligibility, pool state and failures are handled
  * downstream in poap_invite.service.
  */
-async function notifyRecipientPoap(recipientPhone: string): Promise<void> {
+async function notifyRecipientPoap(
+  recipientPhone: string,
+  sippyWalletAddress: string
+): Promise<void> {
   try {
     const pref = await findUserPrefByPhone(recipientPhone)
     const lang: Lang = (pref?.preferredLanguage as Lang | undefined) ?? 'es'
-    await sendPoapInviteIfPending(recipientPhone, lang)
+    await sendPoapInviteIfPending(recipientPhone, lang, sippyWalletAddress)
   } catch (err) {
     logger.warn(
       { recipient: maskPhone(recipientPhone), err },
@@ -774,12 +795,13 @@ export default class OperatorSendController {
         eventName: eventRow?.name ?? wallet.eventSlug,
         eventSlug: wallet.eventSlug,
         sendId: sendRowId,
+        txHash,
       })
       // POAP claim-link DM. One-shot per attendee+event (gated by
       // user_event_links.poap_invite_sent_at). The recipient gets the
       // POAP only on the FIRST operator send to them — subsequent sends
       // (override, top-up) silently no-op.
-      void notifyRecipientPoap(recipientCanonical)
+      void notifyRecipientPoap(recipientCanonical, recipientWallet.walletAddress)
 
       return response.ok({
         success: true,

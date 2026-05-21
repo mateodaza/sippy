@@ -502,22 +502,28 @@ export function formatPoapPoolExhausted(eventName: string, lang: Lang = 'en'): s
  * is the recipient here, not the payer. Frame it as the welcome moment.
  */
 export function formatPoapClaimInvite(
-  params: { poapClaimUrl: string; eventName: string },
+  params: { poapClaimUrl: string; eventName: string; sippyWalletAddress: string },
   lang: Lang = 'en'
 ): string {
   const m = {
     en: () =>
       `🎉 Welcome to ${params.eventName}! Claim your POAP here:\n` +
       `${params.poapClaimUrl}\n\n` +
-      `You can use your Sippy wallet or any other wallet you have.`,
+      `If POAP asks for an address, paste your Sippy wallet:\n` +
+      `${params.sippyWalletAddress}\n\n` +
+      `Or use any other wallet you have.`,
     es: () =>
       `🎉 ¡Bienvenido a ${params.eventName}! Reclama tu POAP aqui:\n` +
       `${params.poapClaimUrl}\n\n` +
-      `Puedes usar tu billetera Sippy o cualquier otra que tengas.`,
+      `Si POAP te pide una direccion, pega tu billetera Sippy:\n` +
+      `${params.sippyWalletAddress}\n\n` +
+      `O usa cualquier otra billetera que tengas.`,
     pt: () =>
       `🎉 Bem-vindo ao ${params.eventName}! Resgate seu POAP aqui:\n` +
       `${params.poapClaimUrl}\n\n` +
-      `Voce pode usar sua carteira Sippy ou qualquer outra que tenha.`,
+      `Se o POAP pedir um endereco, cole sua carteira Sippy:\n` +
+      `${params.sippyWalletAddress}\n\n` +
+      `Ou use qualquer outra carteira que tenha.`,
   }
   return m[lang]()
 }

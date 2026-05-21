@@ -2,6 +2,7 @@ import logger from '@adonisjs/core/services/logger'
 import { sendTextMessage } from '#services/whatsapp.service'
 import { formatPoapClaimInvite, formatPoapPoolExhausted, type Lang } from '#utils/messages'
 import { claimPendingPoapInvite, releasePoapInvite } from '#services/event.service'
+import { notifyPoapClaimInvite } from '#services/notification.service'
 import { capture as posthogCapture } from '#services/posthog_service'
 import { maskPhone } from '#utils/phone'
 
@@ -20,7 +21,11 @@ import { maskPhone } from '#utils/phone'
  * send fail → release fail) is captured as a PostHog event so ops has
  * the morning-after "X attendees never got their POAP" signal.
  */
-export async function sendPoapInviteIfPending(phoneNumber: string, lang: Lang): Promise<void> {
+export async function sendPoapInviteIfPending(
+  phoneNumber: string,
+  lang: Lang,
+  sippyWalletAddress: string
+): Promise<void> {
   try {
     const outcome = await claimPendingPoapInvite(phoneNumber)
     if (outcome.kind === 'none') return
@@ -53,18 +58,44 @@ export async function sendPoapInviteIfPending(phoneNumber: string, lang: Lang): 
     }
     const { reservation } = outcome
     try {
-      await sendTextMessage(
-        phoneNumber,
-        formatPoapClaimInvite(
-          { poapClaimUrl: reservation.poapClaimUrl, eventName: reservation.eventName },
+      // Try the pre-approved HSM template first — works outside the 24h
+      // customer-service window (the realistic case for operator-sends:
+      // attendee onboards at QR booth, may not have replied to Sippy in
+      // 24h+). If the template isn't yet approved by Meta, fall back to
+      // a free-text message; that path only succeeds inside the 24h
+      // window but keeps the feature live until the template lands.
+      const templateDelivered = await notifyPoapClaimInvite({
+        recipientPhone: phoneNumber,
+        eventName: reservation.eventName,
+        poapClaimUrl: reservation.poapClaimUrl,
+        sippyWalletAddress,
+        lang,
+      })
+      if (!templateDelivered) {
+        await sendTextMessage(
+          phoneNumber,
+          formatPoapClaimInvite(
+            {
+              poapClaimUrl: reservation.poapClaimUrl,
+              eventName: reservation.eventName,
+              sippyWalletAddress,
+            },
+            lang
+          ),
           lang
-        ),
-        lang
-      )
-      logger.info(
-        `poap-invite.sent event=${reservation.eventSlug} to=${maskPhone(phoneNumber)} lang=${lang}`
-      )
-      posthogCapture(phoneNumber, 'poap_invite_sent', { event_slug: reservation.eventSlug })
+        )
+        logger.info(
+          `poap-invite.sent-via-freetext event=${reservation.eventSlug} to=${maskPhone(phoneNumber)} (template not approved or returned false)`
+        )
+      } else {
+        logger.info(
+          `poap-invite.sent event=${reservation.eventSlug} to=${maskPhone(phoneNumber)} lang=${lang}`
+        )
+      }
+      posthogCapture(phoneNumber, 'poap_invite_sent', {
+        event_slug: reservation.eventSlug,
+        channel: templateDelivered ? 'template' : 'freetext',
+      })
     } catch (sendErr) {
       logger.error(
         { event: reservation.eventSlug, to: maskPhone(phoneNumber), err: sendErr },
