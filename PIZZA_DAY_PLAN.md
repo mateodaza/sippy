@@ -313,6 +313,23 @@ A single tactical card for **Fri May 22, 2026**. Pin this; everything else in th
 - Drain endpoint (`POST /admin/events/:slug/operator-wallet/drain`) is **superadmin-only**: only `admin@sippy.lat` can call it. Other admins see a 403 and a "Drain is restricted to the superadmin account" hint on the admin panel.
 - Optional partial-drain amount: leave the amount input blank for a full sweep, or enter a USDC amount to drain that exact portion (useful for pre-event smoke checks).
 
+### General announcement template (`event_announcement`)
+
+Two-variable Meta template designed for ANY event-related broadcast: USDC drops, schedule updates, prize announcements, post-event recaps. The wrapper ("🎉 Welcome to … / Enjoy the event.") is approved once per language; the body is freeform per send. One template, many use cases.
+
+- **Submit before:** ideally T-24h on any event using it. For Pizza Day, submit by EOD May 21 so approval lands before doors open May 22.
+- **Where:** Meta Business Manager → WhatsApp → Message Templates → Create.
+  - Name: `event_announcement`
+  - Category: Utility
+  - Languages: en, es, pt_BR
+  - Variables: `{{1}}` = event/source name, `{{2}}` = body content (multiline, may include URLs, ≤1024 chars).
+  - Full EN/ES/PT wrapper text + sample body live in the doc comment at `TEMPLATES.eventAnnouncement` in `apps/backend/app/services/notification.service.ts`.
+- **No buttons needed.** URLs render as clickable text inside the body.
+- **After approval — operator-send rewiring (Pizza Day use case):** swap the paired `notifyPaymentReceived` + `sendPoapInviteIfPending` calls in `operator_send_controller.ts` for an orchestrator that reserves the POAP code first, then calls `notifyEventAnnouncement` with a body built by `formatOperatorDropBody`. On template `false` return, release the reservation and fall back to the old two-message flow. For non-POAP events, keep `notifyPaymentReceived` only — unchanged.
+- **Future use cases (reuse this template):** schedule update DM, raffle/prize result DM, post-event follow-up. Add a new `formatXBody(...)` helper next to `formatOperatorDropBody` in `notification.service.ts` for each new use case so the template-variable surface stays auditable in one file. Call `notifyEventAnnouncement` directly — no new Meta submission needed.
+- **Until approval lands:** existing two-message flow stays in production and is unaffected. Code path for the new template is dormant.
+- **Meta rejection plan:** if Meta flags the open-body design as too broad, fall back to submitting a structured 4-variable version (event + amount + URL + wallet). The original spec is preserved in git history; the formatter would just split into discrete vars.
+
 ---
 
 ## Release checklist (QR system → prod)

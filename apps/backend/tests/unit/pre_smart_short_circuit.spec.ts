@@ -365,3 +365,29 @@ test.group('matchHighConfidencePreLlm | billetera + wallet variants', () => {
     })
   }
 })
+
+// Pins the production path that beats SMART for the real-world bug
+// transcript from 2026-05-21 ("Que es el pizza day?" classified as
+// out_of_scope). Without this lift, SMART can mis-route Pizza Day
+// questions even with the prompt knowledge — the regex/short-circuit
+// guarantees the deterministic answer.
+test.group('matchHighConfidencePreLlm | pizza_day pre-SMART gate', () => {
+  const cases = [
+    'pizza day',
+    'pizzaday',
+    'que es pizza day',
+    'qué es el pizza day',
+    'Que es el pizza day?',
+    'what is pizza day',
+    "what's pizza day",
+    'what is the pizza day',
+    'o que é pizza day',
+  ]
+  for (const input of cases) {
+    test(`"${input}" → pizza_day (pre-SMART)`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      assert.isNotNull(result, `${input} must match HIGH_CONFIDENCE_PRE_LLM pizza_day pattern`)
+      assert.equal(result!.command, 'pizza_day')
+    })
+  }
+})

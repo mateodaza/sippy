@@ -120,6 +120,76 @@ const TEMPLATES = {
    * isn't yet approved (works inside the 24h customer-service window).
    */
   poapClaimInvite: 'poap_claim_invite',
+  /**
+   * General event announcement. A two-variable template where the body is
+   * freeform per send — same Meta-approved wrapper ("Welcome to … / Enjoy
+   * the event.") reused for many use cases: USDC drops, schedule updates,
+   * prize announcements, post-event recaps.
+   *
+   * The caller (Sippy code) owns the middle. Meta approves the wrapper
+   * once per language and we plug values in at runtime, so we don't have
+   * to submit a new template every time we add a new announcement type.
+   *
+   * Submit in Meta Business Manager → WhatsApp → Message Templates:
+   *   Name: event_announcement
+   *   Category: Utility
+   *   Languages: en, es, pt_BR
+   *   Variables: {{1}} = event name / source (e.g. "Pizza Day Cartagena 2026")
+   *              {{2}} = body content (free text, multiline, may include URLs;
+   *                      ≤1024 chars per WhatsApp's per-variable limit)
+   *   Body (en):
+   *     "🎉 Welcome to {{1}}!
+   *
+   *     {{2}}
+   *
+   *     Enjoy the event."
+   *   Body (es):
+   *     "🎉 ¡Bienvenido a {{1}}!
+   *
+   *     {{2}}
+   *
+   *     Disfruta el evento."
+   *   Body (pt_BR):
+   *     "🎉 Bem-vindo ao {{1}}!
+   *
+   *     {{2}}
+   *
+   *     Aproveite o evento."
+   *
+   * Sample body content for the Pizza Day operator-drop case (built by
+   * `formatOperatorDropBody` in this file — keep formatters next to the
+   * template so the structure is auditable in one place):
+   *   "You just received 4 USDC in your Sippy wallet. Type *balance* anytime to check.
+   *
+   *    🎟️ Claim your POAP:
+   *    https://poap.xyz/claim/abc123
+   *
+   *    If POAP asks for a wallet address, paste:
+   *    0x1a2b…"
+   *
+   * No buttons — URLs render as clickable text in WhatsApp. Approval is
+   * typically <24h for Utility templates because the wrapper is short,
+   * branded, and tied to a real event the user attended.
+   *
+   * Risk note: Meta occasionally flags "open body" templates as too
+   * broad. If event_announcement is rejected, the fallback is to submit
+   * the prior structured version (4 vars: event + amount + URL + wallet
+   * — see git history before commit X for the spec).
+   *
+   * Wiring: this template is NOT yet live. Once Meta approves it, swap
+   * the paired calls in operator_send_controller.ts
+   * (`notifyPaymentReceived` + `sendPoapInviteIfPending`) for a single
+   * orchestrator that:
+   *   1. Reserves a POAP code via `claimPendingPoapInvite`.
+   *   2. If reservation succeeds → call `notifyEventAnnouncement` with a
+   *      body built by `formatOperatorDropBody`. On template failure,
+   *      release the reservation and fall back to the old two-message
+   *      flow.
+   *   3. If no POAP pool / reservation fails for non-template reasons →
+   *      keep firing `notifyPaymentReceived` only (the existing behavior
+   *      for non-POAP events stays unchanged).
+   */
+  eventAnnouncement: 'event_announcement',
 } as const
 
 /**
@@ -266,6 +336,107 @@ export async function notifyPoapClaimInvite(opts: {
     logger.error('Failed to send POAP invite template to %s: %o', maskPhone(recipientPhone), error)
     return false
   }
+}
+
+/**
+ * General event announcement: sends the `event_announcement` template with
+ * a Meta-approved wrapper ("Welcome to … / Enjoy the event.") and a
+ * freeform body the caller controls. Same template covers many use cases —
+ * USDC drops, schedule updates, prize results, post-event follow-ups.
+ *
+ * Template: event_announcement (see TEMPLATES doc for the wrapper text).
+ * Variables: {{1}} = event name / source, {{2}} = body content.
+ *
+ * Body content notes:
+ *   - Up to ~1024 characters per WhatsApp's per-variable limit. Anything
+ *     longer should be split across multiple sends.
+ *   - Multiline is fine; newlines render as line breaks in WhatsApp.
+ *   - URLs render as clickable text.
+ *   - The caller is responsible for language consistency between {{1}}
+ *     and {{2}} — Meta approves the wrapper per language but the body
+ *     variable carries whatever the caller puts in it. Use the lang
+ *     param + `formatOperatorDropBody`-style helpers below to stay
+ *     consistent.
+ *
+ * Returns `true` when Meta accepted the send (200 + message_id), `false`
+ * otherwise. Callers treat a `false` return as "template not yet
+ * approved → fall back to the prior message flow". Same return semantics
+ * as `notifyPoapClaimInvite` so an orchestrator can use either uniformly.
+ *
+ * Best-effort: logs errors but never throws.
+ */
+export async function notifyEventAnnouncement(opts: {
+  recipientPhone: string
+  eventName: string
+  body: string
+  lang: string
+}): Promise<boolean> {
+  const { recipientPhone, eventName, body, lang } = opts
+  const templateLang = TEMPLATE_LANG_MAP[lang] || 'en'
+
+  try {
+    const result = await sendTemplateMessage(
+      recipientPhone,
+      TEMPLATES.eventAnnouncement,
+      templateLang,
+      [
+        {
+          type: 'body',
+          parameters: [
+            { type: 'text', text: eventName },
+            { type: 'text', text: body },
+          ],
+        },
+      ]
+    )
+    if (result) {
+      logger.info(
+        `Event announcement sent to ${maskPhone(recipientPhone)} (event=${eventName}, body=${body.length}ch)`
+      )
+      return true
+    }
+    logger.warn(
+      `Event announcement template failed for ${maskPhone(recipientPhone)} — template may not be approved yet`
+    )
+    return false
+  } catch (error) {
+    logger.error('Failed to send event announcement to %s: %o', maskPhone(recipientPhone), error)
+    return false
+  }
+}
+
+/**
+ * Format the announcement body for the operator-drop case: "you got X
+ * USDC + here's your POAP link + paste your wallet if asked". Lives next
+ * to `notifyEventAnnouncement` so the template variable {{2}} structure
+ * is documented in one place.
+ *
+ * Mirror this shape for future announcement types (schedule update,
+ * prize result, etc.) — keep the formatter close to the template helper
+ * so reviewers can audit the template-variable surface in one read.
+ */
+export function formatOperatorDropBody(opts: {
+  amount: string
+  asset: string
+  poapClaimUrl: string | null
+  sippyWalletAddress: string
+  lang: string
+}): string {
+  const { amount, asset, poapClaimUrl, sippyWalletAddress, lang } = opts
+  const amountWithAsset = `${amount} ${asset.toUpperCase()}`
+  if (lang === 'pt' || lang === 'pt_BR') {
+    const head = `Você acabou de receber ${amountWithAsset} na sua carteira Sippy. Digite *saldo* a qualquer momento para ver.`
+    if (!poapClaimUrl) return head
+    return `${head}\n\n🎟️ Resgate seu POAP:\n${poapClaimUrl}\n\nSe o POAP pedir um endereço de carteira, cole:\n${sippyWalletAddress}`
+  }
+  if (lang === 'es') {
+    const head = `Acabas de recibir ${amountWithAsset} en tu billetera Sippy. Escribe *saldo* cuando quieras para revisar.`
+    if (!poapClaimUrl) return head
+    return `${head}\n\n🎟️ Reclama tu POAP:\n${poapClaimUrl}\n\nSi POAP te pide una dirección, pega:\n${sippyWalletAddress}`
+  }
+  const head = `You just received ${amountWithAsset} in your Sippy wallet. Type *balance* anytime to check.`
+  if (!poapClaimUrl) return head
+  return `${head}\n\n🎟️ Claim your POAP:\n${poapClaimUrl}\n\nIf POAP asks for a wallet address, paste:\n${sippyWalletAddress}`
 }
 
 /**

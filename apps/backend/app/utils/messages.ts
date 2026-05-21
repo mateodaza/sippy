@@ -1473,57 +1473,30 @@ function pick<T>(arr: T[]): T {
  * Greeting reply — used when SMART/regex routes to `greeting`. Warm,
  * open-ended ("¿qué necesitas?"), never a closed yes/no question.
  *
- * Multiple variants per (lang, dialect) so the same user sending two
- * greetings in a row doesn't get a copy-paste reply. Variety comes from
- * the variant pool, not from the LLM — keeps personality without the
- * pseudo-promise bug class that bit us 2026-05-21.
+ * Single neutral pool per language. Earlier dialect-specific variants
+ * (voseo, "bacano", "chévere", "joya") reintroduced the same field-test
+ * regression we hit on 2026-05-17 with unknown_variants — regional
+ * particles feel off at WhatsApp scale. Variety comes from the variant
+ * count within each language, not from regional flavor. `dialect` is
+ * accepted for signature compatibility with existing callers but does
+ * not change the pool.
  */
-export function formatGreetingMessage(lang: Lang = 'en', dialect: Dialect = 'neutral'): string {
-  if (lang === 'es' && dialect !== 'neutral') {
-    const d: Record<string, string[]> = {
-      co: [
-        `Hola! ¿Qué necesitas? Te muestro tu saldo o te ayudo a enviar plata, tú me dices.`,
-        `Heyy. Por aquí estoy. Saldo, enviar plata, tu QR, lo que necesites.`,
-        `Hola hola! ¿En qué te ayudo? Te muestro saldo, te ayudo a enviar, o te paso tu QR.`,
-        `Buenas! ¿Qué hacemos? Saldo, enviar plata, QR, todo desde aquí.`,
-      ],
-      mx: [
-        `Hola! ¿Qué necesitas? Te muestro tu saldo o te ayudo a enviar dinero, tú me dices.`,
-        `Eyy. Por aquí ando. Saldo, enviar, tu QR, lo que necesites.`,
-        `Hola hola! ¿En qué te ayudo? Saldo, enviar dinero, o te paso tu QR.`,
-        `Qué tal! ¿Qué hacemos? Saldo, enviar, QR, todo desde aquí.`,
-      ],
-      ar: [
-        `Hola! ¿Qué necesitás? Te muestro tu saldo o te ayudo a enviar plata, decime nomás.`,
-        `Heyy. Por acá estoy. Saldo, enviar plata, tu QR, lo que necesites.`,
-        `Hola hola! ¿En qué te ayudo? Te muestro saldo, te ayudo a enviar, o te paso tu QR.`,
-        `Buenas! ¿Qué hacemos? Saldo, enviar plata, QR, todo desde acá.`,
-      ],
-      ve: [
-        `Hola! ¿Qué necesitas? Te muestro tu saldo o te ayudo a enviar plata, tú me dices.`,
-        `Heyy. Por aquí estoy. Saldo, enviar plata, tu QR, lo que necesites.`,
-        `Hola hola! ¿En qué te ayudo? Te muestro saldo, te ayudo a enviar, o te paso tu QR.`,
-        `Buenas! ¿Qué hacemos? Saldo, enviar plata, QR, todo desde aquí.`,
-      ],
-    }
-    if (d[dialect]) return pick(d[dialect])
-  }
+export function formatGreetingMessage(lang: Lang = 'en', _dialect: Dialect = 'neutral'): string {
   const m: Record<Lang, string[]> = {
     en: [
       `Hey! What do you need? I can check your balance or help you send, just tell me.`,
       `Hello! Around if you need anything. Balance, send money, your QR, your call.`,
-      `Heyy. What's up? Balance, send, QR, pick one.`,
       `Hi! How can I help? Balance, send, your QR, just say the word.`,
     ],
     es: [
       `Hola! ¿Qué necesitas? Te muestro tu saldo o te ayudo a enviar dinero, tú me dices.`,
-      `Heyy. Por aquí estoy. Saldo, enviar dinero, tu QR, lo que necesites.`,
-      `Hola hola! ¿En qué te ayudo? Te muestro saldo, te ayudo a enviar, o te paso tu QR.`,
-      `Buenas! ¿Qué hacemos? Saldo, enviar dinero, QR, todo desde aquí.`,
+      `Hola! Por aquí estoy. Saldo, enviar dinero, tu QR, lo que necesites.`,
+      `Hola! ¿En qué te ayudo? Te muestro saldo, te ayudo a enviar, o te paso tu QR.`,
+      `Hola! ¿Qué hacemos? Saldo, enviar dinero, QR, todo desde aquí.`,
     ],
     pt: [
-      `Oi! O que precisa? Posso ver seu saldo ou ajudar a enviar dinheiro, só me diz.`,
-      `Eaí! Tô por aqui. Saldo, enviar, seu QR, o que precisar.`,
+      `Oi! O que precisa? Posso ver seu saldo ou ajudar a enviar dinheiro, é só me dizer.`,
+      `Oi! Estou por aqui. Saldo, enviar, seu QR, o que precisar.`,
       `Olá! Em que ajudo? Saldo, enviar dinheiro, seu QR, é só falar.`,
     ],
   }
@@ -1534,47 +1507,24 @@ export function formatGreetingMessage(lang: Lang = 'en', dialect: Dialect = 'neu
 
 /**
  * Social acknowledgement — "gracias", "ok", "listo" type messages.
- * Short, warm, never a follow-up question. Multiple variants per
- * dialect so back-to-back acks don't feel templated.
+ * Short, warm, never a follow-up question. Single neutral pool per
+ * language to match the field-tested tone (no regional slang particles
+ * like "bacano" / "chévere" / "joya" that field-tested as off on
+ * 2026-05-17).
  */
-export function formatSocialReplyMessage(lang: Lang = 'en', dialect: Dialect = 'neutral'): string {
-  if (lang === 'es' && dialect !== 'neutral') {
-    const d: Record<string, string[]> = {
-      co: [
-        `Listo. Por aquí estoy si necesitas algo.`,
-        `Bacano. Cualquier cosa, me avisas.`,
-        `Vale. Aquí ando.`,
-      ],
-      mx: [
-        `Dale. Aquí estoy si necesitas algo.`,
-        `Sale. Cualquier cosa me dices.`,
-        `Listo. Por acá ando.`,
-      ],
-      ar: [
-        `Dale. Acá estoy si necesitás algo.`,
-        `Joya. Cualquier cosa me decís.`,
-        `Listo. Por acá ando.`,
-      ],
-      ve: [
-        `Dale. Aquí estoy si necesitas algo.`,
-        `Chévere. Cualquier cosa me avisas.`,
-        `Listo. Por aquí ando.`,
-      ],
-    }
-    if (d[dialect]) return pick(d[dialect])
-  }
+export function formatSocialReplyMessage(lang: Lang = 'en', _dialect: Dialect = 'neutral'): string {
   const m: Record<Lang, string[]> = {
     en: [
       `Got it. I'm here if you need anything.`,
-      `Cool, holler if you need something.`,
       `Sounds good. Around if you need me.`,
+      `Cool. Let me know if you need something.`,
     ],
     es: [
-      `Dale. Aquí estoy si necesitas algo.`,
-      `Listo. Cualquier cosa me dices.`,
-      `Genial. Por aquí ando.`,
+      `Listo. Aquí estoy si necesitas algo.`,
+      `Vale. Cualquier cosa me dices.`,
+      `Perfecto. Por aquí ando.`,
     ],
-    pt: [`Beleza. Tô aqui se precisar.`, `Tranquilo. Por aqui.`, `Show. Qualquer coisa me chama.`],
+    pt: [`Beleza. Estou aqui se precisar.`, `Tranquilo. Por aqui.`, `Ok. Qualquer coisa me chama.`],
   }
   return pick(m[lang])
 }
