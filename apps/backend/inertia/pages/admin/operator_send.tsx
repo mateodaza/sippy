@@ -81,9 +81,57 @@ function maskPhone(phone: string): string {
   return `${cc}${'*'.repeat(Math.max(0, phone.length - cc.length - 2))}${last2}`
 }
 
-function shortAddress(addr: string): string {
-  if (!addr || addr.length < 12) return addr
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+/**
+ * Wallet-address row with a copy-to-clipboard button. The operator needs
+ * the FULL address (not a truncated `0x123…abc`) to know where to send
+ * funds when the wallet runs low — hiding it behind a short-mask was the
+ * reason operators had no idea how to fund their own wallet.
+ */
+function WalletAddressBlock({
+  address,
+  hint,
+  copyLabel,
+  copiedLabel,
+}: {
+  address: string
+  hint: string
+  copyLabel: string
+  copiedLabel: string
+}) {
+  const [copied, setCopied] = useState(false)
+
+  async function doCopy() {
+    try {
+      await navigator.clipboard.writeText(address)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard API can fail under unfocused tabs or http origins.
+      // Fall back to a noop visual; operator can still read the address.
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <p
+          className="font-mono text-xs admin-text break-all"
+          style={{ wordBreak: 'break-all' }}
+          title={address}
+        >
+          {address}
+        </p>
+        <button
+          type="button"
+          onClick={doCopy}
+          className="shrink-0 rounded-md border border-current px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] hover:bg-current hover:text-white"
+        >
+          {copied ? copiedLabel : copyLabel}
+        </button>
+      </div>
+      <p className="mt-1 font-mono text-[10px] text-neutral-500">{hint}</p>
+    </div>
+  )
 }
 
 // Shield's CSRF middleware rejects POSTs that don't echo the XSRF-TOKEN
@@ -282,7 +330,14 @@ export default function OperatorSendPage({
         <div className="panel-frame mb-6 grid gap-4 p-4 sm:grid-cols-3">
           <div>
             <p className="spec-label">{t.walletLabel}</p>
-            <p className="mt-1 font-mono text-sm admin-text">{shortAddress(wallet.address)}</p>
+            <div className="mt-1">
+              <WalletAddressBlock
+                address={wallet.address}
+                hint={t.walletAddressCopyHint}
+                copyLabel={t.walletAddressCopy}
+                copiedLabel={t.walletAddressCopied}
+              />
+            </div>
           </div>
           <div>
             <p className="spec-label">{t.balanceLabel}</p>

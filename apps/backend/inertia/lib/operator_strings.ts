@@ -37,6 +37,9 @@ interface OperatorSendStrings {
 
   // Wallet header
   walletLabel: string
+  walletAddressCopyHint: string
+  walletAddressCopy: string
+  walletAddressCopied: string
   balanceLabel: string
   balanceRpcUnavailable: string
   hourCapLabel: string
@@ -96,6 +99,9 @@ const operatorSendEs: OperatorSendStrings = {
   noWalletSubtitle: 'No tienes billetera de evento asignada. Contacta a un admin.',
 
   walletLabel: 'Billetera',
+  walletAddressCopyHint: 'Comparte esta dirección para recibir fondos USDC en Arbitrum',
+  walletAddressCopy: 'Copiar',
+  walletAddressCopied: '¡Copiada!',
   balanceLabel: 'Saldo',
   balanceRpcUnavailable:
     'RPC no disponible; saldo desconocido. NO asumas que está vacía — reintenta en un momento.',
@@ -165,6 +171,9 @@ const operatorSendEn: OperatorSendStrings = {
   noWalletSubtitle: 'No event wallet assigned. Contact admin.',
 
   walletLabel: 'Wallet',
+  walletAddressCopyHint: 'Share this address to receive USDC on Arbitrum',
+  walletAddressCopy: 'Copy',
+  walletAddressCopied: 'Copied!',
   balanceLabel: 'Balance',
   balanceRpcUnavailable: 'RPC unavailable; balance unknown. Do NOT assume empty — retry shortly.',
   hourCapLabel: 'Hour cap remaining',
