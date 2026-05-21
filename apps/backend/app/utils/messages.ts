@@ -465,9 +465,12 @@ export function formatPoapPoolExhausted(eventName: string, lang: Lang = 'en'): s
 }
 
 /**
- * Sent to a user right after their first successful payment at an event
- * that has a POAP claim link configured. One-shot per user-event pair —
+ * Sent to an attendee right after an operator drops the welcome USDC into
+ * their wallet from `/admin/operator/send`. One-shot per user-event pair —
  * gated by `user_event_links.poap_invite_sent_at`.
+ *
+ * Copy intentionally does NOT thank the user for "paying" — the attendee
+ * is the recipient here, not the payer. Frame it as the welcome moment.
  */
 export function formatPoapClaimInvite(
   params: { poapClaimUrl: string; eventName: string },
@@ -475,15 +478,15 @@ export function formatPoapClaimInvite(
 ): string {
   const m = {
     en: () =>
-      `🎉 Thanks for paying at ${params.eventName}! Claim your POAP here:\n` +
+      `🎉 Welcome to ${params.eventName}! Claim your POAP here:\n` +
       `${params.poapClaimUrl}\n\n` +
       `You can use your Sippy wallet or any other wallet you have.`,
     es: () =>
-      `🎉 Gracias por pagar en ${params.eventName}! Reclama tu POAP aqui:\n` +
+      `🎉 ¡Bienvenido a ${params.eventName}! Reclama tu POAP aqui:\n` +
       `${params.poapClaimUrl}\n\n` +
       `Puedes usar tu billetera Sippy o cualquier otra que tengas.`,
     pt: () =>
-      `🎉 Obrigado por pagar em ${params.eventName}! Resgate seu POAP aqui:\n` +
+      `🎉 Bem-vindo ao ${params.eventName}! Resgate seu POAP aqui:\n` +
       `${params.poapClaimUrl}\n\n` +
       `Voce pode usar sua carteira Sippy ou qualquer outra que tenha.`,
   }

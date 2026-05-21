@@ -1079,8 +1079,7 @@ export async function routeCommand(
               rateCtx.senderRate,
               rateCtx.senderCurrency,
               rateCtx.recipientRate,
-              rateCtx.recipientCurrency,
-              pending.payQrScan === true
+              rateCtx.recipientCurrency
             )
           } finally {
             clearTimeout(safetyTimer)

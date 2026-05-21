@@ -74,6 +74,7 @@ async function resolveActiveWallet(
   const wallet = await getOperatorWalletForUser(user.id)
   return { wallet, override: false }
 }
+import { sendPoapInviteIfPending } from '#services/poap_invite.service'
 
 const DEFAULT_MAX_PER_TX = 100
 const DEFAULT_MAX_PER_HOUR = 500
@@ -192,6 +193,30 @@ async function notifyRecipientOfPayment(args: {
         err,
       },
       'operator_send.notify-failed (on-chain send still succeeded)'
+    )
+  }
+}
+
+/**
+ * Fire-and-forget POAP claim-link DM to the operator's recipient. Runs
+ * alongside `notifyRecipientOfPayment`: the receipt message ("you got
+ * $X USDC") and the POAP message ("claim your POAP here") are paired,
+ * both target the recipient, both isolated from the request lifecycle.
+ *
+ * Lang resolution mirrors notifyRecipientOfPayment so the two messages
+ * arrive in the same language. The helper itself (sendPoapInviteIfPending)
+ * does NOT throw — eligibility, pool state and failures are handled
+ * downstream in poap_invite.service.
+ */
+async function notifyRecipientPoap(recipientPhone: string): Promise<void> {
+  try {
+    const pref = await findUserPrefByPhone(recipientPhone)
+    const lang: Lang = (pref?.preferredLanguage as Lang | undefined) ?? 'es'
+    await sendPoapInviteIfPending(recipientPhone, lang)
+  } catch (err) {
+    logger.warn(
+      { recipient: maskPhone(recipientPhone), err },
+      'operator_send.poap-notify-failed (on-chain send still succeeded)'
     )
   }
 }
@@ -707,6 +732,11 @@ export default class OperatorSendController {
         eventSlug: wallet.eventSlug,
         sendId: sendRowId,
       })
+      // POAP claim-link DM. One-shot per attendee+event (gated by
+      // user_event_links.poap_invite_sent_at). The recipient gets the
+      // POAP only on the FIRST operator send to them — subsequent sends
+      // (override, top-up) silently no-op.
+      void notifyRecipientPoap(recipientCanonical)
 
       return response.ok({
         success: true,
