@@ -4,6 +4,7 @@ import BaseInertiaMiddleware from '@adonisjs/inertia/inertia_middleware'
 import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
 import { getAdminLang } from '#utils/admin_lang'
+import { isSuperAdmin } from '#utils/super_admin'
 
 export default class InertiaMiddleware extends BaseInertiaMiddleware {
   async share(ctx: HttpContext) {
@@ -70,6 +71,7 @@ export default class InertiaMiddleware extends BaseInertiaMiddleware {
             role: user.role,
             initials: user.initials,
             assignedEventSlug,
+            isSuperAdmin: isSuperAdmin(user.email),
           }
         : null,
       flash: {

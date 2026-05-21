@@ -39,6 +39,7 @@ import {
   getOperatorWalletBalance,
   drainOperatorWallet,
 } from '#services/operator_wallet.service'
+import { isSuperAdmin } from '#utils/super_admin'
 
 const DEFAULT_PER_PAGE = 50
 const MAX_PER_PAGE = 200
@@ -55,6 +56,14 @@ const drainBody = vine.compile(
       .string()
       .trim()
       .regex(/^0x[a-fA-F0-9]{40}$/),
+    /**
+     * Optional partial-drain amount in USDC. When omitted, the endpoint
+     * sweeps the full balance (the original recovery behavior). When
+     * provided, sends exactly this amount and leaves the rest. Used for
+     * pre-event smoke tests where we want to pull a small portion out
+     * before the floor opens. Service-layer validates against balance.
+     */
+    amountUsdc: vine.number().positive().optional(),
   })
 )
 
@@ -521,12 +530,27 @@ export default class EventsController {
    *
    * Returns `{txHash, amountSent}`. If balance is 0, returns
    * `{txHash: null, amountSent: 0}` without touching CDP.
+   *
+   * Superadmin-locked: even within `role='admin'`, only the SUPER_ADMIN_EMAIL
+   * account can drain. Defense-in-depth against an admin account being
+   * compromised or misused; the route-level role gate stays in place.
    */
-  async drainOperatorWallet({ params, request, response }: HttpContext) {
+  async drainOperatorWallet({ auth, params, request, response }: HttpContext) {
+    const user = auth.user
+    if (!user || !isSuperAdmin(user.email)) {
+      logger.warn(
+        { user_id: user?.id, email: user?.email, path: request.url() },
+        'drainOperatorWallet: blocked non-superadmin'
+      )
+      return response.forbidden({
+        error: 'Draining the operator wallet is restricted to the superadmin account.',
+      })
+    }
+
     const slug = String(params.slug ?? '').trim()
     if (!slug) return response.badRequest({ error: 'Missing :slug' })
 
-    let body: { destinationAddress: string }
+    let body: { destinationAddress: string; amountUsdc?: number }
     try {
       body = await request.validateUsing(drainBody)
     } catch (err) {
@@ -542,9 +566,10 @@ export default class EventsController {
       const result = await drainOperatorWallet({
         wallet,
         destinationAddress: body.destinationAddress,
+        amountUsdc: body.amountUsdc,
       })
       logger.info(
-        `events_controller.drained event=${slug} amount=${result.amountSent} tx=${result.txHash}`
+        `events_controller.drained event=${slug} amount=${result.amountSent} requested=${body.amountUsdc ?? 'all'} tx=${result.txHash}`
       )
       return response.ok({
         eventSlug: slug,
@@ -552,7 +577,12 @@ export default class EventsController {
       })
     } catch (err) {
       logger.error(
-        { event_slug: slug, destination: body.destinationAddress, err },
+        {
+          event_slug: slug,
+          destination: body.destinationAddress,
+          requested_amount: body.amountUsdc,
+          err,
+        },
         'events_controller.drainOperatorWallet failed'
       )
       return response.status(500).send({

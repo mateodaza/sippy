@@ -403,18 +403,26 @@ export async function sendUsdcFromOperatorWallet(args: {
 // ── Drain (admin recovery / post-event) ─────────────────────────────────────
 
 /**
- * Sweep the full USDC balance of an operator wallet to a destination
- * (typically Sippy's treasury wallet). Works even if `active=false` — the
- * "drain regardless of state" is the explicit recovery guarantee.
+ * Sweep USDC from an operator wallet to a destination (typically Sippy's
+ * treasury wallet). Works even if `active=false` — the "drain regardless
+ * of state" is the explicit recovery guarantee.
  *
- * Reads current balance, transfers it all. If balance is zero, returns
- * `{ amountSent: 0, txHash: null }` without touching CDP.
+ * Two modes:
+ *   - `amountUsdc` omitted → drain full balance (post-event sweep)
+ *   - `amountUsdc` given   → send exactly that amount (partial pre-event
+ *                            top-up test; leftover stays in the wallet)
+ *
+ * If the wallet balance is zero (full drain) or the requested amount is
+ * zero, returns `{ amountSent: 0, txHash: null }` without touching CDP.
+ * If the requested amount exceeds the on-chain balance, throws — partial
+ * drains must never silently underpay or fall back to "drain all".
  */
 export async function drainOperatorWallet(args: {
   wallet: EventOperatorWalletRow
   destinationAddress: string
+  amountUsdc?: number
 }): Promise<{ txHash: string | null; amountSent: number }> {
-  const { wallet, destinationAddress } = args
+  const { wallet, destinationAddress, amountUsdc } = args
 
   // Same defense-in-depth as submit: the vine validator on the route already
   // checks 0x-format, but service should never trust callers. Also blocks the
@@ -423,6 +431,14 @@ export async function drainOperatorWallet(args: {
     throw new Error(
       `Invalid destinationAddress '${destinationAddress}' — must be a valid EVM address`
     )
+  }
+
+  if (amountUsdc !== undefined) {
+    if (!Number.isFinite(amountUsdc) || amountUsdc <= 0) {
+      throw new Error(
+        `Invalid amountUsdc '${amountUsdc}' — partial drain requires a positive number`
+      )
+    }
   }
 
   // Strict balance read — we MUST distinguish "wallet empty" from "RPC
@@ -435,6 +451,18 @@ export async function drainOperatorWallet(args: {
     return { txHash: null, amountSent: 0 }
   }
 
+  // Resolve the send amount. Default = balance (full drain). For partial
+  // drains, reject if the request would overdraw — silently capping at
+  // balance would mask an admin typo that walks away thinking the rest is
+  // still there.
+  const sendAmount = amountUsdc ?? balance
+  if (sendAmount > balance) {
+    throw new Error(
+      `Requested amount ${sendAmount} USDC exceeds wallet balance ${balance} USDC ` +
+        `for ${wallet.walletAddress}. Top up the wallet or lower the amount.`
+    )
+  }
+
   // Reuse the send pipeline — drain is just a "send full balance" call.
   // Note: we pass the wallet through `sendUsdc...` which enforces active=true.
   // For drains, we want to ignore that gate — so call sendUserOperation
@@ -443,14 +471,14 @@ export async function drainOperatorWallet(args: {
   const smart = await rehydrateSmartAccount(wallet)
 
   const erc20Interface = new ethers.utils.Interface(ERC20_TRANSFER_ABI)
-  const amountWei = ethers.utils.parseUnits(balance.toString(), USDC_DECIMALS)
+  const amountWei = ethers.utils.parseUnits(sendAmount.toString(), USDC_DECIMALS)
   const transferCallData = erc20Interface.encodeFunctionData('transfer', [
     destinationAddress,
     amountWei,
   ])
 
   logger.info(
-    `operator_wallet.drain event=${wallet.eventSlug} amount=${balance} to=${destinationAddress}`
+    `operator_wallet.drain event=${wallet.eventSlug} amount=${sendAmount} balance=${balance} to=${destinationAddress}${amountUsdc !== undefined ? ' (partial)' : ''}`
   )
 
   const userOpResult = await cdp.evm.sendUserOperation({
@@ -482,7 +510,7 @@ export async function drainOperatorWallet(args: {
   const txHash = userOp.transactionHash ?? receipt.userOpHash
 
   logger.info(`operator_wallet.drain-confirmed event=${wallet.eventSlug} tx=${txHash}`)
-  return { txHash, amountSent: balance }
+  return { txHash, amountSent: sendAmount }
 }
 
 // ── Balance read ────────────────────────────────────────────────────────────

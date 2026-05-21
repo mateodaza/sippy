@@ -300,6 +300,19 @@ A single tactical card for **Fri May 22, 2026**. Pin this; everything else in th
 - [ ] Disburse Quest prizes (USDC transfers from treasury).
 - [ ] Drain exchange wallet floats back to treasury (or leave for next event).
 
+### Operator wallet attribution (read before inspecting rows)
+
+- The superadmin (`admin@sippy.lat`) can send through any event's operator wallet via `/admin/operator/send?event=<slug>` (also reachable from "Send from this wallet" on the event-attendees admin panel).
+- Superadmin sends are attributed to the wallet's assigned operator in `operator_sends.operator_id` — same as if the operator themselves had sent. If you query `operator_sends` during the event and see a send the operator says they didn't make, check Railway logs.
+- Railway logs for `operator_send.start` / `operator_send.confirmed` include `caller_user_id` (the actual sender) and an `override` flag (true when superadmin acted through another operator's wallet). Grep on `superadmin-override` to find them quickly.
+- Caps (hourly + per-tx) and the duplicate-recipient guard still apply to superadmin sends — there is no bypass. The wallet's hourly cap is shared between the operator and the superadmin.
+- DB-level forensic attribution (`operator_sends.initiated_by_user_id` column) is deferred until after Cartagena; logs are the authoritative source during the event.
+
+### Operator wallet drain (post-event)
+
+- Drain endpoint (`POST /admin/events/:slug/operator-wallet/drain`) is **superadmin-only**: only `admin@sippy.lat` can call it. Other admins see a 403 and a "Drain is restricted to the superadmin account" hint on the admin panel.
+- Optional partial-drain amount: leave the amount input blank for a full sweep, or enter a USDC amount to drain that exact portion (useful for pre-event smoke checks).
+
 ---
 
 ## Release checklist (QR system → prod)

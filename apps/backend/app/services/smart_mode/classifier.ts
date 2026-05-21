@@ -93,7 +93,10 @@ export const MODEL_PRESETS: Record<string, ModelConfig> = {
   },
   qwen: {
     model: 'qwen/qwen3-32b',
-    reasoning_effort: 'low',
+    // Groq updated their Qwen API: `reasoning_effort` now only accepts
+    // `none` | `default` (returns 400 on `low`). Use `default` to keep
+    // reasoning on without picking a level that may not exist.
+    reasoning_effort: undefined,
   },
 }
 

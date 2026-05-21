@@ -28,6 +28,7 @@ import db from '@adonisjs/lucid/services/db'
 import env from '#start/env'
 import {
   getOperatorWalletForUser,
+  getOperatorWalletForEvent,
   getOperatorWalletBalance,
   getOperatorSpendInLastHour,
   submitUsdcSend,
@@ -41,6 +42,38 @@ import { sendTextMessage } from '#services/whatsapp.service'
 import { formatOperatorPaymentReceived, type Lang } from '#utils/messages'
 import { getAdminLang } from '#utils/admin_lang'
 import { adminErrors } from '#utils/admin_messages'
+import { isSuperAdmin } from '#utils/super_admin'
+import type AdminUser from '#models/user'
+
+/**
+ * Resolve the wallet the request should operate against.
+ *
+ * Default path: the caller is an operator with an assigned wallet — load
+ * THEIR wallet, ignore any `eventSlug` hint.
+ *
+ * Superadmin override: when the caller is `admin@sippy.lat` AND an explicit
+ * `eventSlug` was provided, load the wallet for that event instead. This is
+ * the only way an account without an operator assignment can act on a
+ * per-event wallet (e.g. for a pre-event smoke send). Regular operators
+ * never get to override — their hint is silently dropped, so they can't
+ * accidentally drive funds out of a wallet they're not assigned to.
+ *
+ * All caps and audit columns downstream key off `wallet.operatorUserId`
+ * so the wallet identity (not the caller's identity) drives counters.
+ * Audit clarity for superadmin-initiated sends is intentionally deferred
+ * to a future `initiated_by_user_id` column.
+ */
+async function resolveActiveWallet(
+  user: AdminUser,
+  eventHint: string | null
+): Promise<{ wallet: EventOperatorWalletRow | null; override: boolean }> {
+  if (eventHint && isSuperAdmin(user.email)) {
+    const wallet = await getOperatorWalletForEvent(eventHint)
+    return { wallet, override: true }
+  }
+  const wallet = await getOperatorWalletForUser(user.id)
+  return { wallet, override: false }
+}
 
 const DEFAULT_MAX_PER_TX = 100
 const DEFAULT_MAX_PER_HOUR = 500
@@ -82,6 +115,12 @@ const sendBodyValidator = vine.compile(
   vine.object({
     recipientPhone: vine.string().trim().minLength(7).maxLength(20),
     amountUsdc: vine.number().positive(),
+    /**
+     * Optional superadmin event override. Ignored unless the caller is the
+     * superadmin. Lets admin@sippy.lat send through a per-event wallet they
+     * aren't formally assigned to (pre-event smoke runs, etc.).
+     */
+    eventSlug: vine.string().trim().minLength(1).maxLength(120).optional(),
   })
 )
 
@@ -114,6 +153,12 @@ interface ShowSendProps {
   recentSends: RecentSend[]
   /** When ?to=<phone> is provided, pre-fill the form. */
   prefillRecipientPhone: string | null
+  /**
+   * Superadmin override metadata: the page renders a banner and forwards
+   * `eventSlug` on POST so the controller resolves the same wallet. Null
+   * for ordinary operator sessions.
+   */
+  superadminOverride: { eventSlug: string } | null
   flash: { error?: string; success?: string } | null
 }
 
@@ -181,7 +226,8 @@ export default class OperatorSendController {
     const user = auth.user!
     const caps = getCaps()
 
-    const wallet = await getOperatorWalletForUser(user.id)
+    const eventHint = String(request.input('event', '') ?? '').trim() || null
+    const { wallet, override } = await resolveActiveWallet(user, eventHint)
     if (!wallet) {
       // Operator (or admin acting as operator) with no assignment. UI
       // surfaces this clearly — the form is disabled, send is blocked.
@@ -196,6 +242,7 @@ export default class OperatorSendController {
         },
         recentSends: [],
         prefillRecipientPhone: null,
+        superadminOverride: null,
         flash: (session.flashMessages.all() as ShowSendProps['flash']) ?? null,
       }
       return inertia.render('admin/operator_send', props)
@@ -208,10 +255,14 @@ export default class OperatorSendController {
       .select('slug', 'name')
       .first()
 
+    // Caps and recent-sends key on the WALLET's operator (wallet.operatorUserId),
+    // not the caller. This keeps the hourly cap shared between the assigned
+    // operator and a superadmin acting through the same wallet — no cap
+    // bypass — and keeps the "Recent sends" list wallet-scoped.
     const [balanceResult, spentLastHourUsdc, recentSends] = await Promise.all([
       getOperatorWalletBalance(wallet.walletAddress),
-      getOperatorSpendInLastHour(user.id),
-      loadRecentSends(user.id, wallet.eventSlug),
+      getOperatorSpendInLastHour(wallet.operatorUserId),
+      loadRecentSends(wallet.operatorUserId, wallet.eventSlug),
     ])
 
     const prefillRaw = String(request.input('to', '') ?? '').trim()
@@ -236,6 +287,7 @@ export default class OperatorSendController {
       },
       recentSends,
       prefillRecipientPhone: prefill,
+      superadminOverride: override ? { eventSlug: wallet.eventSlug } : null,
       flash: (session.flashMessages.all() as ShowSendProps['flash']) ?? null,
     }
     return inertia.render('admin/operator_send', props)
@@ -253,9 +305,10 @@ export default class OperatorSendController {
    * Returns `{ valid, reason?, attendee? }`. The reason strings are stable
    * so the UI can localize / branch on them.
    */
-  async validateRecipient({ auth, params, response }: HttpContext) {
+  async validateRecipient({ auth, params, request, response }: HttpContext) {
     const user = auth.user!
-    const wallet = await getOperatorWalletForUser(user.id)
+    const eventHint = String(request.input('event', '') ?? '').trim() || null
+    const { wallet } = await resolveActiveWallet(user, eventHint)
     if (!wallet) {
       return response.badRequest({ valid: false, reason: 'no-assigned-wallet' })
     }
@@ -327,15 +380,7 @@ export default class OperatorSendController {
     // payload itself has to be already-translated.
     const adminLang = getAdminLang(ctx)
 
-    const wallet = await getOperatorWalletForUser(user.id)
-    if (!wallet) {
-      return response.badRequest({ error: adminErrors.noEventWallet(adminLang) })
-    }
-    if (!wallet.active) {
-      return response.badRequest({ error: adminErrors.eventWalletRevoked(adminLang) })
-    }
-
-    let body: { recipientPhone: string; amountUsdc: number }
+    let body: { recipientPhone: string; amountUsdc: number; eventSlug?: string }
     try {
       body = await request.validateUsing(sendBodyValidator)
     } catch (err) {
@@ -344,6 +389,25 @@ export default class OperatorSendController {
         detail: (err as Error).message,
       })
     }
+
+    // Resolve the wallet AFTER body validation so the superadmin hint
+    // (body.eventSlug) is available. For ordinary operators the hint is
+    // silently dropped inside resolveActiveWallet.
+    const { wallet, override } = await resolveActiveWallet(user, body.eventSlug ?? null)
+    if (!wallet) {
+      return response.badRequest({ error: adminErrors.noEventWallet(adminLang) })
+    }
+    if (!wallet.active) {
+      return response.badRequest({ error: adminErrors.eventWalletRevoked(adminLang) })
+    }
+
+    // Everything downstream — caps, advisory lock, audit insert — keys on
+    // the wallet's assigned operator, NOT the caller. That keeps superadmin
+    // sends counted against the same hourly cap as the operator and makes
+    // the lock serialize concurrent superadmin↔operator sends on the same
+    // wallet. operator_id stays as the wallet's owner per the audit policy;
+    // a future `initiated_by_user_id` column will let us separate them.
+    const effectiveOperatorId = wallet.operatorUserId
 
     const recipientCanonical = canonicalizePhone(body.recipientPhone)
     if (!recipientCanonical) {
@@ -406,7 +470,7 @@ export default class OperatorSendController {
         // Advisory lock keyed on operator id. pg_advisory_xact_lock blocks
         // until the lock is acquired; same-operator sends queue, others
         // proceed in parallel. Lock auto-released on commit/rollback.
-        await trx.rawQuery('SELECT pg_advisory_xact_lock(?)', [user.id])
+        await trx.rawQuery('SELECT pg_advisory_xact_lock(?)', [effectiveOperatorId])
 
         // C1 — duplicate-recipient guard. The per-row "sent" rollup on the
         // attendees page is purely cosmetic; two operators (or the same
@@ -454,7 +518,7 @@ export default class OperatorSendController {
 
         const spent = (await trx
           .from('operator_sends')
-          .where('operator_id', user.id)
+          .where('operator_id', effectiveOperatorId)
           .whereIn('status', ['pending', 'submitted', 'confirmed'])
           .where('created_at', '>', trx.raw("now() - interval '1 hour'"))
           .sum('amount_usdc as total')
@@ -474,7 +538,7 @@ export default class OperatorSendController {
         const inserted = await trx
           .table('operator_sends')
           .insert({
-            operator_id: user.id,
+            operator_id: effectiveOperatorId,
             event_slug: wallet.eventSlug,
             from_address: wallet.walletAddress,
             to_phone: recipientPrefKey,
@@ -500,12 +564,17 @@ export default class OperatorSendController {
           attempted: body.amountUsdc,
         })
       }
-      logger.error({ operator_id: user.id, err }, 'operator_send.reserve-failed')
+      logger.error(
+        { operator_id: effectiveOperatorId, caller_user_id: user.id, override, err },
+        'operator_send.reserve-failed'
+      )
       return response.status(500).send({ error: adminErrors.failedToReserveSendSlot(adminLang) })
     }
 
     logger.info(
-      `operator_send.start op=${user.id} event=${wallet.eventSlug} send_id=${sendRowId} to=${maskPhone(recipientPrefKey)} amount=${body.amountUsdc}`
+      `operator_send.start op=${effectiveOperatorId} caller=${user.id}${
+        override ? ' (superadmin-override)' : ''
+      } event=${wallet.eventSlug} send_id=${sendRowId} to=${maskPhone(recipientPrefKey)} amount=${body.amountUsdc}`
     )
 
     // ── Submit phase ──────────────────────────────────────────────────────
@@ -540,7 +609,7 @@ export default class OperatorSendController {
           updated_at: db.raw('now()'),
         })
       logger.error(
-        { operator_id: user.id, send_id: sendRowId, err },
+        { operator_id: effectiveOperatorId, caller_user_id: user.id, send_id: sendRowId, err },
         'operator_send.submit-failed (no userOp broadcast, safe to retry)'
       )
       return response.status(500).send({
@@ -563,7 +632,7 @@ export default class OperatorSendController {
       // recover automatically — userOp may be in flight but we have no
       // way to find it. Force admin intervention.
       logger.error(
-        { operator_id: user.id, send_id: sendRowId },
+        { operator_id: effectiveOperatorId, caller_user_id: user.id, send_id: sendRowId },
         'operator_send: CDP returned no userOpHash after sendUserOperation. Row stuck in pending — manual reconciliation required.'
       )
       return response.status(500).send({
@@ -611,7 +680,9 @@ export default class OperatorSendController {
           tx_hash: txHash,
           updated_at: db.raw('now()'),
         })
-      logger.info(`operator_send.confirmed op=${user.id} send_id=${sendRowId} tx=${txHash}`)
+      logger.info(
+        `operator_send.confirmed op=${effectiveOperatorId} caller=${user.id} send_id=${sendRowId} tx=${txHash}`
+      )
 
       // Notify recipient on WhatsApp. Fired AFTER the chain confirms so the
       // message acts as a receipt, not a promise — if we sent on submit and
@@ -662,7 +733,8 @@ export default class OperatorSendController {
           : 'timeout-or-unknown'
       logger.warn(
         {
-          operator_id: user.id,
+          operator_id: effectiveOperatorId,
+          caller_user_id: user.id,
           send_id: sendRowId,
           userOpHash: submitted.userOpHash,
           errClass,

@@ -115,14 +115,34 @@ function OperatorWalletPanel({
   eventSlug,
   wallet,
   availableOperators,
+  isSuperAdmin,
 }: {
   eventSlug: string
   wallet: OperatorWallet | null
   availableOperators: AvailableOperator[]
+  /** Only the superadmin (SUPER_ADMIN_EMAIL, defaults to admin@sippy.lat)
+   *  may drain the wallet. Backend enforces the same check; the UI gate is
+   *  just to avoid showing a button that always 403s. */
+  isSuperAdmin: boolean
 }) {
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>('')
   const [drainAddress, setDrainAddress] = useState<string>('')
+  /** Empty string = sweep full balance. Any positive number = partial. */
+  const [drainAmount, setDrainAmount] = useState<string>('')
   const [busy, setBusy] = useState<null | string>(null) // 'assign' | 'revoke' | 'drain'
+  const [addrCopied, setAddrCopied] = useState(false)
+
+  async function copyWalletAddress() {
+    if (!wallet) return
+    try {
+      await navigator.clipboard.writeText(wallet.walletAddress)
+      setAddrCopied(true)
+      setTimeout(() => setAddrCopied(false), 1500)
+    } catch {
+      // Clipboard API can fail under unfocused tabs / non-secure origins.
+      // Address is still visible to read manually.
+    }
+  }
 
   function getCsrfToken(): string {
     // AdonisJS shield writes XSRF-TOKEN cookie; expects X-XSRF-TOKEN header
@@ -213,11 +233,29 @@ function OperatorWalletPanel({
       alert('Destination must be a valid 0x address')
       return
     }
-    if (!confirm(`Drain ALL USDC to ${drainAddress}? This cannot be undone.`)) return
+    // Optional partial amount. Empty input ⇒ full sweep (legacy behavior).
+    // Validate before hitting the server to avoid a confusing 422.
+    let parsedAmount: number | undefined
+    if (drainAmount.trim() !== '') {
+      const n = Number.parseFloat(drainAmount)
+      if (!Number.isFinite(n) || n <= 0) {
+        alert('Amount must be a positive number (or leave blank to drain all)')
+        return
+      }
+      parsedAmount = n
+    }
+    const promptMsg =
+      parsedAmount === undefined
+        ? `Drain ALL USDC to ${drainAddress}? This cannot be undone.`
+        : `Drain $${parsedAmount.toFixed(2)} USDC to ${drainAddress}? This cannot be undone.`
+    if (!confirm(promptMsg)) return
     setBusy('drain')
     const { ok, status, data, bodyText } = await postJson(
       `/admin/events/${encodeURIComponent(eventSlug)}/operator-wallet/drain`,
-      { destinationAddress: drainAddress },
+      {
+        destinationAddress: drainAddress,
+        ...(parsedAmount !== undefined ? { amountUsdc: parsedAmount } : {}),
+      },
       'POST'
     )
     setBusy(null)
@@ -231,6 +269,7 @@ function OperatorWalletPanel({
         : `Drained $${Number(data.amountSent).toFixed(2)} USDC. tx=${(data.txHash ?? '').slice(0, 10)}…`
     )
     setDrainAddress('')
+    setDrainAmount('')
     router.reload({ only: ['operatorWallet'] })
   }
 
@@ -263,9 +302,25 @@ function OperatorWalletPanel({
             </div>
             <div>
               <p className="spec-label">Address</p>
-              <p className="mt-1 break-all admin-text" title={wallet.walletAddress}>
-                {wallet.walletAddress.slice(0, 8)}…{wallet.walletAddress.slice(-6)}
-              </p>
+              {/* Full address (not truncated): admin needs to copy it to
+                  top up the operator wallet. Pairing with a copy button
+                  keeps long addresses usable on narrow viewports. */}
+              <div className="mt-1 flex items-start gap-2">
+                <p
+                  className="font-mono text-xs admin-text break-all"
+                  style={{ wordBreak: 'break-all' }}
+                  title={wallet.walletAddress}
+                >
+                  {wallet.walletAddress}
+                </p>
+                <button
+                  type="button"
+                  onClick={copyWalletAddress}
+                  className="shrink-0 rounded-md border border-current px-2 py-1 font-mono text-[10px] uppercase tracking-[0.1em] hover:bg-current hover:text-white"
+                >
+                  {addrCopied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
             </div>
             <div>
               <p className="spec-label">Balance</p>
@@ -285,6 +340,19 @@ function OperatorWalletPanel({
           </div>
 
           <div className="flex flex-wrap gap-3 border-t border-[var(--admin-border-subtle)] pt-3">
+            {/* Superadmin-only "act through this wallet" link. The operator
+                send page resolves the wallet from ?event=<slug> when called
+                by admin@sippy.lat — same caps, dup guard, recent-sends
+                scope. Hidden for non-superadmin admins to keep the wallet
+                identity per-operator. */}
+            {isSuperAdmin && wallet.active && (
+              <Link
+                href={`/admin/operator/send?event=${encodeURIComponent(eventSlug)}`}
+                className="rounded-md border border-crypto-hover px-3 py-1.5 font-mono text-xs uppercase tracking-[0.1em] text-crypto-hover hover:bg-crypto-hover hover:text-white"
+              >
+                Send from this wallet
+              </Link>
+            )}
             {wallet.active && (
               <button
                 type="button"
@@ -295,23 +363,48 @@ function OperatorWalletPanel({
                 {busy === 'revoke' ? 'Revoking…' : 'Revoke assignment'}
               </button>
             )}
-            <div className="flex flex-1 items-center gap-2">
-              <input
-                type="text"
-                value={drainAddress}
-                onChange={(e) => setDrainAddress(e.target.value)}
-                placeholder="0x destination for drain…"
-                className="flex-1 rounded border border-[var(--admin-border-subtle)] bg-[var(--admin-surface)] px-3 py-1.5 font-mono text-xs admin-text"
-              />
-              <button
-                type="button"
-                onClick={doDrain}
-                disabled={busy !== null || !drainAddress}
-                className="rounded-md border border-red-600 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.1em] text-red-700 hover:bg-red-600 hover:text-white disabled:opacity-50"
-              >
-                {busy === 'drain' ? 'Draining…' : 'Drain all to address'}
-              </button>
-            </div>
+            {/* Drain is irreversible: gated to the superadmin only. Other
+                admins see a disabled hint instead of the form so they know
+                the affordance exists but isn't theirs to use. Backend
+                returns 403 if anyone bypasses the UI. */}
+            {isSuperAdmin ? (
+              <div className="flex flex-1 flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={drainAddress}
+                  onChange={(e) => setDrainAddress(e.target.value)}
+                  placeholder="0x destination for drain…"
+                  className="flex-1 min-w-[260px] rounded border border-[var(--admin-border-subtle)] bg-[var(--admin-surface)] px-3 py-1.5 font-mono text-xs admin-text"
+                />
+                {/* Optional partial amount. Blank = drain full balance. */}
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={drainAmount}
+                  onChange={(e) => setDrainAmount(e.target.value)}
+                  placeholder="Amount (blank = all)"
+                  className="w-40 rounded border border-[var(--admin-border-subtle)] bg-[var(--admin-surface)] px-3 py-1.5 font-mono text-xs admin-text"
+                  title="USDC amount to drain. Leave blank to sweep the full balance."
+                />
+                <button
+                  type="button"
+                  onClick={doDrain}
+                  disabled={busy !== null || !drainAddress}
+                  className="rounded-md border border-red-600 px-3 py-1.5 font-mono text-xs uppercase tracking-[0.1em] text-red-700 hover:bg-red-600 hover:text-white disabled:opacity-50"
+                >
+                  {busy === 'drain'
+                    ? 'Draining…'
+                    : drainAmount.trim() !== ''
+                      ? `Drain $${drainAmount}`
+                      : 'Drain all to address'}
+                </button>
+              </div>
+            ) : (
+              <p className="flex-1 font-mono text-xs text-neutral-500">
+                Drain is restricted to the superadmin account.
+              </p>
+            )}
           </div>
         </div>
       ) : availableOperators.length === 0 ? (
@@ -364,9 +457,13 @@ export default function EventAttendeesPage({
   availableOperators,
 }: Props) {
   const { meta } = attendees
-  const pageProps = usePage().props as { auth?: { role?: string }; adminLang?: AdminLang }
+  const pageProps = usePage().props as {
+    auth?: { role?: string; isSuperAdmin?: boolean }
+    adminLang?: AdminLang
+  }
   const auth = pageProps.auth ?? null
   const isAdmin = auth?.role === 'admin'
+  const isSuperAdmin = auth?.isSuperAdmin === true
   const lang: AdminLang = pageProps.adminLang ?? 'es'
   const t = getEventAttendeesStrings(lang)
 
@@ -423,6 +520,7 @@ export default function EventAttendeesPage({
           eventSlug={event.slug}
           wallet={operatorWallet}
           availableOperators={availableOperators}
+          isSuperAdmin={isSuperAdmin}
         />
       )}
 

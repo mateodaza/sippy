@@ -137,6 +137,12 @@ export default class SmartModeEvalCommand extends BaseCommand {
               ? ` | got category=${f.actual.category} intent=${f.actual.intent} conf=${f.actual.confidence.toFixed(2)}`
               : '')
         )
+        // Surface the raw classifier reasoning — for `gibberish/null/0.00`
+        // sentinels this exposes the underlying tryOnce failure mode
+        // (empty_response / json_parse / schema / timeout / network).
+        if (f.actual?.reasoning) {
+          this.logger.info(`     ↳ reasoning: ${f.actual.reasoning.slice(0, 200)}`)
+        }
       }
     }
 

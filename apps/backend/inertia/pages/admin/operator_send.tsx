@@ -45,6 +45,10 @@ interface Props {
   }
   recentSends: RecentSend[]
   prefillRecipientPhone: string | null
+  /** Non-null when admin@sippy.lat is acting through another operator's
+   *  wallet via ?event=<slug>. Page surfaces a banner and POSTs eventSlug
+   *  back so the controller resolves the same wallet. */
+  superadminOverride: { eventSlug: string } | null
   flash: { error?: string; success?: string } | null
 }
 
@@ -150,12 +154,16 @@ export default function OperatorSendPage({
   caps,
   recentSends,
   prefillRecipientPhone,
+  superadminOverride,
   flash,
 }: Props) {
   const lang = ((usePage().props as { adminLang?: AdminLang }).adminLang ?? 'es') as AdminLang
   const t = getOperatorSendStrings(lang)
   const [recipientPhone, setRecipientPhone] = useState(prefillRecipientPhone ?? '')
-  const [amount, setAmount] = useState('')
+  // Pre-select 4 USDC: that's the per-attendee disbursement target for the
+  // Cartagena pre-event float ($500 / ~125 users). Operator can change it
+  // via the dropdown for one-off adjustments.
+  const [amount, setAmount] = useState('4')
   const [lookup, setLookup] = useState<RecipientLookupState>({ kind: 'idle' })
   const [confirming, setConfirming] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -196,7 +204,13 @@ export default function OperatorSendPage({
     if (!phone) return
     setLookup({ kind: 'loading' })
     try {
-      const res = await fetch(`/admin/operator/recipient/${encodeURIComponent(phone)}`, {
+      // Forward the superadmin event override so /admin/operator/recipient
+      // validates against the right event. Regular operators send nothing
+      // here and the backend ignores the param.
+      const lookupQs = superadminOverride
+        ? `?event=${encodeURIComponent(superadminOverride.eventSlug)}`
+        : ''
+      const res = await fetch(`/admin/operator/recipient/${encodeURIComponent(phone)}${lookupQs}`, {
         headers: { Accept: 'application/json' },
       })
       const body = await res.json()
@@ -247,6 +261,10 @@ export default function OperatorSendPage({
           recipientPhone: lookup.phone,
           amountUsdc: amountNum,
           ...(override ? { override: true } : {}),
+          // Superadmin override: tells the backend which event's wallet to
+          // act through. Backend ignores it for non-superadmin callers, so
+          // this is safe to always include.
+          ...(superadminOverride ? { eventSlug: superadminOverride.eventSlug } : {}),
         }),
       })
       const body = await res.json()
@@ -324,6 +342,26 @@ export default function OperatorSendPage({
           <p className="spec-label mt-1 text-amber-700">{t.noWalletSubtitle}</p>
         )}
       </div>
+
+      {/* Superadmin override banner. Makes it visually obvious that the
+          superadmin is acting through an operator's wallet — Mateo's note:
+          "the UI makes the active wallet/event obvious". */}
+      {superadminOverride && (
+        <div
+          className="panel-frame mb-6 border-l-4 border-amber-600 bg-amber-50 p-4 text-amber-900"
+          role="status"
+        >
+          <p className="font-mono text-xs font-bold uppercase tracking-[0.12em]">
+            Superadmin override
+          </p>
+          <p className="mt-1 font-mono text-sm">
+            You are sending through the operator wallet for event{' '}
+            <span className="font-bold">{superadminOverride.eventSlug}</span>. Hourly cap and
+            duplicate-recipient guard apply as if the assigned operator were sending. Audit row will
+            be attributed to the assigned operator; check server logs for the caller id.
+          </p>
+        </div>
+      )}
 
       {/* Wallet header */}
       {wallet ? (

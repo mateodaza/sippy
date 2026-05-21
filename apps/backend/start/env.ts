@@ -22,6 +22,11 @@ export default await Env.create(new URL('../', import.meta.url), {
   WHATSAPP_BUTTONS: Env.schema.string.optional(),
   SIPPY_WHATSAPP_NUMBER: Env.schema.string.optional(),
 
+  // Superadmin lock. Only this email can perform irreversible actions like
+  // draining an event operator wallet. Defaults to `admin@sippy.lat` at the
+  // call site; override per-environment via env.
+  SUPER_ADMIN_EMAIL: Env.schema.string.optional(),
+
   // CDP SDK
   CDP_API_KEY_NAME: Env.schema.string.optional(),
   CDP_PRIVATE_KEY: Env.schema.string.optional(),
