@@ -501,6 +501,11 @@ export function formatBalanceMessage(
     phoneNumber?: string
     localRate?: number | null
     localCurrency?: string | null
+    // True when the routing came from an address-specific phrase
+    // ("mi address", "cuál es mi billetera", "wallet address", …). The
+    // user named the wallet itself, not the balance number, so render
+    // the FULL public address instead of the default masked form.
+    addressQuery?: boolean
   },
   lang: Lang = 'en'
 ): string {
@@ -509,7 +514,7 @@ export function formatBalanceMessage(
     params.localRate ?? null,
     params.localCurrency ?? null
   )
-  const addr = maskAddress(params.wallet)
+  const addr = params.addressQuery ? params.wallet : maskAddress(params.wallet)
 
   // Dashboard link: phone-scoped /wallet URL. Surfaces the web hub at
   // the most-engaged moment (user just asked about their money), without

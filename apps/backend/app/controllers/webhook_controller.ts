@@ -580,7 +580,13 @@ export async function routeCommand(
       }
 
       case 'balance':
-        await balanceHandler(phoneNumber, lang, rateCtx.senderRate, rateCtx.senderCurrency)
+        await balanceHandler(
+          phoneNumber,
+          lang,
+          rateCtx.senderRate,
+          rateCtx.senderCurrency,
+          command.addressQuery === true
+        )
         break
 
       case 'send': {

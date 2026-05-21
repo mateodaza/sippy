@@ -28,7 +28,8 @@ import {
   partialSends,
   pendingInvites,
 } from '#controllers/webhook_controller'
-import { matchHighConfidencePreLlm } from '#utils/message_parser'
+import { matchHighConfidencePreLlm, parseMessageWithRegex } from '#utils/message_parser'
+import { formatBalanceMessage } from '#utils/messages'
 import type { PendingTransaction, ParsedCommand } from '#types/index'
 
 // ── Group A — Pending confirm/cancel guard ──────────────────────────────
@@ -93,10 +94,14 @@ test.group('Pre-SMART | high-confidence loose patterns', () => {
     'dirección de mi billetera',
   ]
   for (const input of balanceInputs) {
-    test(`"${input}" → balance`, ({ assert }) => {
+    test(`"${input}" → balance with addressQuery=true`, ({ assert }) => {
       const result = tryPreSmartShortCircuit(input, false)
       assert.isNotNull(result, `${input} must short-circuit`)
       assert.equal(result!.command, 'balance', `${input} must route to balance, not pay_qr`)
+      assert.isTrue(
+        result!.addressQuery,
+        `${input} must set addressQuery so balance reply shows full public address`
+      )
     })
   }
 
@@ -108,6 +113,79 @@ test.group('Pre-SMART | high-confidence loose patterns', () => {
       assert.equal(result!.command, 'dashboard')
     })
   }
+})
+
+// ── Group C2 — Strict regex address-query subset of balance ─────────────
+// "mi billetera" / "mi wallet" / etc. match the strict balance regex
+// (anchored exact, no question mark), but the address-y subset must set
+// addressQuery=true. "saldo" / "balance" must NOT — those want the number.
+
+test.group('parseMessageWithRegex | addressQuery flag on balance', () => {
+  const addressQueryInputs = [
+    'mi billetera',
+    'mi wallet',
+    'mi cartera',
+    'cuál es mi billetera',
+    'cual es mi wallet',
+    'my wallet',
+    'minha carteira',
+  ]
+  for (const input of addressQueryInputs) {
+    test(`"${input}" → balance + addressQuery=true`, ({ assert }) => {
+      const result = parseMessageWithRegex(input)
+      assert.equal(result.command, 'balance')
+      assert.isTrue(
+        result.addressQuery,
+        `${input} names the wallet/address — reply must show full address`
+      )
+    })
+  }
+
+  const balanceNumberInputs = ['balance', 'saldo', 'cuanto tengo', 'mi saldo', 'meu saldo']
+  for (const input of balanceNumberInputs) {
+    test(`"${input}" → balance + addressQuery=falsy`, ({ assert }) => {
+      const result = parseMessageWithRegex(input)
+      assert.equal(result.command, 'balance')
+      assert.notEqual(
+        result.addressQuery,
+        true,
+        `${input} asks for the number — address should stay masked`
+      )
+    })
+  }
+})
+
+// ── Group C3 — formatBalanceMessage honors addressQuery ─────────────────
+//
+// User incident on 2026-05-21: "Sabes cual es mi address?" routed
+// correctly to balance, but the reply showed `0x80d6...948A` (masked).
+// The full public address must appear when the user asked for it.
+
+test.group('formatBalanceMessage | full address on addressQuery', () => {
+  const fullAddress = '0x80d6f5a17a39bc4567890abcdef1234567890948A'
+
+  test('addressQuery=true → reply contains FULL address', ({ assert }) => {
+    const msg = formatBalanceMessage(
+      { balance: 89.91, wallet: fullAddress, addressQuery: true },
+      'es'
+    )
+    assert.include(msg, fullAddress, 'full public address must appear in reply')
+    assert.notInclude(msg, '0x80d6...948A', 'masked form must not appear when addressQuery is set')
+  })
+
+  test('addressQuery=false → reply contains MASKED address (default)', ({ assert }) => {
+    const msg = formatBalanceMessage(
+      { balance: 89.91, wallet: fullAddress, addressQuery: false },
+      'es'
+    )
+    assert.notInclude(msg, fullAddress, 'full address must not bloat the balance reply')
+    assert.include(msg, '0x80d6...948A', 'masked form for balance-number queries')
+  })
+
+  test('addressQuery omitted → reply contains MASKED address (legacy default)', ({ assert }) => {
+    const msg = formatBalanceMessage({ balance: 89.91, wallet: fullAddress }, 'es')
+    assert.include(msg, '0x80d6...948A')
+  })
 })
 
 // ── Group D — Unrelated text falls through ──────────────────────────────

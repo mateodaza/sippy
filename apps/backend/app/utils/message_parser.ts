@@ -65,7 +65,11 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^balance$/i,
     /^(saldo|cu[aá]nto tengo|mi saldo)$/i,
     /^(saldo|quanto tenho|meu saldo)$/i,
-    // Wallet queries: "cuál es mi wallet", "mi billetera", "my wallet"
+    // Wallet queries: "cuál es mi wallet", "mi billetera", "my wallet".
+    // These are also address queries — handled in the matcher to set
+    // `addressQuery: true` so the balance reply shows the full public
+    // address. Kept in the same array (vs a separate top-level list) so
+    // the trilingual coverage stays grouped with the rest of balance.
     /^(cu[aá]l es )?mi (wallet|billetera|cartera)$/i,
     /^(my wallet|minha carteira)$/i,
   ],
@@ -380,6 +384,17 @@ const SEND_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
 ]
 
 /**
+ * Address-query subset of the strict `balance` patterns. Used by
+ * `parseMessageWithRegex` to mark balance hits where the user named the
+ * wallet itself ("mi wallet", "mi billetera", "my wallet") so the
+ * downstream balance reply can show the full public address instead of
+ * the masked one. Mirrors the corresponding entries in
+ * `COMMAND_PATTERNS.balance`; if those change, this must too.
+ */
+const ADDRESS_QUERY_REGEX_BALANCE =
+  /^(cu[aá]l es )?mi (wallet|billetera|cartera)$|^(my wallet|minha carteira)$/i
+
+/**
  * Parse message with regex (exact matching).
  * This is the primary parser — handles 80%+ of messages at zero cost.
  */
@@ -407,7 +422,18 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
   for (const [command, patterns] of Object.entries(COMMAND_PATTERNS)) {
     if (command === 'language') continue // Already handled above
     if (patterns.some((p) => p.test(normalizedText))) {
-      return { command: command as ParsedCommand['command'], originalText: text }
+      // Address-query subset of `balance`: phrases like "mi wallet" /
+      // "mi billetera" / "my wallet" name the wallet itself, not the
+      // balance number. The balance reply masks the address by default
+      // for compactness; addressQuery=true tells the handler to show
+      // the full public address so the user can copy/share it.
+      const addressQuery = command === 'balance' && ADDRESS_QUERY_REGEX_BALANCE.test(normalizedText)
+      const result: ParsedCommand = {
+        command: command as ParsedCommand['command'],
+        originalText: text,
+      }
+      if (addressQuery) result.addressQuery = true
+      return result
     }
   }
 
@@ -693,7 +719,17 @@ export function matchHighConfidencePreLlm(text: string): ParsedCommand | null {
     .trim()
   for (const [command, pattern] of HIGH_CONFIDENCE_PRE_LLM_PATTERNS) {
     if (pattern.test(normalized)) {
-      return { command: command as ParsedCommand['command'], originalText: text }
+      const result: ParsedCommand = {
+        command: command as ParsedCommand['command'],
+        originalText: text,
+      }
+      // Every `balance` entry in HIGH_CONFIDENCE_PRE_LLM_PATTERNS is
+      // an address query by design ("mi address", "cuál es mi
+      // billetera", "wallet address", "dirección de mi cartera", …) —
+      // the user named the wallet/address, not the balance number, so
+      // flag it so the balance handler shows the full public address.
+      if (command === 'balance') result.addressQuery = true
+      return result
     }
   }
   return null

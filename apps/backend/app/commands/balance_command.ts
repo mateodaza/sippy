@@ -40,7 +40,8 @@ export async function handleBalanceCommand(
   phoneNumber: string,
   lang: Lang,
   localRate: number | null,
-  localCurrency: string | null
+  localCurrency: string | null,
+  addressQuery: boolean = false
 ): Promise<void> {
   logger.info(`BALANCE command from ${maskPhone(phoneNumber)}`)
 
@@ -49,7 +50,14 @@ export async function handleBalanceCommand(
     const embeddedWallet = await getEmbeddedWallet(phoneNumber)
 
     if (embeddedWallet) {
-      await handleEmbeddedBalance(phoneNumber, embeddedWallet, lang, localRate, localCurrency)
+      await handleEmbeddedBalance(
+        phoneNumber,
+        embeddedWallet,
+        lang,
+        localRate,
+        localCurrency,
+        addressQuery
+      )
       return
     }
 
@@ -89,6 +97,7 @@ export async function handleBalanceCommand(
         phoneNumber,
         localRate,
         localCurrency,
+        addressQuery,
       },
       lang
     )
@@ -121,7 +130,8 @@ async function handleEmbeddedBalance(
   },
   lang: Lang,
   localRate: number | null,
-  localCurrency: string | null
+  localCurrency: string | null,
+  addressQuery: boolean = false
 ): Promise<void> {
   logger.info(`Fetching embedded wallet balance for ${maskPhone(phoneNumber)}...`)
 
@@ -134,6 +144,7 @@ async function handleEmbeddedBalance(
       phoneNumber,
       localRate,
       localCurrency,
+      addressQuery,
     },
     lang
   )

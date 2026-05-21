@@ -133,6 +133,13 @@ export interface ParsedCommand {
   //    the single static fallback. Unset for non-SMART paths. ────────
   smartCategory?: 'out_of_scope' | 'gibberish'
   smartOosRedirect?: string
+  // ── Address-query intent on a balance route ────────────────────────────
+  // True when the user asked specifically for their wallet address
+  // ("mi address", "cuál es mi billetera", "wallet address", …) rather
+  // than the balance number ("saldo", "balance"). Both route to the
+  // balance handler, but the reply must show the FULL public address —
+  // not the masked `0x80d6...948A` — so the user can copy/share it.
+  addressQuery?: boolean
 }
 
 export interface WalletInfo {
