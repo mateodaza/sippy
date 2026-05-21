@@ -21,12 +21,12 @@ import Link from 'next/link'
 import { WHATSAPP_BOT_NUMBER } from '@/lib/constants'
 
 export const metadata: Metadata = {
-  title: 'Pizza Day Cartagena 2026 — Sippy',
+  title: 'Pizza Day Cartagena 2026 · Sippy',
   description:
     'Cómo usar Sippy en Pizza Day Cartagena 2026: conseguir USDC, enviar a otros asistentes, pagar pizza, ganar premios del Quest, reclamar tu POAP.',
   alternates: { canonical: 'https://www.sippy.lat/pizza-day' },
   openGraph: {
-    title: 'Pizza Day Cartagena 2026 — Sippy',
+    title: 'Pizza Day Cartagena 2026 · Sippy',
     description: 'Guía rápida para el evento. Sippy en WhatsApp.',
     type: 'article',
   },
@@ -160,11 +160,11 @@ export default function PizzaDayPage() {
           </p>
         </Section>
 
-        <Section number="4" title="Sippy Quest — entradas al sorteo">
+        <Section number="4" title="Sippy Quest: entradas al sorteo">
           <p>
             Sippy Quest es un sorteo. Acumulas <strong>entradas</strong> y al final del evento se
-            sortean ganadores entre todas las entradas válidas, al azar. No es por ranking — estar
-            en el primer puesto no garantiza premio.
+            sortean ganadores entre todas las entradas válidas, al azar. No es por ranking. Estar en
+            el primer puesto no garantiza premio.
           </p>
           <p className="mt-3">
             Cómo sumas entradas (máximo <span className="font-mono">5</span> por persona):
@@ -176,7 +176,7 @@ export default function PizzaDayPage() {
               cuenta en Pizza Day.
             </li>
             <li>
-              <strong>+1 entrada</strong> por cada amigo que se una a Sippy con tu link de Quest —
+              <strong>+1 entrada</strong> por cada amigo que se una a Sippy con tu link de Quest,
               vengan o no al evento. Si tu mamá se une desde la casa, te cuenta.
             </li>
           </ul>
@@ -209,17 +209,17 @@ export default function PizzaDayPage() {
           </p>
           <ul className="mt-3 space-y-2 text-sm">
             <li>
-              <strong>Reclamar a tu Sippy</strong> — un clic, queda en tu billetera Sippy.
+              <strong>Reclamar a tu Sippy</strong>: un clic, queda en tu billetera Sippy.
             </li>
             <li>
-              <strong>Reclamar a tu wallet</strong> — pegas la dirección y se acuña ahí.
+              <strong>Reclamar a tu wallet</strong>: pegas la dirección y se acuña ahí.
             </li>
           </ul>
         </Section>
 
         <Section number="6" title="¿Necesitas ayuda?">
           <p>
-            Escríbele a Sippy en WhatsApp y di <span className="font-mono">ayuda</span> — te lista
+            Escríbele a Sippy en WhatsApp y di <span className="font-mono">ayuda</span>. Te lista
             los comandos. Si necesitas a una persona, busca al equipo Sippy o pasa por nuestro
             stand.
           </p>

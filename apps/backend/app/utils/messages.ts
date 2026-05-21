@@ -120,7 +120,8 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `📊 *Dashboard / web app* — see balance, activity, actions (say "dashboard")\n\n` +
       `⚙️ *Change settings or limits* — ask for settings\n\n` +
       `🌐 *Switch language* — just tell me which one\n\n` +
-      `Add funds: ${FUND_URL}`,
+      `Add funds: ${FUND_URL}\n\n` +
+      `🍕 Pizza Day Cartagena 2026: ${FRONTEND_URL}/pizza-day`,
     es: () =>
       `Esto es lo que puedo hacer:\n\n` +
       `💸 *Enviar dinero* — dime a quien y cuanto\n\n` +
@@ -132,7 +133,8 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `📊 *Dashboard / panel web* — saldo, actividad y acciones (di "dashboard")\n\n` +
       `⚙️ *Cambiar ajustes o limites* — pideme los ajustes\n\n` +
       `🌐 *Cambiar idioma* — solo dime cual\n\n` +
-      `Agregar fondos: ${FUND_URL}`,
+      `Agregar fondos: ${FUND_URL}\n\n` +
+      `🍕 Pizza Day Cartagena 2026: ${FRONTEND_URL}/pizza-day`,
     pt: () =>
       `Aqui esta o que posso fazer:\n\n` +
       `💸 *Enviar dinheiro* — me diz pra quem e quanto\n\n` +
@@ -144,7 +146,8 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `📊 *Dashboard / painel web* — saldo, atividade e acoes (diz "dashboard")\n\n` +
       `⚙️ *Mudar ajustes ou limites* — pede os ajustes\n\n` +
       `🌐 *Mudar idioma* — so me diz qual\n\n` +
-      `Adicionar fundos: ${FUND_URL}`,
+      `Adicionar fundos: ${FUND_URL}\n\n` +
+      `🍕 Pizza Day Cartagena 2026: ${FRONTEND_URL}/pizza-day`,
   }
   return m[lang]()
 }
@@ -925,23 +928,30 @@ export function formatHistoryMessage(phoneNumber: string, lang: Lang = 'en'): st
  * here too — share-link tests pin the shape.
  */
 export function formatReferralCodeMessage(
-  args: { code: string; maxEntries: number },
+  args: { code: string; maxEntries: number; leaderboardUrl?: string },
   lang: Lang = 'en'
 ): string {
   const shareUrl = `${FRONTEND_URL}/r/${args.code}`
+  const boardLine = args.leaderboardUrl
+    ? {
+        en: `\n\nLive leaderboard:\n${args.leaderboardUrl}`,
+        es: `\n\nMira el tablero en vivo:\n${args.leaderboardUrl}`,
+        pt: `\n\nVeja o ranking ao vivo:\n${args.leaderboardUrl}`,
+      }[lang]
+    : ''
   const m = {
     en: () =>
       `Your Quest invite code: *${args.code}*\n\n` +
       `Each friend who joins with your code = 1 draw entry (max ${args.maxEntries}).\n\n` +
-      `Share your link:\n${shareUrl}`,
+      `Share your link:\n${shareUrl}${boardLine}`,
     es: () =>
       `Tu codigo de Quest: *${args.code}*\n\n` +
       `Cada amigo que se una con tu codigo = 1 entrada al sorteo (max ${args.maxEntries}).\n\n` +
-      `Comparte tu link:\n${shareUrl}`,
+      `Comparte tu link:\n${shareUrl}${boardLine}`,
     pt: () =>
       `Seu codigo do Quest: *${args.code}*\n\n` +
       `Cada amigo que entrar com seu codigo = 1 entrada no sorteio (max ${args.maxEntries}).\n\n` +
-      `Compartilhe seu link:\n${shareUrl}`,
+      `Compartilhe seu link:\n${shareUrl}${boardLine}`,
   }
   return m[lang]()
 }
@@ -976,6 +986,7 @@ export function formatQuestStatusMessage(
     rank: number | null
     totalRanked: number
     code: string
+    leaderboardUrl?: string
   },
   lang: Lang = 'en'
 ): string {
@@ -988,6 +999,13 @@ export function formatQuestStatusMessage(
           pt: `Posicao: #${args.rank} de ${args.totalRanked}`,
         }[lang]
       : null
+  const boardLine = args.leaderboardUrl
+    ? {
+        en: `Live leaderboard:\n${args.leaderboardUrl}`,
+        es: `Mira el tablero en vivo:\n${args.leaderboardUrl}`,
+        pt: `Veja o ranking ao vivo:\n${args.leaderboardUrl}`,
+      }[lang]
+    : null
   const m = {
     en: () => {
       const lines = [
@@ -1000,6 +1018,8 @@ export function formatQuestStatusMessage(
         args.entries < args.cap
           ? `Invite more to climb. Share:\n${shareUrl}`
           : `Max entries reached. Good luck on the draw!`,
+        boardLine ? '' : null,
+        boardLine,
       ].filter((l): l is string => l !== null)
       return lines.join('\n')
     },
@@ -1014,6 +1034,8 @@ export function formatQuestStatusMessage(
         args.entries < args.cap
           ? `Invita mas y sube. Comparte:\n${shareUrl}`
           : `Llegaste al maximo de entradas. Suerte en el sorteo!`,
+        boardLine ? '' : null,
+        boardLine,
       ].filter((l): l is string => l !== null)
       return lines.join('\n')
     },
@@ -1028,6 +1050,8 @@ export function formatQuestStatusMessage(
         args.entries < args.cap
           ? `Convide mais e suba. Compartilhe:\n${shareUrl}`
           : `Atingiu o maximo de entradas. Boa sorte no sorteio!`,
+        boardLine ? '' : null,
+        boardLine,
       ].filter((l): l is string => l !== null)
       return lines.join('\n')
     },

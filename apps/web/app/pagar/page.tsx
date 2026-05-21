@@ -23,11 +23,11 @@ import Link from 'next/link'
 import { WHATSAPP_BOT_NUMBER } from '@/lib/constants'
 
 export const metadata: Metadata = {
-  title: 'Pagar con Sippy — Guía para clientes',
+  title: 'Pagar con Sippy: Guía para clientes',
   description: 'Cómo pagar a un comercio con Sippy. Tres pasos: escaneas, confirmas, listo.',
   alternates: { canonical: 'https://www.sippy.lat/pagar' },
   openGraph: {
-    title: 'Pagar con Sippy — Guía para clientes',
+    title: 'Pagar con Sippy: Guía para clientes',
     description: 'Escaneas, confirmas, listo. Tres pasos en WhatsApp.',
     type: 'article',
   },

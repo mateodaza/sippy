@@ -1065,6 +1065,8 @@ export async function routeCommand(
           break
         }
         const maxEntries = env.get('QUEST_MAX_ENTRIES_PER_USER') ?? 5
+        const currentEventSlug = 'pizza-day-ctg-2026'
+        const leaderboardUrl = `${env.get('FRONTEND_URL') ?? 'https://www.sippy.lat'}/quest/${currentEventSlug}`
         try {
           const codeRow = await ensureReferralCode(phoneNumber)
           // Share URL is built inside `formatReferralCodeMessage` against
@@ -1078,6 +1080,7 @@ export async function routeCommand(
               {
                 code: codeRow.code,
                 maxEntries: Number(maxEntries),
+                leaderboardUrl,
               },
               lang
             ),
@@ -1111,6 +1114,7 @@ export async function routeCommand(
         // to this event's draw. Post-Pizza-Day, resolve the active event
         // dynamically from `events` table rather than hardcoding.
         const currentEventSlug = 'pizza-day-ctg-2026'
+        const leaderboardUrl = `${env.get('FRONTEND_URL') ?? 'https://www.sippy.lat'}/quest/${currentEventSlug}`
         try {
           // Fetch global code + event-scoped status in parallel — both
           // are independent reads needed for the reply. Status query
@@ -1131,6 +1135,7 @@ export async function routeCommand(
                 rank: status.rank,
                 totalRanked: status.totalRanked,
                 code: codeRow.code,
+                leaderboardUrl,
               },
               lang
             ),

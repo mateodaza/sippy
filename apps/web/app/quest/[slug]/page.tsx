@@ -73,7 +73,7 @@ export async function generateMetadata({
   if (!data) {
     return { title: 'Sippy Quest', robots: { index: false, follow: false } }
   }
-  const title = `${data.event.name} — Sippy Quest`
+  const title = `${data.event.name} · Sippy Quest`
   const description = `${data.totals.totalEntries} entradas, ${data.totals.totalEntrants} participantes. Mira el leaderboard en vivo y suma tus propias entradas.`
   return {
     title,
@@ -195,8 +195,8 @@ export default async function QuestLeaderboardPage({
           </h2>
           <p className="mt-2 text-sm text-[var(--text-secondary,#374151)]">
             Cada participante puede juntar hasta <strong>{cap} entradas</strong>: 1 por asistir
-            (escanear un QR del evento al llegar) y 1 por cada amigo que se una a Sippy con tu link
-            — vengan o no al evento. Los ganadores se sortean al azar entre TODAS las entradas
+            (escanear un QR del evento al llegar) y 1 por cada amigo que se una a Sippy con tu link,
+            vengan o no al evento. Los ganadores se sortean al azar entre TODAS las entradas
             válidas, no por puesto en el ranking.
           </p>
           <p className="mt-2 text-xs text-[var(--text-muted,#6B7280)]">

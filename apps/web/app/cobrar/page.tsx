@@ -31,12 +31,12 @@ import Link from 'next/link'
 import { WHATSAPP_BOT_NUMBER } from '@/lib/constants'
 
 export const metadata: Metadata = {
-  title: 'Cobrar con Sippy — Cómo recibir pagos',
+  title: 'Cobrar con Sippy: Cómo recibir pagos',
   description:
     'Cómo recibir pagos en USDC con Sippy. Funciona para comercios, eventos o entre amigos. Tres pasos, sin instalar nada.',
   alternates: { canonical: 'https://www.sippy.lat/cobrar' },
   openGraph: {
-    title: 'Cobrar con Sippy — Cómo recibir pagos',
+    title: 'Cobrar con Sippy: Cómo recibir pagos',
     description: 'Comercios, eventos o entre amigos. Recibe USDC en tres pasos. Sin instalar nada.',
     type: 'article',
   },
@@ -72,8 +72,8 @@ export default function CobrarPage() {
             ¿Cómo recibo pagos con Sippy?
           </h1>
           <p className="mt-4 text-base text-[var(--text-secondary,#374151)] sm:text-lg">
-            Tres pasos. Sin instalar nada. Quien te paga escanea un código, te llega USDC —
-            normalmente en segundos.
+            Tres pasos. Sin instalar nada. Quien te paga escanea un código, te llega USDC en
+            segundos.
           </p>
           <p className="mt-3 text-sm text-[var(--text-muted,#6B7280)]">
             Funciona igual si eres un comercio en un evento, un amigo cobrando una cuenta dividida,
