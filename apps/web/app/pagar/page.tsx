@@ -161,8 +161,10 @@ export default function PagarPage() {
               confirmar puede generar un pago doble.
             </li>
             <li>
-              <strong>Algo más raro.</strong> Busca al equipo Sippy en el evento (camisetas Sippy) o
-              escribe <span className="font-mono">ayuda</span> en WhatsApp.
+              <strong>No sabes qué escribirle a Sippy.</strong> Manda{' '}
+              <span className="font-mono">ayuda</span> y te lista todos los comandos.{' '}
+              <strong>Para problemas en el momento</strong>, busca al equipo Sippy en el evento
+              (camisetas Sippy).
             </li>
           </ul>
         </Section>
