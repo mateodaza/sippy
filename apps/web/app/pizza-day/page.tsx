@@ -51,6 +51,44 @@ export default function PizzaDayPage() {
           </p>
         </header>
 
+        {/* Audience router — sends people to the operational guide
+            that matches what they're actually trying to do. Placed at
+            the top so visitors who landed here from a "what is Sippy?"
+            link can skip the long explainer and get straight to the
+            payment flow they need. */}
+        <nav className="mb-12 grid gap-3 sm:grid-cols-2" aria-label="Guías rápidas">
+          <Link
+            href="/pagar"
+            className="group flex flex-col gap-1 rounded-md border-2 border-[var(--text-primary,#1A1A2E)] bg-[var(--bg-primary,#FFFFFF)] p-5 transition hover:bg-[var(--brand-primary,#00AFD7)] hover:text-white"
+          >
+            <span className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--text-muted,#6B7280)] group-hover:text-white/80">
+              Asistente
+            </span>
+            <span className="mt-1 flex items-center justify-between text-xl font-bold">
+              <span>¿Vas a pagar?</span>
+              <span aria-hidden="true">→</span>
+            </span>
+            <span className="text-sm text-[var(--text-secondary,#374151)] group-hover:text-white/90">
+              Cómo pagar a un comercio con Sippy.
+            </span>
+          </Link>
+          <Link
+            href="/cobrar"
+            className="group flex flex-col gap-1 rounded-md border-2 border-[var(--text-primary,#1A1A2E)] bg-[var(--bg-primary,#FFFFFF)] p-5 transition hover:bg-[var(--brand-primary,#00AFD7)] hover:text-white"
+          >
+            <span className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--text-muted,#6B7280)] group-hover:text-white/80">
+              Comercio o amigo
+            </span>
+            <span className="mt-1 flex items-center justify-between text-xl font-bold">
+              <span>¿Vas a cobrar?</span>
+              <span aria-hidden="true">→</span>
+            </span>
+            <span className="text-sm text-[var(--text-secondary,#374151)] group-hover:text-white/90">
+              Cómo recibir USDC en Sippy.
+            </span>
+          </Link>
+        </nav>
+
         {/* Sections */}
         <Section number="1" title="Conseguir USDC con efectivo">
           <p>
