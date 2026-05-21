@@ -1,26 +1,16 @@
 /**
- * /pagar — Cómo pagar con Sippy (asistentes / clientes)
+ * /pagar — Cómo pagar con Sippy.
  *
- * Operational one-pager. Attendee-facing, Spanish-only, mobile-first.
- * Designed for someone standing in front of a vendor booth wondering
- * "how does this work?" — readable in <60s.
- *
- * Structure pinned 2026-05-19 with Mateo:
- *   1. Qué necesitas
- *   2. Cómo hacerlo
- *   3. Cómo confirmar que funcionó
- *   4. Si algo falla
- *
- * Onboarding CTA goes via WhatsApp (`Hola Sippy!`) rather than directly
- * to /setup. The bot already handles the new-user welcome and serves the
- * setup link in-flow — keeps the user in one context instead of bouncing
- * them to a web form they didn't ask for.
+ * Server entry: holds metadata + canonical, delegates rendering to the
+ * client `PagarContent` which carries the ES/EN bilingual toggle.
+ * Static metadata stays ES because (a) the site default is ES and
+ * (b) Pizza Day Cartagena is a Spanish-speaking event; we accept the
+ * tradeoff that an EN-toggled visitor sees a Spanish browser tab title.
  */
 
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
-import Image from 'next/image'
-import Link from 'next/link'
-import { WHATSAPP_BOT_NUMBER } from '@/lib/constants'
+import PagarContent from './PagarContent'
 
 export const metadata: Metadata = {
   title: 'Pagar con Sippy: Guía para clientes',
@@ -33,195 +23,12 @@ export const metadata: Metadata = {
   },
 }
 
-const WA_BASE = `https://wa.me/${WHATSAPP_BOT_NUMBER}`
-const WA_HOLA = `${WA_BASE}?text=${encodeURIComponent('Hola Sippy!')}`
-const WA_SALDO = `${WA_BASE}?text=${encodeURIComponent('saldo')}`
-
 export default function PagarPage() {
+  // Suspense boundary required by Next 16 because PagarContent uses
+  // `useSearchParams()`. Static prerender otherwise bails out at build.
   return (
-    <main className="min-h-screen bg-[var(--bg-primary,#FFFFFF)] text-[var(--text-primary,#1A1A2E)]">
-      <article className="mx-auto max-w-2xl px-6 py-10 sm:py-14">
-        {/* Brand mark — links home; same asset used across /wallet/pay-qr
-            and the rest of the brand surfaces (cheetah-blue wordmark). */}
-        <Link href="/" className="mb-8 inline-flex items-center" aria-label="Sippy">
-          <Image
-            src="/images/logos/sippy-wordmark-cheetah.svg"
-            alt="Sippy"
-            width={120}
-            height={34}
-            className="h-7 w-auto"
-            priority
-          />
-        </Link>
-
-        {/* Hero */}
-        <header className="mb-10 border-b-2 border-[var(--text-primary,#1A1A2E)] pb-8">
-          <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--brand-primary,#00AFD7)]">
-            Sippy · Pagar
-          </p>
-          <h1 className="mt-2 text-4xl font-bold leading-tight sm:text-5xl">
-            ¿Cómo pago con Sippy?
-          </h1>
-          <p className="mt-4 text-base text-[var(--text-secondary,#374151)] sm:text-lg">
-            Tres pasos. Sin instalar nada. Escaneas el QR del comercio, confirmas en WhatsApp,
-            listo.
-          </p>
-        </header>
-
-        <Section number="1" title="Qué necesitas">
-          <ul className="mt-2 space-y-2 text-base">
-            <li>
-              <strong>Sippy en WhatsApp.</strong> Si todavía no tienes cuenta, escríbele a Sippy y
-              te guía en menos de un minuto.
-            </li>
-            <li>
-              <strong>USDC en tu saldo.</strong> Si no tienes, busca al equipo Sippy o pasa por
-              nuestro stand. Le entregas efectivo, te mandan USDC en segundos.
-            </li>
-            <li>
-              <strong>Datos o Wi-Fi.</strong> Solo para abrir WhatsApp cuando pagues.
-            </li>
-          </ul>
-          <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-            {/* Two distinct destinations: web-form onboarding vs jumping
-                into the bot chat. Earlier pass had both buttons pointing
-                at the same wa.me URL — fixed 2026-05-19. */}
-            <Link
-              href="/setup"
-              className="inline-flex items-center justify-center rounded-md bg-[var(--brand-primary,#00AFD7)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-            >
-              Crear mi cuenta
-            </Link>
-            <a
-              href={WA_HOLA}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center rounded-md border-2 border-[var(--text-primary,#1A1A2E)] px-5 py-3 text-sm font-semibold text-[var(--text-primary,#1A1A2E)] transition hover:bg-[var(--text-primary,#1A1A2E)] hover:text-white"
-            >
-              Abrir Sippy en WhatsApp
-            </a>
-          </div>
-        </Section>
-
-        <Section number="2" title="Cómo hacerlo">
-          <ol className="mt-2 space-y-3 text-base">
-            <li>
-              <strong>1.</strong> Abre la cámara de tu teléfono (no Sippy, la cámara normal) y
-              apunta al QR del comercio.
-            </li>
-            <li>
-              <strong>2.</strong> Toca el link que te aparece. Se abre WhatsApp con Sippy.
-            </li>
-            <li>
-              <strong>3.</strong> Sippy te pregunta cuánto pagar. Escribes el monto que te dijo el
-              comercio (ej. <span className="font-mono">5</span>), confirmas con{' '}
-              <span className="font-mono">si</span>. El pago se envía, normalmente en segundos.
-            </li>
-          </ol>
-          <p className="mt-4 text-sm text-[var(--text-secondary,#374151)]">
-            ¿No hay QR a la mano? Puedes pagarle directo a un amigo escribiendo en WhatsApp:{' '}
-            <span className="font-mono">envía 5 a +57 300 123 4567</span> o{' '}
-            <span className="font-mono">mándale 10 a María</span> si la tienes en tus contactos.
-          </p>
-        </Section>
-
-        <Section number="3" title="Cómo confirmar que funcionó">
-          <p>
-            Sippy te confirma el envío en el mismo chat con el comprobante. Si quieres ver tu saldo
-            después, escribe <span className="font-mono">saldo</span> en cualquier momento.
-          </p>
-          <div className="mt-4">
-            <a
-              href={WA_SALDO}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center rounded-md border-2 border-[var(--text-primary,#1A1A2E)] px-5 py-3 text-sm font-semibold text-[var(--text-primary,#1A1A2E)] transition hover:bg-[var(--text-primary,#1A1A2E)] hover:text-white"
-            >
-              Ver mi saldo
-            </a>
-          </div>
-        </Section>
-
-        <Section number="4" title="Si algo falla">
-          <ul className="mt-2 space-y-2 text-base">
-            <li>
-              <strong>La cámara no te abre WhatsApp.</strong> Toca el link directamente desde el QR
-              si está impreso con la URL visible, o pídele al comercio que te comparta el link por
-              WhatsApp.
-            </li>
-            <li>
-              <strong>Sippy no te pide el monto.</strong> Asegúrate de haber abierto el link del
-              comercio (no escribiste tú mismo). Vuelve a escanear si hace falta.
-            </li>
-            <li>
-              <strong>No estás seguro si pagaste.</strong> Si Sippy te mostró un comprobante, el
-              pago salió. Si no estás seguro, no lo repitas todavía: escribe{' '}
-              <span className="font-mono">historial</span> o busca al equipo Sippy. Reintentarlo sin
-              confirmar puede generar un pago doble.
-            </li>
-            <li>
-              <strong>No sabes qué escribirle a Sippy.</strong> Manda{' '}
-              <span className="font-mono">ayuda</span> y te lista todos los comandos.{' '}
-              <strong>Para problemas en el momento</strong>, busca al equipo Sippy o pasa por
-              nuestro stand.
-            </li>
-          </ul>
-        </Section>
-
-        {/* Bottom anchor — cross-links so a visitor who landed on the
-            wrong guide (e.g. shared via WhatsApp without site nav
-            context) can pivot, plus a breadcrumb back to the Pizza Day
-            hub for context. */}
-        <div className="mt-12 border-t-2 border-[var(--text-primary,#1A1A2E)] pt-8">
-          <nav
-            className="mb-6 flex flex-col items-center gap-3 text-sm sm:flex-row sm:justify-between"
-            aria-label="Más"
-          >
-            <Link
-              href="/cobrar"
-              className="font-semibold text-[var(--brand-primary,#00AFD7)] hover:underline"
-            >
-              ¿Vas a cobrar en lugar de pagar? →
-            </Link>
-            <Link
-              href="/pizza-day"
-              className="text-[var(--text-secondary,#374151)] hover:underline"
-            >
-              ← Volver a Pizza Day
-            </Link>
-          </nav>
-          <p className="text-center text-xs text-[var(--text-muted,#6B7280)]">
-            <Link href="/" className="underline hover:no-underline">
-              sippy.lat
-            </Link>{' '}
-            · Billetera de dólares en WhatsApp
-          </p>
-        </div>
-      </article>
-    </main>
+    <Suspense fallback={null}>
+      <PagarContent />
+    </Suspense>
   )
 }
-
-function Section({
-  number,
-  title,
-  children,
-}: {
-  number: string
-  title: string
-  children: React.ReactNode
-}) {
-  return (
-    <section className="mb-10">
-      <h2 className="mb-3 flex items-baseline gap-3 text-2xl font-bold">
-        <span className="font-mono text-base text-[var(--brand-primary,#00AFD7)]">
-          {number.padStart(2, '0')}
-        </span>
-        <span>{title}</span>
-      </h2>
-      <div className="text-base leading-relaxed text-[var(--text-primary,#1A1A2E)]">{children}</div>
-    </section>
-  )
-}
-
-export const dynamic = 'force-static'

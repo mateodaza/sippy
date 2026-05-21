@@ -121,7 +121,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `⚙️ *Change settings or limits* — ask for settings\n\n` +
       `🌐 *Switch language* — just tell me which one\n\n` +
       `Add funds: ${FUND_URL}\n\n` +
-      `🍕 Pizza Day Cartagena 2026: ${FRONTEND_URL}/pizza-day`,
+      `🍕 Pizza Day Cartagena 2026: ${FRONTEND_URL}/pizza-day?lang=en`,
     es: () =>
       `Esto es lo que puedo hacer:\n\n` +
       `💸 *Enviar dinero* — dime a quien y cuanto\n\n` +
