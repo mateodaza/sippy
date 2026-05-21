@@ -16,6 +16,7 @@
  */
 
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import Link from 'next/link'
 import { WHATSAPP_BOT_NUMBER } from '@/lib/constants'
 
@@ -37,6 +38,19 @@ export default function PizzaDayPage() {
   return (
     <main className="min-h-screen bg-[var(--bg-primary,#FFFFFF)] text-[var(--text-primary,#1A1A2E)]">
       <article className="mx-auto max-w-2xl px-6 py-10 sm:py-14">
+        {/* Brand mark — links home; same asset used across /pagar, /cobrar
+            and the rest of the brand surfaces (cheetah-blue wordmark). */}
+        <Link href="/" className="mb-8 inline-flex items-center" aria-label="Sippy">
+          <Image
+            src="/images/logos/sippy-wordmark-cheetah.svg"
+            alt="Sippy"
+            width={120}
+            height={34}
+            className="h-7 w-auto"
+            priority
+          />
+        </Link>
+
         {/* Hero */}
         <header className="mb-10 border-b-2 border-[var(--text-primary,#1A1A2E)] pb-8">
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--text-muted,#6B7280)]">
@@ -92,8 +106,8 @@ export default function PizzaDayPage() {
         {/* Sections */}
         <Section number="1" title="Conseguir USDC con efectivo">
           <p>
-            Busca al equipo Sippy con el cartel de <strong>Exchange</strong>. Le entregas efectivo,
-            te mandan USDC a tu billetera Sippy al instante. Mínimo $5, sin comisión.
+            Busca al equipo Sippy o pasa por nuestro stand. Le entregas efectivo, te mandan USDC a
+            tu billetera Sippy en segundos. Mínimo $5, sin comisión.
           </p>
           <p className="mt-2 text-sm text-[var(--text-secondary,#374151)]">
             Si todavía no tienes Sippy, escanea cualquier QR del evento o escríbele a Sippy en
@@ -121,19 +135,28 @@ export default function PizzaDayPage() {
         </Section>
 
         <Section number="3" title="Pagar pizza y bebidas">
-          <p>
-            Cada puesto tiene un cartel con el nombre del vendor. Le escribes a Sippy en WhatsApp:
-          </p>
-          <ul className="mt-3 space-y-2 font-mono text-sm">
-            <li className="rounded bg-[var(--bg-secondary,rgba(0,0,0,0.04))] px-3 py-2">
-              paga 8 a pizza
+          <ol className="mt-2 space-y-3 text-base">
+            <li>
+              <strong>1.</strong> Cada puesto tiene un QR. Abre la cámara de tu teléfono (no Sippy,
+              la cámara normal) y apunta al QR.
             </li>
-            <li className="rounded bg-[var(--bg-secondary,rgba(0,0,0,0.04))] px-3 py-2">
-              envía 5 a bebidas
+            <li>
+              <strong>2.</strong> Toca el link que aparece. Se abre WhatsApp con Sippy.
             </li>
-          </ul>
+            <li>
+              <strong>3.</strong> Escribe el monto que te dijo el puesto (ej.{' '}
+              <span className="font-mono">5</span>), confirma con{' '}
+              <span className="font-mono">si</span>. El pago se envía en segundos.
+            </li>
+          </ol>
           <p className="mt-3 text-sm text-[var(--text-secondary,#374151)]">
-            Sippy te muestra el monto, confirmas, listo. El vendor ve el pago al instante.
+            ¿Más detalle?{' '}
+            <Link
+              href="/pagar"
+              className="font-semibold text-[var(--brand-primary,#00AFD7)] hover:underline"
+            >
+              Ver guía completa de cómo pagar →
+            </Link>
           </p>
         </Section>
 
@@ -154,7 +177,7 @@ export default function PizzaDayPage() {
             </li>
             <li>
               <strong>+1 entrada</strong> por cada amigo que se una a Sippy con tu link de Quest —
-              vengan o no al evento. Si tu mamá se une desde Bogotá, te cuenta.
+              vengan o no al evento. Si tu mamá se une desde la casa, te cuenta.
             </li>
           </ul>
           <p className="mt-3 text-sm text-[var(--text-secondary,#374151)]">
@@ -196,8 +219,9 @@ export default function PizzaDayPage() {
 
         <Section number="6" title="¿Necesitas ayuda?">
           <p>
-            Escríbele a Sippy en WhatsApp y di <span className="font-mono">ayuda</span>. O busca a
-            alguien del equipo en el evento (estamos con camisetas Sippy).
+            Escríbele a Sippy en WhatsApp y di <span className="font-mono">ayuda</span> — te lista
+            los comandos. Si necesitas a una persona, busca al equipo Sippy o pasa por nuestro
+            stand.
           </p>
         </Section>
 

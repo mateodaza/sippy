@@ -75,9 +75,8 @@ export default function PagarPage() {
               te guía en menos de un minuto.
             </li>
             <li>
-              <strong>USDC en tu saldo.</strong> Si no tienes, busca al equipo Sippy con el cartel
-              de <strong>Exchange</strong> en el evento. Le entregas efectivo, te mandan USDC en
-              segundos.
+              <strong>USDC en tu saldo.</strong> Si no tienes, busca al equipo Sippy o pasa por
+              nuestro stand. Le entregas efectivo, te mandan USDC en segundos.
             </li>
             <li>
               <strong>Datos o Wi-Fi.</strong> Solo para abrir WhatsApp cuando pagues.
@@ -163,15 +162,35 @@ export default function PagarPage() {
             <li>
               <strong>No sabes qué escribirle a Sippy.</strong> Manda{' '}
               <span className="font-mono">ayuda</span> y te lista todos los comandos.{' '}
-              <strong>Para problemas en el momento</strong>, busca al equipo Sippy en el evento
-              (camisetas Sippy).
+              <strong>Para problemas en el momento</strong>, busca al equipo Sippy o pasa por
+              nuestro stand.
             </li>
           </ul>
         </Section>
 
-        {/* Bottom anchor */}
-        <div className="mt-12 border-t-2 border-[var(--text-primary,#1A1A2E)] pt-8 text-center">
-          <p className="text-xs text-[var(--text-muted,#6B7280)]">
+        {/* Bottom anchor — cross-links so a visitor who landed on the
+            wrong guide (e.g. shared via WhatsApp without site nav
+            context) can pivot, plus a breadcrumb back to the Pizza Day
+            hub for context. */}
+        <div className="mt-12 border-t-2 border-[var(--text-primary,#1A1A2E)] pt-8">
+          <nav
+            className="mb-6 flex flex-col items-center gap-3 text-sm sm:flex-row sm:justify-between"
+            aria-label="Más"
+          >
+            <Link
+              href="/cobrar"
+              className="font-semibold text-[var(--brand-primary,#00AFD7)] hover:underline"
+            >
+              ¿Vas a cobrar en lugar de pagar? →
+            </Link>
+            <Link
+              href="/pizza-day"
+              className="text-[var(--text-secondary,#374151)] hover:underline"
+            >
+              ← Volver a Pizza Day
+            </Link>
+          </nav>
+          <p className="text-center text-xs text-[var(--text-muted,#6B7280)]">
             <Link href="/" className="underline hover:no-underline">
               sippy.lat
             </Link>{' '}

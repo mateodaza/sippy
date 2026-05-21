@@ -24,6 +24,7 @@
  */
 
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { WHATSAPP_BOT_NUMBER } from '@/lib/constants'
@@ -103,6 +104,19 @@ export default async function QuestLeaderboardPage({
   return (
     <main className="min-h-screen bg-[var(--bg-primary,#FFFFFF)] text-[var(--text-primary,#1A1A2E)]">
       <article className="mx-auto max-w-2xl px-6 py-10 sm:py-14">
+        {/* Brand mark — links home; same asset used across /pagar, /cobrar,
+            /pizza-day (cheetah-blue wordmark). */}
+        <Link href="/" className="mb-8 inline-flex items-center" aria-label="Sippy">
+          <Image
+            src="/images/logos/sippy-wordmark-cheetah.svg"
+            alt="Sippy"
+            width={120}
+            height={34}
+            className="h-7 w-auto"
+            priority
+          />
+        </Link>
+
         {/* Hero */}
         <header className="mb-10 border-b-2 border-[var(--text-primary,#1A1A2E)] pb-8">
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-[var(--brand-primary,#00AFD7)]">
