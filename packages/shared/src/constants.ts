@@ -22,6 +22,10 @@ export const USDC_ADDRESSES: Record<string, string> = {
 // V1 was 0xE4e5474E97E89d990082505fC5708A6a11849936 (deprecated, open allowlist).
 
 // Minimum ETH balance before a gas refuel is needed.
-// Must cover a CDP UserOp (~0.000462 ETH on Arbitrum).
-// Keep in sync with GasRefuelV2.sol on-chain params (minBalance & refuelAmount).
-export const GAS_MIN_BALANCE_ETH = 0.0005
+// Must be ≤ on-chain `refuelAmount` so a single refuel brings the wallet
+// up to / above this threshold — otherwise `ensure-gas` keeps asking for
+// more refuels and the user hits the contract cooldown.
+// Real createSpendPermission cost on Arbitrum is ~0.0000084 ETH at 0.02
+// gwei, so 0.00005 ETH gives ~6× headroom while keeping the drip cheap.
+// Keep in sync with on-chain `minBalance` and `refuelAmount`.
+export const GAS_MIN_BALANCE_ETH = 0.00005

@@ -654,7 +654,7 @@ const HIGH_CONFIDENCE_PRE_LLM_PATTERNS: Array<[string, RegExp]> = [
   // "wallet address" can sit anywhere in a question.
   [
     'balance',
-    /(?:^|\s)(mi (?:address|direcci[oó]n)|cu[aá]l es mi (?:address|direcci[oó]n|wallet)|direcci[oó]n de mi (?:wallet|billetera)|billetera p[uú]blica|wallet address|my address)(?:\s|$)/i,
+    /(?:^|\s)(mi (?:address|direcci[oó]n|wallet|billetera|cartera)|cu[aá]l es mi (?:address|direcci[oó]n|wallet|billetera|cartera)|direcci[oó]n de mi (?:wallet|billetera|cartera)|billetera p[uú]blica|wallet address|my address)(?:\s|$)/i,
   ],
   // Referral code — Sippy Quest invite code. Strict regex above also
   // catches these (with `\s*\??$`), but punctuation/whitespace variants
@@ -868,7 +868,18 @@ function parseSendMatch(
  *    detection, no helpful messages) but prevents "unknown command" for
  *    clear queries like "cuanto es mi balance?"
  *
- * Send commands are NEVER accepted from LLM for M1.
+ * Send commands accepted from LLM (`parseMessage` itself): only via the
+ * Step 2 NORMALIZER path — the LLM rewrites slang into canonical
+ * "enviar X a Y" text and the result is RE-PARSED through strict regex.
+ * The raw LLM classifier (Step 3) NEVER returns a send command directly;
+ * the validator strips any LLM-asserted `send` to prevent prompt-injected
+ * recipients/amounts from reaching the send handler.
+ *
+ * SMART MODE runs BEFORE this function (see webhook_controller.ts) and can
+ * synthesize a `send` ParsedCommand from its classifier output. SMART's
+ * synthesizer mirrors `parseSendMatch` and is gated by Zod validation +
+ * the same downstream guards (force-confirm threshold, self-send,
+ * balance, alias canonicalization). Audit it there, not here.
  */
 export interface ParseMessageOptions {
   /**

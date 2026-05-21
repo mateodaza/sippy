@@ -47,7 +47,7 @@ const COPY: Record<DocsLang, Copy> = {
     eyebrow: 'Sippy · Cobrar',
     h1: '¿Cómo recibo pagos con Sippy?',
     intro:
-      'Tres pasos. Sin instalar nada. Quien te paga escanea un código, te llega USDC en segundos.',
+      'Tres pasos. Sin instalar nada. Quien te paga escanea un código, te llega USDC, normalmente en segundos.',
     introSub:
       'Funciona igual si eres un comercio en un evento, un amigo cobrando una cuenta dividida, o cualquier persona que necesita recibir.',
     s1Title: 'Qué necesitas',

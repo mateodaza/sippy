@@ -60,7 +60,7 @@ const COPY: Record<DocsLang, Copy> = {
       },
       {
         strong: 'USDC en tu saldo.',
-        rest: ' Si no tienes, busca al equipo Sippy o pasa por nuestro stand. Le entregas efectivo, te mandan USDC en segundos.',
+        rest: ' Si no tienes, busca al equipo Sippy o pasa por nuestro stand. Le entregas efectivo, te mandan USDC, normalmente en segundos.',
       },
       {
         strong: 'Datos o Wi-Fi.',
@@ -140,7 +140,7 @@ const COPY: Record<DocsLang, Copy> = {
       },
       {
         strong: 'USDC in your balance.',
-        rest: " If you don't have any, find the Sippy team or stop by our stand. Hand over cash, they send USDC in seconds.",
+        rest: " If you don't have any, find the Sippy team or stop by our stand. Hand over cash, they send USDC, usually in seconds.",
       },
       {
         strong: 'Mobile data or Wi-Fi.',

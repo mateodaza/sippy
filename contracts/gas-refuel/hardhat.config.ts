@@ -1,8 +1,8 @@
-import type { HardhatUserConfig } from 'hardhat/config';
-import '@nomicfoundation/hardhat-toolbox';
-import * as dotenv from 'dotenv';
+import type { HardhatUserConfig } from 'hardhat/config'
+import '@nomicfoundation/hardhat-toolbox'
+import * as dotenv from 'dotenv'
 
-dotenv.config();
+dotenv.config()
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -18,9 +18,7 @@ const config: HardhatUserConfig = {
     arbitrum: {
       url: process.env.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc',
       chainId: 42161,
-      accounts: process.env.REFUEL_ADMIN_PRIVATE_KEY
-        ? [process.env.REFUEL_ADMIN_PRIVATE_KEY]
-        : [],
+      accounts: process.env.REFUEL_ADMIN_PRIVATE_KEY ? [process.env.REFUEL_ADMIN_PRIVATE_KEY] : [],
     },
   },
   etherscan: {
@@ -36,6 +34,9 @@ const config: HardhatUserConfig = {
       },
     ],
   },
-};
+  sourcify: {
+    enabled: true,
+  },
+}
 
-export default config;
+export default config
