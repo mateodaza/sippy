@@ -132,6 +132,16 @@ export async function linkUserToEvent(
     }
   }
 
+  // `actions: ['poap']` here means "show the static Claim-POAP button on
+  // /setup with `poapClaimUrl` as its href" — the LEGACY shared-URL
+  // delivery model. Events that use the per-attendee pool (poap_codes
+  // table, e.g. Pizza Day) deliberately DO NOT surface here: their POAP
+  // is delivered post-payment via WhatsApp DM by sendPoapInviteIfPending,
+  // not via the /setup web button. /setup correctly reports "no static
+  // POAP" for pool events; the DM closes the loop after the user pays.
+  // If you ever want /setup to advertise pool-event POAP availability
+  // ("you'll get yours by WhatsApp when you pay"), the change is here:
+  // add a parallel action that signals DM-delivery without a URL.
   const actions: string[] = []
   if (event.poapClaimUrl) actions.push('poap')
 
@@ -201,54 +211,192 @@ export async function markPoapClaimed(phoneNumber: string, slug: string): Promis
 
 /**
  * Outcome of a `claimPendingPoapInvite` call.
- *  - `reserved`  — exactly one eligible row found + atomically stamped; caller
- *                  should send the WhatsApp DM.
- *  - `contended` — eligible row existed but the `FOR UPDATE … SKIP LOCKED`
- *                  guard handed it to a parallel call. Caller treats as a
- *                  silent no-op but ops can monitor the rate as a signal that
- *                  the user is double-paying within the same instant.
- *  - `none`      — phone simply isn't linked to any eligible event right now.
+ *  - `reserved`       — exactly one eligible row found + atomically stamped;
+ *                       caller should send the WhatsApp DM with the URL.
+ *  - `pool_exhausted` — event uses a per-attendee pool and every code is
+ *                       already assigned. `poap_invite_sent_at` is NOT
+ *                       stamped so a restock makes the user eligible again.
+ *  - `contended`      — eligible row existed but the `FOR UPDATE … SKIP
+ *                       LOCKED` guard handed it to a parallel call.
+ *  - `none`           — phone isn't linked to any eligible event right now.
  */
 export type PoapInviteOutcome =
   | {
       kind: 'reserved'
       reservation: { eventName: string; eventSlug: string; poapClaimUrl: string }
     }
+  | { kind: 'pool_exhausted'; eventName: string; eventSlug: string }
   | { kind: 'contended' }
   | { kind: 'none' }
 
 /**
- * Atomically reserves a POAP claim-link invite for a phone. Conditions: phone
- * is linked to an active event (within its date window), `poap_claim_url IS
- * NOT NULL`, POAP not yet claimed, and the invite hasn't already been sent.
- * Stamps `poap_invite_sent_at = now()` in the same UPDATE so two concurrent
- * successful sends can't double-fire the WhatsApp message.
+ * Atomically reserves a POAP claim-link invite for a phone. Two paths,
+ * picked per-event:
+ *
+ *  - **Pool path** (event has ≥1 row in `poap_codes`): assigns the next
+ *    unassigned code by FIFO (`ORDER BY pc.id LIMIT 1`). Both the link
+ *    stamp and the code assignment happen in the same statement so they
+ *    can't desync. If the pool is exhausted, the link is NOT stamped —
+ *    a restock then re-opens the user as eligible.
+ *
+ *  - **Legacy path** (no `poap_codes` rows but `events.poap_claim_url`
+ *    is set): single shared URL, stamps the link as before.
+ *
+ * Eligibility is otherwise unchanged: active event in its date window,
+ * `poap_claimed = FALSE`, `poap_invite_sent_at IS NULL`. Both paths use
+ * `FOR UPDATE … SKIP LOCKED` so concurrent payments by the same phone
+ * fail closed (contended) rather than double-firing the DM.
  */
 export async function claimPendingPoapInvite(phoneNumber: string): Promise<PoapInviteOutcome> {
   const prefKey = await resolveUserPrefKey(phoneNumber)
 
-  // CTE picks exactly ONE eligible row (with `FOR UPDATE … SKIP LOCKED` so a
-  // concurrent call for the same phone doesn't pick the same row), then the
-  // outer UPDATE stamps `poap_invite_sent_at` on that single row. Without
-  // LIMIT 1, every eligible event link gets stamped but only `rows[0]` is
-  // delivered — silent data loss.
+  // Phase 1 — eligibility + path selection.
   //
-  // Ordering: most-recently-started event first so the freshest invite
-  // wins; falls back to user-event-link creation time for deterministic
-  // tiebreak when starts_at is NULL.
-  const res = await db.rawQuery(
+  // No locks here. Race-safe because phase 2 is the locking step; if a
+  // parallel call locks the row between phases, phase 2 returns no rows
+  // and we fall to the contended/none probe below. The `has_pool` flag
+  // tells us whether to take the pool path or the legacy shared-URL
+  // path; eligibility relaxes the URL requirement to "(has shared URL)
+  // OR (event has a pool)" so pool-only events still qualify.
+  const eligible = await db.rawQuery(
+    `SELECT uel.event_id, e.slug AS event_slug, e.name AS event_name,
+            e.poap_claim_url AS shared_url,
+            EXISTS(SELECT 1 FROM poap_codes pc WHERE pc.event_id = e.id) AS has_pool
+     FROM user_event_links uel
+     JOIN events e ON e.id = uel.event_id
+     WHERE uel.phone_number = ?
+       AND uel.poap_invite_sent_at IS NULL
+       AND uel.poap_claimed = FALSE
+       AND e.active = TRUE
+       AND (e.starts_at IS NULL OR e.starts_at <= now())
+       AND (e.ends_at IS NULL OR e.ends_at >= now())
+       AND (
+         e.poap_claim_url IS NOT NULL
+         OR EXISTS(SELECT 1 FROM poap_codes pc2 WHERE pc2.event_id = e.id)
+       )
+     ORDER BY e.starts_at DESC NULLS LAST, uel.created_at DESC
+     LIMIT 1`,
+    [prefKey]
+  )
+
+  const target = eligible.rows?.[0] as
+    | {
+        event_id: string
+        event_slug: string
+        event_name: string
+        shared_url: string | null
+        has_pool: boolean
+      }
+    | undefined
+
+  if (!target) {
+    return { kind: 'none' }
+  }
+
+  if (target.has_pool) {
+    // Pool path: lock the user_event_link AND the next unassigned code in
+    // the same multi-CTE, stamp both atomically. If the pool is empty,
+    // neither stamp fires (both UPDATEs depend on `FROM next_code`), so
+    // the user stays eligible for restock.
+    const poolRes = await db.rawQuery(
+      `WITH eligible AS (
+         SELECT uel.event_id, uel.phone_number
+         FROM user_event_links uel
+         JOIN events e ON e.id = uel.event_id
+         WHERE uel.phone_number = ?
+           AND uel.event_id = ?
+           AND uel.poap_invite_sent_at IS NULL
+           AND uel.poap_claimed = FALSE
+           AND e.active = TRUE
+           AND (e.starts_at IS NULL OR e.starts_at <= now())
+           AND (e.ends_at IS NULL OR e.ends_at >= now())
+         LIMIT 1
+         FOR UPDATE OF uel SKIP LOCKED
+       ),
+       next_code AS (
+         SELECT pc.id, pc.claim_url
+         FROM poap_codes pc, eligible
+         WHERE pc.event_id = eligible.event_id
+           AND pc.assigned_to_phone IS NULL
+         ORDER BY pc.id
+         LIMIT 1
+         FOR UPDATE OF pc SKIP LOCKED
+       ),
+       stamp_link AS (
+         UPDATE user_event_links uel
+         SET poap_invite_sent_at = now()
+         FROM eligible, next_code
+         WHERE uel.event_id = eligible.event_id
+           AND uel.phone_number = eligible.phone_number
+         RETURNING 1
+       ),
+       assign_code AS (
+         UPDATE poap_codes pc
+         SET assigned_to_phone = ?, assigned_at = now()
+         FROM next_code
+         WHERE pc.id = next_code.id
+         RETURNING pc.claim_url
+       )
+       SELECT
+         (SELECT EXISTS(SELECT 1 FROM eligible)) AS eligible_locked,
+         (SELECT claim_url FROM assign_code) AS claim_url`,
+      [prefKey, target.event_id, prefKey]
+    )
+
+    const poolRow = poolRes.rows?.[0] as
+      | { eligible_locked: boolean; claim_url: string | null }
+      | undefined
+
+    // No row means the SELECT itself failed structurally — defensive.
+    if (!poolRow) return { kind: 'none' }
+
+    if (!poolRow.eligible_locked) {
+      // Couldn't lock the user_event_link (parallel claimer took it). The
+      // existence of `target` from phase 1 means a row WAS eligible an
+      // instant ago, so this is contention, not absence.
+      logger.warn(
+        `event.poap-invite-contended ${maskPhone(prefKey)} (parallel claim won the race, pool path)`
+      )
+      return { kind: 'contended' }
+    }
+
+    if (poolRow.claim_url) {
+      logger.info(`event.poap-invite-reserved ${target.event_slug} -> ${maskPhone(prefKey)} (pool)`)
+      return {
+        kind: 'reserved',
+        reservation: {
+          eventName: target.event_name,
+          eventSlug: target.event_slug,
+          poapClaimUrl: poolRow.claim_url,
+        },
+      }
+    }
+
+    // Pool exhausted: link is locked but neither UPDATE fired (their FROM
+    // included `next_code`, which returned no rows). poap_invite_sent_at
+    // stays NULL → user is restock-eligible.
+    logger.warn(`event.poap-invite-pool-exhausted ${target.event_slug} for ${maskPhone(prefKey)}`)
+    return {
+      kind: 'pool_exhausted',
+      eventName: target.event_name,
+      eventSlug: target.event_slug,
+    }
+  }
+
+  // Legacy path: single shared URL, single-row reservation as before.
+  const legacyRes = await db.rawQuery(
     `WITH eligible AS (
        SELECT uel.event_id, uel.phone_number, e.name, e.slug, e.poap_claim_url
        FROM user_event_links uel
        JOIN events e ON e.id = uel.event_id
        WHERE uel.phone_number = ?
+         AND uel.event_id = ?
          AND uel.poap_invite_sent_at IS NULL
          AND uel.poap_claimed = FALSE
-         AND e.active = TRUE
          AND e.poap_claim_url IS NOT NULL
+         AND e.active = TRUE
          AND (e.starts_at IS NULL OR e.starts_at <= now())
          AND (e.ends_at IS NULL OR e.ends_at >= now())
-       ORDER BY e.starts_at DESC NULLS LAST, uel.created_at DESC
        LIMIT 1
        FOR UPDATE OF uel SKIP LOCKED
      )
@@ -260,55 +408,43 @@ export async function claimPendingPoapInvite(phoneNumber: string): Promise<PoapI
      RETURNING eligible.name AS event_name,
                eligible.slug AS event_slug,
                eligible.poap_claim_url AS poap_claim_url`,
-    [prefKey]
+    [prefKey, target.event_id]
   )
 
-  const row = res.rows?.[0] as
+  const legacyRow = legacyRes.rows?.[0] as
     | { event_name: string; event_slug: string; poap_claim_url: string }
     | undefined
 
-  if (row) {
-    logger.info(`event.poap-invite-reserved ${row.event_slug} -> ${maskPhone(prefKey)}`)
+  if (legacyRow) {
+    logger.info(
+      `event.poap-invite-reserved ${legacyRow.event_slug} -> ${maskPhone(prefKey)} (legacy shared-url)`
+    )
     return {
       kind: 'reserved',
       reservation: {
-        eventName: row.event_name,
-        eventSlug: row.event_slug,
-        poapClaimUrl: row.poap_claim_url,
+        eventName: legacyRow.event_name,
+        eventSlug: legacyRow.event_slug,
+        poapClaimUrl: legacyRow.poap_claim_url,
       },
     }
   }
 
-  // UPDATE matched nothing. Two scenarios: (a) no eligible row exists at all,
-  // (b) every eligible row is locked by a parallel claimant. Re-issue the
-  // SELECT *without* the lock to disambiguate; if it returns a row, someone
-  // else won the race. This is observability-only — caller still no-ops.
-  const probe = await db.rawQuery(
-    `SELECT 1
-     FROM user_event_links uel
-     JOIN events e ON e.id = uel.event_id
-     WHERE uel.phone_number = ?
-       AND uel.poap_invite_sent_at IS NULL
-       AND uel.poap_claimed = FALSE
-       AND e.active = TRUE
-       AND e.poap_claim_url IS NOT NULL
-       AND (e.starts_at IS NULL OR e.starts_at <= now())
-       AND (e.ends_at IS NULL OR e.ends_at >= now())
-     LIMIT 1`,
-    [prefKey]
+  // Legacy path didn't lock the row → parallel call beat us.
+  logger.warn(
+    `event.poap-invite-contended ${maskPhone(prefKey)} (parallel claim won the race, legacy path)`
   )
-
-  if ((probe.rows?.length ?? 0) > 0) {
-    logger.warn(`event.poap-invite-contended ${maskPhone(prefKey)} (parallel claim won the race)`)
-    return { kind: 'contended' }
-  }
-
-  return { kind: 'none' }
+  return { kind: 'contended' }
 }
 
 /**
  * Undo the reservation made by claimPendingPoapInvite. Called when the
  * WhatsApp send fails so the invite stays eligible for the next payment.
+ *
+ * Two writes (in a single transaction):
+ *  1. Un-stamp `poap_invite_sent_at` on the user_event_link.
+ *  2. Un-assign any pool code that was assigned to this phone for this
+ *     event. The code goes back to the unassigned pool, ready for the
+ *     next eligible payer.
  *
  * Named-object args (vs positional) because both fields are strings and
  * swapping them silently no-ops the UPDATE — same pattern as captureReferral
@@ -322,13 +458,26 @@ export async function releasePoapInvite(args: {
   eventSlug: string
 }): Promise<void> {
   const prefKey = await resolveUserPrefKey(args.phoneNumber)
-  await db.rawQuery(
-    `UPDATE user_event_links uel
-     SET poap_invite_sent_at = NULL
-     FROM events e
-     WHERE uel.event_id = e.id
-       AND uel.phone_number = ?
-       AND e.slug = ?`,
-    [prefKey, args.eventSlug]
-  )
+  await db.transaction(async (trx) => {
+    await trx.rawQuery(
+      `UPDATE user_event_links uel
+       SET poap_invite_sent_at = NULL
+       FROM events e
+       WHERE uel.event_id = e.id
+         AND uel.phone_number = ?
+         AND e.slug = ?`,
+      [prefKey, args.eventSlug]
+    )
+    // Pool path only — un-assign any code held by this phone for this event.
+    // Legacy events (no pool) get no rows touched here.
+    await trx.rawQuery(
+      `UPDATE poap_codes pc
+       SET assigned_to_phone = NULL, assigned_at = NULL
+       FROM events e
+       WHERE pc.event_id = e.id
+         AND pc.assigned_to_phone = ?
+         AND e.slug = ?`,
+      [prefKey, args.eventSlug]
+    )
+  })
 }

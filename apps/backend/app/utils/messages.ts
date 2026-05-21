@@ -440,6 +440,31 @@ export function formatOperatorPaymentReceived(
 }
 
 /**
+ * Sent to a user who paid at an event that uses a finite POAP code pool
+ * (e.g. Pizza Day: 300 unique mint links) AFTER every code has been
+ * assigned. "Distributed" / "se entregaron" is deliberate: the pool
+ * exhaustion state means every code has an `assigned_to_phone`, NOT
+ * that every POAP was minted on-chain. An attendee with a reserved code
+ * might still not have clicked the mint link. Avoid claiming the state
+ * we don't measure.
+ *
+ * `poap_invite_sent_at` is intentionally NOT stamped server-side when
+ * the pool is exhausted, so a restock makes the user eligible again on
+ * their next payment.
+ */
+export function formatPoapPoolExhausted(eventName: string, lang: Lang = 'en'): string {
+  const m = {
+    en: () =>
+      `Sorry — all ${eventName} POAPs have already been distributed. Thanks for joining the event!`,
+    es: () =>
+      `Lo sentimos — los POAPs de ${eventName} ya se entregaron todos. Gracias por venir al evento!`,
+    pt: () =>
+      `Desculpe — todos os POAPs de ${eventName} ja foram distribuidos. Obrigado por participar do evento!`,
+  }
+  return m[lang]()
+}
+
+/**
  * Sent to a user right after their first successful payment at an event
  * that has a POAP claim link configured. One-shot per user-event pair —
  * gated by `user_event_links.poap_invite_sent_at`.

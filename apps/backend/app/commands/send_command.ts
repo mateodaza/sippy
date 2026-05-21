@@ -32,6 +32,7 @@ import {
   formatTieredDailyLimitExceededMessage,
   formatSpendingLimitInfo,
   formatPoapClaimInvite,
+  formatPoapPoolExhausted,
   buttonNeedAnythingElse,
   buttonBalance,
   buttonHelp,
@@ -73,6 +74,27 @@ async function sendPoapInviteIfPending(phoneNumber: string, lang: Lang): Promise
       // won't) deliver — we have nothing to do, but emit a PostHog event so
       // ops can see the rate of double-payment within the same instant.
       posthogCapture(phoneNumber, 'poap_invite_contended', {})
+      return
+    }
+    if (outcome.kind === 'pool_exhausted') {
+      // Pool fully assigned. The link stamp was intentionally NOT set so
+      // a restock makes the user eligible again. Tell the attendee the
+      // honest news so they don't keep wondering — they paid USDC and
+      // deserve closure on the POAP.
+      posthogCapture(phoneNumber, 'poap_invite_pool_exhausted', {
+        event_slug: outcome.eventSlug,
+      })
+      try {
+        await sendTextMessage(phoneNumber, formatPoapPoolExhausted(outcome.eventName, lang), lang)
+        logger.info(
+          `poap-invite.pool-exhausted-notified event=${outcome.eventSlug} to=${maskPhone(phoneNumber)}`
+        )
+      } catch (notifyErr) {
+        logger.error(
+          { event: outcome.eventSlug, to: maskPhone(phoneNumber), err: notifyErr },
+          'poap-invite.pool-exhausted-notify-failed'
+        )
+      }
       return
     }
     const { reservation } = outcome

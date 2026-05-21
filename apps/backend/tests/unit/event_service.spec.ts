@@ -35,11 +35,13 @@ type RawQueryResponse = { rows?: unknown[]; rowCount?: number }
 let rawQueryCalls: RawQueryCall[] = []
 let rawQueryHandlers: Array<{ pattern: string; response: RawQueryResponse }> = []
 let origRawQuery: typeof db.rawQuery
+let origTransaction: typeof db.transaction
 
 function installDbMock() {
   rawQueryCalls = []
   rawQueryHandlers = []
   origRawQuery = db.rawQuery
+  origTransaction = db.transaction
   db.rawQuery = (async (sql: string, bindings?: unknown[]) => {
     rawQueryCalls.push({ sql, bindings })
     for (const { pattern, response } of rawQueryHandlers) {
@@ -47,10 +49,21 @@ function installDbMock() {
     }
     return { rows: [], rowCount: 0 }
   }) as any
+  // Stub `db.transaction(cb)` so service code that wraps multi-step writes
+  // (e.g. releasePoapInvite) hits the same mock handlers. The `trx` handle
+  // we pass to the callback only needs `rawQuery` — that's the surface the
+  // services use; we route it through the same mock so SQL is captured.
+  db.transaction = (async (cb: any) => {
+    const trxStub = {
+      rawQuery: db.rawQuery,
+    }
+    return cb(trxStub)
+  }) as any
 }
 
 function restoreDbMock() {
   db.rawQuery = origRawQuery
+  db.transaction = origTransaction
 }
 
 function setQueryResponse(pattern: string, response: RawQueryResponse) {
@@ -531,8 +544,20 @@ test.group('event.service | markPoapClaimed', (group) => {
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
-// claimPendingPoapInvite — atomic single-row reservation + race observability
+// claimPendingPoapInvite — pool path + legacy path + race observability
 // ══════════════════════════════════════════════════════════════════════════════
+//
+// Phase 1: eligibility SELECT (no lock) returns the user_event_link plus a
+// `has_pool` flag so the service can pick the pool or legacy code path.
+// Phase 2: locking UPDATE — multi-CTE for the pool path, single CTE for
+// legacy. Pool exhaustion is signalled by `eligible_locked = true` AND
+// `claim_url = null` (the link UPDATE is FROM next_code, so an empty pool
+// also leaves the link unstamped → restock-friendly).
+//
+// Mock query-pattern keys:
+//   • Phase 1:      `EXISTS(SELECT 1 FROM poap_codes`
+//   • Pool path:    `next_code`
+//   • Legacy path:  `RETURNING eligible.name AS event_name`
 
 test.group('event.service | claimPendingPoapInvite', (group) => {
   group.each.setup(installDbMock)
@@ -541,43 +566,37 @@ test.group('event.service | claimPendingPoapInvite', (group) => {
     restoreModels()
   })
 
-  test('returns kind=none when no eligible link exists and no rows in probe', async ({
-    assert,
-  }) => {
+  test('returns kind=none when no eligible link exists', async ({ assert }) => {
     mockUserPref({ phoneNumber: '+573001234567' })
-    // Both UPDATE and probe SELECT return empty
-    setQueryResponse('UPDATE user_event_links uel', { rows: [] })
-    setQueryResponse('SELECT 1', { rows: [] })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', { rows: [] })
 
     const result = await claimPendingPoapInvite('+573001234567')
 
     assert.deepEqual(result, { kind: 'none' })
   })
 
-  test('returns kind=contended when UPDATE misses but probe finds an eligible row', async ({
-    assert,
-  }) => {
+  // ── Pool path ────────────────────────────────────────────────────────
+
+  test('pool path: returns kind=reserved with the assigned code URL', async ({ assert }) => {
     mockUserPref({ phoneNumber: '+573001234567' })
-    // The locking UPDATE returns nothing (SKIP LOCKED took the only row),
-    // but the unlocked probe SELECT sees it.
-    setQueryResponse('UPDATE user_event_links uel', { rows: [] })
-    setQueryResponse('SELECT 1', { rows: [{ '?column?': 1 }] })
-
-    const result = await claimPendingPoapInvite('+573001234567')
-
-    assert.deepEqual(result, { kind: 'contended' })
-  })
-
-  test('returns kind=reserved with event payload when UPDATE matches one row', async ({
-    assert,
-  }) => {
-    mockUserPref({ phoneNumber: '+573001234567' })
-    setQueryResponse('UPDATE user_event_links uel', {
+    // Phase 1: eligible + has_pool=true.
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
       rows: [
         {
-          event_name: 'Pizza Day',
+          event_id: 'evt-uuid-1',
           event_slug: 'pizza-day-ctg-2026',
-          poap_claim_url: 'https://poap.example/claim/abc',
+          event_name: 'Pizza Day',
+          shared_url: null,
+          has_pool: true,
+        },
+      ],
+    })
+    // Phase 2 (pool): eligible_locked + claim_url assigned.
+    setQueryResponse('next_code', {
+      rows: [
+        {
+          eligible_locked: true,
+          claim_url: 'https://poap.example/mint/code-001',
         },
       ],
     })
@@ -589,77 +608,234 @@ test.group('event.service | claimPendingPoapInvite', (group) => {
       assert.deepEqual(result.reservation, {
         eventName: 'Pizza Day',
         eventSlug: 'pizza-day-ctg-2026',
-        poapClaimUrl: 'https://poap.example/claim/abc',
+        poapClaimUrl: 'https://poap.example/mint/code-001',
       })
     }
   })
 
-  test('reserved path does NOT issue the disambiguation SELECT probe', async ({ assert }) => {
+  test('pool path: returns kind=pool_exhausted when no code is available', async ({ assert }) => {
     mockUserPref({ phoneNumber: '+573001234567' })
-    setQueryResponse('UPDATE user_event_links uel', {
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
       rows: [
         {
-          event_name: 'Pizza Day',
+          event_id: 'evt-uuid-1',
           event_slug: 'pizza-day-ctg-2026',
-          poap_claim_url: 'https://poap.example/claim/abc',
+          event_name: 'Pizza Day',
+          shared_url: null,
+          has_pool: true,
+        },
+      ],
+    })
+    // Phase 2 (pool): link locked but pool empty → claim_url=null.
+    setQueryResponse('next_code', {
+      rows: [{ eligible_locked: true, claim_url: null }],
+    })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.deepEqual(result, {
+      kind: 'pool_exhausted',
+      eventName: 'Pizza Day',
+      eventSlug: 'pizza-day-ctg-2026',
+    })
+  })
+
+  test("pool path: returns kind=contended when SKIP LOCKED can't lock the link", async ({
+    assert,
+  }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'pizza-day-ctg-2026',
+          event_name: 'Pizza Day',
+          shared_url: null,
+          has_pool: true,
+        },
+      ],
+    })
+    // Phase 2 (pool): parallel claimer holds the link → eligible_locked=false.
+    setQueryResponse('next_code', {
+      rows: [{ eligible_locked: false, claim_url: null }],
+    })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.deepEqual(result, { kind: 'contended' })
+  })
+
+  test('pool path SQL: FIFO + locking + atomic stamp invariants (regression guard)', async ({
+    assert,
+  }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'pizza-day-ctg-2026',
+          event_name: 'Pizza Day',
+          shared_url: null,
+          has_pool: true,
+        },
+      ],
+    })
+    setQueryResponse('next_code', {
+      rows: [{ eligible_locked: true, claim_url: 'https://poap.example/x' }],
+    })
+
+    await claimPendingPoapInvite('+573001234567')
+
+    const updates = queriesMatching('next_code')
+    assert.equal(updates.length, 1, 'exactly one pool-path query')
+    assert.include(updates[0].sql, 'ORDER BY pc.id', 'pool assigns codes FIFO')
+    assert.include(
+      updates[0].sql,
+      'FOR UPDATE OF uel SKIP LOCKED',
+      'locks user_event_link with SKIP LOCKED'
+    )
+    assert.include(
+      updates[0].sql,
+      'FOR UPDATE OF pc SKIP LOCKED',
+      'locks the next poap_code with SKIP LOCKED'
+    )
+    // The link UPDATE pulls FROM eligible, next_code — both required. With no
+    // code in `next_code`, the link is not stamped, leaving the user
+    // eligible for restock.
+    assert.include(
+      updates[0].sql,
+      'FROM eligible, next_code',
+      'link stamp is gated on a code being available (restock-friendly)'
+    )
+    assert.include(updates[0].sql, 'SET assigned_to_phone = ?, assigned_at = now()')
+    assert.include(updates[0].sql, 'SET poap_invite_sent_at = now()')
+  })
+
+  test('pool path bindings: phone → eligible filter; phone → code assignment', async ({
+    assert,
+  }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'pizza-day-ctg-2026',
+          event_name: 'Pizza Day',
+          shared_url: null,
+          has_pool: true,
+        },
+      ],
+    })
+    setQueryResponse('next_code', {
+      rows: [{ eligible_locked: true, claim_url: 'https://poap.example/x' }],
+    })
+
+    await claimPendingPoapInvite('+573001234567')
+
+    const bindings = queriesMatching('next_code')[0].bindings as unknown[]
+    assert.equal(bindings[0], '+573001234567', 'phone binding for eligible CTE')
+    assert.equal(bindings[1], 'evt-uuid-1', 'event_id binding for eligible CTE')
+    assert.equal(
+      bindings[2],
+      '+573001234567',
+      'phone binding for code assignment (must match payer)'
+    )
+  })
+
+  // ── Legacy (shared URL) path ─────────────────────────────────────────
+
+  test('legacy path: returns kind=reserved with the shared event URL', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    // Phase 1: eligible + has_pool=false (event has shared URL, no pool).
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'legacy-event',
+          event_name: 'Legacy Event',
+          shared_url: 'https://poap.example/legacy',
+          has_pool: false,
+        },
+      ],
+    })
+    setQueryResponse('RETURNING eligible.name AS event_name', {
+      rows: [
+        {
+          event_name: 'Legacy Event',
+          event_slug: 'legacy-event',
+          poap_claim_url: 'https://poap.example/legacy',
+        },
+      ],
+    })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.equal(result.kind, 'reserved')
+    if (result.kind === 'reserved') {
+      assert.deepEqual(result.reservation, {
+        eventName: 'Legacy Event',
+        eventSlug: 'legacy-event',
+        poapClaimUrl: 'https://poap.example/legacy',
+      })
+    }
+  })
+
+  test('legacy path: returns kind=contended when SKIP LOCKED misses', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'legacy-event',
+          event_name: 'Legacy Event',
+          shared_url: 'https://poap.example/legacy',
+          has_pool: false,
+        },
+      ],
+    })
+    setQueryResponse('RETURNING eligible.name AS event_name', { rows: [] })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.deepEqual(result, { kind: 'contended' })
+  })
+
+  test('legacy path SQL: stamps poap_invite_sent_at in the same UPDATE', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'legacy-event',
+          event_name: 'Legacy Event',
+          shared_url: 'https://poap.example/legacy',
+          has_pool: false,
+        },
+      ],
+    })
+    setQueryResponse('RETURNING eligible.name AS event_name', {
+      rows: [
+        {
+          event_name: 'Legacy Event',
+          event_slug: 'legacy-event',
+          poap_claim_url: 'https://poap.example/legacy',
         },
       ],
     })
 
     await claimPendingPoapInvite('+573001234567')
 
-    // The probe is only needed to disambiguate none vs contended — when
-    // UPDATE returned a row, we already know we won.
-    assert.equal(queriesMatching('SELECT 1').length, 0, 'no probe SELECT when UPDATE matched')
-  })
-
-  test('SQL: locking UPDATE contains LIMIT 1 + FOR UPDATE OF uel SKIP LOCKED (regression guard)', async ({
-    assert,
-  }) => {
-    // Pins the two clauses that make this single-row-reservation safe under
-    // concurrent payments. An earlier version stamped every eligible row and
-    // only delivered the first — silent data loss. Don't let that come back.
-    mockUserPref({ phoneNumber: '+573001234567' })
-    setQueryResponse('UPDATE user_event_links uel', { rows: [] })
-    setQueryResponse('SELECT 1', { rows: [] })
-
-    await claimPendingPoapInvite('+573001234567')
-
-    const updates = queriesMatching('UPDATE user_event_links uel')
-    assert.equal(updates.length, 1, 'exactly one UPDATE call')
-    assert.include(updates[0].sql, 'LIMIT 1', 'eligible CTE must cap at one row')
-    assert.include(
-      updates[0].sql,
-      'FOR UPDATE OF uel SKIP LOCKED',
-      'must lock the eligible row + skip-lock contended ones'
-    )
-    assert.include(
-      updates[0].sql,
-      'SET poap_invite_sent_at = now()',
-      'must stamp the reservation in the same UPDATE (not a separate query)'
-    )
-  })
-
-  test('binds resolved pref key (not raw input) — mirrors markPoapClaimed contract', async ({
-    assert,
-  }) => {
-    mockUserPref({ phoneNumber: '+573001234567' })
-    setQueryResponse('UPDATE user_event_links uel', { rows: [] })
-    setQueryResponse('SELECT 1', { rows: [] })
-
-    await claimPendingPoapInvite('+573001234567')
-
-    const updates = queriesMatching('UPDATE user_event_links uel')
-    assert.equal(
-      (updates[0].bindings as unknown[])[0],
-      '+573001234567',
-      'phone binding must be the pref key, not the raw input'
-    )
+    const updates = queriesMatching('RETURNING eligible.name AS event_name')
+    assert.equal(updates.length, 1)
+    assert.include(updates[0].sql, 'SET poap_invite_sent_at = now()')
+    assert.include(updates[0].sql, 'FOR UPDATE OF uel SKIP LOCKED')
+    // Legacy path must NOT touch poap_codes.
+    assert.notInclude(updates[0].sql, 'poap_codes')
   })
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
-// releasePoapInvite — undo reservation on send failure
+// releasePoapInvite — undo reservation on send failure (link + code)
 // ══════════════════════════════════════════════════════════════════════════════
 
 test.group('event.service | releasePoapInvite', (group) => {
@@ -669,7 +845,7 @@ test.group('event.service | releasePoapInvite', (group) => {
     restoreModels()
   })
 
-  test('issues UPDATE … SET poap_invite_sent_at = NULL with both bindings', async ({ assert }) => {
+  test('un-stamps poap_invite_sent_at on the link with the right bindings', async ({ assert }) => {
     mockUserPref({ phoneNumber: '+573001234567' })
 
     await releasePoapInvite({
@@ -677,11 +853,30 @@ test.group('event.service | releasePoapInvite', (group) => {
       eventSlug: 'pizza-day-ctg-2026',
     })
 
-    const updates = queriesMatching('UPDATE user_event_links uel')
-    assert.equal(updates.length, 1, 'exactly one release UPDATE')
-    assert.include(updates[0].sql, 'SET poap_invite_sent_at = NULL')
-    const bindings = updates[0].bindings as unknown[]
+    const linkUpdates = queriesMatching('UPDATE user_event_links uel')
+    assert.equal(linkUpdates.length, 1, 'exactly one link release UPDATE')
+    assert.include(linkUpdates[0].sql, 'SET poap_invite_sent_at = NULL')
+    const bindings = linkUpdates[0].bindings as unknown[]
     assert.equal(bindings[0], '+573001234567', 'phone binding')
     assert.equal(bindings[1], 'pizza-day-ctg-2026', 'event slug binding')
+  })
+
+  test('un-assigns any pool code held by this phone (pool path safety)', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    await releasePoapInvite({
+      phoneNumber: '+573001234567',
+      eventSlug: 'pizza-day-ctg-2026',
+    })
+
+    // The release MUST also clear poap_codes.assigned_to_phone for this
+    // phone+event so the code returns to the pool. Without this, a code
+    // would be lost when the WhatsApp send fails.
+    const codeUpdates = queriesMatching('UPDATE poap_codes pc')
+    assert.equal(codeUpdates.length, 1, 'exactly one code release UPDATE')
+    assert.include(codeUpdates[0].sql, 'SET assigned_to_phone = NULL, assigned_at = NULL')
+    const bindings = codeUpdates[0].bindings as unknown[]
+    assert.equal(bindings[0], '+573001234567', 'phone binding (must match assignee)')
+    assert.equal(bindings[1], 'pizza-day-ctg-2026', 'event slug binding (scope to event)')
   })
 })
