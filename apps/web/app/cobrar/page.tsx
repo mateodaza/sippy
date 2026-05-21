@@ -58,8 +58,8 @@ export default function CobrarPage() {
             ¿Cómo recibo pagos con Sippy?
           </h1>
           <p className="mt-4 text-base text-[var(--text-secondary,#374151)] sm:text-lg">
-            Tres pasos. Sin instalar nada. Quien te paga escanea un código, te llega USDC al
-            instante.
+            Tres pasos. Sin instalar nada. Quien te paga escanea un código, te llega USDC —
+            normalmente en segundos.
           </p>
           <p className="mt-3 text-sm text-[var(--text-muted,#6B7280)]">
             Funciona igual si eres un comercio en un evento, un amigo cobrando una cuenta dividida,
@@ -96,7 +96,7 @@ export default function CobrarPage() {
             </li>
             <li>
               <strong>3.</strong> Quien te paga abre el link (o escanea el QR), escribe el monto,
-              confirma. El pago te llega al instante en USDC.
+              confirma. El pago te llega en USDC, normalmente en segundos.
             </li>
           </ol>
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">

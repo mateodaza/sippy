@@ -62,22 +62,23 @@ export default function PagarPage() {
             </li>
             <li>
               <strong>USDC en tu saldo.</strong> Si no tienes, busca al equipo Sippy con el cartel
-              de <strong>Exchange</strong> en el evento. Le entregas efectivo, te mandan USDC al
-              instante.
+              de <strong>Exchange</strong> en el evento. Le entregas efectivo, te mandan USDC en
+              segundos.
             </li>
             <li>
               <strong>Datos o Wi-Fi.</strong> Solo para abrir WhatsApp cuando pagues.
             </li>
           </ul>
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-            <a
-              href={WA_HOLA}
-              target="_blank"
-              rel="noreferrer"
+            {/* Two distinct destinations: web-form onboarding vs jumping
+                into the bot chat. Earlier pass had both buttons pointing
+                at the same wa.me URL — fixed 2026-05-19. */}
+            <Link
+              href="/setup"
               className="inline-flex items-center justify-center rounded-md bg-[var(--brand-primary,#00AFD7)] px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
             >
               Crear mi cuenta
-            </a>
+            </Link>
             <a
               href={WA_HOLA}
               target="_blank"
@@ -101,7 +102,7 @@ export default function PagarPage() {
             <li>
               <strong>3.</strong> Sippy te pregunta cuánto pagar. Escribes el monto que te dijo el
               comercio (ej. <span className="font-mono">5</span>), confirmas con{' '}
-              <span className="font-mono">si</span>. El pago se va al instante.
+              <span className="font-mono">si</span>. El pago se envía, normalmente en segundos.
             </li>
           </ol>
           <p className="mt-4 text-sm text-[var(--text-secondary,#374151)]">
@@ -140,9 +141,10 @@ export default function PagarPage() {
               comercio (no escribiste tú mismo). Vuelve a escanear si hace falta.
             </li>
             <li>
-              <strong>No estás seguro si pagaste.</strong> Escribe{' '}
-              <span className="font-mono">saldo</span>. Si bajó el monto, el pago se hizo. Si no,
-              vuelve a intentar.
+              <strong>No estás seguro si pagaste.</strong> Si Sippy te mostró un comprobante, el
+              pago salió. Si no estás seguro, no lo repitas todavía: escribe{' '}
+              <span className="font-mono">historial</span> o busca al equipo Sippy. Reintentarlo sin
+              confirmar puede generar un pago doble.
             </li>
             <li>
               <strong>Algo más raro.</strong> Busca al equipo Sippy en el evento (camisetas Sippy) o
