@@ -140,10 +140,14 @@ async function main() {
   } else if (!ownerRes.rows[0].wallet_address) {
     fail('2. owner has wallet_address', 'wallet_address is null')
   } else {
+    // Narrow once into a local — tsc can't carry the row-access null check
+    // through a fresh `rows[0]` lookup, and Railway's build refuses to
+    // compile on the implicit `string | null`.
+    const walletAddress: string = ownerRes.rows[0].wallet_address
     const owner = ownerRes.rows[0]
     ok(
       '2. owner wallet check',
-      `wallet=${owner.wallet_address.slice(0, 10)}… perm=${owner.spend_permission_hash ? 'set' : 'null'}`
+      `wallet=${walletAddress.slice(0, 10)}… perm=${owner.spend_permission_hash ? 'set' : 'null'}`
     )
   }
 
@@ -155,13 +159,14 @@ async function main() {
     userAgent: 'sippy-prerelease-smoke/1.0',
     referer: null,
   }
-  let scan: {
+  type ScanResponse = {
     outcome: string
     shortId: string
     kind: string | null
     waUrl: string
     displayLabel: string | null
-  } | null = null
+  }
+  let scan: ScanResponse | null = null
   try {
     const res = await fetch(`${BACKEND_URL}/api/qr/scan/${encodeURIComponent(qr.short_id)}`, {
       method: 'POST',
@@ -172,7 +177,10 @@ async function main() {
     if (!res.ok) {
       fail('3. backend /api/qr/scan responds 2xx', `HTTP ${res.status}`)
     } else {
-      scan = await res.json()
+      // res.json() is typed `Promise<unknown>` on the lib.dom Railway tsc uses.
+      // Cast through the declared shape — runtime parsing happens in production
+      // endpoints, this script is a smoke check and trusts the API's contract.
+      scan = (await res.json()) as ScanResponse
       ok('3. backend /api/qr/scan responds 2xx', `HTTP ${res.status}`)
     }
   } catch (err) {

@@ -18,7 +18,53 @@
 import logger from '@adonisjs/core/services/logger'
 import type { ContextMessage } from '#services/db'
 import { getGroqClient } from '#services/llm.service'
-import { SmartClassification, classifierErrorFallback } from './types.js'
+import { SmartClassification, SMART_INTENT_SLUGS, classifierErrorFallback } from './types.js'
+
+// LLMs occasionally collapse the category/intent distinction and put an
+// intent name (e.g. "social", "greeting") directly into `category`. This
+// is structurally invalid (only the 4 categories are allowed) but is the
+// model trying to do the right thing — it correctly identified the intent.
+// Rather than fall back to the gibberish sentinel and lose the signal,
+// rewrite this shape into the equivalent `{category: 'action', intent: X}`
+// before Zod sees it. Idempotent on already-valid shapes.
+//
+// Also coerces numeric slot values that arrive as strings ("5" → 5).
+// JSON-mode models sometimes typecast numbers to strings; Zod rejects
+// them as Expected number / received string and we lose the slot. Coerce
+// before Zod sees the payload — safe because the schema's number
+// validators (positive, etc.) still run on the coerced value.
+function normalizeClassifierOutput(parsed: unknown): unknown {
+  if (!parsed || typeof parsed !== 'object') return parsed
+  const obj = { ...(parsed as Record<string, unknown>) }
+
+  // Category/intent confusion fix
+  const cat = obj.category
+  if (typeof cat === 'string') {
+    const isValidCat =
+      cat === 'action' || cat === 'ambiguous' || cat === 'out_of_scope' || cat === 'gibberish'
+    if (!isValidCat && (SMART_INTENT_SLUGS as readonly string[]).includes(cat)) {
+      obj.category = 'action'
+      obj.intent = obj.intent ?? cat
+    }
+  }
+
+  // Slot type coercion (string number → number) for amount/localAmount.
+  // Only coerces digit-only strings; anything weirder falls through to
+  // schema validation as-is.
+  if (obj.slots && typeof obj.slots === 'object') {
+    const slots = { ...(obj.slots as Record<string, unknown>) }
+    for (const k of ['amount', 'localAmount']) {
+      const v = slots[k]
+      if (typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)) {
+        const n = Number(v)
+        if (!Number.isNaN(n)) slots[k] = n
+      }
+    }
+    obj.slots = slots
+  }
+
+  return obj
+}
 import type { SmartClassification as SmartClassificationType } from './types.js'
 import { buildContextMessages, buildSystemPrompt, buildUserMessage } from './prompt.js'
 
@@ -271,7 +317,8 @@ async function tryOnce(
       }
     }
 
-    const validated = SmartClassification.safeParse(parsed)
+    const normalized = normalizeClassifierOutput(parsed)
+    const validated = SmartClassification.safeParse(normalized)
     if (!validated.success) {
       return {
         ok: false,
