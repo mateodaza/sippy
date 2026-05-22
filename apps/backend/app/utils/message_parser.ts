@@ -743,10 +743,13 @@ const HIGH_CONFIDENCE_PRE_LLM_PATTERNS: Array<[string, RegExp]> = [
     'pizza_day',
     /(?:^|\s)(pizza\s?day|pizzaday|(?:qu[eé]|que)\s+es\s+(?:el\s+)?pizza\s?day|(?:what\s+is|what's|whats)\s+(?:the\s+)?pizza\s?day|(?:o\s+que\s+[eé])\s+(?:o\s+)?pizza\s?day)\??\s*$/i,
   ],
-  // poap_code — user asking for their assigned POAP claim link. Strict
-  // membership in this gate because the LLM has no `poap_code` slug in
-  // its vocabulary (added below) and would otherwise classify "mi poap"
-  // as out_of_scope or about.
+  // poap_code — user asking for their assigned POAP claim link. The LLM
+  // intent vocabulary now includes `poap_code` (see slug map earlier in
+  // this file), but this pre-LLM regex gate stays as a deterministic
+  // short-circuit: zero token spend, zero latency, and immune to any
+  // classifier drift on the canonical phrasings ("mi poap", "my poap",
+  // "donde esta mi poap", etc.). Out-of-scope / about classifications
+  // would lose the user their claim link.
   [
     'poap_code',
     /(?:^|\s)((?:mi|my|meu)\s+poap|poap(?:\s+(?:code|c[oó]digo|link))?|(?:c[oó]digo|code)\s+(?:de\s+)?poap|(?:claim|reclamar|resgatar)\s+(?:mi|my|meu)?\s*poap|(?:d[oó]nde|donde|where|cad[eê])\s+(?:est[aá]\s+|is\s+)?(?:mi|my|meu)\s+poap)\??\s*$/i,

@@ -391,3 +391,68 @@ test.group('matchHighConfidencePreLlm | pizza_day pre-SMART gate', () => {
     })
   }
 })
+
+// Acceptance pins for the poap_code intent. Without these, a SMART
+// classifier drift could silently route "mi poap" → out_of_scope and the
+// attendee loses their claim link. Mirror the pizza_day gate's shape:
+// canonical phrasings must hit the pre-LLM regex; shadow phrasings that
+// SHOULD route elsewhere (referral code, pay code) must NOT match.
+test.group('matchHighConfidencePreLlm | poap_code pre-SMART gate', () => {
+  const positiveCases = [
+    'mi poap',
+    'Mi poap',
+    'mi poap?',
+    'my poap',
+    'meu poap',
+    'poap',
+    'poap code',
+    'poap codigo',
+    'poap código',
+    'poap link',
+    'codigo poap',
+    'código de poap',
+    'code poap',
+    'claim poap',
+    'reclamar mi poap',
+    'resgatar meu poap',
+    'donde esta mi poap',
+    'dónde está mi poap',
+    'where is my poap',
+    'where my poap',
+    'cade meu poap',
+    'cadê meu poap',
+  ]
+  for (const input of positiveCases) {
+    test(`"${input}" → poap_code (pre-SMART)`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      assert.isNotNull(result, `${input} must match HIGH_CONFIDENCE_PRE_LLM poap_code pattern`)
+      assert.equal(result!.command, 'poap_code')
+    })
+  }
+
+  // Shadow guards — these are different intents (referral code, pay-QR
+  // code) and MUST NOT collide with poap_code or the user gets the wrong
+  // reply on an unrelated request.
+  const negativeCases = [
+    'mi codigo',
+    'mi código',
+    'mi codigo de pago',
+    'mi código de pago',
+    'my code',
+    'meu código',
+    'codigo',
+    'código',
+  ]
+  for (const input of negativeCases) {
+    test(`"${input}" must NOT match poap_code`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      if (result !== null) {
+        assert.notEqual(
+          result.command,
+          'poap_code',
+          `${input} should not route to poap_code (it's a different intent)`
+        )
+      }
+    })
+  }
+})

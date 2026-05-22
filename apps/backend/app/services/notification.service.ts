@@ -178,18 +178,19 @@ const TEMPLATES = {
    * the prior structured version (4 vars: event + amount + URL + wallet
    * — see git history before commit X for the spec).
    *
-   * Wiring: this template is NOT yet live. Once Meta approves it, swap
-   * the paired calls in operator_send_controller.ts
-   * (`notifyPaymentReceived` + `sendPoapInviteIfPending`) for a single
-   * orchestrator that:
-   *   1. Reserves a POAP code via `claimPendingPoapInvite`.
-   *   2. If reservation succeeds → call `notifyEventAnnouncement` with a
-   *      body built by `formatOperatorDropBody`. On template failure,
-   *      release the reservation and fall back to the old two-message
-   *      flow.
-   *   3. If no POAP pool / reservation fails for non-template reasons →
-   *      keep firing `notifyPaymentReceived` only (the existing behavior
-   *      for non-POAP events stays unchanged).
+   * Wiring (live as of 2026-05-21): the orchestrator
+   * `notifyOperatorDrop` in operator_send_controller.ts replaces the
+   * paired `notifyPaymentReceived` + `sendPoapInviteIfPending` calls
+   * for EN/ES/PT recipients. It:
+   *   1. Reserves a POAP code via `claimPendingPoapInvite` (or reuses an
+   *      existing assignment via `getAssignedPoapClaimUrl` on repeat
+   *      sends).
+   *   2. Calls `notifyEventAnnouncement` with a body built by
+   *      `formatOperatorDropBody`. On template failure, releases the
+   *      reservation and falls back to the old two-message flow.
+   *   3. If no POAP pool / reservation fails for non-template reasons,
+   *      fires `notifyPaymentReceived` only — unchanged for non-POAP
+   *      events.
    */
   eventAnnouncement: 'event_announcement',
 } as const

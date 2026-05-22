@@ -541,49 +541,52 @@ export function formatPoapPoolExhausted(eventName: string, lang: Lang = 'en'): s
 }
 
 /**
- * Sent to an attendee right after an operator drops the welcome USDC into
- * their wallet from `/admin/operator/send`. One-shot per user-event pair —
- * gated by `user_event_links.poap_invite_sent_at`.
+ * POAP claim link reply.
  *
- * Copy intentionally does NOT thank the user for "paying" — the attendee
- * is the recipient here, not the payer. Frame it as the welcome moment.
+ * Used in two contexts:
+ *   - Fallback path when the combined `event_announcement` template send
+ *     fails (`sendPoapInviteIfPending`).
+ *   - On-demand reply when the user types "mi poap" / "my poap" /
+ *     "donde esta mi poap" (poap_code intent in webhook_controller).
+ *
+ * Copy is intentionally neutral — no "welcome" framing — because the
+ * vast majority of calls land on the on-demand path AFTER the user is
+ * already at the event (or even post-event), asking for their link a
+ * second time. A "Welcome to …" greeting reads as awkward / robotic in
+ * that context. The first-time welcome moment is owned by the combined
+ * template (`event_announcement` + `formatOperatorDropBody`) — see
+ * notification.service.ts.
  */
 export function formatPoapClaimInvite(
   params: { poapClaimUrl: string; eventName: string; sippyWalletAddress: string },
   lang: Lang = 'en'
 ): string {
-  // Push side (operator_send → sendPoapInviteIfPending) always has the
-  // wallet address because the USDC was just deposited into it. The
-  // chat-pull handler (`poap_code` intent) reads the wallet separately
-  // via `getEmbeddedWallet`, which can transiently miss. When it does,
-  // we still want to send the URL — it's the load-bearing artifact —
-  // so we drop the wallet-paste section instead of rendering an empty
-  // "paste your Sippy wallet:\n\n" stub.
+  // Push side (operator_send → sendPoapInviteIfPending fallback) always
+  // has the wallet address because the USDC was just deposited into it.
+  // The chat-pull handler (`poap_code` intent) reads the wallet
+  // separately via `getEmbeddedWallet`, which can transiently miss. When
+  // it does, we still want to send the URL — it's the load-bearing
+  // artifact — so we drop the wallet-paste section instead of rendering
+  // an empty "paste your Sippy wallet:\n\n" stub.
   const hasWallet = params.sippyWalletAddress.length > 0
   const m = {
     en: () =>
-      `🎉 Welcome to ${params.eventName}! Claim your POAP here:\n` +
+      `Your POAP for ${params.eventName}:\n` +
       `${params.poapClaimUrl}` +
       (hasWallet
-        ? `\n\nIf POAP asks for an address, paste your Sippy wallet:\n` +
-          `${params.sippyWalletAddress}\n\n` +
-          `Or use any other wallet you have.`
+        ? `\n\nIf POAP asks for a wallet address, paste:\n` + `${params.sippyWalletAddress}`
         : ''),
     es: () =>
-      `🎉 ¡Bienvenido a ${params.eventName}! Reclama tu POAP aqui:\n` +
+      `Tu POAP de ${params.eventName}:\n` +
       `${params.poapClaimUrl}` +
       (hasWallet
-        ? `\n\nSi POAP te pide una direccion, pega tu billetera Sippy:\n` +
-          `${params.sippyWalletAddress}\n\n` +
-          `O usa cualquier otra billetera que tengas.`
+        ? `\n\nSi POAP te pide una dirección de billetera, pega:\n` + `${params.sippyWalletAddress}`
         : ''),
     pt: () =>
-      `🎉 Bem-vindo ao ${params.eventName}! Resgate seu POAP aqui:\n` +
+      `Seu POAP de ${params.eventName}:\n` +
       `${params.poapClaimUrl}` +
       (hasWallet
-        ? `\n\nSe o POAP pedir um endereco, cole sua carteira Sippy:\n` +
-          `${params.sippyWalletAddress}\n\n` +
-          `Ou use qualquer outra carteira que tenha.`
+        ? `\n\nSe o POAP pedir um endereço de carteira, cole:\n` + `${params.sippyWalletAddress}`
         : ''),
   }
   return m[lang]()

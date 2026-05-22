@@ -529,7 +529,12 @@ test.group('bracket_token.service | dispatchBracketToken', (group) => {
 
     const inserts = queriesMatching('INSERT INTO user_event_links')
     assert.equal(inserts.length, 1, 'one upsert against user_event_links')
-    assert.include(inserts[0].sql, 'ON CONFLICT (phone_number, event_id) DO NOTHING')
+    // event.service.ts now uses DO UPDATE with a narrow venue-source
+    // upgrade clause (added 2026-05-21 for Pizza Day). "First contact
+    // wins" is preserved for linked_at_step; only metadata.source can
+    // be upgraded, and only when the incoming source is 'venue'.
+    assert.include(inserts[0].sql, 'ON CONFLICT (phone_number, event_id) DO UPDATE')
+    assert.include(inserts[0].sql, "EXCLUDED.metadata->>'source' = 'venue'")
 
     const bindings = inserts[0].bindings as unknown[]
     assert.equal(bindings[0], '+573001234567', 'phone_number')
