@@ -57,16 +57,38 @@ export async function linkUserToEvent(
   const prefKey = await resolveUserPrefKey(phoneNumber)
 
   // Composite PK (phone_number, event_id) lives at the DB level; Lucid can't
-  // represent it cleanly, so we upsert via raw SQL. DO NOTHING preserves the
-  // ORIGINAL `linked_at_step` and metadata on re-link — first contact wins.
-  // That way a user who completed onboarding at the booth ('done', source=
-  // 'qr-booth') stays attributed correctly even if they hit a Twitter link
-  // later. Same row, same first-source.
+  // represent it cleanly, so we upsert via raw SQL.
+  //
+  // "First contact wins" is the default — DO UPDATE preserves the original
+  // `linked_at_step` and metadata on re-link. So a user who completed
+  // onboarding at the booth ('done', source='qr-booth') stays attributed
+  // correctly even if they later tap a Twitter link.
+  //
+  // EXCEPTION — venue source upgrade (added 2026-05-21 for Pizza Day):
+  // when the incoming source is 'venue' AND the stored source is missing
+  // or non-venue, upgrade `metadata.source` to 'venue'. Without this,
+  // anyone who was pre-linked via a deep-link or social tap (source=NULL
+  // or 'twitter') gets stuck failing the venue-source gate even after
+  // they physically scan the venue QR on event day — they never earn
+  // their Quest activity ticket, and any pending referrer they brought
+  // in never gets credited via the attendance branch.
+  //
+  // Only `metadata.source` is updated; linked_at_step stays the original
+  // value so "first contact wins" still applies to the step. Drain re-
+  // fires after the upgrade if the new state satisfies the venue gate
+  // (see below).
   const metadata = source ? JSON.stringify({ source }) : null
   await db.rawQuery(
     `INSERT INTO user_event_links (phone_number, event_id, linked_at_step, metadata)
      VALUES (?, ?, ?, ?::jsonb)
-     ON CONFLICT (phone_number, event_id) DO NOTHING`,
+     ON CONFLICT (phone_number, event_id) DO UPDATE
+       SET metadata = jsonb_set(
+         COALESCE(user_event_links.metadata, '{}'::jsonb),
+         '{source}',
+         '"venue"'::jsonb
+       )
+       WHERE EXCLUDED.metadata->>'source' = 'venue'
+         AND COALESCE(user_event_links.metadata->>'source', '') <> 'venue'`,
     [prefKey, event.id, linkedAtStep, metadata]
   )
 

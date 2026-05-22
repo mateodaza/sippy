@@ -197,7 +197,7 @@ test.group('event.service | linkUserToEvent', (group) => {
     assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)
   })
 
-  test('issues idempotent INSERT … ON CONFLICT DO NOTHING with the canonical bindings', async ({
+  test('issues idempotent INSERT … ON CONFLICT … with the canonical bindings', async ({
     assert,
   }) => {
     mockEvent(makeEvent())
@@ -212,7 +212,12 @@ test.group('event.service | linkUserToEvent', (group) => {
 
     const inserts = queriesMatching('INSERT INTO user_event_links')
     assert.equal(inserts.length, 1, 'should issue exactly one upsert')
-    assert.include(inserts[0].sql, 'ON CONFLICT (phone_number, event_id) DO NOTHING')
+    // "First contact wins" is now implemented via ON CONFLICT DO UPDATE
+    // with a narrow source-upgrade rule (venue source upgrades stale
+    // NULL/non-venue sources). All other fields stay preserved by the
+    // WHERE clause on the UPDATE.
+    assert.include(inserts[0].sql, 'ON CONFLICT (phone_number, event_id) DO UPDATE')
+    assert.include(inserts[0].sql, "EXCLUDED.metadata->>'source' = 'venue'")
 
     const bindings = inserts[0].bindings as unknown[]
     assert.equal(bindings[0], '+573001234567', 'phone_number binding')
