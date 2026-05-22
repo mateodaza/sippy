@@ -159,13 +159,15 @@ const TEMPLATES = {
    * Sample body content for the Pizza Day operator-drop case (built by
    * `formatOperatorDropBody` in this file — keep formatters next to the
    * template so the structure is auditable in one place):
-   *   "You just received 4 USDC in your Sippy wallet. Type *balance* anytime to check.
+   *   "You just received 4 USDC in your Sippy wallet. Type *balance* anytime to check. Claim your POAP: https://poap.xyz/claim/abc123. If POAP asks for a wallet address, paste 0x1a2b…."
    *
-   *    🎟️ Claim your POAP:
-   *    https://poap.xyz/claim/abc123
-   *
-   *    If POAP asks for a wallet address, paste:
-   *    0x1a2b…"
+   * Hard constraint: the body parameter is ONE single line. WhatsApp's
+   * Cloud API rejects template body parameters containing newlines,
+   * tabs, or >4 consecutive spaces at send-time. The static wrapper
+   * supplies the visual paragraph breaks (around {{2}}); the variable
+   * itself stays one paragraph. This is why the prior multi-line draft
+   * silently failed for every send (Meta returned 132000 → orchestrator
+   * fell back to the legacy two-message flow).
    *
    * No buttons — URLs render as clickable text in WhatsApp. Approval is
    * typically <24h for Utility templates because the wrapper is short,
@@ -411,6 +413,14 @@ export async function notifyEventAnnouncement(opts: {
  * to `notifyEventAnnouncement` so the template variable {{2}} structure
  * is documented in one place.
  *
+ * IMPORTANT — single line, no `\n`, no tabs, no >4 consecutive spaces.
+ * WhatsApp Cloud API rejects template body parameters containing those
+ * characters at send-time (separate from template approval). The
+ * surrounding static wrapper ("🎉 ¡Bienvenido a … / Disfruta el evento.")
+ * supplies the visual paragraph breaks; the variable is one paragraph.
+ * Compare `notifyPaymentReceived` / `notifyPoapClaimInvite` — both use
+ * single-line variables, which is why they work.
+ *
  * Mirror this shape for future announcement types (schedule update,
  * prize result, etc.) — keep the formatter close to the template helper
  * so reviewers can audit the template-variable surface in one read.
@@ -427,16 +437,16 @@ export function formatOperatorDropBody(opts: {
   if (lang === 'pt' || lang === 'pt_BR') {
     const head = `Você acabou de receber ${amountWithAsset} na sua carteira Sippy. Digite *saldo* a qualquer momento para ver.`
     if (!poapClaimUrl) return head
-    return `${head}\n\n🎟️ Resgate seu POAP:\n${poapClaimUrl}\n\nSe o POAP pedir um endereço de carteira, cole:\n${sippyWalletAddress}`
+    return `${head} Resgate seu POAP: ${poapClaimUrl}. Se o POAP pedir um endereço de carteira, cole ${sippyWalletAddress}.`
   }
   if (lang === 'es') {
     const head = `Acabas de recibir ${amountWithAsset} en tu billetera Sippy. Escribe *saldo* cuando quieras para revisar.`
     if (!poapClaimUrl) return head
-    return `${head}\n\n🎟️ Reclama tu POAP:\n${poapClaimUrl}\n\nSi POAP te pide una dirección, pega:\n${sippyWalletAddress}`
+    return `${head} Reclama tu POAP: ${poapClaimUrl}. Si POAP te pide una dirección, pega ${sippyWalletAddress}.`
   }
   const head = `You just received ${amountWithAsset} in your Sippy wallet. Type *balance* anytime to check.`
   if (!poapClaimUrl) return head
-  return `${head}\n\n🎟️ Claim your POAP:\n${poapClaimUrl}\n\nIf POAP asks for a wallet address, paste:\n${sippyWalletAddress}`
+  return `${head} Claim your POAP: ${poapClaimUrl}. If POAP asks for a wallet address, paste ${sippyWalletAddress}.`
 }
 
 /**
