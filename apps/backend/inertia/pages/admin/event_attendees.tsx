@@ -503,7 +503,7 @@ export default function EventAttendeesPage({
           <button
             type="button"
             onClick={() => goToPage(meta.page)}
-            className="rounded-md border border-current px-4 py-2 font-mono text-xs uppercase tracking-[0.1em] hover:bg-current hover:text-white"
+            className="rounded-md border-2 border-crypto-hover bg-white px-4 py-2 font-mono text-xs font-bold uppercase tracking-[0.1em] text-crypto-hover hover:bg-crypto-hover hover:text-white"
             aria-label={t.refresh}
           >
             {t.refresh}
@@ -660,7 +660,7 @@ export default function EventAttendeesPage({
               type="button"
               onClick={() => goToPage(Math.max(1, meta.page - 1))}
               disabled={meta.page <= 1}
-              className="rounded-md border border-current px-3 py-1 uppercase tracking-[0.1em] hover:bg-current hover:text-white disabled:opacity-30"
+              className="rounded-md border-2 border-brand bg-white px-3 py-1 font-bold uppercase tracking-[0.1em] text-brand hover:bg-brand hover:text-white disabled:opacity-30"
             >
               {t.prev}
             </button>
@@ -668,7 +668,7 @@ export default function EventAttendeesPage({
               type="button"
               onClick={() => goToPage(Math.min(meta.lastPage, meta.page + 1))}
               disabled={meta.page >= meta.lastPage}
-              className="rounded-md border border-current px-3 py-1 uppercase tracking-[0.1em] hover:bg-current hover:text-white disabled:opacity-30"
+              className="rounded-md border-2 border-brand bg-white px-3 py-1 font-bold uppercase tracking-[0.1em] text-brand hover:bg-brand hover:text-white disabled:opacity-30"
             >
               {t.next}
             </button>
