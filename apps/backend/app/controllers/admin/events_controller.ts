@@ -30,7 +30,7 @@ import db from '@adonisjs/lucid/services/db'
 import logger from '@adonisjs/core/services/logger'
 import vine from '@vinejs/vine'
 import Event from '#models/event'
-import { maskPhone } from '#utils/phone'
+import { canonicalizePhone, maskPhone } from '#utils/phone'
 import {
   provisionOperatorWallet,
   revokeOperatorWallet,
@@ -39,6 +39,7 @@ import {
   getOperatorWalletBalance,
   drainOperatorWallet,
 } from '#services/operator_wallet.service'
+import { getPoapStatusForPhone } from '#services/event.service'
 import { isSuperAdmin } from '#utils/super_admin'
 
 const DEFAULT_PER_PAGE = 50
@@ -617,5 +618,35 @@ export default class EventsController {
       balanceUsdc: balanceResult.kind === 'ok' ? balanceResult.value : null,
       balanceError: balanceResult.kind === 'error' ? balanceResult.error : null,
     })
+  }
+
+  /**
+   * GET /admin/events/:slug/poap-status/:phone
+   *
+   * Admin diagnostic: returns the POAP-eligibility snapshot for a phone in
+   * a given event. Single endpoint replaces five SQL queries when
+   * answering "why didn't this user get a POAP?" questions during/after
+   * the event.
+   *
+   * Returns 200 with structured JSON even when the user isn't linked or
+   * the event has no pool — fields are nulled out, the consumer can
+   * branch on `eventFound` and `link`/`assignedCode`/`poolStatus`.
+   * 400 if the phone can't be canonicalized.
+   */
+  async getPoapStatus({ params, response }: HttpContext) {
+    const slug = String(params.slug ?? '').trim()
+    if (!slug) return response.badRequest({ error: 'Missing :slug' })
+
+    const phoneRaw = String(params.phone ?? '').trim()
+    if (!phoneRaw) return response.badRequest({ error: 'Missing :phone' })
+    const phone = canonicalizePhone(phoneRaw)
+    if (!phone) {
+      return response.badRequest({
+        error: `Could not canonicalize phone '${phoneRaw}' — expected E.164`,
+      })
+    }
+
+    const snapshot = await getPoapStatusForPhone(phone, slug)
+    return response.ok(snapshot)
   }
 }

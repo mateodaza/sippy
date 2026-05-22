@@ -44,7 +44,11 @@ import {
   notifyEventAnnouncement,
   formatOperatorDropBody,
 } from '#services/notification.service'
-import { claimPendingPoapInvite, releasePoapInvite } from '#services/event.service'
+import {
+  claimPendingPoapInvite,
+  getAssignedPoapClaimUrl,
+  releasePoapInvite,
+} from '#services/event.service'
 import { sendTextMessage } from '#services/whatsapp.service'
 import { getAdminLang } from '#utils/admin_lang'
 import { adminErrors } from '#utils/admin_messages'
@@ -323,8 +327,18 @@ async function notifyOperatorDrop(args: {
     let poolExhaustedEventName: string | null = null
     try {
       const outcome = await claimPendingPoapInvite(args.recipientPhone)
+      // Track the POAP URL to plug into the combined body. Could come from
+      // a fresh reservation (this is the recipient's first operator-send)
+      // or from an existing assignment looked up below (repeat send to an
+      // already-invited attendee). Same URL is safe to resend — the link
+      // is idempotent per code and the user may have lost the earlier
+      // message.
+      let poapClaimUrlForBody: string | null = null
+      let eventNameForBody: string | null = null
       if (outcome.kind === 'reserved') {
         reservedPoap = outcome.reservation
+        poapClaimUrlForBody = outcome.reservation.poapClaimUrl
+        eventNameForBody = outcome.reservation.eventName
       } else if (outcome.kind === 'pool_exhausted') {
         // Track separately so we can fire the courtesy text after the
         // combined send confirms.
@@ -334,21 +348,43 @@ async function notifyOperatorDrop(args: {
         )
       } else {
         // 'none' (already invited on a prior send) or 'contended' (parallel
-        // call won the lock). Both → no POAP block in the body.
-        logger.info(`operator_send.combined-no-poap send_id=${args.sendId} reason=${outcome.kind}`)
+        // call won the lock). For 'none' specifically, the recipient has a
+        // POAP URL already assigned to them — look it up so repeat sends
+        // keep showing the link. 'contended' usually means a parallel call
+        // is committing right now; if an assignment already exists we can
+        // surface it, otherwise omit.
+        const existing = await getAssignedPoapClaimUrl(args.recipientPhone, args.eventSlug).catch(
+          (existingErr) => {
+            logger.warn(
+              { send_id: args.sendId, err: existingErr },
+              'operator_send.combined-existing-poap-lookup-failed'
+            )
+            return null
+          }
+        )
+        if (existing) {
+          poapClaimUrlForBody = existing.poapClaimUrl
+          eventNameForBody = existing.eventName
+          logger.info(
+            `operator_send.combined-existing-poap send_id=${args.sendId} reason=${outcome.kind} (reusing assigned URL)`
+          )
+        } else {
+          logger.info(
+            `operator_send.combined-no-poap send_id=${args.sendId} reason=${outcome.kind}`
+          )
+        }
       }
 
       const body = formatOperatorDropBody({
         amount: args.amountUsdc.toFixed(2),
         asset: 'USDC',
-        poapClaimUrl: reservedPoap?.poapClaimUrl ?? null,
+        poapClaimUrl: poapClaimUrlForBody,
         sippyWalletAddress: args.sippyWalletAddress,
         lang,
       })
-      // Event name: prefer the POAP reservation's name (DB-resolved) when
-      // available, otherwise the controller-passed name (also DB-resolved
-      // earlier in the flow). Falling back to the slug last.
-      const eventName = reservedPoap?.eventName ?? args.eventName ?? args.eventSlug
+      // Event name resolution order: POAP-derived (reservation or existing
+      // assignment) → controller-passed → slug as last resort.
+      const eventName = eventNameForBody ?? args.eventName ?? args.eventSlug
 
       const sent = await notifyEventAnnouncement({
         recipientPhone: args.recipientPhone,
@@ -358,7 +394,7 @@ async function notifyOperatorDrop(args: {
       })
       if (sent) {
         logger.info(
-          `operator_send.combined-sent send_id=${args.sendId} to=${maskPhone(args.recipientPhone)} lang=${lang} poap=${reservedPoap ? 'with' : 'without'} event=${args.eventSlug}`
+          `operator_send.combined-sent send_id=${args.sendId} to=${maskPhone(args.recipientPhone)} lang=${lang} poap=${reservedPoap ? 'fresh' : poapClaimUrlForBody ? 'reused' : 'none'} event=${args.eventSlug}`
         )
         // Pool-exhausted courtesy text: only fires when we successfully
         // sent the combined message and the recipient was actually denied

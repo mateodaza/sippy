@@ -592,3 +592,194 @@ export async function releasePoapInvite(args: {
     )
   })
 }
+
+/**
+ * Look up the POAP claim URL ALREADY assigned to a phone for an event.
+ *
+ * Distinct from `claimPendingPoapInvite`: this one is read-only and does
+ * NOT reserve anything. Returns the same URL on every call. Used by the
+ * operator-drop orchestrator so repeat sends to the same attendee can
+ * keep including the POAP link in the combined message — the link was
+ * minted once on the first send, but the recipient may have lost the
+ * earlier WhatsApp message, so resending it is useful.
+ *
+ * Two paths, identical to `claimPendingPoapInvite`:
+ *   - Pool path: look up `poap_codes` where `assigned_to_phone = ?`.
+ *   - Legacy path: if the event has a shared `poap_claim_url` AND the
+ *     user_event_links row has `poap_invite_sent_at IS NOT NULL`, return
+ *     the shared URL.
+ *
+ * Returns `null` when the phone has no POAP assignment for this event
+ * (never invited, or pool-path event with no assignment yet).
+ */
+export async function getAssignedPoapClaimUrl(
+  phoneNumber: string,
+  eventSlug: string
+): Promise<{ eventName: string; poapClaimUrl: string } | null> {
+  const prefKey = await resolveUserPrefKey(phoneNumber)
+
+  // Pool path: any assigned code for this phone + event.
+  const poolRes = await db.rawQuery(
+    `SELECT e.name AS event_name, pc.claim_url
+     FROM poap_codes pc
+     JOIN events e ON e.id = pc.event_id
+     WHERE pc.assigned_to_phone = ?
+       AND e.slug = ?
+     LIMIT 1`,
+    [prefKey, eventSlug]
+  )
+  const poolRow = poolRes.rows?.[0] as { event_name: string; claim_url: string } | undefined
+  if (poolRow) {
+    return { eventName: poolRow.event_name, poapClaimUrl: poolRow.claim_url }
+  }
+
+  // Legacy path: shared URL with an invite stamp.
+  const legacyRes = await db.rawQuery(
+    `SELECT e.name AS event_name, e.poap_claim_url
+     FROM user_event_links uel
+     JOIN events e ON e.id = uel.event_id
+     WHERE uel.phone_number = ?
+       AND e.slug = ?
+       AND uel.poap_invite_sent_at IS NOT NULL
+       AND e.poap_claim_url IS NOT NULL
+     LIMIT 1`,
+    [prefKey, eventSlug]
+  )
+  const legacyRow = legacyRes.rows?.[0] as
+    | { event_name: string; poap_claim_url: string }
+    | undefined
+  if (legacyRow) {
+    return { eventName: legacyRow.event_name, poapClaimUrl: legacyRow.poap_claim_url }
+  }
+
+  return null
+}
+
+/**
+ * Diagnostic snapshot of a phone's POAP state for an event. Read-only;
+ * never mutates state. Used by the admin debug endpoint to answer "why
+ * didn't this user get a POAP" questions during/after an event.
+ */
+export interface PoapStatusSnapshot {
+  phone: string
+  eventSlug: string
+  eventFound: boolean
+  preferredLanguage: string | null
+  link: {
+    linkedAt: string
+    linkedAtStep: string | null
+    poapClaimed: boolean
+    poapClaimedAt: string | null
+    poapInviteSentAt: string | null
+  } | null
+  assignedCode: { claimUrl: string; assignedAt: string } | null
+  poolStatus: {
+    total: number
+    unassigned: number
+    assignedToThisPhone: number
+  } | null
+}
+
+export async function getPoapStatusForPhone(
+  phoneNumber: string,
+  eventSlug: string
+): Promise<PoapStatusSnapshot> {
+  const prefKey = await resolveUserPrefKey(phoneNumber)
+
+  const prefRes = await db.rawQuery(
+    `SELECT preferred_language FROM user_preferences WHERE phone_number = ? LIMIT 1`,
+    [prefKey]
+  )
+  const preferredLanguage =
+    (prefRes.rows?.[0] as { preferred_language: string | null } | undefined)?.preferred_language ??
+    null
+
+  const eventRes = await db.rawQuery(`SELECT id FROM events WHERE slug = ? LIMIT 1`, [eventSlug])
+  const eventRow = eventRes.rows?.[0] as { id: string } | undefined
+  if (!eventRow) {
+    return {
+      phone: prefKey,
+      eventSlug,
+      eventFound: false,
+      preferredLanguage,
+      link: null,
+      assignedCode: null,
+      poolStatus: null,
+    }
+  }
+
+  const linkRes = await db.rawQuery(
+    `SELECT
+       uel.created_at AS linked_at,
+       uel.linked_at_step,
+       uel.poap_claimed,
+       uel.poap_claimed_at,
+       uel.poap_invite_sent_at
+     FROM user_event_links uel
+     WHERE uel.phone_number = ? AND uel.event_id = ?
+     LIMIT 1`,
+    [prefKey, eventRow.id]
+  )
+  const linkRow = linkRes.rows?.[0] as
+    | {
+        linked_at: string
+        linked_at_step: string | null
+        poap_claimed: boolean
+        poap_claimed_at: string | null
+        poap_invite_sent_at: string | null
+      }
+    | undefined
+
+  const codeRes = await db.rawQuery(
+    `SELECT pc.claim_url, pc.assigned_at
+     FROM poap_codes pc
+     WHERE pc.event_id = ? AND pc.assigned_to_phone = ?
+     LIMIT 1`,
+    [eventRow.id, prefKey]
+  )
+  const codeRow = codeRes.rows?.[0] as { claim_url: string; assigned_at: string } | undefined
+
+  const poolRes = await db.rawQuery(
+    `SELECT
+       COUNT(*) FILTER (WHERE assigned_to_phone IS NULL) AS unassigned,
+       COUNT(*) FILTER (WHERE assigned_to_phone = ?) AS assigned_to_this_phone,
+       COUNT(*) AS total
+     FROM poap_codes
+     WHERE event_id = ?`,
+    [prefKey, eventRow.id]
+  )
+  const poolRow = poolRes.rows?.[0] as
+    | {
+        unassigned: string | number
+        assigned_to_this_phone: string | number
+        total: string | number
+      }
+    | undefined
+  // Pool counters return strings for COUNT(*) on some PG drivers — coerce.
+  const poolStatus =
+    poolRow && Number(poolRow.total) > 0
+      ? {
+          total: Number(poolRow.total),
+          unassigned: Number(poolRow.unassigned),
+          assignedToThisPhone: Number(poolRow.assigned_to_this_phone),
+        }
+      : null
+
+  return {
+    phone: prefKey,
+    eventSlug,
+    eventFound: true,
+    preferredLanguage,
+    link: linkRow
+      ? {
+          linkedAt: linkRow.linked_at,
+          linkedAtStep: linkRow.linked_at_step,
+          poapClaimed: linkRow.poap_claimed,
+          poapClaimedAt: linkRow.poap_claimed_at,
+          poapInviteSentAt: linkRow.poap_invite_sent_at,
+        }
+      : null,
+    assignedCode: codeRow ? { claimUrl: codeRow.claim_url, assignedAt: codeRow.assigned_at } : null,
+    poolStatus,
+  }
+}

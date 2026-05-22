@@ -262,6 +262,11 @@ router
     router
       .post('/events/:slug/operator-wallet/drain', [AdminEventsController, 'drainOperatorWallet'])
       .use(middleware.adminRole({ role: 'admin' }))
+    // Read-only POAP diagnostic. Admin-only (the assigned URL is the
+    // mintable POAP link — keep it behind the admin gate).
+    router
+      .get('/events/:slug/poap-status/:phone', [AdminEventsController, 'getPoapStatus'])
+      .use(middleware.adminRole({ role: 'admin' }))
 
     // SMART MODE classifier eval — runs the golden dataset against a model
     // preset and returns per-case + summary metrics. Admin-only because
