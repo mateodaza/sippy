@@ -52,7 +52,12 @@ function isAttemptedSend(text: string): boolean {
  */
 const COMMAND_PATTERNS: Record<string, RegExp[]> = {
   start: [/^(start|begin)$/i, /^(comenzar|iniciar)$/i, /^(come[cç]ar|iniciar)$/i],
-  help: [/^(help|\?)$/i, /^ayuda$/i, /^ajuda$/i],
+  // Trailing-char repetition tolerated ("AYUDAAAA", "helppp", "ajudaaa"):
+  // WhatsApp users elongate help asks for emphasis. Without this the
+  // strict regex misses, the request falls into SMART/LLM, and an
+  // unrelated outbound (e.g. a POAP DM firing in parallel) can look
+  // like the bot ignored the help ask. Real transcript 2026-05-22.
+  help: [/^(help+|\?)$/i, /^ayuda+$/i, /^ajuda+$/i],
   about: [
     /^about$/i,
     /^(what is sippy|whats sippy|what's sippy)$/i,
@@ -265,7 +270,7 @@ const LOOSE_COMMAND_PATTERNS: Array<[string, RegExp]> = [
     'poap_code',
     /(?:^|\s)(?:(?:mi|my|meu)\s+poap|poap(?:\s+(?:code|c[oó]digo|link))?|(?:c[oó]digo|code)\s+(?:de\s+)?poap|(?:claim|reclamar|resgatar)\s+(?:mi|my|meu)?\s*poap|(?:d[oó]nde|donde|where|cad[eê])\s+(?:est[aá]\s+|is\s+)?(?:mi|my|meu)\s+poap)(?:\s|$)/i,
   ],
-  ['help', /(?:^|\s)(help(?!ful|less|ing|er|ed)|ayuda|ajuda)(?:\s|$)/i],
+  ['help', /(?:^|\s)(help+(?!ful|less|ing|er|ed)|ayuda+|ajuda+)(?:\s|$)/i],
   [
     'history',
     /(?:^|\s)(history|historial|hist[oó]rico|transactions?|transacciones?|transa[cç][oõ]es?)(?:\s|$)/i,

@@ -58,6 +58,16 @@ const cases: Array<{ input: string; expected: string; why?: string }> = [
   { input: 'historial', expected: 'history' },
   { input: 'si', expected: 'confirm' },
   { input: 'cancelar', expected: 'cancel' },
+
+  // 7. elongation tolerance — WhatsApp users emphasize by repeating final
+  //    chars. Real 2026-05-22 transcript: "AYUDAAAA" missed the strict
+  //    `^ayuda$` regex, fell to SMART, looked like the bot ignored it
+  //    when an unrelated POAP DM was firing in parallel.
+  { input: 'AYUDAAAA', expected: 'help', why: 'elongated ayuda' },
+  { input: 'ayudaa', expected: 'help' },
+  { input: 'helpp', expected: 'help', why: 'elongated EN help' },
+  { input: 'helppppp', expected: 'help' },
+  { input: 'ajudaa', expected: 'help', why: 'elongated PT ajuda' },
 ]
 
 test.group('Acceptance intents | Pizza Day commands', () => {
