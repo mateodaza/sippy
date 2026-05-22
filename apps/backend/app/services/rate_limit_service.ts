@@ -26,8 +26,8 @@ const IP_RESOLVE_WINDOW = 60 * 1000 // 1 minute
 const USER_RESOLVE_LIMIT = 20 // lookups per window
 const USER_RESOLVE_WINDOW = 60 * 60 * 1000 // 1 hour
 
-const LOGIN_LIMIT = 5 // attempts per window
-const LOGIN_WINDOW = 15 * 60 * 1000 // 15 minutes
+const LOGIN_LIMIT = 30 // attempts per window
+const LOGIN_WINDOW = 2 * 60 * 1000 // 15 minutes
 
 const CDP_EXCHANGE_LIMIT = 5 // exchanges per window
 const CDP_EXCHANGE_WINDOW = 15 * 60 * 1000 // 15 minutes
