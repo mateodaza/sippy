@@ -315,20 +315,17 @@ A single tactical card for **Fri May 22, 2026**. Pin this; everything else in th
 
 ### General announcement template (`event_announcement`)
 
-Two-variable Meta template designed for ANY event-related broadcast: USDC drops, schedule updates, prize announcements, post-event recaps. The wrapper ("🎉 Welcome to … / Enjoy the event.") is approved once per language; the body is freeform per send. One template, many use cases.
+Two-variable Meta template designed for ANY event-related broadcast: USDC drops, schedule updates, prize announcements, post-event recaps. The wrapper ("🎉 Welcome to … / Enjoy the event.") is approved per language; the body is freeform per send. One template, many use cases.
 
-- **Submit before:** ideally T-24h on any event using it. For Pizza Day, submit by EOD May 21 so approval lands before doors open May 22.
-- **Where:** Meta Business Manager → WhatsApp → Message Templates → Create.
-  - Name: `event_announcement`
-  - Category: Utility
-  - Languages: en, es, pt_BR
-  - Variables: `{{1}}` = event/source name, `{{2}}` = body content (multiline, may include URLs, ≤1024 chars).
-  - Full EN/ES/PT wrapper text + sample body live in the doc comment at `TEMPLATES.eventAnnouncement` in `apps/backend/app/services/notification.service.ts`.
-- **No buttons needed.** URLs render as clickable text inside the body.
-- **After approval — operator-send rewiring (Pizza Day use case):** swap the paired `notifyPaymentReceived` + `sendPoapInviteIfPending` calls in `operator_send_controller.ts` for an orchestrator that reserves the POAP code first, then calls `notifyEventAnnouncement` with a body built by `formatOperatorDropBody`. On template `false` return, release the reservation and fall back to the old two-message flow. For non-POAP events, keep `notifyPaymentReceived` only — unchanged.
-- **Future use cases (reuse this template):** schedule update DM, raffle/prize result DM, post-event follow-up. Add a new `formatXBody(...)` helper next to `formatOperatorDropBody` in `notification.service.ts` for each new use case so the template-variable surface stays auditable in one file. Call `notifyEventAnnouncement` directly — no new Meta submission needed.
-- **Until approval lands:** existing two-message flow stays in production and is unaffected. Code path for the new template is dormant.
-- **Meta rejection plan:** if Meta flags the open-body design as too broad, fall back to submitting a structured 4-variable version (event + amount + URL + wallet). The original spec is preserved in git history; the formatter would just split into discrete vars.
+- **Status (2026-05-21):** approved by Meta for en, es, and pt_BR. **Live in production** — `notifyOperatorDrop` in `operator_send_controller.ts` routes through the combined template for all three languages.
+- **How operator sends flow now:**
+  1. After on-chain confirmation, `notifyOperatorDrop` reserves a POAP code via `claimPendingPoapInvite`.
+  2. If reserved → builds the body with `formatOperatorDropBody` (payment receipt + POAP link + Sippy wallet) and sends via `notifyEventAnnouncement`. One message replaces the prior pair.
+  3. On template `false` (rate-limit, transient error, etc.) → releases the POAP and falls back to the two-message flow (`payment_received` + `poap_claim_invite`) so the user never loses their POAP.
+  4. For non-POAP events / contended / pool-exhausted reservations → uses `payment_received` only, identical to pre-template behavior.
+- **Future use cases (reuse this template):** schedule update DM, raffle/prize result DM, post-event follow-up. Add a new `formatXBody(...)` helper next to `formatOperatorDropBody` in `notification.service.ts` for each new use case. Call `notifyEventAnnouncement` directly — no new Meta submission needed.
+- **Audit log markers:** `operator_send.combined-sent` / `combined-failed` / `combined-release-failed` / `combined-orchestrator-error` for the new path; the prior `operator_send.notified` + `poap-invite.sent` markers still fire on fallbacks.
+- **If Meta de-approves a language later:** flip it off in the `templateApproved` allowlist inside `notifyOperatorDrop` (single line). The orchestrator's fallback will pick up automatically.
 
 ---
 

@@ -302,10 +302,13 @@ async function notifyOperatorDrop(args: {
     // already on-chain, the notification path must not block.
   }
 
-  // event_announcement is approved for EN and ES only (as of May 2026).
-  // PT recipients keep getting the two-message flow until the PT version
-  // is approved.
-  const templateApproved = lang === 'en' || lang === 'es'
+  // event_announcement is approved for EN, ES, and PT (Meta approved PT
+  // on 2026-05-21). All three languages route through the combined
+  // template now; the runtime gate stays as an allowlist so if Meta ever
+  // de-approves one lang we can flip it off here without removing the
+  // orchestrator. The fallback path remains in place if a send returns
+  // false for any other reason.
+  const templateApproved = lang === 'en' || lang === 'es' || lang === 'pt'
 
   if (templateApproved) {
     try {
