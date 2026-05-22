@@ -84,6 +84,9 @@ import {
   formatContactNotFound,
   formatPayConfirmationPrompt,
   formatPayQrLinkMessage,
+  formatPoapClaimInvite,
+  formatPoapPendingMessage,
+  formatNoPoapAssignedMessage,
 } from '#utils/messages'
 
 import { DateTime } from 'luxon'
@@ -117,6 +120,7 @@ import {
 import { isSmartModeEnabledFor } from '#services/smart_mode/cohort'
 import { dispatchSmartMode } from '#services/smart_mode/dispatcher'
 import { selectUnknownVariant } from '#services/smart_mode/unknown_variants'
+import { findAssignedPoapForPhone } from '#services/event.service'
 
 // Exported so tests can seed/inspect state directly
 export const pendingTransactions = new Map<string, PendingTransaction>()
@@ -1240,6 +1244,55 @@ export async function routeCommand(
           )
         } catch (err) {
           logger.error({ err, phone: maskPhone(phoneNumber) }, 'quest_status: fetch failed')
+          await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+        }
+        break
+      }
+
+      case 'poap_code': {
+        // User asking for their POAP claim link. We look up the row that
+        // `claimPendingPoapInvite` previously assigned — pool path
+        // (`poap_codes.assigned_to_phone`) or legacy shared URL
+        // (`events.poap_claim_url`, gated by
+        // `user_event_links.poap_invite_sent_at`) — and re-send it inline.
+        //
+        // No template needed: this is user-initiated, so we're inside
+        // WhatsApp's 24h session window. Templates are only required
+        // when the bot initiates outside that window (the original push
+        // notification).
+        //
+        // Reply body mirrors the push-side `poap_claim_invite` template
+        // 1:1 (event name + URL + Sippy wallet address as paste fallback
+        // for POAP's claim form). The wallet comes from
+        // `getEmbeddedWallet`; we still send the URL even if the wallet
+        // lookup misses, because the URL alone is the load-bearing piece.
+        try {
+          const outcome = await findAssignedPoapForPhone(phoneNumber)
+          if (outcome.kind === 'assigned') {
+            const wallet = await getEmbeddedWallet(phoneNumber).catch(() => null)
+            await sendMessageFn(
+              phoneNumber,
+              formatPoapClaimInvite(
+                {
+                  poapClaimUrl: outcome.claimUrl,
+                  eventName: outcome.eventName,
+                  sippyWalletAddress: wallet?.walletAddress ?? '',
+                },
+                lang
+              ),
+              lang
+            )
+          } else if (outcome.kind === 'pool_pending') {
+            await sendMessageFn(
+              phoneNumber,
+              formatPoapPendingMessage(outcome.eventName, lang),
+              lang
+            )
+          } else {
+            await sendMessageFn(phoneNumber, formatNoPoapAssignedMessage(lang), lang)
+          }
+        } catch (err) {
+          logger.error({ err, phone: maskPhone(phoneNumber) }, 'poap_code: lookup failed')
           await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
         }
         break

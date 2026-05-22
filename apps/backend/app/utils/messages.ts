@@ -134,6 +134,53 @@ export function formatPizzaDayMessage(lang: Lang = 'en'): string {
   return m[lang]()
 }
 
+// --- POAP code lookup ---
+
+/**
+ * Reply when the user asks "mi poap" but they're linked to an active
+ * pool-using event without a claim URL yet. Covers pool exhausted, send-
+ * then-release, AND the "linked but not paid yet" case — we don't try to
+ * discriminate, the copy is the same honest "it's on the way" line for all
+ * three. Names the event so the user knows which one we're tracking.
+ *
+ * Contrast with `formatNoPoapAssignedMessage` (the no-link-at-all case)
+ * which tells them how to qualify in the first place.
+ */
+export function formatPoapPendingMessage(eventName: string, lang: Lang = 'en'): string {
+  const m = {
+    en: () =>
+      `Your POAP for ${eventName} hasn't been sent yet. ` +
+      `The link will arrive here as soon as it's ready.`,
+    es: () =>
+      `Aún no te he enviado el POAP de ${eventName}. ` +
+      `El link te llegará aquí en cuanto esté listo.`,
+    pt: () =>
+      `Seu POAP para ${eventName} ainda não foi enviado. ` +
+      `O link chegará aqui assim que estiver pronto.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Reply when the user has no assigned POAP and no link to any active
+ * event — they haven't qualified for one yet. Generic copy because no
+ * specific event applies.
+ */
+export function formatNoPoapAssignedMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () =>
+      `You don't have a POAP yet. Get paid at a Sippy event ` +
+      `and your POAP claim link will arrive here automatically.`,
+    es: () =>
+      `Aún no tienes un POAP. Recibe un pago en un evento Sippy ` +
+      `y tu link para reclamar el POAP te llegará aquí automáticamente.`,
+    pt: () =>
+      `Você ainda não tem um POAP. Receba um pagamento em um evento ` +
+      `Sippy e seu link para resgatar o POAP chegará aqui automaticamente.`,
+  }
+  return m[lang]()
+}
+
 // --- Help ---
 
 export function formatHelpMessage(lang: Lang = 'en'): string {
@@ -505,25 +552,39 @@ export function formatPoapClaimInvite(
   params: { poapClaimUrl: string; eventName: string; sippyWalletAddress: string },
   lang: Lang = 'en'
 ): string {
+  // Push side (operator_send → sendPoapInviteIfPending) always has the
+  // wallet address because the USDC was just deposited into it. The
+  // chat-pull handler (`poap_code` intent) reads the wallet separately
+  // via `getEmbeddedWallet`, which can transiently miss. When it does,
+  // we still want to send the URL — it's the load-bearing artifact —
+  // so we drop the wallet-paste section instead of rendering an empty
+  // "paste your Sippy wallet:\n\n" stub.
+  const hasWallet = params.sippyWalletAddress.length > 0
   const m = {
     en: () =>
       `🎉 Welcome to ${params.eventName}! Claim your POAP here:\n` +
-      `${params.poapClaimUrl}\n\n` +
-      `If POAP asks for an address, paste your Sippy wallet:\n` +
-      `${params.sippyWalletAddress}\n\n` +
-      `Or use any other wallet you have.`,
+      `${params.poapClaimUrl}` +
+      (hasWallet
+        ? `\n\nIf POAP asks for an address, paste your Sippy wallet:\n` +
+          `${params.sippyWalletAddress}\n\n` +
+          `Or use any other wallet you have.`
+        : ''),
     es: () =>
       `🎉 ¡Bienvenido a ${params.eventName}! Reclama tu POAP aqui:\n` +
-      `${params.poapClaimUrl}\n\n` +
-      `Si POAP te pide una direccion, pega tu billetera Sippy:\n` +
-      `${params.sippyWalletAddress}\n\n` +
-      `O usa cualquier otra billetera que tengas.`,
+      `${params.poapClaimUrl}` +
+      (hasWallet
+        ? `\n\nSi POAP te pide una direccion, pega tu billetera Sippy:\n` +
+          `${params.sippyWalletAddress}\n\n` +
+          `O usa cualquier otra billetera que tengas.`
+        : ''),
     pt: () =>
       `🎉 Bem-vindo ao ${params.eventName}! Resgate seu POAP aqui:\n` +
-      `${params.poapClaimUrl}\n\n` +
-      `Se o POAP pedir um endereco, cole sua carteira Sippy:\n` +
-      `${params.sippyWalletAddress}\n\n` +
-      `Ou use qualquer outra carteira que tenha.`,
+      `${params.poapClaimUrl}` +
+      (hasWallet
+        ? `\n\nSe o POAP pedir um endereco, cole sua carteira Sippy:\n` +
+          `${params.sippyWalletAddress}\n\n` +
+          `Ou use qualquer outra carteira que tenha.`
+        : ''),
   }
   return m[lang]()
 }

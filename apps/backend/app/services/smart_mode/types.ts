@@ -91,6 +91,12 @@ export const SMART_INTENT_SLUGS = [
   // Sippy *does* know about; we have a dedicated /pizza-day guide.
   // No slots needed — just return the deep-link + a one-line description.
   'pizza_day',
+  // poap_code — user asking the bot to re-send the POAP claim link
+  // already assigned to their phone (poap_codes.assigned_to_phone). The
+  // original DM is the operator-initiated template; this is the
+  // user-initiated lookup so they can recover the link if they lost it.
+  // No slots needed — handler looks up by phone.
+  'poap_code',
 ] as const
 
 export type SmartIntent = (typeof SMART_INTENT_SLUGS)[number]
@@ -145,7 +151,15 @@ const slotsSchema = z
     if (!s) return
     // Mutually exclusive — amount is USDC, localAmount is the original
     // local-currency number. Both set means the LLM was confused.
-    if (s.amount != null && s.localAmount != null) {
+    // `.nullish()` allows both null and undefined, so presence checks
+    // must cover both — comparing to `null` only would miss `undefined`,
+    // and lint's `eqeqeq` rule blocks the `!= null` shorthand.
+    if (
+      s.amount !== null &&
+      s.amount !== undefined &&
+      s.localAmount !== null &&
+      s.localAmount !== undefined
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'amount (USDC) and localAmount are mutually exclusive',
@@ -154,7 +168,7 @@ const slotsSchema = z
     }
     // localAmount requires localCurrency — without the code, downstream FX
     // can't run, and we'd ship a wrong-currency send.
-    if (s.localAmount != null && !s.localCurrency) {
+    if (s.localAmount !== null && s.localAmount !== undefined && !s.localCurrency) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'localAmount requires localCurrency',
@@ -162,7 +176,7 @@ const slotsSchema = z
       })
     }
     // Inverse: localCurrency without localAmount is meaningless
-    if (s.localCurrency && s.localAmount == null) {
+    if (s.localCurrency && (s.localAmount === null || s.localAmount === undefined)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'localCurrency requires localAmount',

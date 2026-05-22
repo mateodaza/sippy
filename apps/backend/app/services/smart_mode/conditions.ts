@@ -311,6 +311,29 @@ export const INTENT_CONDITIONS: IntentCondition[] = [
       'pagar a juan', // → send / pay
     ],
   },
+  {
+    slug: 'poap_code',
+    description:
+      "User wants their POAP claim link — the one we already assigned to their phone (poap_codes.assigned_to_phone) and DM'd them after they were paid at the event. Common ask: they lost the original message and want it again. Trigger phrases: 'mi poap', 'my poap', 'meu poap', 'donde está mi poap', 'where is my poap', 'cadê meu poap', 'mi código de poap', 'claim my poap'. Distinct from `referral_code` (Sippy Quest code) and `pay_qr` (pay-me link).",
+    requiresSlots: [],
+    examples: [
+      'mi poap',
+      'my poap',
+      'meu poap',
+      'donde está mi poap',
+      'donde esta mi poap',
+      'where is my poap',
+      'cadê meu poap',
+      'mi código de poap',
+      'claim my poap',
+      'reclamar mi poap',
+    ],
+    notRoutedHere: [
+      'mi código', // → referral_code (Sippy Quest invite code)
+      'mi código de pago', // → pay_qr
+      'que es un poap', // → about / out_of_scope (definition, not lookup)
+    ],
+  },
 ]
 
 /** Lookup helper. */

@@ -96,6 +96,7 @@ export interface ParsedCommand {
     | 'referral_code'
     | 'quest_status'
     | 'pizza_day'
+    | 'poap_code'
     | 'unknown'
   amount?: number
   recipient?: string

@@ -160,6 +160,117 @@ export async function linkUserToEvent(
 }
 
 /**
+ * Outcome of a `findAssignedPoapForPhone` call:
+ *
+ *  - `assigned`     — we found a claim URL to send. Source is either the
+ *                     per-attendee pool (`poap_codes.assigned_to_phone`)
+ *                     or the legacy shared URL (`events.poap_claim_url`,
+ *                     gated on `user_event_links.poap_invite_sent_at`).
+ *  - `pool_pending` — user is linked to an active pool-using event but no
+ *                     code has been assigned to them yet (pool exhausted,
+ *                     not paid yet, or a send-then-release roundtrip). We
+ *                     can't show a URL — caller should use the "POAP on
+ *                     the way / pool restock pending" copy instead of
+ *                     the generic "not qualified yet" message.
+ *  - `none`         — no assignment and no active-event link. Caller uses
+ *                     the generic "get paid at the event" fallback.
+ *
+ * Both `assigned` paths return one row (latest first). Multi-event is
+ * deliberately deferred — see POAP_POOL_PLAN.md "Deferred: multi-event
+ * lookup" for the upgrade plan when a second event runs concurrently.
+ */
+export type PoapLookupOutcome =
+  | { kind: 'assigned'; claimUrl: string; eventName: string }
+  | { kind: 'pool_pending'; eventName: string }
+  | { kind: 'none' }
+
+/**
+ * Look up the latest POAP claim link already assigned to a phone, if any.
+ * Used by the WhatsApp `poap_code` handler so a user who lost the original
+ * claim DM can ask the bot ("mi poap") and get it re-sent inline.
+ *
+ * Covers BOTH delivery models:
+ *  - Pool path: per-attendee row in `poap_codes` with `assigned_to_phone`
+ *  - Legacy path: shared `events.poap_claim_url`, gated by the per-user
+ *    `user_event_links.poap_invite_sent_at` stamp (so we don't surface
+ *    the shared URL to users who never qualified for it)
+ *
+ * When neither path returns a URL but the user IS linked to an active
+ * event, we return `pool_pending` so the caller can pick honest copy
+ * instead of the misleading "not qualified yet" line.
+ */
+export async function findAssignedPoapForPhone(phoneNumber: string): Promise<PoapLookupOutcome> {
+  const prefKey = await resolveUserPrefKey(phoneNumber)
+
+  // Pool path. Most events use this; check first because it has the per-
+  // user URL. `assigned_at IS NOT NULL` is defensive — paired with
+  // `assigned_to_phone` in the same UPDATE, but a future back-fill could
+  // split them.
+  const poolRes = await db.rawQuery(
+    `SELECT pc.claim_url, e.name AS event_name
+     FROM poap_codes pc
+     JOIN events e ON e.id = pc.event_id
+     WHERE pc.assigned_to_phone = ?
+       AND pc.assigned_at IS NOT NULL
+     ORDER BY pc.assigned_at DESC
+     LIMIT 1`,
+    [prefKey]
+  )
+  const poolRow = poolRes.rows?.[0] as { claim_url: string; event_name: string } | undefined
+  if (poolRow) {
+    return { kind: 'assigned', claimUrl: poolRow.claim_url, eventName: poolRow.event_name }
+  }
+
+  // Legacy path: shared `events.poap_claim_url`, with the per-user link
+  // stamp as the qualification gate. `claimPendingPoapInvite`'s legacy
+  // branch stamps `poap_invite_sent_at` and uses the shared URL; nothing
+  // is written to `poap_codes` (see `releasePoapInvite` comment). We
+  // require the URL to still be set on the event row in case ops nulls
+  // it post-event.
+  const legacyRes = await db.rawQuery(
+    `SELECT e.poap_claim_url AS claim_url, e.name AS event_name
+     FROM user_event_links uel
+     JOIN events e ON e.id = uel.event_id
+     WHERE uel.phone_number = ?
+       AND uel.poap_invite_sent_at IS NOT NULL
+       AND e.poap_claim_url IS NOT NULL
+     ORDER BY uel.poap_invite_sent_at DESC
+     LIMIT 1`,
+    [prefKey]
+  )
+  const legacyRow = legacyRes.rows?.[0] as { claim_url: string; event_name: string } | undefined
+  if (legacyRow) {
+    return { kind: 'assigned', claimUrl: legacyRow.claim_url, eventName: legacyRow.event_name }
+  }
+
+  // No URL to send. Distinguish "linked to an active pool event but no
+  // code yet" from "not linked at all" so the caller can pick honest copy.
+  // A linked-but-no-code state covers: (a) pool exhausted, (b) not paid
+  // yet at the event, (c) a send-then-release roundtrip. We don't try
+  // to discriminate further — the copy for all three reads the same
+  // ("your POAP is on the way / pool is filling").
+  const linkedRes = await db.rawQuery(
+    `SELECT e.name AS event_name
+     FROM user_event_links uel
+     JOIN events e ON e.id = uel.event_id
+     WHERE uel.phone_number = ?
+       AND e.active = TRUE
+       AND (e.starts_at IS NULL OR e.starts_at <= now())
+       AND (e.ends_at IS NULL OR e.ends_at >= now())
+       AND EXISTS(SELECT 1 FROM poap_codes pc WHERE pc.event_id = e.id)
+     ORDER BY uel.created_at DESC
+     LIMIT 1`,
+    [prefKey]
+  )
+  const linkedRow = linkedRes.rows?.[0] as { event_name: string } | undefined
+  if (linkedRow) {
+    return { kind: 'pool_pending', eventName: linkedRow.event_name }
+  }
+
+  return { kind: 'none' }
+}
+
+/**
  * Outcome of a markPoapClaimed call. Distinguishes the three real cases so
  * the UI can react correctly: actually claimed, idempotent re-click, or the
  * user isn't linked at all (don't lie that we recorded it).

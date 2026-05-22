@@ -74,6 +74,7 @@ const DEFAULT_CLARIFICATIONS: Record<SmartIntent, Record<'amount' | 'recipientRa
   list_contacts: { amount: '', recipientRaw: '' },
   withdraw: { amount: '', recipientRaw: '' },
   pizza_day: { amount: '', recipientRaw: '' },
+  poap_code: { amount: '', recipientRaw: '' },
 }
 
 /**

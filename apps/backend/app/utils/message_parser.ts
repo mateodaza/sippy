@@ -188,6 +188,20 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(?:info|infos|cu[eé]ntame|cuentame|h[aá]blame|hablame|dime)\s+(?:de(?:l)?\s+)?pizza\s?day\s*\??$/i,
     /^(?:o\s+que\s+[eé]|o\s+que\s+e)\s+(?:o\s+)?pizza\s?day\s*\??$/i,
   ],
+  // poap_code — user asks for the POAP claim link already assigned to
+  // their phone (poap_codes.assigned_to_phone). Handler re-sends the URL
+  // inline so a user who lost the original claim DM can recover it.
+  //
+  // Strict patterns only — must include the literal word "poap" so we
+  // don't shadow `referral_code` ("mi código") or `pay_qr`
+  // ("mi código de pago"). Trailing `\s*\??` tolerates the question form.
+  poap_code: [
+    /^(?:mi |my |meu )?poap\s*\??$/i,
+    /^(?:mi |my |meu )?(?:c[oó]digo|code) (?:de )?poap\s*\??$/i,
+    /^poap (?:code|c[oó]digo)\s*\??$/i,
+    /^(?:claim|reclamar|resgatar) (?:mi |my |meu )?poap\s*\??$/i,
+    /^(?:d[oó]nde|donde|where|cad[eê])\s+(?:est[aá]|is)?\s*(?:mi|my|meu)\s+poap\s*\??$/i,
+  ],
 }
 
 /** Privacy patterns — each paired with the language it signals */
@@ -242,6 +256,14 @@ const LOOSE_COMMAND_PATTERNS: Array<[string, RegExp]> = [
   [
     'pay_qr',
     /(?:^|\s)(mi (?:c[oó]digo (?:de )?pago|qr (?:de )?pago|qr para (?:cobrar|recibir)|qr)|c[oó]mo me pagan|como me pagan|pay\s?qr|pay\s?link|pay\s?code|my (?:pay\s?(?:qr|code|link)|qr)|meu (?:c[oó]digo|qr) de pagamento|como me pagam)(?:\s|$)/i,
+  ],
+  // poap_code — natural-language asking for the user's already-assigned
+  // POAP claim link. Must include the literal "poap" token so we don't
+  // shadow referral_code or pay_qr. Placed above help so a phrase like
+  // "help me find my poap" still routes to poap_code.
+  [
+    'poap_code',
+    /(?:^|\s)(?:(?:mi|my|meu)\s+poap|poap(?:\s+(?:code|c[oó]digo|link))?|(?:c[oó]digo|code)\s+(?:de\s+)?poap|(?:claim|reclamar|resgatar)\s+(?:mi|my|meu)?\s*poap|(?:d[oó]nde|donde|where|cad[eê])\s+(?:est[aá]\s+|is\s+)?(?:mi|my|meu)\s+poap)(?:\s|$)/i,
   ],
   ['help', /(?:^|\s)(help(?!ful|less|ing|er|ed)|ayuda|ajuda)(?:\s|$)/i],
   [
@@ -721,6 +743,14 @@ const HIGH_CONFIDENCE_PRE_LLM_PATTERNS: Array<[string, RegExp]> = [
     'pizza_day',
     /(?:^|\s)(pizza\s?day|pizzaday|(?:qu[eé]|que)\s+es\s+(?:el\s+)?pizza\s?day|(?:what\s+is|what's|whats)\s+(?:the\s+)?pizza\s?day|(?:o\s+que\s+[eé])\s+(?:o\s+)?pizza\s?day)\??\s*$/i,
   ],
+  // poap_code — user asking for their assigned POAP claim link. Strict
+  // membership in this gate because the LLM has no `poap_code` slug in
+  // its vocabulary (added below) and would otherwise classify "mi poap"
+  // as out_of_scope or about.
+  [
+    'poap_code',
+    /(?:^|\s)((?:mi|my|meu)\s+poap|poap(?:\s+(?:code|c[oó]digo|link))?|(?:c[oó]digo|code)\s+(?:de\s+)?poap|(?:claim|reclamar|resgatar)\s+(?:mi|my|meu)?\s*poap|(?:d[oó]nde|donde|where|cad[eê])\s+(?:est[aá]\s+|is\s+)?(?:mi|my|meu)\s+poap)\??\s*$/i,
+  ],
 ]
 
 /**
@@ -952,7 +982,7 @@ export async function parseMessage(
   text: string,
   ctx?: ParseContext,
   context: ContextMessage[] = [],
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- forward-discipline param
+
   _options: ParseMessageOptions = {}
 ): Promise<ParsedCommand> {
   const startTime = Date.now()
