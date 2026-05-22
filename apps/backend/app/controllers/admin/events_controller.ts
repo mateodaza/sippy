@@ -39,7 +39,7 @@ import {
   getOperatorWalletBalance,
   drainOperatorWallet,
 } from '#services/operator_wallet.service'
-import { getPoapStatusForPhone } from '#services/event.service'
+import { getPoapStatusForPhone, getRafflePool, drawRaffleWinners } from '#services/event.service'
 import { sendPoapInviteIfPending } from '#services/poap_invite.service'
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { findUserPrefByPhone } from '#utils/user_pref_lookup'
@@ -652,6 +652,78 @@ export default class EventsController {
 
     const snapshot = await getPoapStatusForPhone(phone, slug)
     return response.ok(snapshot)
+  }
+
+  /**
+   * GET /admin/events/:slug/raffle/pool
+   *
+   * Read-only audit of the raffle pool: one entry per phone, capped at 5
+   * tickets, with activity/referral breakdown. Run before drawing so you
+   * have a screenshot of the source-of-truth pool for post-event audit.
+   *
+   * Exchange-staff phones (PIZZA_DAY_EXCHANGE_PHONES env) are filtered
+   * out so vendors don't win their own raffle.
+   *
+   * Both raw and masked phone are returned: raw for ops (disbursement),
+   * masked for any public/recap surface that surfaces the same payload.
+   */
+  async getRafflePool({ params, response }: HttpContext) {
+    const slug = String(params.slug ?? '').trim()
+    if (!slug) return response.badRequest({ error: 'Missing :slug' })
+
+    const pool = await getRafflePool(slug)
+    return response.ok({
+      eventSlug: slug,
+      totalEntrants: pool.length,
+      totalTickets: pool.reduce((sum, p) => sum + p.tickets, 0),
+      pool: pool.map((p) => ({
+        phoneNumber: p.phoneNumber,
+        phoneMasked: maskPhone(p.phoneNumber),
+        tickets: p.tickets,
+        activity: p.activity,
+        referrals: p.referrals,
+      })),
+    })
+  }
+
+  /**
+   * POST /admin/events/:slug/raffle/draw
+   *
+   * Draws `count` distinct winners weighted by ticket count. Returns the
+   * winners list in rank order. Non-deterministic — each call returns a
+   * fresh draw. Standard practice: run ONCE, screenshot the result, post
+   * to the audit log. Re-running invalidates the previous draw.
+   *
+   * `?count=` query param, defaults to 3, clamped 1–20. Pool size is the
+   * hard ceiling — over-requesting just returns everyone.
+   */
+  async drawRaffleWinners(ctx: HttpContext) {
+    const { params, request, response } = ctx
+    const slug = String(params.slug ?? '').trim()
+    if (!slug) return response.badRequest({ error: 'Missing :slug' })
+
+    const countRaw = Number.parseInt(String(request.input('count', '3')), 10)
+    const count = Number.isFinite(countRaw) ? Math.max(1, Math.min(20, countRaw)) : 3
+
+    const winners = await drawRaffleWinners(slug, count)
+    logger.info(
+      `events_controller.raffle_drawn event=${slug} count=${count} winners=${winners
+        .map((w) => maskPhone(w.phoneNumber))
+        .join(',')}`
+    )
+    return response.ok({
+      eventSlug: slug,
+      requestedCount: count,
+      drawnAt: new Date().toISOString(),
+      winners: winners.map((w) => ({
+        rank: w.rank,
+        phoneNumber: w.phoneNumber,
+        phoneMasked: maskPhone(w.phoneNumber),
+        tickets: w.tickets,
+        activity: w.activity,
+        referrals: w.referrals,
+      })),
+    })
   }
 
   /**

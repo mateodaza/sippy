@@ -272,6 +272,14 @@ router
     router
       .post('/events/:slug/poap-status/:phone/repair', [AdminEventsController, 'repairPoap'])
       .use(middleware.adminRole({ role: 'admin' }))
+    // Quest raffle: pool audit (read-only) + winner draw. Admin-only so
+    // floor operators can't accidentally re-roll the draw mid-event.
+    router
+      .get('/events/:slug/raffle/pool', [AdminEventsController, 'getRafflePool'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .post('/events/:slug/raffle/draw', [AdminEventsController, 'drawRaffleWinners'])
+      .use(middleware.adminRole({ role: 'admin' }))
 
     // SMART MODE classifier eval — runs the golden dataset against a model
     // preset and returns per-case + summary metrics. Admin-only because

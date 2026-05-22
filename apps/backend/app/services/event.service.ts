@@ -14,6 +14,7 @@ import { resolveUserPrefKey } from '#utils/user_pref_lookup'
 import { maskPhone } from '#utils/phone'
 import { drainPendingReferral } from '#services/quest/referral.service'
 import { VENUE_ATTENDANCE_SOURCES } from '#services/quest/scoring.service'
+import { getQuestExcludedPhones } from '#utils/special_accounts'
 
 // Re-export the wire types so existing internal imports (`#services/event.service`)
 // keep working without each consumer needing to know about `@sippy/shared`.
@@ -835,4 +836,156 @@ export async function getPoapStatusForPhone(
     assignedCode: codeRow ? { claimUrl: codeRow.claim_url, assignedAt: codeRow.assigned_at } : null,
     poolStatus,
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Sippy Quest raffle — winner draw at event close
+// ──────────────────────────────────────────────────────────────────────────
+
+export interface RaffleTicket {
+  phoneNumber: string
+  source: 'activity' | 'referral'
+  ticketAt: string
+}
+
+export interface RafflePoolEntry {
+  phoneNumber: string
+  tickets: number
+  activity: number
+  referrals: number
+}
+
+/**
+ * Returns the audit pool used by the raffle draw: one entry per phone,
+ * with their capped ticket count + activity/referral breakdown.
+ *
+ * Caps apply identically to the leaderboard scoring CTE (5 tickets max per
+ * user, earliest tickets win the cap slots so attendance is favored over
+ * late referral bursts). Exchange-phone exclusion mirrors the leaderboard
+ * — vendors/exchange staff are filtered out so they can't win their own
+ * raffle.
+ */
+export async function getRafflePool(eventSlug: string): Promise<RafflePoolEntry[]> {
+  const excluded = await getQuestExcludedPhones()
+  // Postgres `= ANY($n::text[])` style — Lucid raw bindings accept JS arrays.
+  const res = await db.rawQuery(
+    `WITH valid_tickets AS (
+       SELECT uel.phone_number, 'activity'::text AS source, uel.created_at AS ticket_at
+       FROM user_event_links uel
+       JOIN events e ON e.id = uel.event_id
+       WHERE e.slug = ?
+         AND (
+           uel.linked_at_step = 'done'
+           OR (uel.linked_at_step = 'returning'
+               AND uel.metadata->>'source' = ANY(?::text[]))
+         )
+       UNION ALL
+       SELECT ra.referrer_phone, 'referral'::text, ra.created_at
+       FROM referral_attributions ra
+       WHERE ra.event_slug = ?
+     ),
+     capped AS (
+       SELECT phone_number, source,
+              ROW_NUMBER() OVER (PARTITION BY phone_number ORDER BY ticket_at ASC) AS slot
+       FROM valid_tickets
+     ),
+     agg AS (
+       SELECT phone_number,
+              COUNT(*)::int AS tickets,
+              COUNT(*) FILTER (WHERE source = 'activity')::int AS activity,
+              COUNT(*) FILTER (WHERE source = 'referral')::int AS referrals
+       FROM capped
+       WHERE slot <= 5
+         AND NOT (phone_number = ANY(?::text[]))
+       GROUP BY phone_number
+     )
+     SELECT phone_number, tickets, activity, referrals
+     FROM agg
+     ORDER BY tickets DESC, phone_number ASC`,
+    [eventSlug, VENUE_ATTENDANCE_SOURCES as unknown as string[], eventSlug, excluded]
+  )
+  return (res.rows ?? []).map((r: any) => ({
+    phoneNumber: r.phone_number,
+    tickets: Number(r.tickets),
+    activity: Number(r.activity),
+    referrals: Number(r.referrals),
+  }))
+}
+
+export interface RaffleWinner {
+  phoneNumber: string
+  tickets: number
+  activity: number
+  referrals: number
+  rank: number
+}
+
+/**
+ * Draws `count` distinct winners from the raffle pool, weighted by
+ * ticket count (Efraimidis–Spirakis: each user gets key `U^(1/w)`, top K
+ * by key wins). A user with 5 tickets has ~5× the chance of any single-
+ * ticket user — fair "more entries, more chances" raffle math without
+ * the same user winning multiple prizes.
+ *
+ * Non-deterministic by design — `random()` is fresh per call. Run once,
+ * screenshot the result for audit. If you need a reproducible draw,
+ * wrap the query in `BEGIN; SELECT setseed(0.42); … ; COMMIT;` and the
+ * same seed always picks the same winners.
+ *
+ * Returns winners ranked by draw_key DESC. `count` is clamped between
+ * 1 and the pool size — over-requesting just returns everyone.
+ */
+export async function drawRaffleWinners(eventSlug: string, count: number): Promise<RaffleWinner[]> {
+  if (count < 1) return []
+  const excluded = await getQuestExcludedPhones()
+  const res = await db.rawQuery(
+    `WITH valid_tickets AS (
+       SELECT uel.phone_number, 'activity'::text AS source, uel.created_at AS ticket_at
+       FROM user_event_links uel
+       JOIN events e ON e.id = uel.event_id
+       WHERE e.slug = ?
+         AND (
+           uel.linked_at_step = 'done'
+           OR (uel.linked_at_step = 'returning'
+               AND uel.metadata->>'source' = ANY(?::text[]))
+         )
+       UNION ALL
+       SELECT ra.referrer_phone, 'referral'::text, ra.created_at
+       FROM referral_attributions ra
+       WHERE ra.event_slug = ?
+     ),
+     capped AS (
+       SELECT phone_number, source,
+              ROW_NUMBER() OVER (PARTITION BY phone_number ORDER BY ticket_at ASC) AS slot
+       FROM valid_tickets
+     ),
+     user_weights AS (
+       SELECT phone_number,
+              COUNT(*)::int AS tickets,
+              COUNT(*) FILTER (WHERE source = 'activity')::int AS activity,
+              COUNT(*) FILTER (WHERE source = 'referral')::int AS referrals
+       FROM capped
+       WHERE slot <= 5
+         AND NOT (phone_number = ANY(?::text[]))
+       GROUP BY phone_number
+     ),
+     keyed AS (
+       SELECT phone_number, tickets, activity, referrals,
+              exp(ln(random()) / tickets) AS draw_key
+       FROM user_weights
+     )
+     SELECT phone_number, tickets, activity, referrals,
+            ROW_NUMBER() OVER (ORDER BY draw_key DESC) AS rank
+     FROM keyed
+     ORDER BY draw_key DESC
+     LIMIT ?`,
+    [eventSlug, VENUE_ATTENDANCE_SOURCES as unknown as string[], eventSlug, excluded, count]
+  )
+  return (res.rows ?? []).map((r: any) => ({
+    phoneNumber: r.phone_number,
+    tickets: Number(r.tickets),
+    activity: Number(r.activity),
+    referrals: Number(r.referrals),
+    rank: Number(r.rank),
+  }))
 }
