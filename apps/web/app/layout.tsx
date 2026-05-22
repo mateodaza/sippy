@@ -206,7 +206,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                               'acceptedAnswer': {
                                 '@type': 'Answer',
                                 'text':
-                                  'Sippy uses non-custodial wallets, meaning only you control your funds. Your wallet is linked to your phone number and secured on the Arbitrum blockchain.',
+                                  'You own the wallet. Sippy can only move funds through a spend permission you approve, capped by the daily limit you set. You can revoke that permission anytime in settings. The wallet itself runs on Coinbase wallet infrastructure on Arbitrum.',
                               },
                             },
                             {
@@ -243,6 +243,35 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                                 '@type': 'Answer',
                                 'text':
                                   'Just message Sippy on WhatsApp with something like "send 10 to +57..." or "manda 5 a Maria". Sippy understands natural language in English, Spanish, and Portuguese.',
+                              },
+                            },
+                            // Security-focused additions (mirror the visible FAQ on the
+                            // landing page — keep both lists in sync when editing).
+                            {
+                              '@type': 'Question',
+                              'name': 'What if I lose access to my WhatsApp?',
+                              'acceptedAnswer': {
+                                '@type': 'Answer',
+                                'text':
+                                  'Your wallet is also reachable with the email you used during setup. If you lose your phone or your WhatsApp account, you can recover access at sippy.lat/setup using that email. Your funds stay yours.',
+                              },
+                            },
+                            {
+                              '@type': 'Question',
+                              'name': 'Can I block or mute the Sippy chat?',
+                              'acceptedAnswer': {
+                                '@type': 'Answer',
+                                'text':
+                                  'Yes. Sippy is just a contact in WhatsApp, so you can block, mute, or archive it from WhatsApp itself like any other chat. Your wallet stays active, and you can unblock whenever you want to come back.',
+                              },
+                            },
+                            {
+                              '@type': 'Question',
+                              'name': 'Will Sippy ever ask for my password or codes?',
+                              'acceptedAnswer': {
+                                '@type': 'Answer',
+                                'text':
+                                  'Never. Sippy will not ask you for passwords, recovery phrases, or verification codes through chat. If someone messages you claiming to be Sippy support and asks for any of those, it is a scam.',
                               },
                             },
                           ],

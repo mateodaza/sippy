@@ -197,6 +197,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `⚙️ *Change settings or limits* — ask for settings\n\n` +
       `🌐 *Switch language* — just tell me which one\n\n` +
       `Add funds: ${FUND_URL}\n\n` +
+      `❓ Questions, safety, recovery: ${FRONTEND_URL}/#faq\n\n` +
       `🍕 Pizza Day Cartagena 2026: ${FRONTEND_URL}/pizza-day?lang=en`,
     es: () =>
       `Esto es lo que puedo hacer:\n\n` +
@@ -210,6 +211,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `⚙️ *Cambiar ajustes o limites* — pideme los ajustes\n\n` +
       `🌐 *Cambiar idioma* — solo dime cual\n\n` +
       `Agregar fondos: ${FUND_URL}\n\n` +
+      `❓ Preguntas, seguridad, recuperación: ${FRONTEND_URL}/#faq\n\n` +
       `🍕 Pizza Day Cartagena 2026: ${FRONTEND_URL}/pizza-day`,
     pt: () =>
       `Aqui esta o que posso fazer:\n\n` +
@@ -223,6 +225,7 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `⚙️ *Mudar ajustes ou limites* — pede os ajustes\n\n` +
       `🌐 *Mudar idioma* — so me diz qual\n\n` +
       `Adicionar fundos: ${FUND_URL}\n\n` +
+      `❓ Perguntas, segurança, recuperação: ${FRONTEND_URL}/#faq\n\n` +
       `🍕 Pizza Day Cartagena 2026: ${FRONTEND_URL}/pizza-day`,
   }
   return m[lang]()

@@ -515,6 +515,47 @@ export default async function HomePage() {
           </div>
         </section>
 
+        {/* ── FAQ — Questions, answered ──
+            Practical + security-focused. Uses native <details> for
+            zero-JS collapsible behavior. Visible content stays in sync
+            with the structured-data FAQ in layout.tsx (search rich
+            snippets) — when adding/editing questions here, mirror them
+            there for SEO. */}
+        <section
+          id="faq"
+          className="relative py-16 sm:py-24 bg-[var(--bg-primary)] px-4 sm:px-6 lg:px-8"
+        >
+          <div className="max-w-3xl mx-auto">
+            <ScrollReveal>
+              <span className="spec-label mb-4 block">{t('landing.faq.label', lang)}</span>
+              <h2 className="font-display font-bold text-3xl sm:text-5xl lg:text-6xl text-[var(--text-primary)] uppercase mb-8 sm:mb-12">
+                {t('landing.faq.title', lang)}
+              </h2>
+              <div className="space-y-3 sm:space-y-4">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+                  <details
+                    key={n}
+                    className="group border border-[var(--border-strong)] bg-[var(--bg-primary)] open:border-brand-primary/60 transition-colors"
+                  >
+                    <summary className="flex items-center justify-between cursor-pointer list-none px-5 py-4 sm:px-6 sm:py-5 font-display font-bold text-base sm:text-lg text-[var(--text-primary)] uppercase tracking-wide">
+                      <span>{t(`landing.faq.q${n}.q`, lang)}</span>
+                      <span
+                        aria-hidden="true"
+                        className="ml-4 shrink-0 font-mono text-brand-primary text-xl transition-transform group-open:rotate-45"
+                      >
+                        +
+                      </span>
+                    </summary>
+                    <div className="px-5 pb-5 sm:px-6 sm:pb-6 text-[var(--text-secondary)] text-base sm:text-lg leading-relaxed">
+                      {t(`landing.faq.q${n}.a`, lang)}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </ScrollReveal>
+          </div>
+        </section>
+
         {/* ── CTA — Start on WhatsApp ── */}
         <section className="relative py-16 sm:py-32 bg-[var(--bg-primary)] overflow-hidden px-2 sm:px-6 lg:px-8">
           {/* Gradient border bloom — TRON-style, capped at inset-6 on mobile */}
@@ -596,6 +637,7 @@ export default async function HomePage() {
             <nav className="flex flex-wrap gap-x-5 sm:gap-x-8 gap-y-3 font-mono text-sm tracking-[0.12em] sm:tracking-[0.15em] uppercase">
               {[
                 { labelKey: 'landing.footer.features' as const, href: '#specs' },
+                { labelKey: 'landing.footer.faq' as const, href: '#faq' },
                 { labelKey: 'landing.footer.fund' as const, href: 'https://fund.sippy.lat' },
                 { labelKey: 'landing.footer.about' as const, href: '/about' },
                 { labelKey: 'landing.footer.stats' as const, href: '/stats' },
