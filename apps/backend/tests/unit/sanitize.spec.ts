@@ -211,6 +211,19 @@ test.group('sanitizeOutboundMessage | Cleaning', () => {
     assert.include(result.text, 'https://sippy.lat/setup')
   })
 
+  test('preserves POAP claim URLs (poap.xyz)', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Reclama tu POAP: https://poap.xyz/mint/abc123')
+    assert.isFalse(result.blocked)
+    assert.include(result.text, 'https://poap.xyz/mint/abc123')
+    assert.notInclude(result.text, '[link removed]')
+  })
+
+  test('preserves POAP subdomain URLs (app.poap.xyz)', ({ assert }) => {
+    const result = sanitizeOutboundMessage('Claim: https://app.poap.xyz/claim/xyz')
+    assert.isFalse(result.blocked)
+    assert.include(result.text, 'https://app.poap.xyz/claim/xyz')
+  })
+
   test('truncates messages exceeding 4096 chars', ({ assert }) => {
     const longMessage = 'A'.repeat(5000)
     const result = sanitizeOutboundMessage(longMessage)
