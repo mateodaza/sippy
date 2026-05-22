@@ -261,7 +261,24 @@ export async function sendTemplateMessage(
     const data = (await response.json()) as WhatsAppAPIResponse & WhatsAppAPIError
 
     if (!response.ok) {
-      logger.warn('Failed to send template message: %s', data.error?.message)
+      // Surface every Meta-side detail. Their error envelope nests the
+      // useful bits under `error_data.details` / `error_subcode` / `code`
+      // — without these you get a generic "template message failure" and
+      // no way to tell parameter-mismatch from template-not-found.
+      const err = (data as WhatsAppAPIError).error
+      logger.warn(
+        {
+          template: templateName,
+          lang: languageCode,
+          status: response.status,
+          code: err?.code,
+          subcode: (err as any)?.error_subcode,
+          message: err?.message,
+          details: (err as any)?.error_data?.details,
+          fbtrace_id: (err as any)?.fbtrace_id,
+        },
+        'Failed to send template message'
+      )
       return null
     }
 
@@ -271,7 +288,10 @@ export async function sendTemplateMessage(
     }
     return data
   } catch (error) {
-    logger.warn('Error sending template message: %s', (error as Error).message)
+    logger.warn(
+      { template: templateName, lang: languageCode, err: (error as Error).message },
+      'Error sending template message'
+    )
     return null
   }
 }

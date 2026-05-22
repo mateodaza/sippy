@@ -40,6 +40,10 @@ import {
   drainOperatorWallet,
 } from '#services/operator_wallet.service'
 import { getPoapStatusForPhone } from '#services/event.service'
+import { sendPoapInviteIfPending } from '#services/poap_invite.service'
+import { getUserWallet } from '#services/cdp_wallet.service'
+import { findUserPrefByPhone } from '#utils/user_pref_lookup'
+import { type Lang } from '#utils/messages'
 import { isSuperAdmin } from '#utils/super_admin'
 
 const DEFAULT_PER_PAGE = 50
@@ -648,5 +652,65 @@ export default class EventsController {
 
     const snapshot = await getPoapStatusForPhone(phone, slug)
     return response.ok(snapshot)
+  }
+
+  /**
+   * POST /admin/events/:slug/poap-status/:phone/repair
+   *
+   * Force-claims a POAP for a phone and sends the WhatsApp DM, then
+   * returns the updated diagnostic. Used to heal the orphan-stamp state
+   * (poap_invite_sent_at set, no code assigned) that arose for users who
+   * went through the legacy shared-URL path before the per-attendee pool
+   * was provisioned.
+   *
+   * Reuses `sendPoapInviteIfPending` which internally calls
+   * `claimPendingPoapInvite`. The eligibility query was updated to treat
+   * orphan-stamped users as claim-eligible — re-running it assigns a
+   * fresh code in the same atomic CTE.
+   *
+   * 404 if the phone has no `user_preferences` row (unknown user).
+   * 200 with the updated snapshot on success or no-op.
+   */
+  async repairPoap({ params, response }: HttpContext) {
+    const slug = String(params.slug ?? '').trim()
+    if (!slug) return response.badRequest({ error: 'Missing :slug' })
+
+    const phoneRaw = String(params.phone ?? '').trim()
+    if (!phoneRaw) return response.badRequest({ error: 'Missing :phone' })
+    const phone = canonicalizePhone(phoneRaw)
+    if (!phone) {
+      return response.badRequest({
+        error: `Could not canonicalize phone '${phoneRaw}' — expected E.164`,
+      })
+    }
+
+    const pref = await findUserPrefByPhone(phone)
+    if (!pref) {
+      return response.notFound({
+        error: `No user_preferences row for ${phone} — recipient was never onboarded`,
+      })
+    }
+    const lang: Lang = (pref.preferredLanguage as Lang | undefined) ?? 'es'
+
+    // Need the user's Sippy wallet address for the POAP claim DM (the
+    // template variable {{3}} that tells the recipient which address to
+    // paste into POAP's claim form).
+    const userWallet = await getUserWallet(phone)
+    if (!userWallet?.walletAddress) {
+      return response.badRequest({
+        error: `User ${phone} has no Sippy wallet — POAP DM template requires it`,
+      })
+    }
+
+    // Snapshot before, so the response can show what changed.
+    const before = await getPoapStatusForPhone(phone, slug)
+
+    // Best-effort — sendPoapInviteIfPending never throws. The updated
+    // eligibility query in claimPendingPoapInvite auto-heals orphan
+    // stamps, so this re-claims and sends the DM in one call.
+    await sendPoapInviteIfPending(phone, lang, userWallet.walletAddress)
+
+    const after = await getPoapStatusForPhone(phone, slug)
+    return response.ok({ repaired: true, before, after })
   }
 }

@@ -369,6 +369,18 @@ export async function claimPendingPoapInvite(phoneNumber: string): Promise<PoapI
   // tells us whether to take the pool path or the legacy shared-URL
   // path; eligibility relaxes the URL requirement to "(has shared URL)
   // OR (event has a pool)" so pool-only events still qualify.
+  // Eligibility includes an ORPHAN-STAMP heal path: when the event has a
+  // pool AND the user's `poap_invite_sent_at` is set BUT no row in
+  // `poap_codes` is actually assigned to them, treat them as eligible
+  // again. This happens when the legacy shared-URL path stamped the
+  // user before a pool was provisioned — the stamp is real but the
+  // intended POAP delivery never landed. Phase 2 will re-stamp the now()
+  // timestamp and atomically assign a fresh code in the same CTE.
+  //
+  // Note: the orphan check only applies to events that currently have a
+  // pool. Pure-legacy events (no pool, just a shared URL) stay strictly
+  // gated on `poap_invite_sent_at IS NULL` because there's nothing to
+  // assign — the stamp itself is the delivery record.
   const eligible = await db.rawQuery(
     `SELECT uel.event_id, e.slug AS event_slug, e.name AS event_name,
             e.poap_claim_url AS shared_url,
@@ -376,7 +388,6 @@ export async function claimPendingPoapInvite(phoneNumber: string): Promise<PoapI
      FROM user_event_links uel
      JOIN events e ON e.id = uel.event_id
      WHERE uel.phone_number = ?
-       AND uel.poap_invite_sent_at IS NULL
        AND uel.poap_claimed = FALSE
        AND e.active = TRUE
        AND (e.starts_at IS NULL OR e.starts_at <= now())
@@ -384,6 +395,18 @@ export async function claimPendingPoapInvite(phoneNumber: string): Promise<PoapI
        AND (
          e.poap_claim_url IS NOT NULL
          OR EXISTS(SELECT 1 FROM poap_codes pc2 WHERE pc2.event_id = e.id)
+       )
+       AND (
+         uel.poap_invite_sent_at IS NULL
+         OR (
+           -- Orphan-stamp: pool event, stamped, no assignment.
+           EXISTS(SELECT 1 FROM poap_codes pc3 WHERE pc3.event_id = e.id)
+           AND NOT EXISTS(
+             SELECT 1 FROM poap_codes pc4
+             WHERE pc4.event_id = e.id
+               AND pc4.assigned_to_phone = uel.phone_number
+           )
+         )
        )
      ORDER BY e.starts_at DESC NULLS LAST, uel.created_at DESC
      LIMIT 1`,
@@ -416,11 +439,19 @@ export async function claimPendingPoapInvite(phoneNumber: string): Promise<PoapI
          JOIN events e ON e.id = uel.event_id
          WHERE uel.phone_number = ?
            AND uel.event_id = ?
-           AND uel.poap_invite_sent_at IS NULL
            AND uel.poap_claimed = FALSE
            AND e.active = TRUE
            AND (e.starts_at IS NULL OR e.starts_at <= now())
            AND (e.ends_at IS NULL OR e.ends_at >= now())
+           AND (
+             uel.poap_invite_sent_at IS NULL
+             OR NOT EXISTS(
+               -- Orphan-stamp heal: stamped but no code assigned.
+               SELECT 1 FROM poap_codes pc_self
+               WHERE pc_self.event_id = uel.event_id
+                 AND pc_self.assigned_to_phone = uel.phone_number
+             )
+           )
          LIMIT 1
          FOR UPDATE OF uel SKIP LOCKED
        ),
