@@ -377,7 +377,7 @@ export function formatQrInactiveMessage(lang: Lang = 'en'): string {
 export function formatPayAskForAmount(displayName: string, lang: Lang = 'en'): string {
   const m = {
     en: () => `How much do you want to pay ${displayName}?`,
-    es: () => `Cuanto le pagas a ${displayName}?`,
+    es: () => `¿Cuánto le pagas a ${displayName}?`,
     pt: () => `Quanto voce paga a ${displayName}?`,
   }
   return m[lang]()
