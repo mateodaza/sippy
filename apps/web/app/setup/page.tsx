@@ -111,8 +111,11 @@ type Step =
   | 'event-tagged'
   | 'email-login'
   | 'email-login-otp'
-// 'permission' is hidden — auto-created with max limit after ToS
-const STEPS: Step[] = ['phone', 'otp', 'email', 'tos', 'done']
+// Event-day fast path: recovery email and ToS screens are temporarily skipped
+// during onboarding. Keep the legacy steps/components in this file so we can
+// restore them after Pizza Day without re-threading the state machine.
+// 'permission' is hidden — auto-created with max limit after OTP/wallet registration.
+const STEPS: Step[] = ['phone', 'otp', 'done']
 
 const TOS_VERSION = '1.0'
 const TOS_URL = 'https://www.sippy.lat/terms'
@@ -274,27 +277,25 @@ function SetupContent({
   const isCdpConfigured = !!CDP_PROJECT_ID
 
   /**
-   * Check wallet-status (and email-status) to advance to the correct step.
+   * Check wallet-status to advance to the correct step.
    * Used after wallet registration to skip steps for returning users.
    *
    * Decision tree:
    *   hasPermission   → redirect to /settings (fully onboarded)
-   *   tosAccepted     → permission step
-   *   email verified  → tos step (skip email, they already have one)
-   *   otherwise       → email step (genuinely fresh user)
+   *   otherwise       → permission step (event-day fast path)
    */
   const advanceToCorrectStep = async (accessToken: string): Promise<boolean> => {
     if (!BACKEND_URL) {
-      setStep('email')
-      return false
+      setStep('permission')
+      return true
     }
     try {
       const headers = { Authorization: `Bearer ${accessToken}` }
 
       const statusResponse = await fetch(`${BACKEND_URL}/api/wallet-status`, { headers })
       if (!statusResponse.ok) {
-        setStep('email')
-        return false
+        setStep('permission')
+        return true
       }
       const status = await statusResponse.json()
 
@@ -321,30 +322,14 @@ function SetupContent({
         router.replace('/settings')
         return true
       }
-      if (status.tosAccepted) {
-        setStep('permission')
-        return true
-      }
-
-      // ToS not accepted — check if email is already verified to skip the email step
-      try {
-        const emailRes = await fetch(`${BACKEND_URL}/api/auth/email-status`, { headers })
-        if (emailRes.ok) {
-          const emailData = await emailRes.json()
-          if (emailData.verified) {
-            setStep('tos')
-            return true
-          }
-        }
-      } catch {
-        // email-status failed — not critical, just show email step
-      }
     } catch (err) {
       console.error('advanceToCorrectStep failed:', err)
     }
-    // Fresh user or no verified email — show email step
-    setStep('email')
-    return false
+    // Fresh/incomplete users skip recovery email + ToS and go straight to
+    // spend-permission creation. This is intentionally web-only; settings
+    // still exposes email recovery after onboarding.
+    setStep('permission')
+    return true
   }
 
   // Language init: phone prefix wins immediately, then API can override for returning users
@@ -624,10 +609,12 @@ function SetupContent({
               }
               router.replace('/settings')
               return
-            } else if (status.tosAccepted) {
+            } else {
               // Attempt to register an existing on-chain permission before asking
               // the user to create a new one. Handles the case where a permission
-              // was signed on-chain but registration was interrupted (tab close, network error).
+              // was signed on-chain but registration was interrupted (tab close,
+              // network error). Recovery email + ToS are skipped for the event-day
+              // fast path, so every incomplete wallet resumes here.
               try {
                 const regPermRes = await fetch(`${BACKEND_URL}/api/register-permission`, {
                   method: 'POST',
@@ -641,26 +628,19 @@ function SetupContent({
                   console.log('Found and registered existing on-chain permission during recovery')
                   router.replace('/settings')
                   return
-                } else {
-                  // No existing permission found — resume at permission step
-                  setStep('permission')
                 }
               } catch (err) {
                 console.error('Permission recovery check failed:', err)
-                setStep('permission')
               }
-            } else {
-              // Wallet registered but ToS not accepted — resume at ToS step.
-              // Email step is only shown in the initial fresh flow, not on recovery.
-              setStep('tos')
+              setStep('permission')
             }
           } else {
-            // wallet-status returned non-OK — resume at tos step (safe default).
-            setStep('tos')
+            // wallet-status returned non-OK — resume at permission step (fast path).
+            setStep('permission')
           }
         } else {
-          // No backend, just go to tos step
-          setStep('tos')
+          // No backend, just go to permission step
+          setStep('permission')
         }
       } catch (err) {
         console.error('Session recovery failed:', err)
@@ -858,7 +838,7 @@ function SetupContent({
       if (token) {
         await advanceToCorrectStep(token)
       } else {
-        setStep('email')
+        setStep('permission')
       }
     } catch (err) {
       console.error('OTP verification failed:', err)
@@ -937,7 +917,7 @@ function SetupContent({
         if (token) {
           await advanceToCorrectStep(token)
         } else {
-          setStep('email')
+          setStep('permission')
         }
       } catch (regErr) {
         console.error('Backend registration error:', regErr)
@@ -1269,7 +1249,7 @@ function SetupContent({
     <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-[var(--bg-primary)] panel-frame rounded-2xl p-8">
         {/* Progress indicator — hidden on terminal screens not in the linear flow */}
-        {step !== 'event-tagged' && (
+        {step !== 'event-tagged' && step !== 'permission' && (
           <div className="mb-8 text-sm text-[var(--text-secondary)] font-medium tracking-wide">
             {{ en: 'Step', es: 'Paso', pt: 'Passo' }[lang] || 'Step'} {STEPS.indexOf(step) + 1} of{' '}
             {STEPS.length}

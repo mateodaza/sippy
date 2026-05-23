@@ -191,17 +191,6 @@ async function goToOtpStep(phone = '+573001234567') {
   })
 }
 
-// Advance through the ToS step (checkbox + Continue)
-async function goThroughTosStep() {
-  await act(async () => {
-    const checkbox = container!.querySelector('input[type="checkbox"]') as HTMLInputElement
-    checkbox.click()
-  })
-  await act(async () => {
-    findButton('Continue')!.click()
-  })
-}
-
 /**
  * Flush pending microtasks/promises so async handlers (fetch chains) resolve.
  * Uses process.nextTick which flushes microtasks in jsdom better than setTimeout.
@@ -245,10 +234,10 @@ async function waitForRedirect(path: string, timeoutMs = 3000) {
   )
 }
 
-// Advance to email step (after OTP verification)
-// When BACKEND_URL is set, handleVerifyOtp makes async fetch calls
-// (register-wallet, wallet-status, email-status) that need extra flushing.
-async function goToEmailStep(otpCode = '123456') {
+// Advance past OTP verification. With the event-day fast path, this no longer
+// lands on a recovery-email screen; it either redirects, completes setup, or
+// auto-creates the spend permission.
+async function goPastOtpStep(otpCode = '123456') {
   await act(async () => {
     const input = container!.querySelector('input[type="text"]') as HTMLInputElement
     setInputValue(input, otpCode)
@@ -260,37 +249,9 @@ async function goToEmailStep(otpCode = '123456') {
   await flushAsync()
 }
 
-async function goThroughEmailStep() {
-  // Enter email
-  await act(async () => {
-    const input = container!.querySelector('input[type="email"]') as HTMLInputElement
-    setInputValue(input, 'test@example.com')
-  })
-  // Send code
-  await act(async () => {
-    findButton('Send code')!.click()
-  })
-  await flushAsync()
-  // Enter verification code
-  await act(async () => {
-    const input = container!.querySelector('input[type="text"]') as HTMLInputElement
-    setInputValue(input, '123456')
-  })
-  // Verify
-  await act(async () => {
-    findButton('Verify')!.click()
-  })
-  await flushAsync()
-  // Email verified -> auto-advances to ToS after 1500ms timer
-  // Wait for the timer to fire naturally
-  await waitForContent('Terms of Service', 5000)
-}
-
-// Advance to permission step (verify email, accept ToS)
+// Advance to permission step (OTP verification now skips recovery email + ToS)
 async function goToPermissionStep(otpCode = '123456') {
-  await goToEmailStep(otpCode)
-  await goThroughEmailStep()
-  await goThroughTosStep()
+  await goPastOtpStep(otpCode)
 }
 
 // --- Setup / Teardown ---
@@ -307,7 +268,7 @@ beforeEach(() => {
   )
   vi.stubEnv('NEXT_PUBLIC_CDP_PROJECT_ID', 'test-project-id')
   vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', '')
-  vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '')
+  vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '0xspender')
   vi.stubEnv('NEXT_PUBLIC_SIPPY_NETWORK', 'arbitrum')
 })
 
@@ -354,23 +315,26 @@ describe('handleSendOtp', () => {
 })
 
 describe('handleVerifyOtp', () => {
-  it('happy path: verifies OTP, stores token, authenticates, advances to email step', async () => {
+  it('happy path: verifies OTP, stores token, authenticates, skips email/ToS, and completes setup', async () => {
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
       isNewUser: false,
     })
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
     await renderPage()
 
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
+    await flushAsync()
 
     expect(mocks.verifyOtp).toHaveBeenCalledWith('+573001234567', '123456')
     expect(mocks.storeToken).toHaveBeenCalledWith('jwt-token-abc')
     expect(mocks.authenticateWithJWT).toHaveBeenCalled()
-    // Should now be on email step
-    expect(container!.textContent).toContain('Add a recovery email (recommended)')
+    expect(container!.textContent).not.toContain('Add a recovery email')
+    expect(container!.textContent).not.toContain('Terms of Service')
+    expect(container!.textContent).toContain("You're All Set")
   })
 
   it('shows error and stays on otp step when verifyOtp throws', async () => {
@@ -379,7 +343,7 @@ describe('handleVerifyOtp', () => {
     await renderPage()
 
     await goToOtpStep('+573001234567')
-    await goToEmailStep('000000')
+    await goPastOtpStep('000000')
 
     expect(container!.textContent).toContain('Verification failed')
     // Should still be on OTP step (text input for OTP visible)
@@ -393,7 +357,7 @@ describe('handleVerifyOtp', () => {
     await renderPage()
 
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
 
     expect(container!.textContent).toContain('Verification failed')
   })
@@ -407,7 +371,7 @@ describe('handleVerifyOtp', () => {
     await renderPage()
 
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
 
     // Should be in loading state waiting for wallet to populate
     // (awaitingCdpWallet = true, useEffect polling currentUser)
@@ -438,13 +402,15 @@ describe('session recovery', () => {
     expect((registerCall![1] as RequestInit).headers).toMatchObject({
       Authorization: 'Bearer stored-token-xyz',
     })
-    // Recovery routes to tos (not email) when tosAccepted is falsy
-    expect(container!.textContent).toContain('Terms of Service')
+    // Recovery routes straight to permission creation when tosAccepted is falsy
+    await flushAsync()
+    expect(container!.textContent).not.toContain('Terms of Service')
+    expect(container!.textContent).not.toContain('Add a recovery email')
 
     vi.unstubAllGlobals()
   })
 
-  it('routes to tos step (not email) when hasPermission is false — covers skipped-email recovery', async () => {
+  it('routes to permission step when hasPermission is false — skips email and ToS recovery', async () => {
     // Covers all hasPermission:false recovery cases: skipped email, mid-email, never-saw-email.
     // None of them should show the email step on recovery ("no nag on this page").
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
@@ -461,8 +427,9 @@ describe('session recovery', () => {
 
     await renderPage()
 
-    // Must show tos step, NOT email step (tosAccepted is falsy in response)
-    expect(container!.textContent).toContain('Terms of Service')
+    // Must skip ToS and email.
+    await flushAsync()
+    expect(container!.textContent).not.toContain('Terms of Service')
     expect(container!.textContent).not.toContain('Add a recovery email')
     // No email-status fetch should occur during recovery
     const emailStatusCalls = mockFetch.mock.calls.filter(
@@ -473,7 +440,7 @@ describe('session recovery', () => {
     vi.unstubAllGlobals()
   })
 
-  it('routes to tos step when wallet-status returns non-OK', async () => {
+  it('routes to permission step when wallet-status returns non-OK', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
@@ -493,7 +460,8 @@ describe('session recovery', () => {
 
     await renderPage()
 
-    expect(container!.textContent).toContain('Terms of Service')
+    await flushAsync()
+    expect(container!.textContent).not.toContain('Terms of Service')
     expect(container!.textContent).not.toContain('Add a recovery email')
 
     vi.unstubAllGlobals()
@@ -569,216 +537,6 @@ describe('handleApprovePermission', () => {
     expect((registerPermCall![1] as RequestInit).headers).toMatchObject({
       Authorization: 'Bearer jwt-token',
     })
-
-    vi.unstubAllGlobals()
-  })
-})
-
-describe('handleSendEmailCode', () => {
-  it('happy path: calls POST /api/auth/send-email-code and shows code input', async () => {
-    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
-      isNewUser: false,
-    })
-    // Token is set automatically by storeToken() during OTP verify
-
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => '',
-      json: async () => ({}),
-    })
-    vi.stubGlobal('fetch', mockFetch)
-
-    await renderPage()
-    await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-
-    // Enter email and click Send code
-    await act(async () => {
-      const input = container!.querySelector('input[type="email"]') as HTMLInputElement
-      setInputValue(input, 'user@example.com')
-    })
-    await act(async () => {
-      findButton('Send code')!.click()
-    })
-
-    const sendCodeCall = mockFetch.mock.calls.find(
-      (call: unknown[]) =>
-        typeof call[0] === 'string' && call[0].includes('/api/auth/send-email-code')
-    )
-    expect(sendCodeCall).toBeDefined()
-    expect((sendCodeCall![1] as RequestInit).headers).toMatchObject({
-      'Authorization': 'Bearer jwt-token-abc',
-      'Content-Type': 'application/json',
-    })
-    expect((sendCodeCall![1] as RequestInit).body).toBe(
-      JSON.stringify({ email: 'user@example.com' })
-    )
-    // Code input should now be visible
-    expect(container!.textContent).toContain('Code sent to user@example.com')
-
-    vi.unstubAllGlobals()
-  })
-
-  it('shows error when send-email-code returns non-OK', async () => {
-    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
-      isNewUser: false,
-    })
-    // Token is set automatically by storeToken() during OTP verify
-
-    // register-wallet (from handleVerifyOtp) must succeed so we reach the email step;
-    // send-email-code should fail to exercise the error branch.
-    const mockFetch = vi.fn().mockImplementation((url: string) => {
-      if (typeof url === 'string' && url.includes('/api/auth/send-email-code')) {
-        return Promise.resolve({
-          ok: false,
-          text: async () => 'Invalid email address',
-          json: async () => ({}),
-        })
-      }
-      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
-    })
-    vi.stubGlobal('fetch', mockFetch)
-
-    await renderPage()
-    await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-
-    await act(async () => {
-      const input = container!.querySelector('input[type="email"]') as HTMLInputElement
-      setInputValue(input, 'bad-email')
-    })
-    await act(async () => {
-      findButton('Send code')!.click()
-    })
-
-    expect(container!.textContent).toContain('Failed to send email code')
-    // Still on email step (email input still visible)
-    expect(container!.querySelector('input[type="email"]')).not.toBeNull()
-
-    vi.unstubAllGlobals()
-  })
-})
-
-describe('handleVerifyEmailCode', () => {
-  it('happy path: verifies code, shows confirmation, advances to tos after 1500ms', async () => {
-    vi.useFakeTimers()
-    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
-      isNewUser: false,
-    })
-    // Token is set automatically by storeToken() during OTP verify
-
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => '',
-      json: async () => ({}),
-    })
-    vi.stubGlobal('fetch', mockFetch)
-
-    await renderPage()
-    await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-
-    // Send email code
-    await act(async () => {
-      const input = container!.querySelector('input[type="email"]') as HTMLInputElement
-      setInputValue(input, 'user@example.com')
-    })
-    await act(async () => {
-      findButton('Send code')!.click()
-    })
-
-    // Enter verification code
-    await act(async () => {
-      const input = container!.querySelector('input[type="text"]') as HTMLInputElement
-      setInputValue(input, '654321')
-    })
-    await act(async () => {
-      findButton('Verify')!.click()
-    })
-
-    const verifyCall = mockFetch.mock.calls.find(
-      (call: unknown[]) =>
-        typeof call[0] === 'string' && call[0].includes('/api/auth/verify-email-code')
-    )
-    expect(verifyCall).toBeDefined()
-    expect((verifyCall![1] as RequestInit).headers).toMatchObject({
-      'Authorization': 'Bearer jwt-token-abc',
-      'Content-Type': 'application/json',
-    })
-    expect((verifyCall![1] as RequestInit).body).toBe(
-      JSON.stringify({ email: 'user@example.com', code: '654321' })
-    )
-    // Confirmation shown before auto-advance
-    expect(container!.textContent).toContain('Email verified')
-
-    // Advance timer to trigger setStep('tos')
-    await act(async () => {
-      vi.advanceTimersByTime(1500)
-    })
-    expect(container!.textContent).toContain('Terms of Service')
-
-    vi.useRealTimers()
-    vi.unstubAllGlobals()
-  })
-
-  it('shows error when verify-email-code returns non-OK', async () => {
-    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
-      isNewUser: false,
-    })
-    // Token is set automatically by storeToken() during OTP verify
-
-    // verify-email-code fails; all other endpoints succeed
-    const mockFetch = vi.fn().mockImplementation((url: string) => {
-      if (typeof url === 'string' && url.includes('/api/auth/verify-email-code')) {
-        return Promise.resolve({
-          ok: false,
-          text: async () => 'Invalid code',
-          json: async () => ({}),
-        })
-      }
-      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
-    })
-    vi.stubGlobal('fetch', mockFetch)
-
-    await renderPage()
-    await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-
-    await act(async () => {
-      const input = container!.querySelector('input[type="email"]') as HTMLInputElement
-      setInputValue(input, 'user@example.com')
-    })
-    await act(async () => {
-      findButton('Send code')!.click()
-    })
-
-    await act(async () => {
-      const input = container!.querySelector('input[type="text"]') as HTMLInputElement
-      setInputValue(input, '000000')
-    })
-    await act(async () => {
-      findButton('Verify')!.click()
-    })
-
-    expect(container!.textContent).toContain('Failed to verify email code')
-    // Still on email step (code input still visible)
-    expect(container!.textContent).toContain('Code sent to user@example.com')
 
     vi.unstubAllGlobals()
   })
@@ -938,7 +696,7 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
     await waitForRedirect('/settings')
   })
 
@@ -954,7 +712,7 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
     // useEffect auto-fires handleApprovePermission
     await flushAsync()
     await flushAsync()
@@ -962,36 +720,70 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
     expect(mocks.createSpendPermission).toHaveBeenCalled()
   })
 
-  it('returning user with verified email but no ToS → skips email, goes to tos step', async () => {
+  it('returning user with verified email but no ToS → skips email/ToS, auto-creates permission', async () => {
     setupOtpMocksWithBackend()
-    mockFetchByUrl({
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
+    const fetchMock = mockFetchByUrl({
       '/api/wallet-status': { hasWallet: true, hasPermission: false, tosAccepted: false },
       '/api/auth/email-status': { hasEmail: true, verified: true, maskedEmail: 'u***@example.com' },
+      '/api/ensure-gas': { ready: true },
+      '/api/register-permission': { ok: true },
     })
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-    await waitForContent('Terms of Service')
+    await goPastOtpStep('123456')
+    await flushAsync()
+    expect(container!.textContent).not.toContain('Terms of Service')
+    expect(container!.textContent).not.toContain('Add a recovery email')
+    expect(mocks.createSpendPermission).toHaveBeenCalled()
+    expect(
+      fetchMock.mock.calls.some(
+        (call: unknown[]) =>
+          typeof call[0] === 'string' && call[0].includes('/api/auth/email-status')
+      )
+    ).toBe(false)
+    expect(
+      fetchMock.mock.calls.some(
+        (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/accept-tos')
+      )
+    ).toBe(false)
   })
 
-  it('fresh user (no email, no ToS) → shows email step', async () => {
+  it('fresh user (no email, no ToS) → skips email/ToS and auto-creates permission', async () => {
     setupOtpMocksWithBackend()
-    mockFetchByUrl({
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
+    const fetchMock = mockFetchByUrl({
       '/api/wallet-status': { hasWallet: true, hasPermission: false, tosAccepted: false },
       '/api/auth/email-status': { hasEmail: false, verified: false, maskedEmail: null },
+      '/api/ensure-gas': { ready: true },
+      '/api/register-permission': { ok: true },
     })
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
 
-    expect(container!.textContent).toContain('Add a recovery email')
+    expect(container!.textContent).not.toContain('Add a recovery email')
+    expect(container!.textContent).not.toContain('Terms of Service')
+    expect(mocks.createSpendPermission).toHaveBeenCalled()
+    expect(
+      fetchMock.mock.calls.some(
+        (call: unknown[]) =>
+          typeof call[0] === 'string' && call[0].includes('/api/auth/email-status')
+      )
+    ).toBe(false)
+    expect(
+      fetchMock.mock.calls.some(
+        (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/accept-tos')
+      )
+    ).toBe(false)
     expect(mocks.routerReplace).not.toHaveBeenCalledWith('/settings')
   })
 
-  it('wallet-status returns non-OK → falls back to email step (does not block onboarding)', async () => {
+  it('wallet-status returns non-OK → falls back to permission step (does not block onboarding)', async () => {
     setupOtpMocksWithBackend()
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
     const fn = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/api/wallet-status')) {
         return Promise.resolve({
@@ -1000,14 +792,24 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
           json: async () => ({}),
         })
       }
+      if (url.includes('/api/ensure-gas')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ ready: true }),
+        })
+      }
       return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
     })
     vi.stubGlobal('fetch', fn)
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-    await waitForContent('Add a recovery email')
+    await goPastOtpStep('123456')
+    await flushAsync()
+    expect(container!.textContent).not.toContain('Add a recovery email')
+    expect(container!.textContent).not.toContain('Terms of Service')
+    expect(mocks.createSpendPermission).toHaveBeenCalled()
   })
 })
 
@@ -1119,7 +921,7 @@ describe('event linking — linkEventFiredRef guard', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     window.sessionStorage.clear()
-    window.localStorage.clear()
+    window.localStorage?.clear?.()
   })
 
   // URL: ?phone=…&event=…&source=…
@@ -1279,7 +1081,7 @@ describe('event linking — linkEventFiredRef guard', () => {
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
     await flushAsync()
     // Extra flushes in case a stray re-render attempts a second call.
     await flushAsync()
@@ -1330,7 +1132,7 @@ describe('event linking — linkEventFiredRef guard', () => {
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
     await flushAsync()
 
     const calls = countLinkEventCalls(mockFetch)
@@ -1369,7 +1171,7 @@ describe('event linking — linkEventFiredRef guard', () => {
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
     await flushAsync()
     await flushAsync()
 
@@ -1394,7 +1196,7 @@ describe('event linking — linkEventFiredRef guard', () => {
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
     await flushAsync()
 
     expect(countLinkEventCalls(mockFetch).length).toBe(0)
