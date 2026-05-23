@@ -537,6 +537,12 @@ describe('handleApprovePermission', () => {
     expect((registerPermCall![1] as RequestInit).headers).toMatchObject({
       Authorization: 'Bearer jwt-token',
     })
+    expect(JSON.parse((registerPermCall![1] as RequestInit).body as string)).toEqual({
+      dailyLimit: '50',
+    })
+
+    const viem = await import('viem')
+    expect(viem.parseUnits).toHaveBeenCalledWith('50', 6)
 
     vi.unstubAllGlobals()
   })

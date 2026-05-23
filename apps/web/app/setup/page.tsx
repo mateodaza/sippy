@@ -114,8 +114,13 @@ type Step =
 // Event-day fast path: recovery email and ToS screens are temporarily skipped
 // during onboarding. Keep the legacy steps/components in this file so we can
 // restore them after Pizza Day without re-threading the state machine.
-// 'permission' is hidden — auto-created with max limit after OTP/wallet registration.
+// 'permission' is hidden — auto-created after OTP/wallet registration.
 const STEPS: Step[] = ['phone', 'otp', 'done']
+
+// Email is skipped on the event-day fast path, so new users must receive the
+// unverified tier. Asking CDP for $500/day creates an on-chain permission the
+// backend correctly rejects for unverified users, which strands onboarding.
+const EVENT_FAST_PATH_DAILY_LIMIT_USDC = '50'
 
 const TOS_VERSION = '1.0'
 const TOS_URL = 'https://www.sippy.lat/terms'
@@ -222,7 +227,7 @@ function SetupContent({
   const [step, setStep] = useState<Step>('phone')
   const [phoneNumber, setPhoneNumber] = useState(phoneFromUrl)
   const [otp, setOtp] = useState('')
-  // dailyLimit is derived from emailVerified at permission-creation time (see handleApprovePermission)
+  // dailyLimit is fixed to the unverified tier while email verification is skipped.
   const [error, setError] = useState<string | null>(null)
   const [isSessionExpired, setIsSessionExpired] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -1095,8 +1100,7 @@ function SetupContent({
         throw new Error('No wallet address. Please restart the process.')
       }
 
-      // Email is mandatory before ToS — all new users get the verified tier
-      const tierLimit = '500'
+      const tierLimit = EVENT_FAST_PATH_DAILY_LIMIT_USDC
 
       // Validate daily limit before creating on-chain permission — invalid values
       // would create a broken or expensive-to-undo permission on-chain
