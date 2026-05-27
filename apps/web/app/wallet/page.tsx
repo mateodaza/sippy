@@ -525,21 +525,17 @@ function WalletContent() {
 
           {reAuthStep === 'phone' && (
             <>
-              <input
-                type="tel"
+              <SippyPhoneInput
                 value={reAuthPhone}
-                onChange={(e) => !isPhoneLocked && setReAuthPhone(e.target.value)}
-                placeholder="+573001234567"
-                disabled={isPhoneLocked}
-                className={`w-full p-3 border rounded-lg mb-4 text-[var(--text-primary)] ${
-                  isPhoneLocked ? 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]' : ''
-                }`}
+                onChange={setReAuthPhone}
+                locked={isPhoneLocked}
               />
               {isPhoneLocked && (
-                <p className="text-sm text-[var(--text-secondary)] mb-4">
+                <p className="text-sm text-[var(--text-secondary)] mb-4 mt-2">
                   {t('wallet.phoneFromWhatsapp', lang)}
                 </p>
               )}
+              <div className="mt-4" />
               <ChannelPicker
                 canSwitch={reAuthCanSwitchChannel}
                 isLoading={reAuthLoading}
@@ -637,14 +633,12 @@ function WalletContent() {
             )}
             {reAuthStep === 'phone' && (
               <>
-                <input
-                  type="tel"
+                <SippyPhoneInput
                   value={reAuthPhone}
-                  onChange={(e) => setReAuthPhone(e.target.value)}
-                  placeholder="+573001234567"
-                  disabled={!!reAuthPhone}
-                  className="w-full p-3 border rounded-lg mb-3 text-[var(--text-primary)] disabled:bg-[var(--bg-tertiary)] disabled:cursor-not-allowed"
+                  onChange={setReAuthPhone}
+                  locked={!!reAuthPhone}
                 />
+                <div className="mt-3" />
                 <ChannelPicker
                   canSwitch={reAuthCanSwitchChannel}
                   isLoading={reAuthLoading}
