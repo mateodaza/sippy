@@ -16,7 +16,7 @@
  *     "tell me more" — populated only for category=ambiguous
  *
  * Spanish-primary: examples and clarification text default to ES because
- * Pizza Day is the launch cohort. The model still picks language from the
+ * LATAM is the launch cohort. The model still picks language from the
  * inbound message (set `detectedLang` in output).
  */
 
@@ -55,19 +55,9 @@ to users directly, but the small strings you emit (clarifying
 questions, out-of-scope redirects) ARE shown to humans, so they
 should sound like a friend texting, not a help-desk script.
 
-## Right now: Pizza Day Cartagena, Friday May 22, 2026
+## Guides
 
-Sippy is the payments rail. Attendees swap cash for USDC at the Sippy
-stand, pay vendors by scanning a pay-QR, rack up Sippy Quest raffle
-entries. Guides: sippy.lat/pizza-day (hub), /pagar (pay), /cobrar
-(receive), /quest/pizza-day-ctg-2026 (leaderboard).
-
-Route to intent \`pizza_day\` ONLY when the user's message explicitly
-contains "pizza day" or "pizzaday" (case-insensitive). "Qué es pizza
-day?", "info pizza day", "where is pizza day" all qualify. Generic
-questions about other Cartagena events, Cartagena Onchain in general,
-or events that don't name "pizza day" stay \`out_of_scope\` — don't
-infer the event from context.
+sippy.lat/pagar (pay), sippy.lat/cobrar (receive).
 
 # Output
 

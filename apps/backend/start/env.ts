@@ -210,4 +210,11 @@ export default await Env.create(new URL('../', import.meta.url), {
   PIZZA_DAY_EVENT_END_AT: Env.schema.string.optional(),
   // Caps the whale-inviter outcome. 5 chosen by design call 2026-05-18.
   QUEST_MAX_ENTRIES_PER_USER: Env.schema.number.optional(),
+
+  // Currently active event slug (e.g. `pizza-day-ctg-2026`, `techx-colcaribe-2026`).
+  // Drives quest scoping, leaderboard URL, and referral attribution in the bot.
+  // When unset, the bot operates in "no active event" mode: referral codes still
+  // work but without event attribution, and quest_status replies that no event
+  // is currently running. Flip per-event without redeploying code.
+  SIPPY_CURRENT_EVENT_SLUG: Env.schema.string.optional(),
 })

@@ -14,7 +14,7 @@
  *   - invariant: GAS_MIN_BALANCE_ETH ≤ refuelAmount ≤ minBalance
  *   - spender wallet ETH balance
  *   - Arbitrum RPC reachable + latest block freshness
- *   - active venue event QR exists for pizza-day-ctg-2026
+ *   - active venue event QR exists for SIPPY_CURRENT_EVENT_SLUG (skipped if unset)
  *   - at least one active pay QR resolves
  *   - WhatsApp Cloud API env vars present
  *   - FRONTEND_URL env present
@@ -62,7 +62,7 @@ const RPC_URL = process.env.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc'
 const GAS_REFUEL =
   process.env.REFUEL_CONTRACT_ADDRESS || '0xE4e5474E97E89d990082505fC5708A6a11849936'
 const SPENDER = process.env.SIPPY_SPENDER_ADDRESS || '0xB396805F4C4eb7A45E237A9468FB647C982fBeb1'
-const EVENT_SLUG = 'pizza-day-ctg-2026'
+const EVENT_SLUG = process.env.SIPPY_CURRENT_EVENT_SLUG
 
 // Backend's hardcoded gas-readiness threshold. Must stay in sync with
 // packages/shared/src/constants.ts. The invariant check below assumes
@@ -227,8 +227,13 @@ async function main() {
     }
   })
 
-  // 9. active venue event QR for pizza-day-ctg-2026
+  // 9. active venue event QR for SIPPY_CURRENT_EVENT_SLUG. Skipped (with a
+  // PASS note) when no event is configured — outside event windows the
+  // bot operates in "no active event" mode and a venue QR isn't expected.
   await check("9.  active event QR exists (kind=event, source_tag='venue')", async () => {
+    if (!EVENT_SLUG) {
+      return { ok: true, detail: 'SIPPY_CURRENT_EVENT_SLUG unset — check skipped' }
+    }
     const r = await db.query(
       `SELECT COUNT(*)::int AS n FROM qr_links
        WHERE kind = 'event' AND status = 'active'

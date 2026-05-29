@@ -1195,6 +1195,36 @@ export function formatQuestStatusMessage(
 }
 
 /**
+ * Sippy Quest — fallback reply when no event is currently active
+ * (SIPPY_CURRENT_EVENT_SLUG unset). Still surfaces the user's referral
+ * code so they have something useful, just no entries/rank/leaderboard.
+ */
+export function formatQuestNoActiveEvent(
+  args: { code: string; maxEntries: number },
+  lang: Lang = 'en'
+): string {
+  const shareUrl = `${FRONTEND_URL}/r/${args.code}`
+  const m = {
+    en: () =>
+      `No active Sippy Quest right now.\n\n` +
+      `Your invite code stays the same: *${args.code}*\n` +
+      `(Up to ${args.maxEntries} entries per event when the next one opens.)\n\n` +
+      `Share your link:\n${shareUrl}`,
+    es: () =>
+      `No hay un Sippy Quest activo ahora mismo.\n\n` +
+      `Tu codigo de invitacion sigue siendo: *${args.code}*\n` +
+      `(Hasta ${args.maxEntries} entradas por evento cuando se abra el proximo.)\n\n` +
+      `Comparte tu link:\n${shareUrl}`,
+    pt: () =>
+      `Nao ha Sippy Quest ativo no momento.\n\n` +
+      `Seu codigo de convite continua: *${args.code}*\n` +
+      `(Ate ${args.maxEntries} entradas por evento quando o proximo abrir.)\n\n` +
+      `Compartilhe seu link:\n${shareUrl}`,
+  }
+  return m[lang]()
+}
+
+/**
  * Dashboard deep-link reply. The `/wallet` page is the authenticated app
  * hub: balance, activity, send, settings link. Bot keyword `dashboard` /
  * `mi cuenta` / `meu painel` routes here. Also appended (as a one-liner)

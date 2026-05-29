@@ -47,6 +47,7 @@ import {
   formatDashboardMessage,
   formatReferralCodeMessage,
   formatQuestStatusMessage,
+  formatQuestNoActiveEvent,
   formatLanguageSetMessage,
   formatCommandErrorMessage,
   formatGreetingMessage,
@@ -1166,8 +1167,10 @@ export async function routeCommand(
           break
         }
         const maxEntries = env.get('QUEST_MAX_ENTRIES_PER_USER') ?? 5
-        const currentEventSlug = 'pizza-day-ctg-2026'
-        const leaderboardUrl = `${env.get('FRONTEND_URL') ?? 'https://www.sippy.lat'}/quest/${currentEventSlug}`
+        const currentEventSlug = env.get('SIPPY_CURRENT_EVENT_SLUG')
+        const leaderboardUrl = currentEventSlug
+          ? `${env.get('FRONTEND_URL') ?? 'https://www.sippy.lat'}/quest/${currentEventSlug}`
+          : undefined
         try {
           const codeRow = await ensureReferralCode(phoneNumber)
           // Share URL is built inside `formatReferralCodeMessage` against
@@ -1209,14 +1212,24 @@ export async function routeCommand(
           await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
           break
         }
-        // Quest standing is shown for the currently-active prize event
-        // (Pizza Day). The CODE returned in the share-link CTA is global
-        // (one per user, lifetime) — only the entries / rank are scoped
-        // to this event's draw. Post-Pizza-Day, resolve the active event
-        // dynamically from `events` table rather than hardcoding.
-        const currentEventSlug = 'pizza-day-ctg-2026'
-        const leaderboardUrl = `${env.get('FRONTEND_URL') ?? 'https://www.sippy.lat'}/quest/${currentEventSlug}`
+        // Quest standing is scoped to the currently-active prize event.
+        // The CODE returned in the share-link CTA is global (one per user,
+        // lifetime) — only the entries / rank are event-scoped. When no
+        // event is active (SIPPY_CURRENT_EVENT_SLUG unset), fall back to a
+        // "no active event" reply that still shares the user's code.
+        const currentEventSlug = env.get('SIPPY_CURRENT_EVENT_SLUG')
+        const questMaxEntries = Number(env.get('QUEST_MAX_ENTRIES_PER_USER') ?? 5)
         try {
+          if (!currentEventSlug) {
+            const codeRow = await ensureReferralCode(phoneNumber)
+            await sendMessageFn(
+              phoneNumber,
+              formatQuestNoActiveEvent({ code: codeRow.code, maxEntries: questMaxEntries }, lang),
+              lang
+            )
+            break
+          }
+          const leaderboardUrl = `${env.get('FRONTEND_URL') ?? 'https://www.sippy.lat'}/quest/${currentEventSlug}`
           // Fetch global code + event-scoped status in parallel — both
           // are independent reads needed for the reply. Status query
           // returns zero-state when the user hasn't earned entries yet
@@ -1953,18 +1966,27 @@ export default class WebhookController {
         // attributionEventSlug = the event this referral lands under.
         // Codes are global (GLOBAL_REFERRAL_CAMPAIGN), but attributions
         // record where the referee actually showed up so the prize-draw
-        // scoring can filter. Hardcoded for Pizza Day MVP; resolve from
-        // the currently-active event post-event.
-        const capture = await captureReferral({
-          code: referralExtracted.code,
-          refereePhone: from,
-          refereeOnboarded: !!senderPref,
-          attributionEventSlug: 'pizza-day-ctg-2026',
-        })
-        logger.info(
-          { phone: maskPhone(from), code: referralExtracted.code, capture: capture.kind },
-          'webhook: referral captured'
-        )
+        // scoring can filter. When SIPPY_CURRENT_EVENT_SLUG is unset
+        // (no active event), skip the capture — the user still onboards
+        // via the stripped text; we just don't tag the referral.
+        const attributionEventSlug = env.get('SIPPY_CURRENT_EVENT_SLUG')
+        if (!attributionEventSlug) {
+          logger.info(
+            { phone: maskPhone(from), code: referralExtracted.code },
+            'webhook: referral skipped (no active event)'
+          )
+        } else {
+          const capture = await captureReferral({
+            code: referralExtracted.code,
+            refereePhone: from,
+            refereeOnboarded: !!senderPref,
+            attributionEventSlug,
+          })
+          logger.info(
+            { phone: maskPhone(from), code: referralExtracted.code, capture: capture.kind },
+            'webhook: referral captured'
+          )
+        }
       } catch (err) {
         // Referral capture must never block message processing — log and
         // continue with the stripped text. Worst case: an attribution
