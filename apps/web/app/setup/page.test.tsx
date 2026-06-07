@@ -249,9 +249,23 @@ async function goPastOtpStep(otpCode = '123456') {
   await flushAsync()
 }
 
-// Advance to permission step (OTP verification now skips recovery email + ToS)
+// Accept ToS: tick the checkbox and click Continue. This advances to the
+// hidden permission step, whose effect auto-creates the spend permission.
+async function acceptTos() {
+  await act(async () => {
+    const checkbox = container!.querySelector('input[type="checkbox"]') as HTMLInputElement
+    checkbox.click()
+  })
+  await act(async () => {
+    findButton('Continue')!.click()
+  })
+  await flushAsync()
+}
+
+// Advance to the hidden permission step: past OTP, then accept ToS.
 async function goToPermissionStep(otpCode = '123456') {
   await goPastOtpStep(otpCode)
+  await acceptTos()
 }
 
 // --- Setup / Teardown ---
@@ -315,7 +329,7 @@ describe('handleSendOtp', () => {
 })
 
 describe('handleVerifyOtp', () => {
-  it('happy path: verifies OTP, stores token, authenticates, skips email/ToS, and completes setup', async () => {
+  it('happy path: verifies OTP, skips email, accepts ToS, and completes setup', async () => {
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
     mocks.authenticateWithJWT.mockResolvedValue({
@@ -332,8 +346,13 @@ describe('handleVerifyOtp', () => {
     expect(mocks.verifyOtp).toHaveBeenCalledWith('+573001234567', '123456')
     expect(mocks.storeToken).toHaveBeenCalledWith('jwt-token-abc')
     expect(mocks.authenticateWithJWT).toHaveBeenCalled()
+    // Email is never collected during onboarding; ToS is shown and required.
     expect(container!.textContent).not.toContain('Add a recovery email')
-    expect(container!.textContent).not.toContain('Terms of Service')
+    expect(container!.textContent).toContain('Terms of Service')
+
+    // Accept ToS → hidden permission step auto-creates the spend permission → done.
+    await acceptTos()
+    expect(mocks.createSpendPermission).toHaveBeenCalled()
     expect(container!.textContent).toContain("You're All Set")
   })
 
@@ -402,17 +421,19 @@ describe('session recovery', () => {
     expect((registerCall![1] as RequestInit).headers).toMatchObject({
       Authorization: 'Bearer stored-token-xyz',
     })
-    // Recovery routes straight to permission creation when tosAccepted is falsy
+    // Recovery with ToS not yet accepted resumes at the ToS step (never bypasses
+    // ToS into permission creation).
     await flushAsync()
-    expect(container!.textContent).not.toContain('Terms of Service')
+    expect(container!.textContent).toContain('Terms of Service')
     expect(container!.textContent).not.toContain('Add a recovery email')
 
     vi.unstubAllGlobals()
   })
 
-  it('routes to permission step when hasPermission is false — skips email and ToS recovery', async () => {
-    // Covers all hasPermission:false recovery cases: skipped email, mid-email, never-saw-email.
-    // None of them should show the email step on recovery ("no nag on this page").
+  it('routes to ToS step when hasPermission is false and ToS not accepted (no bypass)', async () => {
+    // A user who reloads mid-onboarding (signed in, no permission, no ToS) must
+    // resume at ToS — not be routed into permission creation. Email is never
+    // shown on recovery ("no nag on this page").
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
@@ -421,16 +442,22 @@ describe('session recovery', () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       text: async () => '',
-      json: async () => ({ hasPermission: false }),
+      json: async () => ({ hasPermission: false, tosAccepted: false }),
     })
     vi.stubGlobal('fetch', mockFetch)
 
     await renderPage()
 
-    // Must skip ToS and email.
+    // Must land on ToS, never email.
     await flushAsync()
-    expect(container!.textContent).not.toContain('Terms of Service')
+    expect(container!.textContent).toContain('Terms of Service')
     expect(container!.textContent).not.toContain('Add a recovery email')
+    // ToS not accepted → must NOT attempt to register a spend permission.
+    const registerPermCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('/api/register-permission')
+    )
+    expect(registerPermCalls).toHaveLength(0)
     // No email-status fetch should occur during recovery
     const emailStatusCalls = mockFetch.mock.calls.filter(
       (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/auth/email-status')
@@ -440,7 +467,47 @@ describe('session recovery', () => {
     vi.unstubAllGlobals()
   })
 
-  it('routes to permission step when wallet-status returns non-OK', async () => {
+  it('returning user with ToS accepted but no permission → recovers/creates permission (not ToS)', async () => {
+    // The legitimate interrupted-registration path: ToS already accepted, so
+    // recovery proceeds to register/create the permission rather than re-prompting ToS.
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
+    _storedToken = 'stored-token-xyz'
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasPermission: false, tosAccepted: true }),
+        })
+      }
+      // register-permission recovery fails (no existing on-chain permission) →
+      // falls through to the permission step.
+      if (url.includes('/api/register-permission')) {
+        return Promise.resolve({ ok: false, text: async () => 'not found', json: async () => ({}) })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await flushAsync()
+
+    // ToS already accepted → recovery attempts permission registration.
+    const registerPermCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('/api/register-permission')
+    )
+    expect(registerPermCalls.length).toBeGreaterThan(0)
+    // Does not re-prompt ToS.
+    expect(container!.textContent).not.toContain('Terms of Service')
+
+    vi.unstubAllGlobals()
+  })
+
+  it('routes to ToS step when wallet-status returns non-OK (safe default, no bypass)', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
@@ -460,9 +527,15 @@ describe('session recovery', () => {
 
     await renderPage()
 
+    // Can't confirm ToS status → resume at ToS (never bypass into permission).
     await flushAsync()
-    expect(container!.textContent).not.toContain('Terms of Service')
+    expect(container!.textContent).toContain('Terms of Service')
     expect(container!.textContent).not.toContain('Add a recovery email')
+    const registerPermCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('/api/register-permission')
+    )
+    expect(registerPermCalls).toHaveLength(0)
 
     vi.unstubAllGlobals()
   })
@@ -726,12 +799,11 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
     expect(mocks.createSpendPermission).toHaveBeenCalled()
   })
 
-  it('returning user with verified email but no ToS → skips email/ToS, auto-creates permission', async () => {
+  it('returning user with no ToS → shows ToS (not email), auto-creates permission on accept', async () => {
     setupOtpMocksWithBackend()
     mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
     const fetchMock = mockFetchByUrl({
       '/api/wallet-status': { hasWallet: true, hasPermission: false, tosAccepted: false },
-      '/api/auth/email-status': { hasEmail: true, verified: true, maskedEmail: 'u***@example.com' },
       '/api/ensure-gas': { ready: true },
       '/api/register-permission': { ok: true },
     })
@@ -740,28 +812,32 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
     await goToOtpStep('+573001234567')
     await goPastOtpStep('123456')
     await flushAsync()
-    expect(container!.textContent).not.toContain('Terms of Service')
+    // ToS is shown; email is never collected during onboarding.
+    expect(container!.textContent).toContain('Terms of Service')
     expect(container!.textContent).not.toContain('Add a recovery email')
+
+    await acceptTos()
     expect(mocks.createSpendPermission).toHaveBeenCalled()
+    // Routing no longer consults email-status.
     expect(
       fetchMock.mock.calls.some(
         (call: unknown[]) =>
           typeof call[0] === 'string' && call[0].includes('/api/auth/email-status')
       )
     ).toBe(false)
+    // ToS acceptance is recorded.
     expect(
       fetchMock.mock.calls.some(
         (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/accept-tos')
       )
-    ).toBe(false)
+    ).toBe(true)
   })
 
-  it('fresh user (no email, no ToS) → skips email/ToS and auto-creates permission', async () => {
+  it('fresh user (no email, no ToS) → shows ToS (not email), auto-creates permission on accept', async () => {
     setupOtpMocksWithBackend()
     mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
     const fetchMock = mockFetchByUrl({
       '/api/wallet-status': { hasWallet: true, hasPermission: false, tosAccepted: false },
-      '/api/auth/email-status': { hasEmail: false, verified: false, maskedEmail: null },
       '/api/ensure-gas': { ready: true },
       '/api/register-permission': { ok: true },
     })
@@ -769,25 +845,31 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
     await renderPage()
     await goToOtpStep('+573001234567')
     await goPastOtpStep('123456')
+    await flushAsync()
 
+    // ToS is shown; email is never collected during onboarding.
     expect(container!.textContent).not.toContain('Add a recovery email')
-    expect(container!.textContent).not.toContain('Terms of Service')
+    expect(container!.textContent).toContain('Terms of Service')
+
+    await acceptTos()
     expect(mocks.createSpendPermission).toHaveBeenCalled()
+    // Routing no longer consults email-status.
     expect(
       fetchMock.mock.calls.some(
         (call: unknown[]) =>
           typeof call[0] === 'string' && call[0].includes('/api/auth/email-status')
       )
     ).toBe(false)
+    // ToS acceptance is recorded; user is not bounced to /settings.
     expect(
       fetchMock.mock.calls.some(
         (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/accept-tos')
       )
-    ).toBe(false)
+    ).toBe(true)
     expect(mocks.routerReplace).not.toHaveBeenCalledWith('/settings')
   })
 
-  it('wallet-status returns non-OK → falls back to permission step (does not block onboarding)', async () => {
+  it('wallet-status returns non-OK → falls back to ToS step (does not block onboarding)', async () => {
     setupOtpMocksWithBackend()
     mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
     const fn = vi.fn().mockImplementation((url: string) => {
@@ -813,8 +895,11 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
     await goToOtpStep('+573001234567')
     await goPastOtpStep('123456')
     await flushAsync()
+    // Status failure must not block onboarding: fall back to ToS, not email.
     expect(container!.textContent).not.toContain('Add a recovery email')
-    expect(container!.textContent).not.toContain('Terms of Service')
+    expect(container!.textContent).toContain('Terms of Service')
+
+    await acceptTos()
     expect(mocks.createSpendPermission).toHaveBeenCalled()
   })
 })

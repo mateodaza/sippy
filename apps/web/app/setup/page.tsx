@@ -111,16 +111,19 @@ type Step =
   | 'event-tagged'
   | 'email-login'
   | 'email-login-otp'
-// Event-day fast path: recovery email and ToS screens are temporarily skipped
-// during onboarding. Keep the legacy steps/components in this file so we can
-// restore them after Pizza Day without re-threading the state machine.
-// 'permission' is hidden — auto-created after OTP/wallet registration.
-const STEPS: Step[] = ['phone', 'otp', 'done']
+// Onboarding flow: phone → otp → tos → done. Recovery email is intentionally
+// NOT collected here — users verify email later in Settings to lift their daily
+// limit. The 'email' / 'email-login' steps/components are kept in this file:
+// 'email-login' is the returning-user login path; 'email' is legacy and unused
+// in onboarding.
+// 'permission' is hidden — auto-created after ToS acceptance.
+const STEPS: Step[] = ['phone', 'otp', 'tos', 'done']
 
-// Email is skipped on the event-day fast path, so new users must receive the
-// unverified tier. Asking CDP for $500/day creates an on-chain permission the
-// backend correctly rejects for unverified users, which strands onboarding.
-const EVENT_FAST_PATH_DAILY_LIMIT_USDC = '50'
+// New users haven't verified email yet, so they onboard at the unverified daily
+// tier. Asking CDP for the $500/day verified limit would create an on-chain
+// permission the backend correctly rejects for unverified users, which strands
+// onboarding. Email verification in Settings lifts the limit afterward.
+const UNVERIFIED_DAILY_LIMIT_USDC = '50'
 
 const TOS_VERSION = '1.0'
 const TOS_URL = 'https://www.sippy.lat/terms'
@@ -287,11 +290,12 @@ function SetupContent({
    *
    * Decision tree:
    *   hasPermission   → redirect to /settings (fully onboarded)
-   *   otherwise       → permission step (event-day fast path)
+   *   tosAccepted     → permission step (resume: ToS done, permission missing)
+   *   otherwise       → tos step (fresh user must accept ToS)
    */
   const advanceToCorrectStep = async (accessToken: string): Promise<boolean> => {
     if (!BACKEND_URL) {
-      setStep('permission')
+      setStep('tos')
       return true
     }
     try {
@@ -299,7 +303,7 @@ function SetupContent({
 
       const statusResponse = await fetch(`${BACKEND_URL}/api/wallet-status`, { headers })
       if (!statusResponse.ok) {
-        setStep('permission')
+        setStep('tos')
         return true
       }
       const status = await statusResponse.json()
@@ -327,13 +331,19 @@ function SetupContent({
         router.replace('/settings')
         return true
       }
+      if (status.tosAccepted) {
+        // ToS already accepted but no spend permission yet — resume at the
+        // hidden permission step (auto-creates the permission).
+        setStep('permission')
+        return true
+      }
     } catch (err) {
       console.error('advanceToCorrectStep failed:', err)
     }
-    // Fresh/incomplete users skip recovery email + ToS and go straight to
-    // spend-permission creation. This is intentionally web-only; settings
-    // still exposes email recovery after onboarding.
-    setStep('permission')
+    // Fresh user: collect ToS acceptance. Recovery email is intentionally not
+    // collected during onboarding — Settings exposes it afterward to lift the
+    // daily limit.
+    setStep('tos')
     return true
   }
 
@@ -614,12 +624,17 @@ function SetupContent({
               }
               router.replace('/settings')
               return
+            } else if (!status.tosAccepted) {
+              // ToS not yet accepted — it must be accepted before any spend
+              // permission can be created or registered. Resume at the ToS step.
+              // Mirrors the server-side gate on /api/register-permission so a
+              // mid-onboarding reload can't bypass ToS.
+              setStep('tos')
             } else {
-              // Attempt to register an existing on-chain permission before asking
-              // the user to create a new one. Handles the case where a permission
-              // was signed on-chain but registration was interrupted (tab close,
-              // network error). Recovery email + ToS are skipped for the event-day
-              // fast path, so every incomplete wallet resumes here.
+              // ToS accepted but no permission registered yet. Attempt to register
+              // an existing on-chain permission before asking the user to create a
+              // new one — handles the case where a permission was signed on-chain
+              // but registration was interrupted (tab close, network error).
               try {
                 const regPermRes = await fetch(`${BACKEND_URL}/api/register-permission`, {
                   method: 'POST',
@@ -640,12 +655,14 @@ function SetupContent({
               setStep('permission')
             }
           } else {
-            // wallet-status returned non-OK — resume at permission step (fast path).
-            setStep('permission')
+            // wallet-status returned non-OK — can't confirm ToS, so resume at the
+            // ToS step (safe default; the backend gate would reject a permission
+            // anyway if ToS isn't accepted).
+            setStep('tos')
           }
         } else {
-          // No backend, just go to permission step
-          setStep('permission')
+          // No backend — resume at the ToS step (ToS is the first onboarding gate).
+          setStep('tos')
         }
       } catch (err) {
         console.error('Session recovery failed:', err)
@@ -843,7 +860,7 @@ function SetupContent({
       if (token) {
         await advanceToCorrectStep(token)
       } else {
-        setStep('permission')
+        setStep('tos')
       }
     } catch (err) {
       console.error('OTP verification failed:', err)
@@ -922,7 +939,7 @@ function SetupContent({
         if (token) {
           await advanceToCorrectStep(token)
         } else {
-          setStep('permission')
+          setStep('tos')
         }
       } catch (regErr) {
         console.error('Backend registration error:', regErr)
@@ -1081,8 +1098,9 @@ function SetupContent({
         }
       }
 
-      // Permission step is hidden — auto-create with max limit
-      await handleApprovePermission()
+      // Permission step is hidden — show the spinner and let its effect
+      // auto-create the spend permission at the unverified daily limit.
+      setStep('permission')
     } catch (err) {
       console.error('ToS acceptance failed:', err)
       setError(err instanceof Error ? err.message : 'Failed to accept Terms of Service')
@@ -1100,7 +1118,7 @@ function SetupContent({
         throw new Error('No wallet address. Please restart the process.')
       }
 
-      const tierLimit = EVENT_FAST_PATH_DAILY_LIMIT_USDC
+      const tierLimit = UNVERIFIED_DAILY_LIMIT_USDC
 
       // Validate daily limit before creating on-chain permission — invalid values
       // would create a broken or expensive-to-undo permission on-chain

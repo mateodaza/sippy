@@ -187,6 +187,19 @@ export default class EmbeddedWalletController {
       const { phoneNumber, walletAddress } = cdpUser!
       const { dailyLimit } = request.body()
 
+      // Enforce ToS server-side: a spend permission must never be registered
+      // before the user accepts the Terms of Service. UI routing alone is
+      // bypassable (page reload mid-onboarding, direct API call), so the
+      // acceptTos-before-permission invariant is gated here too.
+      const pref = await findUserPrefByPhone(phoneNumber)
+      if (!pref?.tosAcceptedAt) {
+        logger.warn(`register-permission blocked: ToS not accepted by ${maskPhone(phoneNumber)}`)
+        return response.status(403).json({
+          error: 'tos_required',
+          message: 'Terms of Service must be accepted before creating a spend permission.',
+        })
+      }
+
       logger.info(`Registering spend permission for ${maskPhone(phoneNumber)}`)
       logger.info(`   Wallet: ${walletAddress}`)
       logger.info(`   Daily limit: $${dailyLimit}`)
