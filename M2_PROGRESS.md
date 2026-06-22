@@ -6,6 +6,45 @@ Each entry tags which M2 checklist item (see `M2_CHECKLIST.md`) the work advance
 
 ---
 
+## 2026-06-22 — content + measurement sprint
+
+- **#9 / #10 Blog posts**: built an on-site `/blog` system in `apps/web` (Next.js, dependency-free Markdown renderer, EN/ES/PT swappable) + wrote, copy-edited, and resynced 2 multilingual posts:
+  - "A dollar wallet inside WhatsApp" (`how-sippy-works`) — product explainer + closed-beta UX lessons.
+  - "The crypto people use before they learn the words" (`training-wheels-for-web3`) — AI + crypto vision / investment case, with Cartagena as the proof point.
+  - Tweet-thread versions + notes in `marketing/blog-tweet-threads.md`.
+  - ✅ **Copy audit complete**: EN/ES/PT bodies, localized metadata, and X threads tightened for publication.
+  - ✅ **ES/PT resync complete (2026-06-22)**: both posts' Spanish + Portuguese bodies re-translated from the edited English; localized titles/descriptions updated in `lib/blog.ts`. Structure verified (headings/bold/numbered-list/quote/links match EN); prettier + `tsc --noEmit` pass.
+  - ⚠️ **Pending**: deploy so `/blog` is live (KPI = "published & accessible").
+- **#7 User testimonials (10–15)**: built + **published** 2 Tally forms (free plan), Google Sheets synced on both:
+  - 🇪🇸 `https://tally.so/r/lbg4Mp` · 🇬🇧 `https://tally.so/r/5BrOOb`
+  - 8 questions incl. a **0–10 NPS** item (also feeds the NPS KPI). Consent right after the name. Outreach DM copy in `marketing/testimonials-collection.md`.
+  - ⚠️ **Pending**: send outreach (~25 users), collect 10–15. NPS to be reported via **Zoho**.
+- **Technical documentation package**: improved `docs/start/get-started.mdx` (newcomer-friendly funding, self-custody clarity, no-fees note) + **translated all 29 docs pages to ES + PT** (`apps/docs`, was English-only fallback). KPI "documentation published & accessible" → ✅.
+
+### M2 status snapshot (for the next task recount)
+
+KPIs — live from `sippy.lat/stats`, 2026-06-22:
+
+| KPI                    | Target   | Live                                                        | Status                                   |
+| ---------------------- | -------- | ----------------------------------------------------------- | ---------------------------------------- |
+| Onchain transfers      | 200–400  | **757**                                                     | ✅ past                                  |
+| Monthly active wallets | 75–100   | **~197–216**                                                | ✅ past                                  |
+| USDC volume            | $50–100K | **$24.8K moved** (+$13.5K onboarded)                        | ⚠️ below floor — biggest gap             |
+| Tx success rate        | >98%     | not instrumented (PostHog dashboard is the default web one) | document from backend/indexer, or accept |
+| Uptime                 | >99%     | not measured here (no Railway connector)                    | pull from Railway                        |
+| NPS                    | >40      | form live                                                   | measure via Zoho once collected          |
+
+Open items to close M2:
+
+1. **Volume gap** — report transacted ($24.8K) vs onboarded ($13.5K) transparently; consider a small push.
+2. **Testimonials** — collect 10–15 from the Tally forms; **NPS via Zoho**.
+3. **Deploy `/blog`** live so the blog deliverable counts as published.
+4. **Tx-success + uptime** — document or note as accepted (PostHog has nothing tx-related — confirmed OK).
+5. **Final report** — assemble M2 report in **team Notion** (M1+M2 live there); keep a dated copy in repo.
+6. **Legal basics (ToS/Privacy/risk)** — owned by **Lina** (in progress).
+
+Deadline note: official Questbook M2 deadline was **04 Jun 2026** (already passed) vs internal target end-of-June — worth confirming with Chilla.
+
 ## 2026-06-07
 
 - `a09e1fd` Carlos — **#2 Open beta**: fix onboarding and shorten the steps (`apps/web/app/setup` + `embedded_wallet_controller`). Removes friction for first-time public users.

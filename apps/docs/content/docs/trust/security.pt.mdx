@@ -1,0 +1,96 @@
+---
+title: Modelo de segurança
+description: Limites diários, avisos de confirmação, limitação de frequência e verificação em duas etapas -- como a Sippy protege a sua conta.
+---
+
+## Camadas de proteção
+
+A Sippy usa várias salvaguardas sobrepostas para que nenhuma falha isolada possa esvaziar
+a sua carteira. Nenhuma delas exige que você configure nada -- elas vêm ativadas por
+padrão.
+
+---
+
+## Limites diários
+
+Toda conta tem um teto diário de gastos. Essa é a proteção mais importante
+contra uma sessão roubada: mesmo que alguém ganhe acesso ao seu WhatsApp, essa pessoa
+não pode enviar mais do que o seu limite diário permite.
+
+| Status | Teto diário máximo |
+|---|---|
+| Não verificado (sem e-mail) | US$ 50 por dia |
+| Verificado (e-mail confirmado) | US$ 500 por dia |
+
+Você controla o valor exato dentro do seu nível. Altere-o quando quiser nas
+[Configurações](https://www.sippy.lat/settings). Os limites são reiniciados à meia-noite UTC.
+
+Veja [Limites de gastos](/docs/using-sippy/limits) para todos os detalhes.
+
+## Avisos de confirmação
+
+Para qualquer envio pelo WhatsApp acima de US$ 5, a Sippy pede que você confirme antes de executar.
+Você verá o valor, o número de telefone do destinatário e um aviso de sim/não.
+Nada é movido até você dizer sim.
+
+Envios pequenos (US$ 5 ou menos) pulam o aviso para manter as transferências do dia a dia rápidas.
+
+## Limitação de frequência
+
+A Sippy monitora atividades incomuns -- como muitos envios em rápida sucessão ou
+tentativas falhas repetidas. Se algo parece errado, a Sippy desacelera ou
+pausa temporariamente a atividade na conta. Isso normalmente se resolve em
+minutos e existe para detectar sessões comprometidas cedo.
+
+## Verificação de e-mail
+
+Adicionar um e-mail verificado faz duas coisas:
+
+1. Desbloqueia o nível de limite diário de US$ 500
+2. Protege ações sensíveis -- como alterar o seu limite diário ou recuperar
+   a sua conta
+
+Sem um e-mail verificado, a sua conta ainda funciona, mas o seu teto permanece em US$ 50
+e você tem menos opções de recuperação.
+
+Veja [E-mail de recuperação](/docs/using-sippy/recovery-email) para os passos de configuração.
+
+## Dois fatores via WhatsApp + e-mail
+
+A Sippy não usa um aplicativo autenticador tradicional. Em vez disso, os seus dois fatores são:
+
+- **WhatsApp** -- o seu canal principal para enviar dinheiro e interagir com a Sippy
+- **E-mail** -- necessário para a recuperação de conta e alterações sensíveis
+
+Então, mesmo que alguém intercepte as suas mensagens do WhatsApp, essa pessoa também precisaria de acesso ao
+seu e-mail para fazer mudanças significativas na sua conta.
+
+---
+
+## O que não custodial significa para a segurança
+
+Como a Sippy é não custodial, há coisas que a Sippy genuinamente não pode fazer --
+mesmo que solicitada, mesmo por autoridades policiais, mesmo pela própria equipe da Sippy:
+
+- **Não pode congelar a sua carteira.** A sua carteira de contrato inteligente existe na Arbitrum
+  de forma independente da Sippy.
+- **Não pode confiscar os seus fundos.** A Sippy não tem as chaves.
+- **Não pode reverter uma transação concluída.** Uma vez confirmada on-chain, ela é definitiva.
+
+Isso é um recurso, não uma falha. Significa que o seu dinheiro é seu de um jeito que uma conta
+bancária não é. Mas também significa que você carrega mais responsabilidade. Se você enviar dinheiro
+para o número errado e o destinatário não devolver, a Sippy não pode desfazer isso.
+
+## O que você deve fazer
+
+- **Adicione um e-mail de recuperação.** Leva 30 segundos e melhora drasticamente a
+  segurança da sua conta.
+- **Mantenha o seu limite diário razoável.** Não o defina mais alto do que você normalmente
+  enviaria em um dia.
+- **Não compartilhe os seus códigos de verificação do WhatsApp.** Essa é a forma mais comum de
+  as contas serem sequestradas.
+
+## E agora?
+
+- [Recuperação de conta](/docs/trust/recovery) -- o que acontece se você perder o celular
+- [Como o seu dinheiro é guardado](/docs/trust/money-safety) -- onde os seus fundos realmente ficam

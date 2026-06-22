@@ -1,0 +1,52 @@
+---
+title: Solução de problemas
+description: Soluções para problemas comuns ao usar a Sippy.
+---
+
+## A Sippy não está respondendo no WhatsApp
+
+Comece pelo básico:
+
+1. **Verifique o número de telefone** -- certifique-se de estar enviando mensagem para o número correto da Sippy com o formato de código de país certo (por exemplo, +1 para os EUA, +57 para a Colômbia)
+2. **Inclua o código do país** -- o WhatsApp exige o formato internacional completo. Uma mensagem para um número sem o prefixo do país não chegará à Sippy
+3. **Tente uma mensagem simples** -- envie "oi" ou "hola" para ver se a Sippy responde. Se você enviou uma mensagem complexa, o sistema pode não ter reconhecido a intenção
+4. **Aguarde um momento** -- em períodos de muito tráfego, as respostas podem demorar alguns segundos a mais do que o normal
+
+Se nada disso funcionar, a Sippy pode estar em manutenção. Aguarde alguns minutos e tente novamente.
+
+## Minha transação está travada
+
+As transações na Arbitrum normalmente são confirmadas em menos de um segundo. Se a sua parece travada:
+
+1. **Verifique a transação no Blockscout** -- acesse [arbiscan.io](https://arbiscan.io) ou o [Blockscout](https://arbitrum.blockscout.com) e pesquise o endereço da sua carteira. Se a transação aparecer como confirmada lá, o problema é um atraso de exibição, não uma transação travada
+2. **Atualize a carteira web** -- a exibição do saldo é consultada a cada 30 segundos. Uma atualização manual da página acionará uma atualização imediata
+3. **Aguarde um pouco** -- em casos raros de congestionamento da rede na Arbitrum, a confirmação pode levar alguns segundos extras. Isso é incomum, mas não é motivo de preocupação
+
+Se a transação não aparecer on-chain de forma alguma após vários minutos, entre em contato com o suporte.
+
+## Erro "Limite diário atingido"
+
+Isso significa que você atingiu o seu teto de gastos do dia atual. Você tem três opções:
+
+- **Envie um valor menor** -- se você está perto do limite, um envio menor ainda pode passar
+- **Aguarde a reinicialização** -- o seu limite diário é reiniciado à meia-noite UTC todos os dias
+- **Use o modo Direto na carteira web** -- acesse [sippy.lat/wallet](https://www.sippy.lat/wallet), selecione "Directo" / "Direct" e envie sem limite diário. Você precisará de uma pequena quantia de ETH na sua carteira para a taxa de rede (gas) (o modo Direto só está disponível na carteira web, não pelo WhatsApp)
+
+## Meu saldo não está atualizando
+
+A carteira web atualiza o seu saldo a cada 30 segundos. Se uma transação recente não está sendo refletida:
+
+1. **Atualize a página** -- isso força uma verificação imediata do saldo
+2. **Verifique o status da transação** -- se a transação ainda estiver pendente (raro na Arbitrum), o saldo será atualizado assim que ela confirmar
+3. **Limpe o cache do navegador** -- em casos incomuns, dados em cache desatualizados podem mostrar um saldo defasado
+
+Se o seu saldo ainda parecer errado após confirmar a transação on-chain, entre em contato com o suporte com o endereço da sua carteira e o hash da transação.
+
+## Não consigo selecionar o modo Direto
+
+O modo Direto exige uma pequena quantia de ETH na Arbitrum na sua carteira para pagar as taxas de rede (gas). Se a opção estiver indisponível ou esmaecida:
+
+1. **Verifique o seu saldo de ETH** -- você precisa de ETH na Arbitrum (não no Ethereum mainnet). Mesmo uma fração de dólar em ETH é suficiente para muitas transações
+2. **Faça a ponte (bridge) ou deposite ETH** -- envie ETH na rede Arbitrum para o endereço da sua carteira Sippy. Você pode encontrar o seu endereço na carteira web ou perguntando à Sippy "qual é o meu endereço"
+
+Assim que a sua carteira tiver ETH na Arbitrum, o modo Direto fica disponível.

@@ -1,0 +1,68 @@
+---
+title: Modo Gas gratis vs Directo
+description: Dos formas de enviar dinero desde la billetera web -- y cuándo usar cada una.
+---
+
+Cuando envías dinero desde la [billetera web](https://www.sippy.lat/wallet), eliges
+entre dos modos. Ambos envían USDC en Arbitrum. La diferencia es quién paga la comisión
+de red y si aplica un límite diario.
+
+## Gas gratis
+
+Sippy envía la transacción por ti y cubre la comisión de red.
+
+- **Costo para ti:** $0
+- **Límite diario:** $500 (o $50 sin un correo verificado)
+- **Cómo funciona:** la infraestructura de Sippy mueve el dinero en tu nombre, usando un
+  permiso que otorgaste durante la configuración
+- **También lo usan:** los envíos por WhatsApp (mismo mecanismo)
+
+Este es el modo predeterminado. Es la forma más sencilla de enviar -- sin ETH, sin pasos extra.
+
+## Directo
+
+Tú envías la transacción y pagas una pequeña comisión de red.
+
+- **Costo para ti:** menos de $0.01 en ETH por transacción (las comisiones de Arbitrum son muy bajas)
+- **Límite diario:** ninguno
+- **Cómo funciona:** tu billetera firma la transacción directamente. La infraestructura de Sippy
+  no participa.
+- **Requiere:** una pequeña cantidad de ETH en tu billetera para el gas
+
+Usa el modo Directo cuando quieras enviar más de lo que permite tu límite diario, o cuando
+prefieras firmar las transacciones tú mismo.
+
+## Lado a lado
+
+|  | Gas gratis | Directo |
+|---|---|---|
+| Comisión de red | Paga Sippy | Pagas tú (~$0.01) |
+| Límite diario | $500 / $50 | Ninguno |
+| ETH requerido | No | Sí (pequeña cantidad) |
+| Disponible en | WhatsApp + Web | Solo Web |
+| Quién firma | Sippy (en tu nombre) | Tú |
+
+## ¿Cuál debería usar?
+
+**La mayoría de las veces, Gas gratis está bien.** Es gratis, es rápido, y el límite diario de $500
+cubre los envíos cotidianos.
+
+**Usa Directo cuando:**
+- Necesitas enviar más de $500 en un día
+- Quieres control total sobre la transacción (sin intermediario)
+- Prefieres el enfoque no custodial donde Sippy nunca toca tus fondos
+
+## Cómo cambiar de modo
+
+En la billetera web, los dos modos aparecen como un interruptor encima del formulario de envío:
+- **"Gas gratis"** / **"Free gas"** -- el predeterminado
+- **"Directo"** / **"Direct"** -- disponible cuando tu billetera tiene ETH
+
+Si tu billetera no tiene ETH, el modo Directo muestra un mensaje que explica lo que necesitas.
+Puedes depositar ETH en la dirección de tu billetera en Arbitrum para desbloquearlo.
+
+## ¿Qué sigue?
+
+- [Enviar dinero](/docs/using-sippy/send-money) -- guía paso a paso para enviar
+- [Límites](/docs/using-sippy/limits) -- cómo funcionan los límites diarios y cómo aumentarlos
+- [Agregar fondos](/docs/using-sippy/add-funds) -- cómo obtener USDC y ETH en tu billetera

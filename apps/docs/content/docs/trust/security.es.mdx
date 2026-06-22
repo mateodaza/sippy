@@ -1,0 +1,102 @@
+---
+title: Modelo de seguridad
+description: Límites diarios, avisos de confirmación, limitación de frecuencia y verificación en dos pasos -- cómo Sippy protege tu cuenta.
+---
+
+## Capas de protección
+
+Sippy usa varias salvaguardas superpuestas para que ninguna falla aislada pueda
+vaciar tu billetera. Ninguna de ellas requiere que configures nada -- están activadas
+de forma predeterminada.
+
+---
+
+## Límites diarios
+
+Cada cuenta tiene un tope de gasto diario. Esta es la protección más importante
+contra una sesión robada: incluso si alguien obtiene acceso a tu WhatsApp, no puede
+enviar más de lo que permite tu límite diario.
+
+| Estado | Tope diario máximo |
+|---|---|
+| Sin verificar (sin correo) | $50 por día |
+| Verificado (correo confirmado) | $500 por día |
+
+Tú controlas el monto exacto dentro de tu nivel. Cámbialo cuando quieras en
+[Configuración](https://www.sippy.lat/settings). Los límites se reinician a la
+medianoche UTC.
+
+Consulta [Límites de gasto](/docs/using-sippy/limits) para ver todos los detalles.
+
+## Avisos de confirmación
+
+Para cualquier envío por WhatsApp superior a $5, Sippy te pide que confirmes antes de
+ejecutarlo. Verás el monto, el número de teléfono del destinatario y un aviso de
+sí/no. No se mueve nada hasta que dices que sí.
+
+Los envíos pequeños ($5 o menos) omiten el aviso para que las transferencias
+cotidianas sean rápidas.
+
+## Limitación de frecuencia
+
+Sippy vigila la actividad inusual -- como muchos envíos en rápida sucesión o
+intentos fallidos repetidos. Si algo parece extraño, Sippy reduce la velocidad o
+pausa temporalmente la actividad en la cuenta. Esto normalmente se resuelve en
+minutos y existe para detectar sesiones comprometidas a tiempo.
+
+## Verificación de correo
+
+Agregar un correo verificado hace dos cosas:
+
+1. Desbloquea el nivel de límite diario de $500
+2. Restringe acciones sensibles -- como cambiar tu límite diario o recuperar tu
+   cuenta
+
+Sin un correo verificado, tu cuenta sigue funcionando, pero tu tope se mantiene en
+$50 y tienes menos opciones de recuperación.
+
+Consulta [Correo de recuperación](/docs/using-sippy/recovery-email) para ver los
+pasos de configuración.
+
+## Doble factor a través de WhatsApp + correo
+
+Sippy no usa una aplicación de autenticación tradicional. En cambio, tus dos
+factores son:
+
+- **WhatsApp** -- tu canal principal para enviar dinero e interactuar con Sippy
+- **Correo** -- requerido para la recuperación de la cuenta y los cambios sensibles
+
+Así que incluso si alguien intercepta tus mensajes de WhatsApp, también necesitaría
+acceso a tu correo para hacer cambios significativos en tu cuenta.
+
+---
+
+## Qué significa "no custodial" para la seguridad
+
+Como Sippy es no custodial, hay cosas que Sippy genuinamente no puede hacer --
+aunque se lo pidan, incluso las autoridades, incluso el propio equipo de Sippy:
+
+- **No puede congelar tu billetera.** Tu billetera de contrato inteligente existe en
+  Arbitrum de forma independiente de Sippy.
+- **No puede apoderarse de tus fondos.** Sippy no tiene las claves.
+- **No puede revertir una transacción completada.** Una vez confirmada en la cadena
+  (on-chain), es definitiva.
+
+Esto es una característica, no una falla. Significa que tu dinero es tuyo de una
+forma en que una cuenta bancaria no lo es. Pero también significa que cargas con más
+responsabilidad. Si envías dinero al número equivocado y el destinatario no lo
+devuelve, Sippy no puede deshacerlo.
+
+## Qué deberías hacer
+
+- **Agrega un correo de recuperación.** Toma 30 segundos y mejora drásticamente la
+  seguridad de tu cuenta.
+- **Mantén tu límite diario razonable.** No lo configures más alto de lo que
+  normalmente enviarías en un día.
+- **No compartas tus códigos de verificación de WhatsApp.** Esta es la forma más
+  común en que se secuestran las cuentas.
+
+## ¿Qué sigue?
+
+- [Recuperación de cuenta](/docs/trust/recovery) -- qué pasa si pierdes tu teléfono
+- [Cómo se guarda tu dinero](/docs/trust/money-safety) -- dónde están realmente tus fondos

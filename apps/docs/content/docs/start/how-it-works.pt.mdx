@@ -1,0 +1,39 @@
+---
+title: Como o Sippy funciona
+description: A versão simples do que acontece quando você envia dinheiro.
+---
+
+## A versão curta
+
+Você manda mensagem para o Sippy no WhatsApp. O Sippy entende o que você quer, move o dinheiro
+na blockchain e avisa quando está pronto. Tudo em poucos segundos.
+
+## Um pouco mais de detalhe
+
+Quando você se cadastra, o Sippy cria uma **carteira** para você -- uma smart account na Arbitrum
+vinculada ao seu número de telefone. Essa carteira guarda seus USDC (dólares digitais). Só você
+a controla.
+
+Quando você envia dinheiro pelo WhatsApp, o Sippy lê sua mensagem, descobre quanto
+você quer enviar e para quem, e submete a transação. O Sippy cobre a taxa de rede (gas)
+(o pequeno custo da rede) para que você não precise se preocupar com isso.
+
+Quando você usa a **carteira web**, você tem duas opções:
+- **Taxa de rede grátis** -- o Sippy submete a transação por você (igual ao WhatsApp, aplica-se o limite diário)
+- **Direto** -- você mesmo submete a transação, paga uma pequena taxa de rede (gas), sem limite diário
+
+## O que acontece com o seu dinheiro
+
+Seus USDC ficam na sua carteira na Arbitrum. Não estão no banco de dados do Sippy, nem na
+conta bancária do Sippy, nem sob o controle do Sippy. Estão na blockchain, em um smart
+contract que só as suas chaves podem acessar.
+
+Cada transferência é uma transação real na Arbitrum. Você pode verificá-la no
+[Blockscout](https://arbitrum.blockscout.com) ou no [Arbiscan](https://arbiscan.io)
+usando o link de recibo que o Sippy envia para você.
+
+## Idiomas
+
+O Sippy fala inglês, espanhol e português. Ele detecta automaticamente o seu idioma a partir do
+seu número de telefone, mas você pode trocar a qualquer momento. Basta falar com ele no idioma
+que você preferir.
