@@ -22,6 +22,7 @@
     "#commands/*": "./app/commands/*.js",
     "#controllers/*": "./app/controllers/*.js",
     "#exceptions/*": "./app/exceptions/*.js",
+    "#season/*": "./app/season/*.js",
     "#models/*": "./app/models/*.js",
     "#mails/*": "./app/mails/*.js",
     "#services/*": "./app/services/*.js",

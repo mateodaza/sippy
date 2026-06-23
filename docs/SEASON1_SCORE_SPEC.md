@@ -50,6 +50,7 @@ Examples: $1 → 2 · $25 → 10 · $100 → 20 (capped) · $10,000 → 20 (stil
 - **Per-tx:** volume bonus capped at `V_CAP = 20`.
 - **Per-day:** total earned points capped at **150** (kills burst farming).
 - **Per-pair decay:** points from a given `(sender → recipient)` pair fall to base-only after 3 sends, then to **0** after 8 (kills two-account ping-pong).
+- **Sub-$1 value-out / first-send → 0 points, no activation:** a `send`/off-ramp/first-send below the `$1` active floor (§2) earns no base or volume points, and a sub-$1 first send does **not** activate the wallet — activation is the first send that actually clears `$1` (a sub-$1 test send still counts toward distinct-counterparty breadth, just not score or status). Ties earning + activation to the same real-usage floor as "active", so sub-$1 dust can't pump the score or fake activation.
 - **Referral cap:** **500 pts/season** from referrals; per-referral points decay after the 10th unlocked referral.
 - **Circular/self-dealing → 0:** any flow detected as A→B→A loops, immediate round-trips, or one funder seeding many wallets earns nothing (graph rules, §4).
 - **On-ramp is pending, not realized:** on-ramp emits `pending_score`; the full amount realizes only when the funds are _sent or off-ramped within 14 days_, else it's forfeited entirely (0). Parked deposits earn nothing.
@@ -84,7 +85,7 @@ Tiers gate cosmetic/community perks and higher caps — never a token.
 
 **Verified counterparty** (load-bearing — the whole score depends on it) = a recipient/sender that is **phone-verified and wallet-linked**, is **not** on the same phone / device / IP / funding cluster as the user, and is **not** a known internal / vendor / operator account. Sends or receives that fail this (self, cluster, vendor) earn no score, confer no active status, and don't count as a distinct counterparty.
 
-- **Activated wallet:** completed ≥1 real send.
+- **Activated wallet:** completed ≥1 real send (≥ $1 to a distinct verified counterparty — the same floor as "active").
 - **Active wallet (period P):** completed **≥1 value-out action — a send OR an off-ramp — of ≥ $1 to a distinct verified counterparty** within P. _Receiving alone, or depositing alone, does NOT count as active._
 - **MAW (the grant KPI):** distinct **active wallets in the trailing 30 days**.
 - **Retained:** active in **two consecutive** 30-day periods.

@@ -186,6 +186,7 @@ const QrSheetsController = () => import('#controllers/admin/qr_sheets_controller
 const AdminEventsController = () => import('#controllers/admin/events_controller')
 const OperatorSendController = () => import('#controllers/admin/operator_send_controller')
 const SmartModeEvalController = () => import('#controllers/admin/smart_mode_eval_controller')
+const SeasonController = () => import('#controllers/admin/season_controller')
 
 // Public admin routes
 router.get('/admin/login', [AdminAuthController, 'showLogin'])
@@ -287,6 +288,13 @@ router
     // Camello eval pattern, ported into Sippy.
     router
       .post('/smart-mode/eval', [SmartModeEvalController, 'run'])
+      .use(middleware.adminRole({ role: 'admin' }))
+
+    // Season 1 (Phase A) shadow-mode recompute. Admin-only — the only HTTP
+    // surface the season exposes until the Phase B dashboard. Guarded again in
+    // the controller by SEASON1_ENABLED.
+    router
+      .post('/season/recompute', [SeasonController, 'recompute'])
       .use(middleware.adminRole({ role: 'admin' }))
 
     // ── Operator-or-admin routes ──────────────────────────────────────

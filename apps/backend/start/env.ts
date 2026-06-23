@@ -217,4 +217,13 @@ export default await Env.create(new URL('../', import.meta.url), {
   // work but without event attribution, and quest_status replies that no event
   // is currently running. Flip per-event without redeploying code.
   SIPPY_CURRENT_EVENT_SLUG: Env.schema.string.optional(),
+
+  // ── Season 1 — usage score (measurement core, Phase A) ───────────────
+  // Master killswitch for everything under #season/*. Default OFF: when
+  // unset (or anything other than "true") the score projector never runs,
+  // the backfill command refuses, and the admin recompute route is gated —
+  // a config-less deploy cannot touch the bot. Flip to "true" to enable
+  // shadow-mode computation (no user-facing surface ships in Phase A).
+  // Mirrors the SMART_MODE_ENABLED / SIPPY_CURRENT_EVENT_SLUG guard style.
+  SEASON1_ENABLED: Env.schema.string.optional(),
 })

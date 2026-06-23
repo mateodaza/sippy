@@ -17,6 +17,7 @@ import {
   recomputeAggregates,
 } from '#services/onchain_writer.service'
 import { getRpcUrl } from '#config/network'
+import { isSeason1Enabled } from '#season/guard'
 import { ethers } from 'ethers'
 
 const ALCHEMY_SIGNING_KEY = env.get('ALCHEMY_SIGNING_KEY', '')
@@ -83,6 +84,20 @@ export default class WebhookAlchemyController {
     let processed = 0
     let removals = 0
     let deferred = 0
+    // Transfers successfully inserted this batch — fed to the season projector
+    // after the loop (Phase A shadow mode). Only the ones onchain_writer
+    // actually inserted, so a webhook retry never re-projects.
+    const seasonBatch: Array<{
+      id: string
+      from: string
+      to: string
+      amount: string
+      timestamp: number
+      txHash: string
+    }> = []
+    // Transfer ids removed by a reorg this batch — fed to the season reorg hook
+    // so their derived score_event rows are dropped too (not just onchain.transfer).
+    const reorgBatch: string[] = []
 
     for (const activity of usdcActivities) {
       const log = activity.log
@@ -95,7 +110,10 @@ export default class WebhookAlchemyController {
       // Handle reorgs
       if (log.removed) {
         const deleted = await deleteTransfer(id)
-        if (deleted) removals++
+        if (deleted) {
+          removals++
+          reorgBatch.push(id)
+        }
         continue
       }
 
@@ -125,12 +143,26 @@ export default class WebhookAlchemyController {
         txHash,
       })
 
-      if (inserted) processed++
+      if (inserted) {
+        processed++
+        seasonBatch.push({ id, from, to, amount, timestamp, txHash })
+      }
     }
 
     // Recompute aggregates if any reorg removals happened
     if (removals > 0) {
       await recomputeAggregates()
+    }
+
+    // Season 1 (Phase A) shadow projection — fully guarded + best-effort.
+    // onTransfersIngested is loaded lazily so the season stack is never even
+    // imported when SEASON1_ENABLED is off, and it swallows its own errors so
+    // it can never affect the webhook response.
+    if (isSeason1Enabled() && (seasonBatch.length > 0 || reorgBatch.length > 0)) {
+      const { onTransfersIngested, onTransfersReorged } = await import('#season/projector')
+      // Reorg removals first, so a re-add later in the same batch re-projects cleanly.
+      if (reorgBatch.length > 0) await onTransfersReorged(reorgBatch)
+      if (seasonBatch.length > 0) await onTransfersIngested(seasonBatch)
     }
 
     // Step 6: If any activities were deferred, fail the whole delivery so Alchemy retries.
@@ -222,6 +254,17 @@ export default class WebhookAlchemyController {
 
     let totalProcessed = 0
     let totalLogs = 0
+    // Backfilled transfers inserted this run — fed to the season projector after
+    // the scan (same hook the webhook uses) so an admin catch-up doesn't leave
+    // the season stale; this endpoint otherwise only writes onchain.transfer.
+    const seasonBatch: Array<{
+      id: string
+      from: string
+      to: string
+      amount: string
+      timestamp: number
+      txHash: string
+    }> = []
 
     for (let start = fromBlock; start <= headBlock; start += CHUNK) {
       const end = Math.min(start + CHUNK - 1, headBlock)
@@ -281,16 +324,23 @@ export default class WebhookAlchemyController {
 
         const parsed = iface.parseLog(log)
         const id = `${log.transactionHash.toLowerCase()}-${log.logIndex}`
+        const from = parsed.args.from.toLowerCase()
+        const to = parsed.args.to.toLowerCase()
+        const amount = parsed.args.value.toString()
+        const txHash = log.transactionHash.toLowerCase()
         const inserted = await processTransfer({
           id,
-          from: parsed.args.from.toLowerCase(),
-          to: parsed.args.to.toLowerCase(),
-          amount: parsed.args.value.toString(),
+          from,
+          to,
+          amount,
           timestamp,
           blockNumber: log.blockNumber,
-          txHash: log.transactionHash.toLowerCase(),
+          txHash,
         })
-        if (inserted) totalProcessed++
+        if (inserted) {
+          totalProcessed++
+          seasonBatch.push({ id, from, to, amount, timestamp, txHash })
+        }
       }
 
       logger.info(
@@ -301,6 +351,13 @@ export default class WebhookAlchemyController {
     // Recompute aggregates after backfill
     if (totalProcessed > 0) {
       await recomputeAggregates()
+    }
+
+    // Season 1 (Phase A) shadow projection of the backfilled batch — guarded,
+    // best-effort, mirrors the webhook path so the season isn't left stale.
+    if (isSeason1Enabled() && seasonBatch.length > 0) {
+      const { onTransfersIngested } = await import('#season/projector')
+      await onTransfersIngested(seasonBatch)
     }
 
     return response.json({
