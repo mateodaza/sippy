@@ -26,7 +26,7 @@ Backend = AdonisJS (Lucid + raw SQL `query` helper, services, controllers, comma
 | Derived-aggregate discipline           | `onchain_writer` idempotent pattern (insert-then-aggregate, flagged-not-deleted, rebuild fn)                                                         | apply identically to score                                   |
 | Periodic jobs                          | `invite.service` retry-timer pattern (provider-managed, `.unref()`)                                                                                  | a **season job** (decay/active-week/retained/pending-expiry) |
 | Identity / sybil floor                 | `phone_registry` (phone+WhatsApp+first-send)                                                                                                         | graph rules + flags                                          |
-| On-ramp signal                         | `fund` `/api/notify-fund`                                                                                                                            | emit on-ramp score event                                     |
+| On-ramp signal                         | **`onchain.transfer` projector** (canonical) — verified wallet receives from an external address; `fund /api/notify-fund` corroborates               | emit `onramp` pending score event (FIFO realize, §4)         |
 | Off-ramp signal                        | `offramp_controller`                                                                                                                                 | emit off-ramp score event                                    |
 
 Everything lives behind an env guard **`SEASON1_ENABLED`** (mirrors `isPrivyEnabled()` / quest event-slug pattern) so it can't brick the bot if unconfigured.
@@ -103,14 +103,14 @@ season.flag              -- sybil/fraud (flagged not deleted; feeds review queue
 
 ## 4. Instrumentation — where each verb is emitted
 
-| Verb                                    | Emitted from                                                               | Notes                                                             |
-| --------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `send`, `receive`, `first_send`         | **score projector** off `onchain.transfer` (same hook as `onchain_writer`) | derived from the source of truth; idempotent on the same `id`     |
-| `onramp` (pending)                      | `fund` `/api/notify-fund`                                                  | emits `realized=false`, `pending_until = now+14d`                 |
-| `onramp_used` (realize)                 | score projector when those funds are later **sent/off-ramped**             | flips the pending on-ramp to realized; else expires (§season job) |
-| `offramp`                               | `offramp_controller`                                                       | high weight; KYC-gated, low sybil risk                            |
-| `referral_unlock` / `referral_retained` | `#season/referral` (driven by projector + season job)                      | see §6                                                            |
-| `active_week`                           | **season job** (weekly)                                                    | ≥1 qualifying value-out that week                                 |
+| Verb                                    | Emitted from                                                                                                       | Notes                                                                                                                                                                                               |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `send`, `receive`, `first_send`         | **score projector** off `onchain.transfer` (same hook as `onchain_writer`)                                         | derived from the source of truth; idempotent on the same `id`                                                                                                                                       |
+| `onramp` (pending)                      | **score projector** — verified wallet receives from a non-verified (external) address; `/notify-fund` corroborates | `realized=false`, `pending_until = now+14d`, `pending_remaining = amount`                                                                                                                           |
+| `onramp_used` (realize)                 | score projector when those funds are later **sent/off-ramped**                                                     | **FIFO**: consume pending on-ramps oldest-first, realize `min(pending_remaining, value_out)`; id `onramp_used:{pending}:{valueout}`; partial OK; expired → `flagged='expired_onramp'` (§season job) |
+| `offramp`                               | `offramp_controller`                                                                                               | high weight; KYC-gated, low sybil risk                                                                                                                                                              |
+| `referral_unlock` / `referral_retained` | `#season/referral` (driven by projector + season job)                                                              | see §6                                                                                                                                                                                              |
+| `active_week`                           | **season job** (weekly)                                                                                            | ≥1 qualifying value-out that week                                                                                                                                                                   |
 
 The projector and `onchain_writer` share the transfer feed; we add the score projection in the same idempotent transaction boundary (or a second consumer of the same event id) so it can't double-count.
 
@@ -139,11 +139,12 @@ Both already write the _signup_ edge. Season 1 reads whichever attributed the re
 
 ```
 pending   → referee onboarded (referral_attributions row, OR pending_invites completed)   create season.referral(pending)
-unlocked  → referee's first send ≥ $5 to a verified counterparty within 14d               referrer +40, referee +25
+unlocked  → referee's first send ≥ $5 to a verified cp (≠ referrer) within 14d, OWN funds   referrer +40, referee +25
 retained  → referee still active 30d after unlock                                          referrer +30
 void      → sybil / cluster / circular / self-ref                                          no award
 ```
 
+- **Source-of-funds rule (anti-farm, load-bearing).** Unlock fires only if the referee's qualifying send is (i) to a verified counterparty that is **not the referrer** and (ii) backed by the referee's **own** funds — realized on-ramp or non-referrer inbound, tracked by the **eligible-balance ledger** (see §4 FIFO accounting): external/on-ramp and non-referrer inbound funds are eligible; **balance the referrer directly transferred in is not**. Without this, a referrer funds a referee $5, the referee bounces it back, and both sides unlock — the program becomes free money. Detected by the projector at the referee's first qualifying send.
 - **Attribution stays in the existing tables; Season 1 only adds milestones.** `referral_attributions.referee_phone` (or `pending_invites`) is joined to the referee's wallet via `phone_registry`, so the score projector can see "this referee's first qualifying send" and the season job can check 30-day retention.
 - **Inherit the existing guards verbatim** — self-referral block, one-attribution-per-referee (PK on `referee_phone`), vendor/exchange exclusion (already filtered in the Quest scoring query). Season 1 does not re-implement them.
 - Caps/diminishing per §3 (cap/season, decay after N). Two-sided, paid on stage transition, **never on signup**.
@@ -243,4 +244,4 @@ Dependencies: B needs A; C needs A; D needs A+B+C. C and B can overlap after A.
 
 ## 14. Reuse map (existing code → role in Season 1)
 
-`onchain.transfer` / `onchain_writer.service` → score source + projector pattern · `quest/referral.service` (`referral_codes`/`pending_referrals`/`referral_attributions`) → **canonical referral attribution** (public `/r/<code>` links) · `pending_invites` / `invite.service` → **direct WhatsApp invite** path · both → `season.referral` ledger · `quest_controller` + `/quest/[slug]` → season leaderboard · `phone_registry` → identity/sybil floor + phone→wallet bridge · `offramp_controller` → off-ramp event · `fund /api/notify-fund` → on-ramp event · `moderation_controller` → flag review · `apps/web/app/stats/page.tsx` + `public_stats_controller` → dashboard · provider timer pattern (`invite.service`) → season job · `SIPPY_CURRENT_EVENT_SLUG` guard pattern → `SEASON1_ENABLED`.
+`onchain.transfer` / `onchain_writer.service` → score source + projector pattern · `quest/referral.service` (`referral_codes`/`pending_referrals`/`referral_attributions`) → **canonical referral attribution** (public `/r/<code>` links) · `pending_invites` / `invite.service` → **direct WhatsApp invite** path · both → `season.referral` ledger · `quest_controller` + `/quest/[slug]` → season leaderboard · `phone_registry` → identity/sybil floor + phone→wallet bridge · `offramp_controller` → off-ramp event · `onchain.transfer` projector → on-ramp event (canonical; `fund /api/notify-fund` corroborates) · `moderation_controller` → flag review · `apps/web/app/stats/page.tsx` + `public_stats_controller` → dashboard · provider timer pattern (`invite.service`) → season job · `SIPPY_CURRENT_EVENT_SLUG` guard pattern → `SEASON1_ENABLED`.
