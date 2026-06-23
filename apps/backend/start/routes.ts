@@ -28,6 +28,8 @@ const EventController = () => import('#controllers/event_controller')
 const QuestController = () => import('#controllers/quest_controller')
 const QrScanController = () => import('#controllers/qr_scan_controller')
 const MyPayQrController = () => import('#controllers/my_pay_qr_controller')
+const SeasonStatsController = () => import('#controllers/season_stats_controller')
+const SeasonTransactionsController = () => import('#controllers/season_transactions_controller')
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
@@ -50,6 +52,16 @@ router.post('/notify-fund', [NotifyController, 'fund'])
 
 // ── Public stats (aggregate-only, no PII) ────────────────────────────────────
 router.get('/api/stats', [PublicStatsController, 'index']).use(middleware.ipThrottle())
+
+// ── Season 1 public dashboard (Phase B) — aggregate-only, no PII. The believable
+//     usage metrics derive live from onchain.transfer + #season/definitions, so
+//     these ship UNGUARDED (honest in shadow mode); only score-derived tiles
+//     depend on season.score and degrade to null when empty. /api/stats is left
+//     untouched for back-compat; both surfaces now read the un-blended numbers.
+router.get('/api/season/stats', [SeasonStatsController, 'index']).use(middleware.ipThrottle())
+router
+  .get('/api/season/transactions', [SeasonTransactionsController, 'index'])
+  .use(middleware.ipThrottle())
 
 // ── Public event lookup (IP-throttled, name/active/endsAt only) ──────────────
 router.get('/api/events/:slug', [EventController, 'getEventPublic']).use(middleware.ipThrottle())

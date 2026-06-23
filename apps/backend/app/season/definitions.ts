@@ -174,6 +174,145 @@ export async function distinctVerifiedCounterparties(wallet: string): Promise<nu
   return Number(res.rows[0]?.n ?? 0)
 }
 
+// ── Network-wide aggregates (Phase B dashboard) ──────────────────────────────
+//
+// The per-wallet definitions above answer "is THIS wallet active / retained /
+// how many counterparties". The dashboard needs the network rollups, and the
+// load-bearing rule (audit) is that they live HERE, beside the per-wallet
+// definitions and over the SAME verified floor — never re-derived in the
+// controller. The grant report and the dashboard both import these, so a single
+// edit to verifiedWalletCte() moves every number in lockstep.
+
+/**
+ * Transacted volume (hero) — total verified VALUE-OUT in raw USDC units, i.e.
+ * SUM(amount) over the exact predicate `maw` counts the senders of: a verified
+ * Sippy wallet sending ≥ $minActiveUsd to a verified counterparty (excluding the
+ * spender and self). This is the un-blend: deposits/receives are NOT in it.
+ *
+ * Off-ramp value-out isn't emitted on-chain in Phase A, so today this resolves
+ * to verified Sippy→Sippy sends — the same scope as `maw`/`isActive`. With no
+ * `period` it's all-time (cumulative value moved), which is the grant figure;
+ * pass a period to window it. Returned as a raw-units string (NUMERIC(78,0)
+ * precision preserved) for the web layer to divide by 10^6.
+ */
+export async function transactedVolume(period?: Period): Promise<string> {
+  const minRaw = await minRawUnits()
+  const res = await deps.query<{ total: string }>(
+    `WITH ${verifiedWalletCte()}
+     SELECT COALESCE(SUM(t.amount), 0)::text AS total
+       FROM onchain.transfer t
+      WHERE t.amount >= $1::numeric
+        AND LOWER(t."from") IN (SELECT addr FROM verified)
+        AND LOWER(t."to")   IN (SELECT addr FROM verified)
+        AND LOWER(t."to") <> $2
+        AND LOWER(t."from") <> LOWER(t."to")
+        ${period ? 'AND t.timestamp >= $3 AND t.timestamp < $4' : ''}`,
+    period ? [minRaw, SPENDER_ADDRESS, period.start, period.end] : [minRaw, SPENDER_ADDRESS]
+  )
+  return res.rows[0]?.total ?? '0'
+}
+
+/**
+ * Network retention — the aggregate of `isRetained`: how many verified wallets
+ * were active (≥1 qualifying value-out) in BOTH the previous and the current
+ * trailing-30d windows, plus that count over the previous-window active base as
+ * a percentage. Same two windows `isRetained(wallet, now)` uses, computed once
+ * for the whole network instead of per wallet.
+ */
+export async function retention(now: number): Promise<{ retained: number; retentionRate: number }> {
+  const minRaw = await minRawUnits()
+  const prevStart = now - 60 * 86_400
+  const mid = now - 30 * 86_400
+  const res = await deps.query<{ prev_active: string; retained: string }>(
+    `WITH ${verifiedWalletCte()},
+     prev AS (
+       SELECT DISTINCT LOWER(t."from") AS w
+         FROM onchain.transfer t
+        WHERE t.timestamp >= $1 AND t.timestamp < $2
+          AND t.amount >= $5::numeric
+          AND LOWER(t."from") IN (SELECT addr FROM verified)
+          AND LOWER(t."to")   IN (SELECT addr FROM verified)
+          AND LOWER(t."to") <> $6
+          AND LOWER(t."from") <> LOWER(t."to")
+     ),
+     curr AS (
+       SELECT DISTINCT LOWER(t."from") AS w
+         FROM onchain.transfer t
+        WHERE t.timestamp >= $3 AND t.timestamp < $4
+          AND t.amount >= $5::numeric
+          AND LOWER(t."from") IN (SELECT addr FROM verified)
+          AND LOWER(t."to")   IN (SELECT addr FROM verified)
+          AND LOWER(t."to") <> $6
+          AND LOWER(t."from") <> LOWER(t."to")
+     )
+     SELECT
+       (SELECT COUNT(*) FROM prev) AS prev_active,
+       (SELECT COUNT(*) FROM prev p WHERE EXISTS (SELECT 1 FROM curr c WHERE c.w = p.w)) AS retained`,
+    [prevStart, mid, mid, now, minRaw, SPENDER_ADDRESS]
+  )
+  const prevActive = Number(res.rows[0]?.prev_active ?? 0)
+  const retained = Number(res.rows[0]?.retained ?? 0)
+  const retentionRate = prevActive > 0 ? Math.round((retained / prevActive) * 100) : 0
+  return { retained, retentionRate }
+}
+
+/**
+ * Distinct verified counterparties network-wide — the rollup of
+ * `distinctVerifiedCounterparties`: the number of distinct directed
+ * (sender → recipient) verified pairs that have moved ≥ $minActiveUsd all-time.
+ * Equals the sum of every wallet's distinct-counterparty count, so it measures
+ * real P2P breadth (the metric that's near-zero while Sippy is used as a ramp).
+ */
+export async function distinctCounterpartiesNetwork(): Promise<number> {
+  const minRaw = await minRawUnits()
+  const res = await deps.query<{ n: string }>(
+    `WITH ${verifiedWalletCte()}
+     SELECT COUNT(*) AS n FROM (
+       SELECT DISTINCT LOWER(t."from") AS f, LOWER(t."to") AS tt
+         FROM onchain.transfer t
+        WHERE t.amount >= $1::numeric
+          AND LOWER(t."from") IN (SELECT addr FROM verified)
+          AND LOWER(t."to")   IN (SELECT addr FROM verified)
+          AND LOWER(t."to") <> $2
+          AND LOWER(t."from") <> LOWER(t."to")
+     ) pairs`,
+    [minRaw, SPENDER_ADDRESS]
+  )
+  return Number(res.rows[0]?.n ?? 0)
+}
+
+/**
+ * Daily verified value-out for the trailing `days`, bucketed by UTC date. The
+ * value-out series behind the dashboard chart — same predicate as
+ * `transactedVolume`, so the chart can never drift back into blended movement.
+ * Returns ascending rows of { date 'YYYY-MM-DD', volume (raw units), count }.
+ */
+export async function dailyTransactedVolume(
+  days: number,
+  now: number
+): Promise<{ date: string; volume: string; count: number }[]> {
+  const minRaw = await minRawUnits()
+  const start = now - days * 86_400
+  const res = await deps.query<{ date: string; volume: string; count: string }>(
+    `WITH ${verifiedWalletCte()}
+     SELECT
+       to_char(to_timestamp(t.timestamp) AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
+       COALESCE(SUM(t.amount), 0)::text AS volume,
+       COUNT(*)::text AS count
+       FROM onchain.transfer t
+      WHERE t.timestamp >= $1
+        AND t.amount >= $2::numeric
+        AND LOWER(t."from") IN (SELECT addr FROM verified)
+        AND LOWER(t."to")   IN (SELECT addr FROM verified)
+        AND LOWER(t."to") <> $3
+        AND LOWER(t."from") <> LOWER(t."to")
+      GROUP BY 1
+      ORDER BY 1 ASC`,
+    [start, minRaw, SPENDER_ADDRESS]
+  )
+  return res.rows.map((r) => ({ date: r.date, volume: String(r.volume), count: Number(r.count) }))
+}
+
 /**
  * The verified-wallet set as a JS Set of lowercased addresses — used by the
  * score projector to decide, per transfer, whether a counterparty is verified
