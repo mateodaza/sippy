@@ -66,10 +66,10 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
       id="main-content"
     >
       <ScrollNav>
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex justify-between items-center gap-3">
           <Link
             href="/"
-            className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 rounded-lg"
+            className="pointer-events-auto flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 rounded-lg"
           >
             <Image
               src="/images/logos/sippy-wordmark-cheetah.svg"
@@ -77,20 +77,23 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
               width={120}
               height={34}
               priority
-              className="transition-smooth hover:scale-105"
+              className="w-[104px] sm:w-[120px] h-auto transition-smooth hover:scale-105"
             />
           </Link>
-          <Link
-            href="/blog"
-            className="inline-flex items-center gap-1.5 font-mono text-xs tracking-[0.15em] uppercase text-[var(--text-secondary)] hover:text-brand-primary transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            All posts
-          </Link>
+          <div className="pointer-events-auto flex items-center gap-3 sm:gap-4">
+            <Link
+              href="/blog"
+              className="inline-flex items-center gap-1.5 font-mono text-xs tracking-[0.15em] uppercase text-[var(--text-secondary)] hover:text-brand-primary transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">All posts</span>
+            </Link>
+            <LanguageSwitcher current={lang} />
+          </div>
         </div>
       </ScrollNav>
 
-      <article className="px-6 py-14 sm:py-20">
+      <article className="px-6 pt-24 pb-14 sm:pt-28 sm:pb-20">
         {/* Header */}
         <header className="max-w-3xl mx-auto mb-10">
           <div className="flex items-center gap-3 flex-wrap font-mono text-[11px] uppercase tracking-[0.15em] text-[var(--text-muted)] mb-5">

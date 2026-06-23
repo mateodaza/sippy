@@ -41,10 +41,10 @@ export default async function BlogIndexPage() {
       id="main-content"
     >
       <ScrollNav>
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex justify-between items-center gap-3">
           <Link
             href="/"
-            className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 rounded-lg"
+            className="pointer-events-auto flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 rounded-lg"
           >
             <Image
               src="/images/logos/sippy-wordmark-cheetah.svg"
@@ -52,17 +52,20 @@ export default async function BlogIndexPage() {
               width={120}
               height={34}
               priority
-              className="transition-smooth hover:scale-105"
+              className="w-[104px] sm:w-[120px] h-auto transition-smooth hover:scale-105"
             />
           </Link>
-          <span className="font-mono text-xs tracking-[0.2em] uppercase text-[var(--text-muted)]">
-            /blog
-          </span>
+          <div className="pointer-events-auto flex items-center gap-3 sm:gap-4">
+            <LanguageSwitcher current={lang} />
+            <span className="hidden sm:inline font-mono text-xs tracking-[0.2em] uppercase text-[var(--text-muted)]">
+              /blog
+            </span>
+          </div>
         </div>
       </ScrollNav>
 
       {/* Header */}
-      <section className="relative py-16 sm:py-24 px-6">
+      <section className="relative pt-24 pb-12 sm:pt-32 sm:pb-20 px-6">
         <div className="max-w-3xl mx-auto text-center">
           <span className="spec-label mb-4 block">Notes from the lab</span>
           <h1 className="font-display font-bold uppercase text-5xl sm:text-7xl tracking-[-0.03em] text-[var(--text-primary)] mb-5">

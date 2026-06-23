@@ -14,12 +14,14 @@ Each entry tags which M2 checklist item (see `M2_CHECKLIST.md`) the work advance
   - Tweet-thread versions + notes in `marketing/blog-tweet-threads.md`.
   - ✅ **Copy audit complete**: EN/ES/PT bodies, localized metadata, and X threads tightened for publication.
   - ✅ **ES/PT resync complete (2026-06-22)**: both posts' Spanish + Portuguese bodies re-translated from the edited English; localized titles/descriptions updated in `lib/blog.ts`. Structure verified (headings/bold/numbered-list/quote/links match EN); prettier + `tsc --noEmit` pass.
+  - ✅ **Final polish (2026-06-22)**: post 2 gained a **"The agentic turn"** section (agentic UX + contemporary AI framing); traction figures pulled from both posts on accuracy review (kept qualitative); dates set — product post **June 5**, vision post **June 22** (vision leads the index, newest-first); titles made attention-first; an AI-accent line smoothed in the ES/PT product post. All three languages re-verified (prettier + tsc pass).
   - ⚠️ **Pending**: deploy so `/blog` is live (KPI = "published & accessible").
 - **#7 User testimonials (10–15)**: built + **published** 2 Tally forms (free plan), Google Sheets synced on both:
   - 🇪🇸 `https://tally.so/r/lbg4Mp` · 🇬🇧 `https://tally.so/r/5BrOOb`
   - 8 questions incl. a **0–10 NPS** item (also feeds the NPS KPI). Consent right after the name. Outreach DM copy in `marketing/testimonials-collection.md`.
   - ⚠️ **Pending**: send outreach (~25 users), collect 10–15. NPS to be reported via **Zoho**.
 - **Technical documentation package**: improved `docs/start/get-started.mdx` (newcomer-friendly funding, self-custody clarity, no-fees note) + **translated all 29 docs pages to ES + PT** (`apps/docs`, was English-only fallback). KPI "documentation published & accessible" → ✅.
+- **#2 (social presence) — LinkedIn**: created the Sippy company page (`linkedin.com/company/sippylat`) — logo, tagline, English About, industry/size/type; built 2 cover banners (EN + ES) in `brand/banners/sippy-linkedin-cover{,-es}.png`; added Mateo as **Co-Founder** (current role, 2025) on his profile. ⚠️ Pending: re-link the role to the page once it's searchable (LinkedIn indexing lag), upload a cover, add the ES About.
 
 ### M2 status snapshot (for the next task recount)
 
@@ -36,7 +38,9 @@ KPIs — live from `sippy.lat/stats`, 2026-06-22:
 
 Open items to close M2:
 
-1. **Volume gap** — report transacted ($24.8K) vs onboarded ($13.5K) transparently; consider a small push.
+1. **Volume gap** — report transacted ($24.8K) vs onboarded ($13.5K) transparently; consider a push.
+   - 💡 **Tomorrow (2026-06-23) — "Sippy Points" growth loop.** A points / future-rewards system pushed on Twitter so anyone, anywhere, deposits USDC into Sippy expecting points (anticipation of a future reward). Goal: drive global deposits to close the volume KPI. To flesh out: points mechanics (per $ deposited / held / referred), anti-sybil, tracking, the Twitter campaign — and **legal framing** with Lina (avoid implying a security / promised airdrop). Maps to `M2_CHECKLIST #8` (volume campaign).
+   - 💡 **Tomorrow — push `fund.sippy.lat` (the crypto→Sippy funding app).** Drive deposits through the existing crypto-to-Sippy on-ramp at https://fund.sippy.lat; pairs naturally with the points loop (deposit → points). Likely add a short **how-to guide** — a docs page and/or an on-page walkthrough — so newcomers can fund without friction.
 2. **Testimonials** — collect 10–15 from the Tally forms; **NPS via Zoho**.
 3. **Deploy `/blog`** live so the blog deliverable counts as published.
 4. **Tx-success + uptime** — document or note as accepted (PostHog has nothing tx-related — confirmed OK).

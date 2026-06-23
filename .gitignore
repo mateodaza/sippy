@@ -82,6 +82,7 @@ legal/
 
 # Agent tooling
 .nightcrawler/
+.firecrawl/
 .cursor/
 PROGRESS.md
 

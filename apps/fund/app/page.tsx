@@ -21,6 +21,16 @@ import {
 } from '@lifi/widget'
 import { ChainType } from '@lifi/sdk'
 import { generateOnRampURL } from '@coinbase/cbpay-js'
+import {
+  useAccount,
+  useChainId,
+  useSwitchChain,
+  useWriteContract,
+  useReadContract,
+  useWaitForTransactionReceipt,
+} from 'wagmi'
+import { ConnectKitButton } from 'connectkit'
+import { erc20Abi, parseUnits, formatUnits } from 'viem'
 
 const SIPPY_HOME = 'https://www.sippy.lat'
 const USDC_ARBITRUM = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831'
@@ -154,6 +164,7 @@ function FundPageContent() {
   const [error, setError] = useState('')
   const coinbaseAvailable = COINBASE_APP_ID && COINBASE_ALLOWED_COUNTRIES.has(detectUserCountry())
   const [activeTab, setActiveTab] = useState<FundTab>(coinbaseAvailable ? 'card' : 'crypto')
+  const [cryptoMode, setCryptoMode] = useState<'bridge' | 'direct'>('bridge')
 
   useEffect(() => {
     if (!token || directAddress) return
@@ -252,7 +263,9 @@ function FundPageContent() {
         { chainId: 1, address: '0x0000000000000000000000000000000000000000' },
         { chainId: 1, address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' },
         { chainId: 42161, address: '0x0000000000000000000000000000000000000000' },
-        { chainId: 42161, address: USDC_ARBITRUM },
+        // NOTE: USDC-on-Arbitrum is intentionally NOT a LI.FI source token — it's the
+        // destination, so same-token/same-chain has no bridge/swap route. That case is
+        // handled by the dedicated direct-transfer flow (DirectUsdcArbitrumTab) instead.
         { chainId: 8453, address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
         { chainId: 8453, address: '0x0000000000000000000000000000000000000000' },
         { chainId: 10, address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85' },
@@ -328,18 +341,30 @@ function FundPageContent() {
       <div className="max-w-xl mx-auto">
         {activeTab === 'card' ? (
           <CardBankTab address={recipient.address} coinbaseAvailable={!!coinbaseAvailable} />
+        ) : cryptoMode === 'direct' ? (
+          <DirectUsdcArbitrumTab recipient={recipient} onBack={() => setCryptoMode('bridge')} />
         ) : hydrated ? (
-          <LiFiWidget config={widgetConfig} integrator="sippy" />
+          <>
+            <LiFiWidget config={widgetConfig} integrator="sippy" />
+            <button
+              onClick={() => setCryptoMode('direct')}
+              className="mt-4 w-full text-center text-sm font-medium text-brand-primary hover:text-brand-primary-hover transition-smooth"
+            >
+              Already have USDC on Arbitrum? Send it directly →
+            </button>
+          </>
         ) : (
           <WidgetSkeleton config={widgetConfig} />
         )}
       </div>
 
-      <p className="text-center text-sm text-[var(--text-secondary)] mt-6 max-w-md mx-auto">
-        {activeTab === 'card'
-          ? 'Buy USDC with your card or bank account. It arrives directly in their Sippy account on Arbitrum.'
-          : 'Connect your wallet, pick a token, and it arrives as USDC in their Sippy account on Arbitrum.'}
-      </p>
+      {!(activeTab === 'crypto' && cryptoMode === 'direct') && (
+        <p className="text-center text-sm text-[var(--text-secondary)] mt-6 max-w-md mx-auto">
+          {activeTab === 'card'
+            ? 'Buy USDC with your card or bank account. It arrives directly in their Sippy account on Arbitrum.'
+            : 'Connect your wallet, pick a token, and it arrives as USDC in their Sippy account on Arbitrum.'}
+        </p>
+      )}
     </Shell>
   )
 }
@@ -488,6 +513,213 @@ function CoinbaseOnrampTab({ address }: { address: string }) {
         </button>
         <p className="text-xs text-[var(--text-muted)] mt-3">Powered by Coinbase</p>
       </div>
+    </div>
+  )
+}
+
+// Direct ERC-20 transfer for users who already hold USDC on Arbitrum.
+// LI.FI can't route same-token/same-chain (no bridge or swap), so we send the USDC
+// straight to the recipient's Sippy account on Arbitrum via wagmi.
+function DirectUsdcArbitrumTab({
+  recipient,
+  onBack,
+}: {
+  recipient: RecipientInfo
+  onBack: () => void
+}) {
+  const { address, isConnected } = useAccount()
+  const chainId = useChainId()
+  const { switchChainAsync } = useSwitchChain()
+  const { writeContractAsync } = useWriteContract()
+
+  const [amount, setAmount] = useState('')
+  const [txHash, setTxHash] = useState<`0x${string}` | undefined>(undefined)
+  const [phase, setPhase] = useState<'idle' | 'sending' | 'confirming' | 'done' | 'error'>('idle')
+  const [errMsg, setErrMsg] = useState('')
+
+  const { data: balanceRaw } = useReadContract({
+    address: USDC_ARBITRUM as `0x${string}`,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    chainId: 42161,
+    query: { enabled: !!address },
+  })
+  const balance = balanceRaw !== undefined ? Number(formatUnits(balanceRaw as bigint, 6)) : null
+
+  const { isSuccess: receiptOk } = useWaitForTransactionReceipt({ hash: txHash, chainId: 42161 })
+
+  useEffect(() => {
+    if (receiptOk && txHash && phase === 'confirming') {
+      setPhase('done')
+      fetch('/api/notify-fund', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: recipient.address,
+          type: 'usdc',
+          amount: parseFloat(amount).toFixed(2),
+          txHash,
+        }),
+      }).catch((e) => console.error('Fund notification failed:', e))
+    }
+  }, [receiptOk, txHash, phase, amount, recipient.address])
+
+  const handleSend = async () => {
+    setErrMsg('')
+    const amt = parseFloat(amount)
+    if (!amt || amt <= 0) {
+      setErrMsg('Enter an amount greater than 0')
+      return
+    }
+    if (balance !== null && amt > balance) {
+      setErrMsg('Amount exceeds your USDC balance')
+      return
+    }
+    try {
+      setPhase('sending')
+      if (chainId !== 42161) {
+        await switchChainAsync({ chainId: 42161 })
+      }
+      const hash = await writeContractAsync({
+        address: USDC_ARBITRUM as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [recipient.address as `0x${string}`, parseUnits(amount, 6)],
+        chainId: 42161,
+      })
+      setTxHash(hash)
+      setPhase('confirming')
+    } catch (e: unknown) {
+      const raw =
+        (e as { shortMessage?: string })?.shortMessage ||
+        (e as { message?: string })?.message ||
+        'Transaction failed'
+      setErrMsg(/reject|denied|cancell?ed/i.test(raw) ? 'Transaction cancelled' : raw)
+      setPhase('error')
+    }
+  }
+
+  if (phase === 'done') {
+    return (
+      <div className="bg-[var(--bg-primary)] panel-frame rounded-2xl p-8 text-center">
+        <CheckCircle2 className="w-16 h-16 text-brand-crypto mx-auto mb-4" />
+        <h3 className="font-display text-xl font-bold uppercase text-[var(--text-primary)] mb-2">
+          USDC Sent
+        </h3>
+        <p className="text-[var(--text-secondary)] mb-4 text-sm">
+          {parseFloat(amount).toFixed(2)} USDC is on its way to their Sippy account. It should
+          appear on WhatsApp within a minute.
+        </p>
+        {txHash && (
+          <a
+            href={`https://arbiscan.io/tx/${txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-brand-primary text-sm font-medium hover:underline"
+          >
+            View on Arbiscan
+          </a>
+        )}
+        <div className="mt-6">
+          <button
+            onClick={() => {
+              setPhase('idle')
+              setAmount('')
+              setTxHash(undefined)
+            }}
+            className="text-brand-primary font-semibold hover:underline text-sm"
+          >
+            Send more
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const busy = phase === 'sending' || phase === 'confirming'
+
+  return (
+    <div className="bg-[var(--bg-primary)] panel-frame rounded-2xl p-6 sm:p-8">
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-display text-lg font-bold uppercase text-[var(--text-primary)]">
+          USDC on Arbitrum
+        </h3>
+        <button
+          onClick={onBack}
+          className="text-xs font-medium text-[var(--text-secondary)] hover:text-brand-primary transition-smooth"
+        >
+          ← Bridge / swap
+        </button>
+      </div>
+
+      {!isConnected ? (
+        <ConnectKitButton.Custom>
+          {({ show }) => (
+            <button
+              onClick={show}
+              className="w-full bg-brand-primary text-white py-3.5 rounded-xl font-semibold hover:bg-brand-primary-hover transition-smooth flex items-center justify-center gap-2"
+            >
+              <Wallet className="w-4 h-4" />
+              Connect Wallet
+            </button>
+          )}
+        </ConnectKitButton.Custom>
+      ) : (
+        <>
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="text-[var(--text-secondary)]">Amount (USDC)</span>
+            {balance !== null && (
+              <button
+                onClick={() => setAmount(String(balance))}
+                disabled={busy}
+                className="text-brand-primary font-medium hover:underline disabled:opacity-50"
+              >
+                Balance: {balance.toFixed(2)} · Max
+              </button>
+            )}
+          </div>
+          <input
+            type="number"
+            inputMode="decimal"
+            min="0"
+            step="0.01"
+            placeholder="0.00"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            disabled={busy}
+            className="w-full px-4 py-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-default)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-brand-primary text-lg mb-4 disabled:opacity-50"
+          />
+
+          {errMsg && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {errMsg}
+            </div>
+          )}
+
+          <button
+            onClick={handleSend}
+            disabled={busy || !amount}
+            className="w-full bg-brand-primary text-white py-3.5 rounded-xl font-semibold hover:bg-brand-primary-hover transition-smooth disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {phase === 'sending' ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Confirm in wallet…
+              </>
+            ) : phase === 'confirming' ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Sending…
+              </>
+            ) : (
+              'Send USDC'
+            )}
+          </button>
+          <p className="text-xs text-[var(--text-muted)] mt-3 text-center">
+            Sends directly to their Sippy account on Arbitrum. You pay a small network fee in ETH.
+          </p>
+        </>
+      )}
     </div>
   )
 }
