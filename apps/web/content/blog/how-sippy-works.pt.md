@@ -14,7 +14,7 @@ Daí em diante, uma transferência pode ser assim de simples:
 
 > envia 10 pra mãe
 
-Um instante depois sua mãe tem dez dólares, e vocês dois recebem um recibo claro. Sem nomes de rede. Sem gas. Sem endereços de contrato. Se você consegue mandar um áudio, você consegue mandar um dólar.
+Um instante depois sua mãe tem dez dólares, e vocês dois recebem um recibo claro. Nada de nomes de rede, nem gas, nem endereços de contrato. Se você consegue mandar um áudio, você consegue mandar um dólar.
 
 Os dólares são USDC, um dólar digital totalmente lastreado, na Arbitrum, uma rede rápida e barata construída sobre a Ethereum. Isso importa para o sistema. Não precisa importar para o usuário, do mesmo jeito que o SMTP importa para o e-mail sem aparecer na sua caixa de entrada.
 

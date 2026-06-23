@@ -20,7 +20,7 @@ Cheap networks made small transfers practical. If moving ten dollars costs more 
 
 WhatsApp solved the cold-start problem. In Latin America, it is already where the family group, the landlord, the vendor, and the customer live. Asking someone to message a number is a different ask than asking them to install and learn a financial app.
 
-AI adds the missing interface. People should be able to write "send my brother what I owe him" and have the software understand the shape of the request. But understanding the request is not the same as executing it, which is the line we care about most.
+AI adds the missing interface. The industry is racing toward agents that take an instruction in plain language and act on it; people should be able to write "send my brother what I owe him" and have the software understand the shape of the request. But understanding the request is not the same as executing it, which is the line we care about most.
 
 ## The line we will not cross
 
@@ -33,6 +33,14 @@ This matters because money is a bad place for vibes. A model can be helpful, but
 Crypto actually helps here. Public rails and smart accounts give the system hard boundaries. A transfer is either valid or it is not. Spend permissions can be enforced by code instead of by trusting an assistant to behave.
 
 That is the version of AI finance we believe in: useful, bounded, and human-confirmed where the risk is real.
+
+## The agentic turn
+
+Software is moving toward agents — systems you talk to in plain language that take an instruction and carry it out for you. The shift is real and it is fast, and it changes what people expect from every product, a wallet included. The open question is not whether people will use agents. It is what a trustworthy one looks like once the task is money instead of text.
+
+Most of today's agent demos answer that by removing the human: hand the agent a goal, let it run, and hope it behaves. For drafting a message, that is fine. For your balance, it is exactly how people get hurt. Good agentic UX is not the absence of a human. It is knowing precisely when to bring one in.
+
+Sippy is agentic in the way that counts. You speak to it in your own words, and it does the work of turning intent into a real action on a real network — but it is built on the opposite instinct from autonomy at all costs. The agent interprets and proposes; deterministic rules and the user decide. Contemporary in its interface, conservative in its authority. We think that pairing, not raw independence, is what actually puts this in the hands of the people it is for.
 
 ## Training wheels that still count
 

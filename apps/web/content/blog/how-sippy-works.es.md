@@ -14,7 +14,7 @@ A partir de ahí, una transferencia puede verse así de simple:
 
 > envía 10 a mamá
 
-Un momento después tu mamá tiene diez dólares, y ambos reciben un comprobante claro. Sin nombres de redes. Sin gas. Sin direcciones de contrato. Si puedes enviar una nota de voz, puedes enviar un dólar.
+Un momento después tu mamá tiene diez dólares, y ambos reciben un comprobante claro. Nada de nombres de red, ni gas, ni direcciones de contrato. Si puedes mandar una nota de voz, puedes mandar un dólar.
 
 Los dólares son USDC, un dólar digital totalmente respaldado, en Arbitrum, una red rápida y barata construida sobre Ethereum. Eso le importa al sistema. No tiene por qué importarle al usuario, de la misma forma en que SMTP le importa al correo sin aparecer en tu bandeja de entrada.
 

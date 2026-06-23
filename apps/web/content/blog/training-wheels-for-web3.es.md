@@ -20,7 +20,7 @@ Las redes baratas volvieron prácticas las transferencias pequeñas. Si mover di
 
 WhatsApp resolvió el problema del arranque en frío. En América Latina, ya es donde viven el grupo familiar, el arrendador, el vendedor y el cliente. Pedirle a alguien que le escriba a un número es algo muy distinto a pedirle que instale y aprenda una app financiera.
 
-La IA aporta la interfaz que faltaba. La gente debería poder escribir "mándale a mi hermano lo que le debo" y que el software entienda la forma del pedido. Pero entender el pedido no es lo mismo que ejecutarlo, y esa es la línea que más nos importa.
+La IA aporta la interfaz que faltaba. La industria está corriendo hacia agentes que toman una instrucción en lenguaje común y actúan sobre ella; la gente debería poder escribir "mándale a mi hermano lo que le debo" y que el software entienda la forma del pedido. Pero entender el pedido no es lo mismo que ejecutarlo, y esa es la línea que más nos importa.
 
 ## La línea que no vamos a cruzar
 
@@ -33,6 +33,14 @@ Esto importa porque el dinero es un mal lugar para las corazonadas. Un modelo pu
 Aquí las cripto en realidad ayudan. Los rieles públicos y las cuentas inteligentes le dan al sistema fronteras duras. Una transferencia es válida o no lo es. Los permisos de gasto pueden hacerse cumplir por código en lugar de confiar en que un asistente se comporte.
 
 Esa es la versión de las finanzas con IA en la que creemos: útil, acotada y confirmada por una persona donde el riesgo es real.
+
+## El giro agéntico
+
+El software se está moviendo hacia los agentes: sistemas con los que hablas en lenguaje común y que toman una instrucción y la llevan a cabo por ti. El cambio es real y es rápido, y modifica lo que la gente espera de cada producto, una billetera incluida. La pregunta abierta no es si la gente va a usar agentes. Es cómo se ve uno confiable cuando la tarea es dinero en lugar de texto.
+
+La mayoría de las demos de agentes de hoy responden a eso quitando a la persona: le das una meta al agente, lo dejas correr y esperas que se comporte. Para redactar un mensaje, está bien. Para tu saldo, es exactamente así como la gente sale lastimada. Una buena UX agéntica no es la ausencia de una persona. Es saber con precisión cuándo traer a una.
+
+Sippy es agéntica en el sentido que cuenta. Le hablas con tus propias palabras, y hace el trabajo de convertir la intención en una acción real sobre una red real, pero está construida sobre el instinto opuesto a la autonomía a toda costa. El agente interpreta y propone; las reglas deterministas y el usuario deciden. Contemporánea en su interfaz, conservadora en su autoridad. Creemos que ese emparejamiento, y no la independencia pura, es lo que de verdad pone esto en manos de la gente para la que es.
 
 ## Rueditas de entrenamiento que igual cuentan
 
