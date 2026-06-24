@@ -42,6 +42,8 @@ import {
   kycVerifyEmail,
   kycSubmitDocument,
   kycRefreshLevel,
+  isFullKyc,
+  FULL_KYC_LEVEL,
   type IdType,
 } from '#services/colurs_kyc.service'
 import {
@@ -86,10 +88,15 @@ export default class OnrampController {
       kycLevel: kyc?.kycLevel ?? 0,
       // "Approved enough to onramp" requires only counterparty + status='approved'.
       // The kyc_level field discriminates between quick-flow (0) and full-KYC
-      // approved (5); only level >= 5 lifts the monthly cap. Both states are
-      // "approved" for the purposes of routing the user to the method picker.
+      // approved (FULL_KYC_LEVEL); only full KYC lifts the monthly cap. Both
+      // states are "approved" for routing the user to the method picker.
       isApproved: kyc?.kycStatus === 'approved' && !!kyc?.counterpartyId,
-      isFullKycApproved: (kyc?.kycLevel ?? 0) >= 5 && kyc?.kycStatus === 'approved',
+      // Shared single definition of full, document-verified KYC. Deliberate
+      // (correct) tightening over the old inline check: isFullKyc ALSO requires a
+      // counterparty_id, so a level-5/approved row whose counterparty creation
+      // transiently failed (see kycRefreshLevel) now reports false here —
+      // consistent with isApproved above, which already excludes that state.
+      isFullKycApproved: isFullKyc(kyc),
       fullname: kyc?.fullname ?? null,
       idType: kyc?.idType ?? null,
       email: kyc?.email ?? null,
@@ -374,14 +381,17 @@ export default class OnrampController {
 
     try {
       const result = await kycRefreshLevel(phoneNumber)
-      // isApproved requires both Level 5 AND a counterparty ID.
-      // Level 5 alone is not enough — the counterparty is required to initiate
+      // isApproved requires both full KYC level AND a counterparty ID.
+      // The level alone is not enough — the counterparty is required to initiate
       // an R2P payment. If counterparty creation failed, the UI must keep polling
       // (kycRefreshLevel retries it on every call) rather than exiting the flow.
+      // This mirrors isFullKyc, but the poll result is { level, status,
+      // counterpartyId } — not a KycRecord — so we use FULL_KYC_LEVEL directly
+      // instead of force-fitting the predicate onto the wrong shape.
       return ctx.response.json({
         kycLevel: result.level,
         kycStatus: result.status,
-        isApproved: result.level >= 5 && !!result.counterpartyId,
+        isApproved: result.level >= FULL_KYC_LEVEL && !!result.counterpartyId,
       })
     } catch (err) {
       logger.error({ err }, `onramp/kyc: refresh-level failed for ${maskPhone(phoneNumber)}`)
@@ -626,17 +636,22 @@ export default class OnrampController {
     }
 
     // Monthly cap until the user has completed full Colurs KYC review.
-    // Discriminator is `kyc_level >= 5` — that's the value kycRefreshLevel
-    // writes when Colurs approves the documents. Quick-flow rows are at
-    // level 0 (counterparty exists but no real verification), and
+    // Discriminator is `kyc_level >= FULL_KYC_LEVEL` — that's the value
+    // kycRefreshLevel writes when Colurs approves the documents. Quick-flow rows
+    // are at level 0 (counterparty exists but no real verification), and
     // mid-upgrade rows are also at level 0 until Colurs's compliance team
     // completes review. Both stay capped.
+    //
+    // Intentionally a level-only gate, NOT isFullKyc: the counterparty is
+    // already guaranteed by the KYC_REQUIRED guard above, and the cap keys off
+    // whether Colurs has granted the level — not the full counterparty/status
+    // bundle. Behavior is identical to isFullKyc here given that guard.
     //
     // Status filter is an ALLOW-LIST of states that represent real,
     // committed money in flight. `initiating_payment` and other transient
     // pre-Colurs states do NOT count — otherwise an orphan row would
     // permanently consume quota.
-    if ((kyc.kycLevel ?? 0) < 5) {
+    if ((kyc.kycLevel ?? 0) < FULL_KYC_LEVEL) {
       const startOfMonth = new Date()
       startOfMonth.setUTCDate(1)
       startOfMonth.setUTCHours(0, 0, 0, 0)
