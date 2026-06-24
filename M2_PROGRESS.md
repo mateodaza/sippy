@@ -31,16 +31,16 @@ KPIs — live from `sippy.lat/stats`, 2026-06-22:
 | ---------------------- | -------- | ----------------------------------------------------------- | ---------------------------------------- |
 | Onchain transfers      | 200–400  | **757**                                                     | ✅ past                                  |
 | Monthly active wallets | 75–100   | **~197–216**                                                | ✅ past                                  |
-| USDC volume            | $50–100K | **$24.8K moved** (+$13.5K onboarded)                        | ⚠️ below floor — biggest gap             |
+| USDC volume            | $50–100K | **value-out + on-ramped reported separately**               | ⚠️ below floor — biggest gap             |
 | Tx success rate        | >98%     | not instrumented (PostHog dashboard is the default web one) | document from backend/indexer, or accept |
 | Uptime                 | >99%     | not measured here (no Railway connector)                    | pull from Railway                        |
 | NPS                    | >40      | form live                                                   | measure via Zoho once collected          |
 
 Open items to close M2:
 
-1. **Volume gap** — report transacted ($24.8K) vs onboarded ($13.5K) transparently; consider a push.
-   - 💡 **Tomorrow (2026-06-23) — "Sippy Points" growth loop.** A points / future-rewards system pushed on Twitter so anyone, anywhere, deposits USDC into Sippy expecting points (anticipation of a future reward). Goal: drive global deposits to close the volume KPI. To flesh out: points mechanics (per $ deposited / held / referred), anti-sybil, tracking, the Twitter campaign — and **legal framing** with Lina (avoid implying a security / promised airdrop). Maps to `M2_CHECKLIST #8` (volume campaign).
-   - 💡 **Tomorrow — push `fund.sippy.lat` (the crypto→Sippy funding app).** Drive deposits through the existing crypto-to-Sippy on-ramp at https://fund.sippy.lat; pairs naturally with the points loop (deposit → points). Likely add a short **how-to guide** — a docs page and/or an on-page walkthrough — so newcomers can fund without friction.
+1. **Volume gap** — report value-out and on-ramped separately; use gross facilitated only as arithmetic context, never as the public headline.
+   - 💡 **Season 1 usage loop** — reputation-only, usage-led, and gated on real sends, cash-outs, active referrals, and retention. No deposit/hold points, no future-reward promise, no airdrop framing.
+   - 💡 **Funding guide for `fund.sippy.lat`** — keep the crypto-to-Sippy funding app easy to use, but frame it as a way to get dollars into Sippy for actual use, not a deposit campaign.
 2. **Testimonials** — collect 10–15 from the Tally forms; **NPS via Zoho**.
 3. **Deploy `/blog`** live so the blog deliverable counts as published.
 4. **Tx-success + uptime** — document or note as accepted (PostHog has nothing tx-related — confirmed OK).

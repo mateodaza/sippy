@@ -48,7 +48,7 @@ Phase D splits in two, and **only D1 ships now:**
 
 ### 5. Tier display
 
-- Names: **Nuevo · Activado · Activo · Regular · Power** (confirmed — user-facing). One short, honest line each describing what it reflects (e.g. Activo = "usando Sippy de verdad"). **No perk promises** in D1 — describe standing, not rewards.
+- Names: **Nuevo · En marcha · Activo · Fiel · Estrella** (confirmed — user-facing; internal slugs stay `newcomer/activated/active/regular/power`). One short, honest line each describing what it reflects (e.g. Activo = "usando Sippy de verdad"). **No perk promises** in D1 — describe standing, not rewards.
 
 ## Go-live runbook (this is where the season actually turns on)
 
@@ -88,7 +88,7 @@ Tier perks that change product behavior or imply a payout — higher limits, pri
 
 ## Product decisions — SETTLED (build to these)
 
-1. **Tier names:** `Nuevo · Activado · Activo · Regular · Power` — final, user-facing. Write one short honest standing-line for each.
+1. **Tier names:** `Nuevo · En marcha · Activo · Fiel · Estrella` — final, user-facing. Write one short honest standing-line for each.
 2. **Command:** all of `puntos` / `mi nivel` / `mi puntaje` / `score` trigger the reply (equal aliases, no single canonical).
 3. **Leaderboard identity:** fully anonymous — **anonymous `displayId` only** (HMAC of wallet+season salt, or masked wallet), **no handles, no phone-derived identity** (no opt-in handle feature; no handle/name/phone field anywhere).
 

@@ -7,7 +7,7 @@ What's on `main`:
 - **A — measurement core:** `season` schema, score projector off `onchain.transfer`, `#season/{params,score,definitions,recompute}`, `season:backfill` command.
 - **B — proof dashboard:** `/api/season/stats` + `/api/season/transactions`, the un-blended `/stats` (Transacted Volume hero, On-ramped separate, live tx feed), landing strip un-blended.
 - **C — the live loop:** referrals (two sources, `referral_attributions`-precedence, source-of-funds rule), anti-sybil graph + flag review queue, on/off-ramp emission + FIFO realization, the season job (provider + DB job-lock).
-- **D1 — user surfaces (reputation-only):** `/api/season/score` (JWT-bound), anonymous `displayId` leaderboard, WhatsApp `puntos`/`mi nivel`/`mi puntaje`/`score` command, web `/score` + `/temporada`, tiers `Nuevo·Activado·Activo·Regular·Power`.
+- **D1 — user surfaces (reputation-only):** `/api/season/score` (JWT-bound), anonymous `displayId` leaderboard, WhatsApp `puntos`/`mi nivel`/`mi puntaje`/`score` command, web `/score` + `/temporada`, tiers `Nuevo·En marcha·Activo·Fiel·Estrella`.
 
 ---
 
