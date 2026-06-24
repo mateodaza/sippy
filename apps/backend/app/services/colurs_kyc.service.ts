@@ -72,6 +72,29 @@ export async function getKyc(phoneNumber: string): Promise<KycRecord | null> {
   }
 }
 
+/**
+ * Colurs full-KYC level. `kyc_level >= FULL_KYC_LEVEL` is the discriminator
+ * between quick-flow approval (level 0 — a counterparty exists but there is no
+ * real identity verification) and full KYC (level 5+, document-verified). See the
+ * onramp semantics at onramp_controller.kycStatus (`isFullKycApproved`).
+ */
+export const FULL_KYC_LEVEL = 5
+
+/**
+ * Real personhood signal: full, document-verified KYC — NOT quick-flow approval.
+ * A quick-flow row can be `approved` with a counterparty at level 0 ("no real
+ * verification"), which must NOT clear an identity gate. Single source of truth so
+ * the season Power-tier gate and the bot agree with the onramp's own definition.
+ */
+export function isFullKyc(kyc: KycRecord | null): boolean {
+  return (
+    !!kyc &&
+    kyc.kycStatus === 'approved' &&
+    (kyc.kycLevel ?? 0) >= FULL_KYC_LEVEL &&
+    !!kyc.counterpartyId
+  )
+}
+
 async function upsertKyc(
   phoneNumber: string,
   fields: Partial<{
@@ -135,7 +158,7 @@ export async function kycRegister(opts: {
  * to apply the monthly USD cap. Once the user trips the cap, kycRegister
  * (above) is invoked to fill in colurs_user_id and lift the cap.
  *
- * State after this call: { kycStatus: 'approved', kycLevel: 5,
+ * State after this call: { kycStatus: 'approved', kycLevel: 0,
  *                          counterparty_id: cp_xxx, colurs_user_id: NULL }
  */
 export async function kycQuickRegister(opts: {
@@ -326,7 +349,7 @@ export async function kycRefreshLevel(
   let status = kyc.kycStatus
   let counterpartyId = kyc.counterpartyId
 
-  if (level >= 5) {
+  if (level >= FULL_KYC_LEVEL) {
     if (status !== 'approved') {
       status = 'approved'
     }
