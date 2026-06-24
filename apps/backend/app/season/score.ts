@@ -23,10 +23,20 @@ import {
   type Tier,
   VOLUME_BONUS_VERBS,
   VALUE_OUT_VERBS,
+  REFERRAL_VERBS,
 } from '#season/params'
 
 const DAY_SECONDS = 86_400
 const WEEK_SECONDS = 7 * DAY_SECONDS
+
+/**
+ * Diminishing factor applied to a referrer's referral_unlock points once they
+ * pass referral.decayAfter unlocked referrals (spec §1.3 "diminishing after the
+ * 10th"). Parallel to the per-pair send decay — the seasonCap is the hard
+ * ceiling, this just slows accrual for prolific referrers. Halving is the ship
+ * default; tune via params if it needs to be a tunable later.
+ */
+const REFERRAL_DECAY_FACTOR = 0.5
 
 /** One scoreable action. `timestamp` is unix seconds; `usd` is dollars at event time. */
 export interface ScoreEvent {
@@ -117,12 +127,14 @@ export function computeTier(m: TierInputs, params: SeasonParams): Tier {
  *      to the distinct set; a first_send ≥ minActiveUsd / any qualifying value-out
  *      flips activation.
  *   2. points: base(+volumeBonus) × recencyWeight, with per-pair send decay
- *      (base-only after N, 0 after M), then clamped by the per-day cap. A
- *      value-out OR first_send below minActiveUsd earns nothing (real-usage
- *      floor); a send's breadth still counts above.
+ *      (base-only after N, 0 after M), then the verb-specific season caps
+ *      (referral seasonCap + diminishing-after-N, new_counterparty cap), then
+ *      clamped by the per-day cap. A value-out OR first_send below minActiveUsd
+ *      earns nothing (real-usage floor); a send's breadth still counts above.
  *
- * Events are processed chronologically so pair-decay counts in send order and
- * the daily cap fills earliest-first (deterministic).
+ * Events are processed chronologically so pair-decay counts in send order, the
+ * referral/new_counterparty caps fill earliest-first, and the daily cap fills
+ * earliest-first (all deterministic).
  */
 export function computeScore(
   events: ScoreEvent[],
@@ -140,6 +152,10 @@ export function computeScore(
   let score = 0
   let lastActive: number | null = null
   let hasActivation = false
+  // Verb-specific season caps (spec §1.3), accumulated in chronological order.
+  let referralEarned = 0 // total points from referral_* verbs (cap: referral.seasonCap)
+  let referralUnlockCount = 0 // # of referral_unlock_referrer seen (for decay-after-N)
+  let newCounterpartyEarned = 0 // # of new_counterparty bonuses that landed (cap: newCounterpartySeasonCap)
 
   for (const e of ordered) {
     const isValueOut = VALUE_OUT_VERBS.has(e.verb) && (e.usd ?? 0) >= params.minActiveUsd
@@ -177,10 +193,36 @@ export function computeScore(
       }
     }
 
+    // new_counterparty bonus is capped at newCounterpartySeasonCap/season. A
+    // capped-out event is still recorded (flagged-not-deleted), it just earns 0.
+    // Checked after the recency `continue` above, so an old (zero-weight) one
+    // never burns a cap slot.
+    if (e.verb === 'new_counterparty' && newCounterpartyEarned >= params.newCounterpartySeasonCap) {
+      continue
+    }
+
+    // Referral diminishing after referral.decayAfter unlocked referrals (spec
+    // §1.3). Counts every unlock chronologically — your Nth referral is your Nth
+    // regardless of recency — and reduces the referrer's points past the limit.
+    if (e.verb === 'referral_unlock_referrer') {
+      referralUnlockCount += 1
+      if (referralUnlockCount > params.referral.decayAfter) {
+        raw = Math.round(raw * REFERRAL_DECAY_FACTOR)
+      }
+    }
+
     if (raw === 0 && !withVolume) continue
     const points = raw + (withVolume ? volumeBonus(e.usd, params) : 0)
     let earned = Math.round(points * w)
     if (earned <= 0) continue
+
+    // Referral season cap (spec §1.3): all referral_* verbs together earn at most
+    // referral.seasonCap per wallet/season. Clamp before the per-day cap so the
+    // season ceiling can't be sidestepped by spreading referrals across days.
+    if (REFERRAL_VERBS.has(e.verb)) {
+      earned = Math.min(earned, Math.max(0, params.referral.seasonCap - referralEarned))
+      if (earned <= 0) continue
+    }
 
     const day = Math.floor(e.timestamp / DAY_SECONDS)
     const already = dayEarned.get(day) ?? 0
@@ -188,6 +230,9 @@ export function computeScore(
     earned = Math.min(earned, allowed)
     if (earned <= 0) continue
     dayEarned.set(day, already + earned)
+    // Commit the FINAL earned (post day-cap) to the season accumulators.
+    if (REFERRAL_VERBS.has(e.verb)) referralEarned += earned
+    if (e.verb === 'new_counterparty') newCounterpartyEarned += 1
     score += earned
   }
 

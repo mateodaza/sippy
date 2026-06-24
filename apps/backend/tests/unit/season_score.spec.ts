@@ -206,6 +206,94 @@ test.group('season/score | computeScore', () => {
   })
 })
 
+// ── Phase C verbs + season caps ─────────────────────────────────────────────────
+
+test.group('season/score | Phase C verbs', () => {
+  test('offramp is a value-out: base 20 + volume bonus, drives active week', ({ assert }) => {
+    const r = computeScore([ev({ verb: 'offramp', usd: 100, timestamp: NOW - 3600 })], P, {
+      now: NOW,
+    })
+    assert.equal(r.score, 40) // base 20 + volumeBonus(100)=20
+    assert.equal(r.activeWeeks, 1) // offramp ∈ VALUE_OUT_VERBS
+    assert.equal(r.tier, 'activated') // a qualifying value-out activates
+  })
+
+  test('onramp (pending) earns nothing and never counts as a value-out', ({ assert }) => {
+    const r = computeScore([ev({ verb: 'onramp', usd: 100, timestamp: NOW - 3600 })], P, {
+      now: NOW,
+    })
+    assert.equal(r.score, 0) // base 0 — no score for parked capital
+    assert.equal(r.activeWeeks, 0) // onramp is NOT a value-out
+    assert.equal(r.tier, 'newcomer')
+  })
+
+  test('onramp_used realizes: base 10 + volume bonus (still not a value-out)', ({ assert }) => {
+    const r = computeScore([ev({ verb: 'onramp_used', usd: 25, timestamp: NOW - 3600 })], P, {
+      now: NOW,
+    })
+    assert.equal(r.score, 20) // base 10 + volumeBonus(25)=10
+    assert.equal(r.activeWeeks, 0) // realization itself isn't the value-out
+  })
+
+  test('referral unlock is two-sided + retained pays the referrer', ({ assert }) => {
+    // Referrer: +40 unlock, +30 retained = 70
+    const referrer = computeScore(
+      [
+        ev({ verb: 'referral_unlock_referrer', timestamp: NOW - 3600 }),
+        ev({ verb: 'referral_retained', timestamp: NOW - 1800 }),
+      ],
+      P,
+      { now: NOW }
+    )
+    assert.equal(referrer.score, 70)
+    // Referee: +25 unlock
+    const referee = computeScore(
+      [ev({ verb: 'referral_unlock_referee', timestamp: NOW - 3600 })],
+      P,
+      {
+        now: NOW,
+      }
+    )
+    assert.equal(referee.score, 25)
+  })
+})
+
+test.group('season/score | season caps', () => {
+  test('referral diminishing after decayAfter (no cap hit)', ({ assert }) => {
+    // 12 unlocks on distinct days (within 30d → recency 1.0, under the daily cap).
+    // First 10 @ 40 = 400; 11th & 12th halved → 20 each = 40. Total 440 (< 500 cap).
+    const events: ScoreEvent[] = []
+    for (let i = 1; i <= 12; i++) {
+      events.push(ev({ verb: 'referral_unlock_referrer', timestamp: NOW - i * DAY }))
+    }
+    const r = computeScore(events, P, { now: NOW })
+    assert.equal(r.score, 440)
+  })
+
+  test('referral season cap clamps total at 500', ({ assert }) => {
+    // 20 unlocks: 10 @ 40 = 400, then halved to 20 each. Uncapped that is 600;
+    // the seasonCap clamps it to exactly 500 (reached at the 15th).
+    const events: ScoreEvent[] = []
+    for (let i = 1; i <= 20; i++) {
+      events.push(ev({ verb: 'referral_unlock_referrer', timestamp: NOW - i * DAY }))
+    }
+    const r = computeScore(events, P, { now: NOW })
+    assert.equal(r.score, 500)
+  })
+
+  test('new_counterparty bonus capped at newCounterpartySeasonCap (10/season)', ({ assert }) => {
+    // 12 new_counterparty events on distinct days: only the first 10 earn (8 each).
+    const events: ScoreEvent[] = []
+    for (let i = 1; i <= 12; i++) {
+      events.push(
+        ev({ verb: 'new_counterparty', counterparty: `0xc${i}`, timestamp: NOW - i * DAY })
+      )
+    }
+    const r = computeScore(events, P, { now: NOW })
+    assert.equal(r.score, 80) // 10 × 8, the 11th/12th earn 0
+  })
+})
+
 // ── computeTier (time + breadth, not just score) ───────────────────────────────
 
 test.group('season/score | computeTier', () => {

@@ -44,6 +44,16 @@ export const VOLUME_BONUS_VERBS: ReadonlySet<Verb> = new Set<Verb>([
 /** Verbs that count as a "value-out" (drive active / activeWeeks / lastActive). */
 export const VALUE_OUT_VERBS: ReadonlySet<Verb> = new Set<Verb>(['send', 'offramp'])
 
+/**
+ * Referral verbs — subject to the per-season referral cap + diminishing-after-N
+ * (spec §1.3). Grouped here so #season/score has one classification source.
+ */
+export const REFERRAL_VERBS: ReadonlySet<Verb> = new Set<Verb>([
+  'referral_unlock_referrer',
+  'referral_unlock_referee',
+  'referral_retained',
+])
+
 export interface SeasonParams {
   /** Volume slope: volumeBonus = round(min(vCap, K*sqrt(usd))). */
   K: number
