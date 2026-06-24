@@ -182,6 +182,20 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(?:meu\s+|minhas\s+)?(?:quest|entradas)\s*\??$/i,
     /^(?:quantas?)\s+entradas?\s*(?:tenho)?\s*\??$/i,
   ],
+  // season_score — Season 1 reputation standing (Phase D). All of
+  // `puntos` / `mi nivel` / `mi puntaje` / `score` are EQUAL triggers (no single
+  // canonical — any of them fires the reply), plus the natural EN/PT forms.
+  // Reputation-only: the reply shows tier + progress + next actions, never the
+  // scoring formula. Anchored so a bare keyword lands here; conversational forms
+  // ("cuantos puntos tengo?") are caught by the pre-LLM gate below. `puntos` /
+  // `puntaje` / `nivel` / `score` don't collide with pay_qr (`codigo de pago`) or
+  // balance (`saldo`), so bare keywords resolve cleanly.
+  season_score: [
+    /^(?:mi |mis )?(?:puntaje|puntos|nivel|score)\s*\??$/i,
+    /^(?:cu[aá]l|cual)\s+es\s+mi\s+(?:puntaje|puntos|nivel|score)\s*\??$/i,
+    /^my\s+(?:score|level|points|standing|rank)\s*\??$/i,
+    /^(?:meu\s+|minha\s+)?(?:n[ií]vel|pontos|pontua[cç][aã]o|score)\s*\??$/i,
+  ],
   // pizza_day — user asking about the Pizza Day Cartagena 2026 event.
   // Distinct from `about` (which is "what is Sippy"); pizza_day is "what
   // is the event Sippy is at". Handler returns the deep-link to the in-app
@@ -739,6 +753,15 @@ const HIGH_CONFIDENCE_PRE_LLM_PATTERNS: Array<[string, RegExp]> = [
   [
     'quest_status',
     /(?:^|\s)((?:mi|mis|my|meu|minhas)\s+(?:quest|entradas|entries)|(?:cu[aá]nt[ao]s?|quantas?)\s+entradas?(?:\s+tengo|\s+tenho)?|(?:c[oó]mo|como)\s+voy(?:\s+(?:en\s+)?(?:el\s+)?quest)?|quest\s+status|how\s+am\s+i\s+doing|how\s+many\s+entries)$/i,
+  ],
+  // season_score — Season 1 reputation standing. Pre-LLM gate so the short
+  // aliases ("puntos", "mi nivel", "score") and conversational forms
+  // ("cuantos puntos tengo", "cual es mi nivel") win deterministically
+  // instead of the LLM guessing greeting/about. Anchored at end. EQUAL
+  // aliases — any of puntos/nivel/puntaje/score triggers it.
+  [
+    'season_score',
+    /(?:^|\s)((?:mi|mis|my|meu|minha)\s+(?:puntaje|puntos|nivel|score|level|points|standing|n[ií]vel|pontos|pontua[cç][aã]o)|puntaje|puntos|nivel|score|(?:cu[aá]ntos?|quantos?)\s+puntos?(?:\s+tengo|\s+tenho)?|(?:cu[aá]l|cual)\s+es\s+mi\s+(?:puntaje|puntos|nivel|score)|(?:c[oó]mo|como)\s+voy\s+(?:de\s+)?(?:puntaje|puntos|nivel))$/i,
   ],
   // Pizza Day — bot must answer "qué es pizza day" etc. without the LLM
   // re-classifying it as out_of_scope (real bug from 2026-05-21

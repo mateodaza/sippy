@@ -48,6 +48,8 @@ import {
   formatReferralCodeMessage,
   formatQuestStatusMessage,
   formatQuestNoActiveEvent,
+  formatSeasonScoreMessage,
+  formatSeasonScoreEmpty,
   formatLanguageSetMessage,
   formatCommandErrorMessage,
   formatGreetingMessage,
@@ -98,6 +100,9 @@ import { handleSendCommand } from '#commands/send_command'
 import { createInvite } from '#services/invite.service'
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { generateResponse } from '#services/llm.service'
+import { isSeason1Enabled } from '#season/guard'
+import { getStanding } from '#season/standing'
+import { getKyc, isFullKyc } from '#services/colurs_kyc.service'
 import {
   type SetupStatus,
   getSetupStatus,
@@ -1257,6 +1262,69 @@ export async function routeCommand(
           )
         } catch (err) {
           logger.error({ err, phone: maskPhone(phoneNumber) }, 'quest_status: fetch failed')
+          await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+        }
+        break
+      }
+
+      case 'season_score': {
+        // Season 1 reputation standing (Phase D). Reputation-only: the reply
+        // shows tier + one progress line + 2-3 next actions, never the scoring
+        // formula. Same setup gating as referral_code/quest_status — a pre-setup
+        // user has no wallet, so nudge them to onboard first.
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+          break
+        }
+        if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+          break
+        }
+        // Master switch off → friendly empty state, never an error or a zero.
+        if (!isSeason1Enabled()) {
+          await sendMessageFn(phoneNumber, formatSeasonScoreEmpty(phoneNumber, lang), lang)
+          break
+        }
+        try {
+          // Resolve the wallet from the sender's phone (server-side). Resolve full
+          // KYC in parallel via the SAME shared predicate the /api/season/score
+          // surface uses, so the bot and web agree on the Power verification gate
+          // for a full-KYC user. getKyc failure degrades to "not verified".
+          const [wallet, kyc] = await Promise.all([
+            getUserWallet(phoneNumber),
+            getKyc(phoneNumber).catch(() => null),
+          ])
+          const standing = wallet?.walletAddress
+            ? await getStanding({ wallet: wallet.walletAddress, hasKyc: isFullKyc(kyc) })
+            : null
+          if (!standing) {
+            // Onboarded but unscored yet (shadow data / no qualifying send).
+            await sendMessageFn(phoneNumber, formatSeasonScoreEmpty(phoneNumber, lang), lang)
+            break
+          }
+          await sendMessageFn(
+            phoneNumber,
+            formatSeasonScoreMessage(
+              {
+                score: standing.score,
+                tier: standing.tier,
+                nextTier: standing.nextTier
+                  ? {
+                      tier: standing.nextTier.tier,
+                      progressPct: standing.nextTier.progressPct,
+                      verificationRequired: standing.nextTier.verificationRequired,
+                    }
+                  : null,
+                topActions: standing.topActions,
+                phoneNumber,
+              },
+              lang
+            ),
+            lang
+          )
+        } catch (err) {
+          logger.error({ err, phone: maskPhone(phoneNumber) }, 'season_score: fetch failed')
           await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
         }
         break

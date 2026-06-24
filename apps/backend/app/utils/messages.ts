@@ -10,6 +10,8 @@ export type Lang = 'en' | 'es' | 'pt'
 import { DAILY_LIMIT_VERIFIED } from '#services/cdp_wallet.service'
 import type { AmountErrorCode } from '#types/index'
 import type { Dialect } from '#utils/dialect'
+import type { Tier } from '#season/params'
+import type { ActionCode } from '#season/standing'
 
 const RECEIPT_BASE_URL = process.env.RECEIPT_BASE_URL || 'https://www.sippy.lat/receipt/'
 const FUND_URL = process.env.FUND_URL || 'https://fund.sippy.lat'
@@ -1220,6 +1222,173 @@ export function formatQuestNoActiveEvent(
       `Seu codigo de convite continua: *${args.code}*\n` +
       `(Ate ${args.maxEntries} entradas por evento quando o proximo abrir.)\n\n` +
       `Compartilhe seu link:\n${shareUrl}`,
+  }
+  return m[lang]()
+}
+
+// ============================================================================
+// Season 1 — reputation standing (Phase D / D1). Reputation-only: every string
+// describes what the user DID and what RAISES their standing. NEVER "reward",
+// "token", "redeem", "airdrop", "earn" — a tier is status, not a payout (anything
+// implying a payout is D2 and ships only after Lina clears it). The reply shows
+// tier + one progress line + 2-3 next actions; it NEVER renders the scoring
+// formula (weights/caps/decay). See SEASON1_PHASE_D_PROMPT.md.
+// ============================================================================
+
+/** User-facing tier names (final, confirmed) — same five everywhere. */
+const SEASON_TIER_NAME: Record<Tier, string> = {
+  newcomer: 'Nuevo',
+  activated: 'Activado',
+  active: 'Activo',
+  regular: 'Regular',
+  power: 'Power',
+}
+
+/** One short, honest standing-line per tier (no perk promises), per language. */
+const SEASON_TIER_LINE: Record<Lang, Record<Tier, string>> = {
+  en: {
+    newcomer: 'just getting started',
+    activated: 'made your first send',
+    active: 'really using Sippy',
+    regular: 'part of your routine',
+    power: 'among the network regulars',
+  },
+  es: {
+    newcomer: 'apenas empiezas',
+    activated: 'ya hiciste tu primer envio',
+    active: 'usando Sippy de verdad',
+    regular: 'parte de tu rutina',
+    power: 'de los que mas mueven la red',
+  },
+  pt: {
+    newcomer: 'comecando agora',
+    activated: 'ja fez seu primeiro envio',
+    active: 'usando a Sippy de verdade',
+    regular: 'parte da sua rotina',
+    power: 'entre os que mais movem a rede',
+  },
+}
+
+/** Next-action copy per code per language — the derived guidance, not the formula. */
+const SEASON_ACTION_LINE: Record<Lang, Record<ActionCode, string>> = {
+  en: {
+    first_send: 'Make your first send to a friend',
+    new_counterparty: 'Send to a friend you have not paid yet',
+    weekly: 'Use Sippy every week',
+    send_more: 'Keep sending to your contacts',
+    offramp: 'Cash out to your local currency',
+    invite: 'Invite a friend to Sippy',
+    verify: 'Verify your identity',
+  },
+  es: {
+    first_send: 'Haz tu primer envio a un amigo',
+    new_counterparty: 'Enviale a un amigo al que no le has pagado',
+    weekly: 'Usa Sippy cada semana',
+    send_more: 'Sigue enviando a tus contactos',
+    offramp: 'Saca a tu moneda local',
+    invite: 'Invita a un amigo a Sippy',
+    verify: 'Verifica tu identidad',
+  },
+  pt: {
+    first_send: 'Faca seu primeiro envio a um amigo',
+    new_counterparty: 'Envie para um amigo que ainda nao pagou',
+    weekly: 'Use a Sippy toda semana',
+    send_more: 'Continue enviando aos seus contatos',
+    offramp: 'Saque para sua moeda local',
+    invite: 'Convide um amigo para a Sippy',
+    verify: 'Verifique sua identidade',
+  },
+}
+
+/**
+ * Season standing reply (Phase D). Shows the user's tier, one line of progress to
+ * the next tier, and their 2-3 next actions — plus a link to the web "your score"
+ * page. NO formula, ever. `nextTier` is the API's shape (slug + progressPct +
+ * verificationRequired); the Power step shows identity verification, never a
+ * points-only path. Accent-free ES/PT bodies match the house style.
+ */
+export function formatSeasonScoreMessage(
+  args: {
+    score: number
+    tier: Tier
+    nextTier: {
+      tier: Tier
+      progressPct: number
+      verificationRequired: boolean
+    } | null
+    topActions: ActionCode[]
+    phoneNumber: string
+  },
+  lang: Lang = 'en'
+): string {
+  const url = `${FRONTEND_URL}/score?phone=${encodeURIComponent(args.phoneNumber)}`
+  const tierName = SEASON_TIER_NAME[args.tier]
+  const tierLine = SEASON_TIER_LINE[lang][args.tier]
+  const nextName = args.nextTier ? SEASON_TIER_NAME[args.nextTier.tier] : null
+
+  const progress = (() => {
+    if (!args.nextTier) {
+      return {
+        en: 'You are at the top tier — keep it up.',
+        es: 'Estas en el nivel mas alto, sigue asi.',
+        pt: 'Voce esta no nivel mais alto, continue assim.',
+      }[lang]
+    }
+    if (args.nextTier.verificationRequired) {
+      return {
+        en: `To reach ${nextName}, verify your identity.`,
+        es: `Para llegar a ${nextName}, verifica tu identidad.`,
+        pt: `Para chegar a ${nextName}, verifique sua identidade.`,
+      }[lang]
+    }
+    if (args.nextTier.tier === 'activated') {
+      return {
+        en: `Make your first send to reach ${nextName}.`,
+        es: `Haz tu primer envio para llegar a ${nextName}.`,
+        pt: `Faca seu primeiro envio para chegar a ${nextName}.`,
+      }[lang]
+    }
+    const pct = args.nextTier.progressPct
+    return {
+      en: `You are ${pct}% of the way to ${nextName}.`,
+      es: `Vas ${pct}% en camino a ${nextName}.`,
+      pt: `Voce esta ${pct}% rumo a ${nextName}.`,
+    }[lang]
+  })()
+
+  const actionLines = args.topActions.map((a) => `- ${SEASON_ACTION_LINE[lang][a]}`).join('\n')
+  const header = {
+    en: `*Your level: ${tierName}* (${tierLine})\nScore: ${args.score}`,
+    es: `*Tu nivel: ${tierName}* (${tierLine})\nPuntaje: ${args.score}`,
+    pt: `*Seu nivel: ${tierName}* (${tierLine})\nPontuacao: ${args.score}`,
+  }[lang]
+  const upLabel = { en: 'To move up:', es: 'Para subir:', pt: 'Para subir:' }[lang]
+  const seeLabel = {
+    en: `See your progress:\n${url}`,
+    es: `Mira tu progreso:\n${url}`,
+    pt: `Veja seu progresso:\n${url}`,
+  }[lang]
+
+  return `${header}\n${progress}\n\n${upLabel}\n${actionLines}\n\n${seeLabel}`
+}
+
+/**
+ * Season standing — friendly empty state. Shown when the season is off, the user
+ * has no wallet, or the wallet has no score yet (per Phase D: "haz tu primer envio
+ * para empezar", never a zero or an error). No mention of rewards or a season.
+ */
+export function formatSeasonScoreEmpty(phoneNumber: string, lang: Lang = 'en'): string {
+  const url = `${FRONTEND_URL}/score?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () =>
+      `You do not have a Sippy level yet.\n\n` +
+      `Make your first send to a friend to get started.\n\n${url}`,
+    es: () =>
+      `Aun no tienes un nivel en Sippy.\n\n` +
+      `Haz tu primer envio a un amigo para empezar.\n\n${url}`,
+    pt: () =>
+      `Voce ainda nao tem um nivel na Sippy.\n\n` +
+      `Faca seu primeiro envio a um amigo para comecar.\n\n${url}`,
   }
   return m[lang]()
 }
