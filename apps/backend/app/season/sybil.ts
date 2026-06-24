@@ -1,10 +1,23 @@
 /**
  * #season/sybil — the C2 anti-sybil graph engine.
  *
- * Graph rules over onchain.transfer (restricted to the verified floor — the SAME
- * exported verifiedWalletCte() the rest of the season uses, so vendor/operator/
- * spender exclusion is defined once) → write season.flag + zero the offending
- * score_events (flagged-not-deleted) + void any referral on the flagged pair.
+ * Graph rules over the RELAY-COLLAPSED logical edge set (restricted to the verified
+ * floor — the SAME exported verifiedWalletCte() the rest of the season uses, so
+ * vendor/operator/spender exclusion is defined once) → write season.flag + zero the
+ * offending score_events (flagged-not-deleted) + void any referral on the flagged pair.
+ *
+ * Relay collapse (load-bearing): a Sippy embedded send is ONE tx of two USDC legs —
+ * user→spender (pull) then spender→recipient (forward), same tx_hash + amount
+ * (embedded_wallet.service). The spender is excluded from the verified floor, so the
+ * detectors CANNOT run on raw onchain.transfer edges: every real (relayed) send would
+ * be two spender-touching legs that the verified↔verified filter drops, leaving the
+ * graph rules blind to ~all real activity. They instead run over `logical_transfer`
+ * (the SAME relay-collapsing CTE the dashboard + feed use — logicalTransfersFeedCte),
+ * which pairs each relay pair back into one logical sender→recipient edge and passes
+ * direct transfers through untouched. So a wash/funnel/cycle done through the normal
+ * app flow is now visible. (Enforcement note: zeroing the offending send only changes
+ * a score once the projector is relay-aware too — a relay-blind projector keys the
+ * send to the spender and it already earns 0; the flag + referral void still apply.)
  *
  * Rules (LENIENT launch defaults + a review queue — open decision #2; tighten on
  * data once false positives on real families/shared-device cases are measured):
@@ -31,7 +44,7 @@
 import logger from '@adonisjs/core/services/logger'
 import { query as _query } from '#services/db'
 import { ACTIVE_SEASON_ID } from '#season/guard'
-import { verifiedWalletCte } from '#season/definitions'
+import { verifiedWalletCte, logicalTransfersFeedCte, getSpenderAddress } from '#season/definitions'
 import { voidReferral } from '#season/referral'
 
 const ROUNDTRIP_WINDOW_SECS = 3600 // an A→B→A bounce within 1h is "immediate"
@@ -105,6 +118,12 @@ async function flagSendEdge(
  */
 export async function runSybilScan(seasonId: string = ACTIVE_SEASON_ID): Promise<SybilScanResult> {
   const cte = await verifiedWalletCte()
+  // The relay-collapsing logical-transfer CTE (operator_addrs + logical_transfer),
+  // bound with $1 = spender at every detector below. Detectors read `logical_transfer`
+  // (one logical sender→recipient edge per relayed send) instead of raw onchain.transfer
+  // legs, which the verified↔verified filter would otherwise drop entirely.
+  const ltCte = logicalTransfersFeedCte()
+  const spender = getSpenderAddress()
   const affected = new Set<string>()
   let flags = 0
   let eventsZeroed = 0
@@ -135,16 +154,17 @@ export async function runSybilScan(seasonId: string = ACTIVE_SEASON_ID): Promise
 
   // ── circular: A↔B (both directions exist) ──────────────────────────────────
   const circular = await deps.query<{ a: string; b: string }>(
-    `WITH ${cte}
-     SELECT DISTINCT LEAST(LOWER(t1."from"), LOWER(t1."to")) AS a,
-                     GREATEST(LOWER(t1."from"), LOWER(t1."to")) AS b
-       FROM onchain.transfer t1
-       JOIN onchain.transfer t2
-         ON LOWER(t2."from") = LOWER(t1."to") AND LOWER(t2."to") = LOWER(t1."from")
-      WHERE LOWER(t1."from") IN (SELECT addr FROM verified)
-        AND LOWER(t1."to")   IN (SELECT addr FROM verified)
-        AND LOWER(t1."from") <> LOWER(t1."to")
-      LIMIT ${MAX_CANDIDATES + 1}`
+    `WITH ${cte}, ${ltCte}
+     SELECT DISTINCT LEAST(lt1.sender, lt1.recipient) AS a,
+                     GREATEST(lt1.sender, lt1.recipient) AS b
+       FROM logical_transfer lt1
+       JOIN logical_transfer lt2
+         ON lt2.sender = lt1.recipient AND lt2.recipient = lt1.sender
+      WHERE lt1.sender    IN (SELECT addr FROM verified)
+        AND lt1.recipient IN (SELECT addr FROM verified)
+        AND lt1.sender <> lt1.recipient
+      LIMIT ${MAX_CANDIDATES + 1}`,
+    [spender]
   )
   if (circular.rows.length > MAX_CANDIDATES) {
     logger.warn('[season1] sybil circular hit MAX_CANDIDATES=%d — truncated', MAX_CANDIDATES)
@@ -160,18 +180,19 @@ export async function runSybilScan(seasonId: string = ACTIVE_SEASON_ID): Promise
 
   // ── roundtrip: a circular pair bouncing back within the window (extra signal) ─
   const roundtrip = await deps.query<{ a: string; b: string }>(
-    `WITH ${cte}
-     SELECT DISTINCT LEAST(LOWER(t1."from"), LOWER(t1."to")) AS a,
-                     GREATEST(LOWER(t1."from"), LOWER(t1."to")) AS b
-       FROM onchain.transfer t1
-       JOIN onchain.transfer t2
-         ON LOWER(t2."from") = LOWER(t1."to") AND LOWER(t2."to") = LOWER(t1."from")
-        AND t2.timestamp >= t1.timestamp
-        AND t2.timestamp - t1.timestamp <= ${ROUNDTRIP_WINDOW_SECS}
-      WHERE LOWER(t1."from") IN (SELECT addr FROM verified)
-        AND LOWER(t1."to")   IN (SELECT addr FROM verified)
-        AND LOWER(t1."from") <> LOWER(t1."to")
-      LIMIT ${MAX_CANDIDATES + 1}`
+    `WITH ${cte}, ${ltCte}
+     SELECT DISTINCT LEAST(lt1.sender, lt1.recipient) AS a,
+                     GREATEST(lt1.sender, lt1.recipient) AS b
+       FROM logical_transfer lt1
+       JOIN logical_transfer lt2
+         ON lt2.sender = lt1.recipient AND lt2.recipient = lt1.sender
+        AND lt2.ts >= lt1.ts
+        AND lt2.ts - lt1.ts <= ${ROUNDTRIP_WINDOW_SECS}
+      WHERE lt1.sender    IN (SELECT addr FROM verified)
+        AND lt1.recipient IN (SELECT addr FROM verified)
+        AND lt1.sender <> lt1.recipient
+      LIMIT ${MAX_CANDIDATES + 1}`,
+    [spender]
   )
   if (roundtrip.rows.length > MAX_CANDIDATES) {
     logger.warn('[season1] sybil roundtrip hit MAX_CANDIDATES=%d — truncated', MAX_CANDIDATES)
@@ -190,13 +211,13 @@ export async function runSybilScan(seasonId: string = ACTIVE_SEASON_ID): Promise
 
   // ── star: one funder → ≥N sole-funded recipients (funnel) ───────────────────
   const star = await deps.query<{ funder: string; recipients: string[] }>(
-    `WITH ${cte},
+    `WITH ${cte}, ${ltCte},
      edges AS (
-       SELECT DISTINCT LOWER(t."from") AS funder, LOWER(t."to") AS recipient
-         FROM onchain.transfer t
-        WHERE LOWER(t."from") IN (SELECT addr FROM verified)
-          AND LOWER(t."to")   IN (SELECT addr FROM verified)
-          AND LOWER(t."from") <> LOWER(t."to")
+       SELECT DISTINCT lt.sender AS funder, lt.recipient AS recipient
+         FROM logical_transfer lt
+        WHERE lt.sender    IN (SELECT addr FROM verified)
+          AND lt.recipient IN (SELECT addr FROM verified)
+          AND lt.sender <> lt.recipient
      ),
      sole AS (
        SELECT recipient, MIN(funder) AS funder
@@ -204,7 +225,8 @@ export async function runSybilScan(seasonId: string = ACTIVE_SEASON_ID): Promise
      )
      SELECT funder, array_agg(recipient) AS recipients
        FROM sole GROUP BY funder HAVING COUNT(*) >= ${STAR_MIN_RECIPIENTS}
-      LIMIT ${MAX_CANDIDATES + 1}`
+      LIMIT ${MAX_CANDIDATES + 1}`,
+    [spender]
   )
   if (star.rows.length > MAX_CANDIDATES) {
     logger.warn('[season1] sybil star hit MAX_CANDIDATES=%d — truncated', MAX_CANDIDATES)
@@ -229,25 +251,26 @@ export async function runSybilScan(seasonId: string = ACTIVE_SEASON_ID): Promise
 
   // ── cluster: a 3-cycle A→B→C→A ──────────────────────────────────────────────
   const cluster = await deps.query<{ a: string; b: string; c: string }>(
-    `WITH ${cte}
+    `WITH ${cte}, ${ltCte}
      SELECT DISTINCT s[1] AS a, s[2] AS b, s[3] AS c FROM (
        SELECT (
          SELECT array_agg(x ORDER BY x) FROM unnest(ARRAY[
-           LOWER(t1."from"), LOWER(t1."to"), LOWER(t2."to")
+           lt1.sender, lt1.recipient, lt2.recipient
          ]) AS x
        ) AS s
-         FROM onchain.transfer t1
-         JOIN onchain.transfer t2 ON LOWER(t2."from") = LOWER(t1."to")
-         JOIN onchain.transfer t3
-           ON LOWER(t3."from") = LOWER(t2."to") AND LOWER(t3."to") = LOWER(t1."from")
-        WHERE LOWER(t1."from") <> LOWER(t1."to")
-          AND LOWER(t1."to")   <> LOWER(t2."to")
-          AND LOWER(t2."to")   <> LOWER(t1."from")
-          AND LOWER(t1."from") IN (SELECT addr FROM verified)
-          AND LOWER(t1."to")   IN (SELECT addr FROM verified)
-          AND LOWER(t2."to")   IN (SELECT addr FROM verified)
+         FROM logical_transfer lt1
+         JOIN logical_transfer lt2 ON lt2.sender = lt1.recipient
+         JOIN logical_transfer lt3
+           ON lt3.sender = lt2.recipient AND lt3.recipient = lt1.sender
+        WHERE lt1.sender    <> lt1.recipient
+          AND lt1.recipient <> lt2.recipient
+          AND lt2.recipient <> lt1.sender
+          AND lt1.sender    IN (SELECT addr FROM verified)
+          AND lt1.recipient IN (SELECT addr FROM verified)
+          AND lt2.recipient IN (SELECT addr FROM verified)
      ) cyc
-      LIMIT ${MAX_CANDIDATES + 1}`
+      LIMIT ${MAX_CANDIDATES + 1}`,
+    [spender]
   )
   if (cluster.rows.length > MAX_CANDIDATES) {
     logger.warn('[season1] sybil cluster hit MAX_CANDIDATES=%d — truncated', MAX_CANDIDATES)

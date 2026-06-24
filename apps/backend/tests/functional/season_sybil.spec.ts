@@ -19,7 +19,7 @@ import { isDbAvailable } from '../helpers/skip_without_db.js'
 import { query } from '#services/db'
 import { recompute } from '#season/recompute'
 import { runSybilScan, __resetDeps as resetSybilDeps } from '#season/sybil'
-import { excludedVendorAddrs, verifiedWalletCte } from '#season/definitions'
+import { excludedVendorAddrs, verifiedWalletCte, getSpenderAddress } from '#season/definitions'
 import { listFlags, reviewFlag } from '#season/flags'
 import { emitActiveWeeks } from '#season/job'
 
@@ -35,6 +35,7 @@ const FAM1 = '0xc2fa000000000000000000000000000000000aa1'
 const FAM2 = '0xc2fa000000000000000000000000000000000bb2'
 const VENDOR = '0xc2d0000000000000000000000000000000000005'
 const VENDOR_PHONE = '+15550059999'
+const SP = getSpenderAddress() // spender (SIPPY_SPENDER_ADDRESS, .env.test) — for relayed edges
 
 const ADDRS = [A, B, C, F, FAM1, FAM2, VENDOR, ...R]
 const PHONES = ADDRS.map((_, i) => `+1555005${String(1000 + i).padStart(4, '0')}`)
@@ -73,6 +74,25 @@ async function seedTransfer(id: string, from: string, to: string, amount: string
     `INSERT INTO onchain.transfer (id, "from", "to", amount, timestamp, block_number, tx_hash)
      VALUES ($1, $2, $3, $4::numeric, $5, 1, $6) ON CONFLICT (id) DO NOTHING`,
     [id, from, to, amount, ts, id]
+  )
+}
+
+/**
+ * Seed a Sippy embedded (RELAYED) send as its TWO on-chain legs sharing one tx_hash:
+ * from→spender (pull, log 0) then spender→to (forward, log 1) — the prod shape the
+ * detectors must collapse back into one logical from→to edge. Both leg ids are
+ * registered for cleanup.
+ */
+async function seedRelayed(label: string, from: string, to: string, amount: string, ts: number) {
+  const txHash = `s1-sybil-${label}`
+  const pull = `${txHash}-0`
+  const fwd = `${txHash}-1`
+  for (const id of [pull, fwd]) if (!TXS.includes(id)) TXS.push(id)
+  await query(
+    `INSERT INTO onchain.transfer (id, "from", "to", amount, timestamp, block_number, tx_hash)
+     VALUES ($1, $2, $3, $4::numeric, $5, 1, $6), ($7, $8, $9, $4::numeric, $5, 1, $6)
+     ON CONFLICT (id) DO NOTHING`,
+    [pull, from, SP, amount, ts, txHash, fwd, SP, to]
   )
 }
 
@@ -347,5 +367,105 @@ test.group('Season C2 | anti-sybil graph rules', (group) => {
       if (prev === undefined) delete process.env.PIZZA_DAY_EXCHANGE_PHONES
       else process.env.PIZZA_DAY_EXCHANGE_PHONES = prev
     }
+  })
+
+  // ── RELAYED edges (the fix) ────────────────────────────────────────────────
+  // Real sends route through the spender as user→spender→recipient (two legs, one
+  // tx). On raw edges the verified↔verified filter drops every relayed leg, so these
+  // farms were invisible. The detectors now read the relay-collapsed logical edge set,
+  // so the SAME patterns are caught when conducted through the normal app flow.
+
+  test('RELAYED circular A→spender→B + B→spender→A → flagged + both sends zeroed', async ({
+    assert,
+  }) => {
+    if (!SP) {
+      assert.isTrue(true, 'No spender configured (.env.test) — relay shape not exercisable')
+      return
+    }
+    await seedRelayed('rcirc-ab', A, B, '25000000', NOW - 5 * 86_400)
+    await seedRelayed('rcirc-ba', B, A, '25000000', NOW - 4 * 86_400)
+    await recompute(A, { seasonId: SEASON, now: NOW })
+    await recompute(B, { seasonId: SEASON, now: NOW })
+
+    const result = await runSybilScan(SEASON)
+    assert.isAbove(result.flags, 0)
+    assert.lengthOf(await flagsFor(`${A}:${B}`, 'circular'), 1)
+    // The relay-aware projector keys each send to the real recipient, so the collapsed
+    // edge's enforcement lands on the right score_event rows.
+    assert.isTrue(await sendFlagged(A, B))
+    assert.isTrue(await sendFlagged(B, A))
+  })
+
+  test('RELAYED roundtrip (bounce within window) gets the extra flag', async ({ assert }) => {
+    if (!SP) {
+      assert.isTrue(true, 'No spender configured (.env.test)')
+      return
+    }
+    await seedRelayed('rrt-ab', A, B, '25000000', NOW - 5 * 86_400)
+    await seedRelayed('rrt-ba', B, A, '25000000', NOW - 5 * 86_400 + 600) // +10 min
+    await recompute(A, { seasonId: SEASON, now: NOW })
+    await recompute(B, { seasonId: SEASON, now: NOW })
+
+    await runSybilScan(SEASON)
+    assert.lengthOf(await flagsFor(`${A}:${B}`, 'roundtrip'), 1)
+    assert.lengthOf(await flagsFor(`${A}:${B}`, 'circular'), 1) // also circular
+  })
+
+  test('RELAYED star: funder→spender→Ri (×5 sole-funded) → flagged + funder sends zeroed', async ({
+    assert,
+  }) => {
+    if (!SP) {
+      assert.isTrue(true, 'No spender configured (.env.test)')
+      return
+    }
+    for (const [i, element] of R.entries()) {
+      await seedRelayed(`rstar-${i}`, F, element, '10000000', NOW - (10 - i) * 86_400)
+    }
+    await recompute(F, { seasonId: SEASON, now: NOW })
+
+    await runSybilScan(SEASON)
+    const flags = await flagsFor(F, 'star')
+    assert.lengthOf(flags, 1)
+    assert.equal(flags[0].detail.fanout, 5)
+    assert.isTrue(await sendFlagged(F, R[0]))
+  })
+
+  test('RELAYED cluster: A→spender→B→spender→C→spender→A → flagged + cyclic sends zeroed', async ({
+    assert,
+  }) => {
+    if (!SP) {
+      assert.isTrue(true, 'No spender configured (.env.test)')
+      return
+    }
+    await seedRelayed('rcl-ab', A, B, '25000000', NOW - 6 * 86_400)
+    await seedRelayed('rcl-bc', B, C, '25000000', NOW - 5 * 86_400)
+    await seedRelayed('rcl-ca', C, A, '25000000', NOW - 4 * 86_400)
+    await recompute(A, { seasonId: SEASON, now: NOW })
+    await recompute(B, { seasonId: SEASON, now: NOW })
+    await recompute(C, { seasonId: SEASON, now: NOW })
+
+    await runSybilScan(SEASON)
+    const [a, b, c] = [A, B, C].sort()
+    assert.lengthOf(await flagsFor(`${a}:${b}:${c}`, 'cluster'), 1)
+    assert.isTrue(await sendFlagged(A, B))
+    assert.isTrue(await sendFlagged(B, C))
+    assert.isTrue(await sendFlagged(C, A))
+  })
+
+  test('a legit one-directional RELAYED send is NOT flagged (no false positive from the collapse)', async ({
+    assert,
+  }) => {
+    if (!SP) {
+      assert.isTrue(true, 'No spender configured (.env.test)')
+      return
+    }
+    await seedRelayed('rfam', FAM1, FAM2, '20000000', NOW - 5 * 86_400)
+    await recompute(FAM1, { seasonId: SEASON, now: NOW })
+
+    await runSybilScan(SEASON)
+    assert.lengthOf(await flagsFor(`${FAM1}:${FAM2}`), 0)
+    assert.lengthOf(await flagsFor(`${FAM2}:${FAM1}`), 0)
+    assert.lengthOf(await flagsFor(FAM1), 0)
+    assert.isFalse(await sendFlagged(FAM1, FAM2)) // legit relayed send still earns
   })
 })
