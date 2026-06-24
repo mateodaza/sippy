@@ -10,6 +10,7 @@
 import { test } from '@japa/runner'
 import {
   isActive,
+  isActiveLogical,
   maw,
   maw30,
   isRetained,
@@ -179,5 +180,48 @@ test.group('season/definitions', (group) => {
       assert.notInclude(q.text, 'operator_addrs')
       assert.notInclude(q.text, 'offramp_orders')
     }
+  })
+
+  // isActiveLogical is the relay-aware sibling of isActive used by referral retention:
+  // it COLLAPSES spender relays (so a spender-routed send counts) but stays STRICT
+  // (verified recipient still required). It must NOT be a dashboard-style loosening.
+  test('isActiveLogical is relay-aware (logical_transfer) yet keeps the strict verified-recipient floor', async ({
+    assert,
+  }) => {
+    const calls = installMocks({ active: true })
+    const result = await isActiveLogical('0xABCDEF', { start: 100, end: 200 })
+    assert.isTrue(result)
+
+    const q = calls.find((c) => c.text.includes('EXISTS') && c.text.includes('logical_transfer'))!
+    // Relay-aware: reads the collapsed logical_transfer source (incl. its relay self-join).
+    assert.include(q.text, 'logical_transfer')
+    assert.include(q.text, 'JOIN onchain.transfer s')
+    // STRICT: the recipient must still be VERIFIED — the sybil floor is preserved.
+    assert.include(q.text, 'lt.recipient IN (SELECT addr FROM verified)')
+    // Binds: $1 spender, $2 wallet (lowercased), $3/$4 window, $5 minRaw ($1 floor).
+    assert.equal(q.params[1], '0xabcdef')
+    assert.equal(q.params[2], 100)
+    assert.equal(q.params[3], 200)
+    assert.equal(q.params[4], '1000000')
+  })
+
+  // Guard: isActive (raw, relay-BLIND) and isActiveLogical (relay-aware) are distinct.
+  // isActive must NOT silently become relay-aware (the stats-polish spec pins
+  // isActive(relayed-only)===false), so the two queries must differ on logical_transfer.
+  test('isActive stays raw while isActiveLogical collapses relays (they are not the same query)', async ({
+    assert,
+  }) => {
+    const calls = installMocks({ active: true })
+    await isActive('0xabc', { start: 0, end: 1 })
+    await isActiveLogical('0xabc', { start: 0, end: 1 })
+    const rawQ = calls.find(
+      (c) => c.text.includes('EXISTS') && !c.text.includes('logical_transfer')
+    )!
+    const logicalQ = calls.find(
+      (c) => c.text.includes('EXISTS') && c.text.includes('logical_transfer')
+    )!
+    assert.include(rawQ.text, 'FROM onchain.transfer t') // raw
+    assert.notInclude(rawQ.text, 'logical_transfer')
+    assert.include(logicalQ.text, 'logical_transfer') // collapsed
   })
 })

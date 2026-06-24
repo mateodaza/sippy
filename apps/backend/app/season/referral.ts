@@ -27,7 +27,7 @@ import { query as _query } from '#services/db'
 import { ACTIVE_SEASON_ID } from '#season/guard'
 import { loadParams } from '#season/params'
 import { computeEligibleBalance } from '#season/onramp'
-import { isActive } from '#season/definitions'
+import { isActiveLogical } from '#season/definitions'
 
 // DI seam (mirrors the other #season modules).
 let deps = { query: _query }
@@ -249,8 +249,9 @@ export async function reconcileReferralStages(
 /**
  * Promote unlocked referrals to retained (season job). A referral is retained when
  * retainedWindowDays have passed since unlock AND the referee is still active (≥1
- * qualifying value-out in the trailing retained window — the shared isActive
- * definition). Fires referrer +30. Idempotent (stage guard + deterministic id).
+ * qualifying value-out in the trailing retained window — the relay-aware isActiveLogical
+ * definition, so spender-routed sends count). Fires referrer +30. Idempotent (stage
+ * guard + deterministic id).
  * Returns the referrer wallets whose score changed.
  */
 export async function promoteRetainedReferrals(
@@ -273,7 +274,9 @@ export async function promoteRetainedReferrals(
   for (const r of due.rows) {
     // "Still active retainedWindowDays after unlock" — a qualifying value-out in the
     // trailing retained window (which, given the due check above, lies after unlock).
-    const active = await isActive(r.referee_wallet, {
+    // Relay-aware: most real sends route through the spender, so a raw isActive() would
+    // miss them and wrongly drop a still-active referee from retention.
+    const active = await isActiveLogical(r.referee_wallet, {
       start: ref - windowSecs,
       end: ref,
     })

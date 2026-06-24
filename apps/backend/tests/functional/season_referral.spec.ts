@@ -24,10 +24,12 @@ import {
   __resetDeps as resetReferralDeps,
 } from '#season/referral'
 import { reviewFlag } from '#season/flags'
+import { getSpenderAddress } from '#season/definitions'
 
 const SEASON = 'test-s1-referral'
 const NOW = 1_700_000_000
 const DAY = 86_400
+const SP = getSpenderAddress() // spender (SIPPY_SPENDER_ADDRESS, .env.test) — for relayed sends
 
 const W_RFR = '0xc1000000000000000000000000000000000000a1' // referrer (quest code)
 const W_REE = '0xc1000000000000000000000000000000000000b2' // referee
@@ -42,7 +44,13 @@ const P_INV = '+15550040004'
 const PHONES = [P_RFR, P_REE, P_V, P_INV]
 const CODE = 'REFC1A'
 const TX = (n: string) => `s1-ref-tx-${n}`
-const ALL_TX = ['onramp10', 'send5', 'rfrFund5', 'bounce5', 'bounceRfr'].map(TX)
+// A relayed send is two legs sharing one tx_hash, with realistic "{txHash}-{logIndex}"
+// ids (pull at log 0, forward at log 1 — the indexer's pull-then-forward order).
+const REL_TX = TX('reltx') // referee's relayed qualifying send
+const REL_FUND = TX('relfund') // referrer's relayed funding of the referee
+const ALL_TX = ['onramp10', 'send5', 'rfrFund5', 'bounce5', 'bounceRfr']
+  .map(TX)
+  .concat([`${REL_TX}-0`, `${REL_TX}-1`, `${REL_FUND}-0`, `${REL_FUND}-1`])
 
 async function ensureSeasonSchema(): Promise<boolean> {
   try {
@@ -95,6 +103,27 @@ async function seedTransfer(id: string, from: string, to: string, amount: string
     `INSERT INTO onchain.transfer (id, "from", "to", amount, timestamp, block_number, tx_hash)
      VALUES ($1, $2, $3, $4::numeric, $5, 1, $6) ON CONFLICT (id) DO NOTHING`,
     [id, from, to, amount, ts, id]
+  )
+}
+
+/**
+ * Seed a Sippy embedded (relayed) send as its TWO on-chain legs sharing one tx_hash:
+ * sender→spender (pull, log 0) then spender→recipient (forward, log 1). This is the
+ * prod shape the projector must collapse back into one logical sender→recipient send.
+ * The unlock is keyed by the pull leg id `${txHash}-0`.
+ */
+async function seedRelayedSend(
+  txHash: string,
+  sender: string,
+  recipient: string,
+  amount: string,
+  ts: number
+) {
+  await query(
+    `INSERT INTO onchain.transfer (id, "from", "to", amount, timestamp, block_number, tx_hash)
+     VALUES ($1, $2, $3, $4::numeric, $5, 1, $6), ($7, $8, $9, $4::numeric, $5, 1, $6)
+     ON CONFLICT (id) DO NOTHING`,
+    [`${txHash}-0`, sender, SP, amount, ts, txHash, `${txHash}-1`, SP, recipient]
   )
 }
 
@@ -193,6 +222,41 @@ test.group('Season C1 | referral state machine', (group) => {
     assert.equal(await scoreOf(W_RFR), 70) // 40 unlock + 30 retained
   })
 
+  test('RELAYED qualifying send: pending → unlocked → retained (the go-live blocker)', async ({
+    assert,
+  }) => {
+    // Same lifecycle as above, but the referee's qualifying send routes through the
+    // spender (W_REE→spender→W_V) — the prod shape. Before the relay-collapse fix this
+    // send scored 0 and never unlocked; now it must unlock AND retain like a direct send.
+    if (!SP) {
+      assert.isTrue(true, 'No spender configured (.env.test) — relay shape not exercisable')
+      return
+    }
+    await seedAttribution(P_REE, P_RFR, CODE)
+    await syncPendingReferrals(SEASON)
+
+    // Referee on-ramps independently ($10 external), then sends $5 to W_V RELAYED.
+    await seedTransfer(TX('onramp10'), EXT, W_REE, '10000000', NOW - 7 * DAY)
+    await seedRelayedSend(REL_TX, W_REE, W_V, '5000000', NOW - 5 * DAY)
+    await recompute(W_REE, { seasonId: SEASON, now: NOW })
+
+    // Unlock fires on the collapsed (verified-recipient) send, keyed by the pull leg id.
+    assert.equal(await stageOf(W_REE), 'unlocked')
+    assert.isTrue(await hasEvent(`referral_unlock_referrer:${SEASON}:${W_REE}`))
+    assert.isTrue(await hasEvent(`referral_unlock_referee:${SEASON}:${W_REE}`))
+    await recompute(W_RFR, { seasonId: SEASON, now: NOW })
+    assert.equal(await scoreOf(W_RFR), 40)
+
+    // Retention: 30d later the referee is still "active" — promoteRetainedReferrals
+    // now uses the relay-aware isActiveLogical, so the relayed send keeps it active.
+    const later = NOW + 25 * DAY
+    const promoted = await promoteRetainedReferrals(SEASON, later)
+    assert.include(promoted, W_RFR)
+    assert.equal(await stageOf(W_REE), 'retained')
+    await recompute(W_RFR, { seasonId: SEASON, now: later })
+    assert.equal(await scoreOf(W_RFR), 70) // 40 unlock + 30 retained
+  })
+
   test('precedence: referral_attributions beats pending_invites (one row/referee)', async ({
     assert,
   }) => {
@@ -226,6 +290,29 @@ test.group('Season C1 | referral state machine', (group) => {
     await recompute(W_REE, { seasonId: SEASON, now: NOW })
 
     assert.equal(await stageOf(W_REE), 'pending') // still pending — farm defeated
+    assert.isFalse(await hasEvent(`referral_unlock_referrer:${SEASON}:${W_REE}`))
+  })
+
+  test('SOURCE OF FUNDS: a RELAYED fund-and-bounce farm does NOT unlock either', async ({
+    assert,
+  }) => {
+    // Same farm as above, but the referrer funds the referee THROUGH the spender
+    // (referrer→spender→referee) — the prod shape, where the inbound forward leg shows
+    // from=spender and hides the referrer. The relay-aware eligible-balance check must
+    // still trace the funds to the referrer (→ eligible 0 → no unlock); otherwise
+    // enabling relayed scoring would silently reopen the fund-and-bounce farm.
+    if (!SP) {
+      assert.isTrue(true, 'No spender configured (.env.test) — relay shape not exercisable')
+      return
+    }
+    await seedAttribution(P_REE, P_RFR, CODE)
+    await syncPendingReferrals(SEASON)
+
+    await seedRelayedSend(REL_FUND, W_RFR, W_REE, '5000000', NOW - 7 * DAY) // referrer relays $5 in
+    await seedTransfer(TX('send5'), W_REE, W_V, '5000000', NOW - 5 * DAY) // referee bounces $5 onward
+    await recompute(W_REE, { seasonId: SEASON, now: NOW })
+
+    assert.equal(await stageOf(W_REE), 'pending') // still pending — relayed farm defeated
     assert.isFalse(await hasEvent(`referral_unlock_referrer:${SEASON}:${W_REE}`))
   })
 

@@ -25,8 +25,9 @@
  *   3. computeEligibleBalance() — the source-of-funds primitive. A wallet's running
  *      eligible balance = non-referrer inbound (external on-ramp + P2P that did NOT
  *      come from the referrer) credited, value-outs debited FIFO (floored at 0).
- *      Balance the referrer directly transferred in is NOT eligible. C1 checks that
- *      the referee's qualifying send draws on this bucket, not on referrer funds.
+ *      Balance the referrer transferred in — DIRECTLY or relayed through the spender
+ *      (referrer→spender→referee) — is NOT eligible. C1 checks that the referee's
+ *      qualifying send draws on this bucket, not on referrer funds.
  *
  *   4. expirePendingOnramps() — the season job's expiry pass: a pending still
  *      carrying pending_remaining>0 past pending_until is flagged 'expired_onramp'
@@ -41,6 +42,7 @@
 
 import db from '@adonisjs/lucid/services/db'
 import { query as _query } from '#services/db'
+import { getSpenderAddress } from '#season/definitions'
 
 const USDC_DECIMALS = 6
 
@@ -59,6 +61,15 @@ function toUsd(rawAmount: string): number {
     return Number(BigInt(rawAmount)) / 10 ** USDC_DECIMALS
   } catch {
     return 0
+  }
+}
+
+/** BigInt-normalized raw-amount key for matching a relay forward leg to its pull. */
+function amountKey(raw: string): string {
+  try {
+    return BigInt(raw).toString()
+  } catch {
+    return `bad:${raw}` // only ever matches an identical malformed value (never a real amount)
   }
 }
 
@@ -219,7 +230,16 @@ export async function rebuildOnrampRealization(args: {
  * at 0). Inbound from the referrer is NOT credited. Returns the eligible balance
  * available just before the candidate send — C1 unlocks only if it covers the send.
  *
- * Derived purely from onchain.transfer + the (stable) referrer wallet, so it
+ * Relay-aware (load-bearing anti-farm): a referrer can fund the referee THROUGH the
+ * spender (referrer→spender→referee), which on-chain shows the inbound forward leg as
+ * from=spender — hiding the referrer and (without this) wrongly crediting it as the
+ * referee's own funds, defeating the fund-and-bounce guard the moment relayed sends
+ * score. We pre-collect every referrer→spender pull and treat a forward leg the
+ * referrer relayed in as referrer-funded, exactly like a direct referrer→referee
+ * transfer. Outbound legs (a direct send, a relayed send's pull leg, or an off-ramp
+ * pull — all show from=referee) debit regardless of the hop, so no special-casing.
+ *
+ * Derived purely from onchain.transfer + the (stable) referrer/spender wallets, so it
  * reproduces identically on recompute.
  */
 export async function computeEligibleBalance(args: {
@@ -227,9 +247,25 @@ export async function computeEligibleBalance(args: {
   referrerWallet: string
   beforeTs: number
   beforeTxId: string
+  /** Spender relay hop; defaults to the configured SIPPY_SPENDER_ADDRESS. */
+  spender?: string
 }): Promise<number> {
   const referee = args.refereeWallet.toLowerCase()
   const referrer = args.referrerWallet.toLowerCase()
+  const spender = (args.spender ?? getSpenderAddress()).toLowerCase()
+
+  // (tx_hash, amount) of every referrer→spender pull — i.e. funds the referrer relayed
+  // out. A referee inbound forward leg (spender→referee) matching one of these is
+  // referrer-relayed money, so it is NOT eligible (same as a direct referrer transfer).
+  const referrerPulls = new Set<string>()
+  if (spender) {
+    const rp = await deps.query<{ tx_hash: string; amount: string }>(
+      `SELECT tx_hash, amount FROM onchain.transfer
+        WHERE LOWER("from") = $1 AND LOWER("to") = $2`,
+      [referrer, spender]
+    )
+    for (const r of rp.rows) referrerPulls.add(`${r.tx_hash}|${amountKey(String(r.amount))}`)
+  }
 
   const res = await deps.query<{
     from: string
@@ -237,8 +273,9 @@ export async function computeEligibleBalance(args: {
     amount: string
     timestamp: number
     id: string
+    tx_hash: string
   }>(
-    `SELECT "from", "to", amount, timestamp, id
+    `SELECT "from", "to", amount, timestamp, id, tx_hash
        FROM onchain.transfer
       WHERE (LOWER("to") = $1 OR LOWER("from") = $1)
         AND (timestamp < $2 OR (timestamp = $2 AND id < $3))
@@ -252,9 +289,14 @@ export async function computeEligibleBalance(args: {
     const to = r.to.toLowerCase()
     const usd = toUsd(String(r.amount))
     if (to === referee && from !== referee) {
-      // Inbound. Non-referrer inflow (external on-ramp or P2P) is eligible; balance
-      // the referrer transferred in is NOT — that's the anti-farm rule.
-      if (from !== referrer) eligible += usd
+      // Inbound. Resolve the real source across the spender relay: a forward leg
+      // (from=spender) the referrer relayed in counts as referrer-funded.
+      const relayedFromReferrer =
+        from === spender && referrerPulls.has(`${r.tx_hash}|${amountKey(String(r.amount))}`)
+      const fromReferrer = from === referrer || relayedFromReferrer
+      // Non-referrer inflow (external on-ramp or P2P) is eligible; referrer-funded
+      // balance (direct OR relayed) is NOT — that's the anti-farm rule.
+      if (!fromReferrer) eligible += usd
     } else if (from === referee && to !== referee) {
       // Outbound — debits the eligible bucket FIFO, floored at 0.
       eligible = Math.max(0, eligible - usd)

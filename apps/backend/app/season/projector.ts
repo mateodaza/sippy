@@ -27,6 +27,18 @@
  * deleted — with flag_reason='counterparty_unverified', and earn 0. Same
  * flagged-not-deleted discipline as the onchain aggregates.
  *
+ * Spender relay collapse (load-bearing): a Sippy embedded send is ONE tx of two
+ * USDC legs — user→spender (the SpendPermission pull) then spender→recipient (the
+ * forward), same tx_hash + amount (embedded_wallet.service). Projecting those legs
+ * raw would score the pull as a 0-earning send to the (unverified) spender and the
+ * forward as a receive from the spender — so a user's REAL send wouldn't score,
+ * activate, or unlock referrals. resolveRelayLeg() pairs the two legs and projects
+ * them as the logical user→recipient send (the same collapse the dashboard does in
+ * logicalTransferCteSql) — the pull's send is attributed to the real recipient, the
+ * forward's receive to the real sender. Off-ramp pulls (forward → the spender
+ * itself, or none) stay UNcollapsed: a flagged send-to-spender earning 0, whose
+ * value-out is realised from offramp_orders, never double-counted here.
+ *
  * Idempotency + recomputability: score_event's PK is composite (season_id, id),
  * so the same transfer projects independently per season. send/receive insert
  * ON CONFLICT (season_id, id) DO UPDATE the verification-derived flag fields
@@ -172,25 +184,127 @@ async function upsertNewCounterparty(row: {
 }
 
 /**
+ * What a single onchain.transfer leg resolves to once the spender relay is
+ * collapsed: the pull leg of a relayed send (→ the real recipient), or the
+ * forward leg (→ the real sender). `null` = a plain direct transfer / off-ramp
+ * pull that must NOT be collapsed.
+ */
+type RelayResolution = { role: 'pull'; recipient: string } | { role: 'forward'; sender: string }
+
+/** Lexicographic-safe USDC raw amount key (BigInt-normalized) for pairing equality. */
+function amountKey(raw: string): string {
+  try {
+    return BigInt(raw).toString()
+  } catch {
+    return `bad:${raw}` // only ever matches an identical malformed value (never a real amount)
+  }
+}
+
+/** Log index from an onchain.transfer id ("{txHash}-{logIndex}"); 0 if unparseable. */
+function logIndexOf(id: string): number {
+  const dash = id.lastIndexOf('-')
+  if (dash < 0) return 0
+  const n = Number(id.slice(dash + 1))
+  return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * Pair the relay legs WITHIN one tx, the same rule logicalTransferCteSql() uses on
+ * the dashboard side: a user→spender pull matches a spender→recipient forward of the
+ * SAME amount in the SAME tx. Done in log-index order with greedy 1:1 matching, so a
+ * batch tx carrying multiple equal-amount pairs pairs each leg exactly once instead of
+ * cross-joining (the dashboard CTE's known same-amount-batch over-count). Off-ramp
+ * pulls (forward goes to the spender itself, or no forward at all) stay UNpaired and
+ * are absent from the map — the caller then leaves them as a flagged send-to-spender,
+ * exactly as before (their value-out is realised via offramp_orders, not here).
+ */
+function pairRelayLegs(
+  rows: { id: string; from: string; to: string; amount: string }[],
+  spender: string
+): Map<string, RelayResolution> {
+  const sorted = [...rows].sort(
+    (a, b) => logIndexOf(a.id) - logIndexOf(b.id) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  )
+  const out = new Map<string, RelayResolution>()
+  const openPulls: { id: string; from: string; amount: string }[] = []
+  for (const r of sorted) {
+    const from = r.from.toLowerCase()
+    const to = r.to.toLowerCase()
+    const amount = amountKey(r.amount)
+    if (to === spender && from !== spender) {
+      // user→spender (a pull leg, or an off-ramp pull until a forward claims it)
+      openPulls.push({ id: r.id, from, amount })
+    } else if (from === spender && to !== spender) {
+      // spender→recipient — claim the oldest open pull of equal amount (FIFO == adjacency
+      // for the consecutive pull-then-forward log layout the indexer emits).
+      const idx = openPulls.findIndex((p) => p.amount === amount)
+      if (idx >= 0) {
+        const pull = openPulls.splice(idx, 1)[0]
+        out.set(pull.id, { role: 'pull', recipient: to })
+        out.set(r.id, { role: 'forward', sender: pull.from })
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * Resolve whether `t` is one leg of a spender relay pair, and to whom it logically
+ * flows. Only spender-touching legs trigger the (indexed) tx-sibling lookup; plain
+ * direct transfers short-circuit to `null` with no query. onchain.transfer is the
+ * source of truth and is written before the projector runs (webhook + tests both
+ * insert first), so the sibling leg is always visible here.
+ */
+async function resolveRelayLeg(
+  t: TransferRow,
+  ctx: ProjectContext
+): Promise<RelayResolution | null> {
+  const spender = ctx.spender
+  if (!spender) return null
+  const from = t.from.toLowerCase()
+  const to = t.to.toLowerCase()
+  const touchesSpenderAsLeg =
+    (to === spender && from !== spender) || (from === spender && to !== spender)
+  if (!touchesSpenderAsLeg) return null
+
+  const res = await deps.query<{ id: string; from: string; to: string; amount: string }>(
+    `SELECT id, "from", "to", amount FROM onchain.transfer WHERE tx_hash = $1`,
+    [t.txHash]
+  )
+  return pairRelayLegs(res.rows, spender).get(t.id) ?? null
+}
+
+/**
  * Project one transfer into score_event rows. Idempotent. Returns the set of
  * wallets whose score may have changed (so the caller can recompute them).
+ *
+ * Relay-aware: Sippy embedded sends route through the spender as ONE tx of two USDC
+ * legs (user→spender pull, then spender→recipient forward; same tx_hash + amount —
+ * embedded_wallet.service). We collapse that pair so the SCORE side sees the real
+ * user→recipient send (the same collapse the dashboard's logicalTransferCteSql does),
+ * instead of scoring the pull as a 0-earning send to the (unverified) spender.
  */
 export async function projectTransfer(t: TransferRow, ctx: ProjectContext): Promise<string[]> {
   const from = t.from.toLowerCase()
   const to = t.to.toLowerCase()
   const usd = toUsd(t.amount)
   const affected: string[] = []
+  const relay = await resolveRelayLeg(t, ctx)
 
-  // SEND — only for a tracked Sippy sender. Flagged (earns 0) if the
-  // counterparty isn't a verified wallet (external, operator, spender, self).
+  // SEND — only for a tracked Sippy sender (a direct send, or the pull leg of a
+  // relayed send). For a relayed send the real counterparty is the forward leg's
+  // recipient, NOT the spender. Flagged (earns 0) if that counterparty isn't a
+  // verified wallet (external, operator, spender, self).
   if (ctx.verified.has(from)) {
-    const counterpartyVerified = ctx.verified.has(to) && to !== from && to !== ctx.spender
+    const recipient = relay?.role === 'pull' ? relay.recipient : to
+    const counterpartyVerified =
+      ctx.verified.has(recipient) && recipient !== from && recipient !== ctx.spender
     await insertTransferEvent({
       id: `send:${t.id}`,
       seasonId: ctx.seasonId,
       wallet: from,
       verb: 'send',
-      counterparty: to,
+      counterparty: recipient,
       usd,
       txHash: t.txHash,
       flagged: !counterpartyVerified,
@@ -208,7 +322,7 @@ export async function projectTransfer(t: TransferRow, ctx: ProjectContext): Prom
       await upsertNewCounterparty({
         seasonId: ctx.seasonId,
         wallet: from,
-        counterparty: to,
+        counterparty: recipient,
         usd,
         txHash: t.txHash,
         timestamp: t.timestamp,
@@ -226,7 +340,7 @@ export async function projectTransfer(t: TransferRow, ctx: ProjectContext): Prom
     const unlocked = await detectReferralUnlock({
       seasonId: ctx.seasonId,
       sender: from,
-      recipient: to,
+      recipient,
       recipientVerified: counterpartyVerified,
       usd,
       txId: t.id,
@@ -237,15 +351,18 @@ export async function projectTransfer(t: TransferRow, ctx: ProjectContext): Prom
     for (const w of unlocked) affected.push(w)
   }
 
-  // RECEIVE — only for a tracked Sippy receiver. Flagged if sender unverified.
+  // RECEIVE — only for a tracked Sippy receiver (a direct receive, or the forward leg
+  // of a relayed send). For a relayed send the real counterparty is the pull leg's
+  // sender, NOT the spender. Flagged if that sender is unverified.
   if (ctx.verified.has(to)) {
-    const counterpartyVerified = ctx.verified.has(from) && from !== to && from !== ctx.spender
+    const sender = relay?.role === 'forward' ? relay.sender : from
+    const counterpartyVerified = ctx.verified.has(sender) && sender !== to && sender !== ctx.spender
     await insertTransferEvent({
       id: `receive:${t.id}`,
       seasonId: ctx.seasonId,
       wallet: to,
       verb: 'receive',
-      counterparty: from,
+      counterparty: sender,
       usd,
       txHash: t.txHash,
       flagged: !counterpartyVerified,
@@ -260,9 +377,11 @@ export async function projectTransfer(t: TransferRow, ctx: ProjectContext): Prom
     // detection is canonical — /notify-fund only corroborates — because not all
     // on-ramps flow through fund.sippy.lat. Self-deposit vs inbound-P2P is
     // indistinguishable on-chain, which is acceptable precisely because on-ramp
-    // realises nothing until a real value-out consumes it (spec §4). The spender is
-    // excluded as an internal address (its inflows aren't deposits).
-    const isExternalInflow = !ctx.verified.has(from) && from !== ctx.spender && from !== to
+    // realises nothing until a real value-out consumes it (spec §4). A relay forward
+    // leg is an in-app transfer initiated by another Sippy wallet, never an external
+    // deposit, so it is excluded — as is the spender as an internal address.
+    const isExternalInflow =
+      relay?.role !== 'forward' && !ctx.verified.has(from) && from !== ctx.spender && from !== to
     if (isExternalInflow) {
       await insertOnrampPending({
         id: `onramp:${t.id}`,

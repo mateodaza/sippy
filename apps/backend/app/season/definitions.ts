@@ -272,6 +272,38 @@ export async function isActive(wallet: string, period: Period): Promise<boolean>
 }
 
 /**
+ * STRICT + RELAY-AWARE active check (score engine). Same sybil floor as `isActive`
+ * — a qualifying value-out (≥ $minActiveUsd) to a VERIFIED counterparty (not self /
+ * spender / operator) — but it reads the relay-collapsed `logical_transfer` source
+ * instead of raw onchain.transfer, so a send routed through the spender
+ * (user→spender→recipient) counts for the real recipient. `isActive` stays raw and
+ * relay-BLIND on purpose (the SPLIT-guard + stats-polish specs pin that), so this is
+ * a separate sibling rather than a change to it. Used by #season/referral
+ * promoteRetainedReferrals, where missing a relayed send would wrongly drop a still-
+ * active referee from retention. NOT a dashboard loosening: the verified-RECIPIENT
+ * requirement is kept (that is what keeps it strict), only the relay blindness is fixed.
+ */
+export async function isActiveLogical(wallet: string, period: Period): Promise<boolean> {
+  const w = wallet.toLowerCase()
+  const minRaw = await minRawUnits()
+  const res = await deps.query<{ active: boolean }>(
+    `WITH ${await verifiedWalletCte()},
+     ${logicalTransferCteSql()}
+     SELECT EXISTS (
+       SELECT 1 FROM logical_transfer lt
+        WHERE lt.sender = $2
+          AND lt.ts >= $3 AND lt.ts < $4
+          AND lt.amount >= $5::numeric
+          AND lt.recipient IN (SELECT addr FROM verified)
+          AND lt.recipient <> $1
+          AND lt.recipient <> lt.sender
+     ) AS active`,
+    [SPENDER_ADDRESS, w, period.start, period.end, minRaw]
+  )
+  return res.rows[0]?.active === true
+}
+
+/**
  * MAW (LOOSE dashboard aggregate — value-out). Distinct verified Sippy wallets
  * that moved ≥ $minActiveUsd OUT in the period (a relay-collapsed send to a real
  * recipient, or a completed off-ramp). Defaults to the trailing 30 days (the
