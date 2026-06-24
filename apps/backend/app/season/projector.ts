@@ -6,15 +6,20 @@
  * source of truth, and this projector derives season.score_event rows from it
  * with deterministic ids, exactly like onchain_writer derives its aggregates.
  *
- * Phase A emits only transfer-derived verbs:
+ * Transfer-derived verbs emitted here:
  *   • send     (id "send:{txId}")       — for a tracked sender wallet
  *   • receive  (id "receive:{txId}")    — for a tracked receiver wallet
  *   • first_send (id "first_send:{season}:{wallet}") — once per wallet/season,
  *     emitted only for a verified send ≥ minActiveUsd (activation = first REAL send)
+ *   • onramp   (id "onramp:{txId}", Phase C) — a verified wallet's external inflow,
+ *     PENDING (realized=false, earns 0) until used; #season/onramp realises it FIFO.
+ *   • onramp_used (Phase C) — emitted by #season/onramp when a qualifying value-out
+ *     (a send here; off-ramps realise via #season/emissions) consumes a pending.
+ *   • new_counterparty (id "new_counterparty:{season}:{wallet}:{cp}", Phase C) —
+ *     first ≥$1 verified send to a never-before-paid counterparty.
  *
- * onramp / onramp_used / offramp / referral_* / active_week are Phase C. The
- * verb enum and the score_event columns (realized, pending_until, flag_reason)
- * are already in place as seams; this projector simply doesn't emit them yet.
+ * offramp / referral_* / active_week are emitted by their own idempotent paths
+ * (#season/emissions, #season/referral, the season job), not by this projector.
  *
  * Verified-counterparty floor (spec §2, Phase A): a send/receive earns only if
  * the counterparty is a verified Sippy wallet (see #season/definitions). Sends
@@ -41,6 +46,8 @@ import { query as _query } from '#services/db'
 import { ACTIVE_SEASON_ID, isSeason1Enabled } from '#season/guard'
 import { getVerifiedWalletSet, getSpenderAddress } from '#season/definitions'
 import { loadParams } from '#season/params'
+import { insertOnrampPending } from '#season/onramp'
+import { detectReferralUnlock, reconcileReferralStages } from '#season/referral'
 
 const USDC_DECIMALS = 6
 
@@ -59,6 +66,11 @@ export interface ProjectContext {
   seasonId: string
   /** Activation floor: first_send is only emitted for a verified send ≥ this (spec §2). */
   minActiveUsd: number
+  /** Pending on-ramp window (days) — pending_until = inflow ts + this (Phase C). */
+  onrampRealizeWindowDays: number
+  /** Referral unlock thresholds (Phase C / C1) — min qualifying send + window. */
+  unlockMinSend: number
+  unlockWindowDays: number
 }
 
 // DI seam (mirrors invite.service.ts).
@@ -78,6 +90,9 @@ export async function buildContext(seasonId: string = ACTIVE_SEASON_ID): Promise
     spender: getSpenderAddress(),
     seasonId,
     minActiveUsd: params.minActiveUsd,
+    onrampRealizeWindowDays: params.onrampRealizeWindowDays,
+    unlockMinSend: params.referral.unlockMinSend,
+    unlockWindowDays: params.referral.unlockWindowDays,
   }
 }
 
@@ -109,7 +124,9 @@ async function insertTransferEvent(row: {
         pending_until, flagged, flag_reason, meta, timestamp)
      VALUES ($1, $2, $3, $4, $5, $6, $7, true, NULL, $8, $9, $10::jsonb, $11)
      ON CONFLICT (season_id, id) DO UPDATE
-       SET flagged = EXCLUDED.flagged, flag_reason = EXCLUDED.flag_reason`,
+       SET flag_reason = CASE WHEN COALESCE(season.score_event.flag_reason, '') LIKE 'sybil%'
+                              THEN season.score_event.flag_reason ELSE EXCLUDED.flag_reason END,
+           flagged = (COALESCE(season.score_event.flag_reason, '') LIKE 'sybil%') OR EXCLUDED.flagged`,
     [
       row.id,
       row.seasonId,
@@ -126,7 +143,15 @@ async function insertTransferEvent(row: {
   )
 }
 
-async function upsertFirstSend(row: {
+/**
+ * new_counterparty (Phase C): the first ≥$1 send from `wallet` to a verified
+ * counterparty it has never paid before this season (+8, capped in #season/score).
+ * One row per (wallet, counterparty); LEAST(timestamp) on conflict so replaying
+ * transfers in any order converges to the earliest qualifying send — deterministic.
+ * Its flagged state (when the underlying sends are sybil-voided) is reconciled by
+ * #season/recompute.reconcileDerivedEvents, not here.
+ */
+async function upsertNewCounterparty(row: {
   seasonId: string
   wallet: string
   counterparty: string
@@ -134,12 +159,12 @@ async function upsertFirstSend(row: {
   txHash: string
   timestamp: number
 }): Promise<void> {
-  const id = `first_send:${row.seasonId}:${row.wallet}`
+  const id = `new_counterparty:${row.seasonId}:${row.wallet}:${row.counterparty}`
   await deps.query(
     `INSERT INTO season.score_event
        (id, season_id, wallet, verb, counterparty, usd, tx_hash, realized,
         pending_until, flagged, flag_reason, meta, timestamp)
-     VALUES ($1, $2, $3, 'first_send', $4, $5, $6, true, NULL, false, NULL, '{}'::jsonb, $7)
+     VALUES ($1, $2, $3, 'new_counterparty', $4, $5, $6, true, NULL, false, NULL, '{}'::jsonb, $7)
      ON CONFLICT (season_id, id) DO UPDATE
        SET timestamp = LEAST(season.score_event.timestamp, EXCLUDED.timestamp)`,
     [id, row.seasonId, row.wallet, row.counterparty, row.usd, row.txHash, row.timestamp]
@@ -174,11 +199,13 @@ export async function projectTransfer(t: TransferRow, ctx: ProjectContext): Prom
       rawAmount: t.amount,
     })
     affected.push(from)
-    // Activation fires only on a verified send that clears the real-usage floor
-    // ($1, spec §2) — so first_send means "first REAL send", and a sub-$1 test
-    // send doesn't activate or earn the 50 (computeScore enforces the same floor).
+    // Activation (first_send) is no longer emitted here — it is re-derived from the
+    // earliest UNFLAGGED qualifying send by reconcileDerivedEvents (#season/recompute)
+    // so a send later voided by C2 sybil can't keep the wallet activated. Here we only
+    // emit the new_counterparty bonus row for a verified send to a never-paid cp; its
+    // flagged state is reconciled there too.
     if (counterpartyVerified && usd >= ctx.minActiveUsd) {
-      await upsertFirstSend({
+      await upsertNewCounterparty({
         seasonId: ctx.seasonId,
         wallet: from,
         counterparty: to,
@@ -187,6 +214,27 @@ export async function projectTransfer(t: TransferRow, ctx: ProjectContext): Prom
         timestamp: t.timestamp,
       })
     }
+    // On-ramp realization is NOT done inline here anymore: it's rebuilt per wallet by
+    // reconcileDerivedEvents (#season/recompute) on every recompute, from the current
+    // realizable value-out set — the only way a sybil flag/clear can't double-allocate
+    // a pending. The recompute that follows this projection performs it.
+
+    // Referral unlock (Phase C / C1): if this sender is a pending referee and this
+    // send is the qualifying, OWN-funded send, fire the two-sided unlock. The
+    // source-of-funds check inside makes the fund-and-bounce farm a no-op. Any
+    // referrer/referee whose score changes is added to `affected` for recompute.
+    const unlocked = await detectReferralUnlock({
+      seasonId: ctx.seasonId,
+      sender: from,
+      recipient: to,
+      recipientVerified: counterpartyVerified,
+      usd,
+      txId: t.id,
+      txTs: t.timestamp,
+      unlockMinSend: ctx.unlockMinSend,
+      unlockWindowDays: ctx.unlockWindowDays,
+    })
+    for (const w of unlocked) affected.push(w)
   }
 
   // RECEIVE — only for a tracked Sippy receiver. Flagged if sender unverified.
@@ -206,6 +254,27 @@ export async function projectTransfer(t: TransferRow, ctx: ProjectContext): Prom
       rawAmount: t.amount,
     })
     affected.push(to)
+    // On-ramp (Phase C): a verified wallet receiving from a non-verified, external
+    // address is a deposit → emit a PENDING on-ramp (earns 0 until used within the
+    // window; #season/onramp realises it FIFO on a later value-out). This on-chain
+    // detection is canonical — /notify-fund only corroborates — because not all
+    // on-ramps flow through fund.sippy.lat. Self-deposit vs inbound-P2P is
+    // indistinguishable on-chain, which is acceptable precisely because on-ramp
+    // realises nothing until a real value-out consumes it (spec §4). The spender is
+    // excluded as an internal address (its inflows aren't deposits).
+    const isExternalInflow = !ctx.verified.has(from) && from !== ctx.spender && from !== to
+    if (isExternalInflow) {
+      await insertOnrampPending({
+        id: `onramp:${t.id}`,
+        seasonId: ctx.seasonId,
+        wallet: to,
+        counterparty: from,
+        usd,
+        txHash: t.txHash,
+        timestamp: t.timestamp,
+        windowDays: ctx.onrampRealizeWindowDays,
+      })
+    }
   }
 
   return affected
@@ -334,12 +403,14 @@ export async function onTransfersIngested(transfers: TransferRow[]): Promise<voi
  * Core reorg cleanup (unguarded; the shared core of onTransfersReorged, also
  * driven directly in tests — mirrors projectAndRecompute vs onTransfersIngested).
  *
- * For each removed transfer, delete its derived send/receive rows; then drop the
- * affected wallets' first_send and FULL-reproject them (no skipProjection), so
- * activation re-derives from whatever verified sends remain in onchain.transfer
- * (a reorged-out first send correctly de-activates the wallet; a later send
- * becomes the new first_send). Scoped to ctx.seasonId — multi-season reorg
- * fan-out is a Phase C concern. Returns the recomputed wallet set.
+ * For each removed transfer, delete its transfer-keyed derived rows (send / receive
+ * / onramp); then, for the affected wallets, drop the wallet-keyed derived events the
+ * reproject must rebuild (first_send, new_counterparty) and FULL-reproject them (no
+ * skipProjection) so everything re-derives from whatever transfers remain. A
+ * reorged-out first send correctly de-activates the wallet; a reorged-out inflow
+ * drops its on-ramp; offramp / referral events are left intact (not transfer-derived).
+ * The recompute's reconcileDerivedEvents rebuilds on-ramp realization (onramp_used +
+ * pending_remaining) from scratch. Scoped to ctx.seasonId. Returns the recomputed set.
  */
 export async function reprojectAfterReorg(
   transferIds: string[],
@@ -350,23 +421,38 @@ export async function reprojectAfterReorg(
   for (const tid of transferIds) {
     const res = await deps.query<{ wallet: string }>(
       `DELETE FROM season.score_event
-        WHERE season_id = $1 AND id IN ($2, $3)
+        WHERE season_id = $1 AND id IN ($2, $3, $4)
         RETURNING wallet`,
-      [ctx.seasonId, `send:${tid}`, `receive:${tid}`]
+      [ctx.seasonId, `send:${tid}`, `receive:${tid}`, `onramp:${tid}`]
     )
     for (const r of res.rows) affected.add(r.wallet.toLowerCase())
   }
   if (affected.size === 0) return affected
-  // Drop derived activation so the reproject below re-derives it from what's left.
+  // Drop the per-wallet derived events the reproject re-derives from what remains:
+  // activation (first_send) and new_counterparty. on-ramp realization (onramp_used +
+  // pending_remaining) is fully rebuilt by reconcileDerivedEvents during the recompute
+  // below, so no explicit cleanup is needed for it here.
   for (const w of affected) {
     await deps.query(`DELETE FROM season.score_event WHERE season_id = $1 AND id = $2`, [
       ctx.seasonId,
       `first_send:${ctx.seasonId}:${w}`,
     ])
+    await deps.query(
+      `DELETE FROM season.score_event
+        WHERE season_id = $1 AND wallet = $2 AND verb = 'new_counterparty'`,
+      [ctx.seasonId, w]
+    )
   }
   const { recomputeWallet } = await import('#season/recompute')
   for (const w of affected) {
     await recomputeWallet(w, ctx.seasonId, { ctx, now: opts.now })
+  }
+  // A reorged-out send may have been a referral's qualifying send — revert any
+  // unlock/retained whose qualifying send is now gone (P1b), then re-score them.
+  const reverted = await reconcileReferralStages(ctx.seasonId)
+  for (const w of reverted) {
+    await recomputeWallet(w, ctx.seasonId, { now: opts.now, skipProjection: true })
+    affected.add(w)
   }
   return affected
 }

@@ -12,6 +12,7 @@ import logger from '@adonisjs/core/services/logger'
 import db from '@adonisjs/lucid/services/db'
 import { getMovement } from '#services/colurs_fx.service'
 import { maskPhone } from '#utils/phone'
+import { isSeason1Enabled } from '#season/guard'
 
 const TERMINAL_STATUSES = ['completed', 'failed', 'rejected']
 const MAX_POLLS = 10_080 // 7 days at 1 poll/minute
@@ -116,6 +117,14 @@ export async function pollColursMovements(): Promise<void> {
             logger.info(
               `poll_colurs_movements: offramp ${order.external_id} completed for ${maskPhone(order.phone_number)}`
             )
+            // Season 1 (Phase C) — off-ramp value-out emission. Guarded + lazy so
+            // the season stack isn't loaded when off, and onOfframpCompleted is
+            // best-effort/non-blocking (its own try/catch), so it can never affect
+            // the off-ramp completion above.
+            if (isSeason1Enabled()) {
+              const { onOfframpCompleted } = await import('#season/emissions')
+              await onOfframpCompleted({ orderId: order.id, phone: order.phone_number })
+            }
             // TODO: WhatsApp notification — offramp_completed template
           } else {
             // User's USDC was already pulled — flag for ops action, not just failed

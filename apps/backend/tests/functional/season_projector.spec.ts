@@ -137,18 +137,19 @@ test.group('Season Integration | projector + recompute', (group) => {
   test('builds expected season.score from a fixture transfer set', async ({ assert }) => {
     await buildScores()
 
-    // A: send→B (10+10) + send→C (10+14) + first_send (50) + receive (3) = 97
-    //    send→EXT is flagged (unverified) → 0
+    // A: send→B (10+10) + send→C (10+14) + first_send (50) + receive (3)
+    //    + new_counterparty→B (8) + new_counterparty→C (8) = 113  (Phase C verb)
+    //    send→EXT is flagged (unverified) → 0, and no new_counterparty (cp unverified)
     const a = await getScore(A)
-    assert.equal(a.score, 97)
+    assert.equal(a.score, 113)
     assert.equal(a.tier, 'activated')
     assert.equal(a.distinct_counterparties, 2) // B and C; EXT flagged out
     assert.equal(a.active_weeks, 1)
     assert.isFalse(a.dormant)
 
-    // B: send→A (10+10) + first_send (50) + receive (3) = 73
+    // B: send→A (10+10) + first_send (50) + receive (3) + new_counterparty→A (8) = 81
     const b = await getScore(B)
-    assert.equal(b.score, 73)
+    assert.equal(b.score, 81)
     assert.equal(b.tier, 'activated')
     assert.equal(b.distinct_counterparties, 1)
 
@@ -224,8 +225,8 @@ test.group('Season Integration | projector + recompute', (group) => {
     assert.deepEqual(live.b, full.b)
     assert.deepEqual(live.c, full.c)
     // Pin the documented fixture values so a regression in either path is caught.
-    assert.equal(live.a.score, 97)
-    assert.equal(live.b.score, 73)
+    assert.equal(live.a.score, 113) // incl. 2× new_counterparty (Phase C)
+    assert.equal(live.b.score, 81) // incl. 1× new_counterparty (Phase C)
     assert.equal(live.c.score, 3)
   })
 })
@@ -303,7 +304,7 @@ test.group('Season Integration | flag refresh + reorg cleanup', (group) => {
       'SELECT score FROM season.score WHERE season_id = $1 AND wallet = $2',
       [S, X]
     )
-    assert.equal(after.rows[0].score, 70) // send (10+10) + first_send (50)
+    assert.equal(after.rows[0].score, 78) // send (10+10) + first_send (50) + new_counterparty (8)
   })
 
   test('reorg cleanup: reprojectAfterReorg drops derived events + activation and de-scores', async ({
@@ -317,7 +318,7 @@ test.group('Season Integration | flag refresh + reorg cleanup', (group) => {
       'SELECT score FROM season.score WHERE season_id = $1 AND wallet = $2',
       [S, X]
     )
-    assert.equal(scored.rows[0].score, 70)
+    assert.equal(scored.rows[0].score, 78) // send (10+10) + first_send (50) + new_counterparty (8)
 
     // Reorg: the transfer is removed from onchain.transfer, then the hook core runs.
     await query('DELETE FROM onchain.transfer WHERE id = $1', [TXR[1]])
@@ -354,7 +355,7 @@ test.group('Season Integration | flag refresh + reorg cleanup', (group) => {
       'SELECT score FROM season.score WHERE season_id = $1 AND wallet = $2',
       [S, X]
     )
-    assert.equal(scored.rows[0].score, 70)
+    assert.equal(scored.rows[0].score, 78) // send (10+10) + first_send (50) + new_counterparty (8)
 
     // Simulate an out-of-band transfer deletion where the live reorg hook did not
     // run. rebuildAll must not leave the orphaned send / first_send in score_event.

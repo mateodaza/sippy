@@ -24,6 +24,8 @@ import { ACTIVE_SEASON_ID } from '#season/guard'
 import { loadParams } from '#season/params'
 import { computeScore, type ScoreEvent } from '#season/score'
 import type { Verb } from '#season/params'
+import { rebuildOnrampRealization } from '#season/onramp'
+import { getSpenderAddress } from '#season/definitions'
 import {
   buildContext,
   projectAllTransfers,
@@ -63,13 +65,88 @@ function toScoreEvents(rows: EventRow[]): ScoreEvent[] {
 }
 
 /**
+ * Reconcile a wallet's DERIVED events to the current set of UNFLAGGED value-outs,
+ * so a send flagged by C2 sybil (or removed by reorg, or re-flagged by a
+ * verification change) zeroes EVERYTHING it produced — not just the raw send.
+ * Idempotent, and behaviour-preserving when nothing is flagged (it reproduces what
+ * the projector/job would emit). Run at the top of every score rebuild so the
+ * "a flagged send earns nothing, anywhere" invariant always holds.
+ *
+ *   • onramp_used      — the whole realization is REBUILT from scratch (delete +
+ *                        re-derive FIFO over the currently-realizable value-outs), so
+ *                        a sybil flag/clear can never double-allocate a pending. This
+ *                        is the single owner of onramp_used + pending_remaining.
+ *   • first_send       — re-pointed to the earliest unflagged qualifying send, or
+ *                        removed (de-activation) when none remain.
+ *   • new_counterparty — flagged when no unflagged qualifying send to that cp remains.
+ *
+ * active_week is the ONE derived verb NOT reconciled here — it's a periodic reward
+ * emitted (and delete-stale reconciled) by the season job (#season/job.emitActiveWeeks),
+ * so a plain recompute keeps the same score it always did (no active_week churn).
+ */
+async function reconcileDerivedEvents(
+  seasonId: string,
+  wallet: string,
+  minActiveUsd: number
+): Promise<void> {
+  const w = wallet.toLowerCase()
+
+  // (a) on-ramp realization — rebuilt from scratch (toggling flagged-state can't
+  // capture FIFO re-allocation across flag/clear; see #season/onramp).
+  await rebuildOnrampRealization({
+    seasonId,
+    wallet: w,
+    minActiveUsd,
+    spender: getSpenderAddress(),
+  })
+
+  // (b) first_send = earliest unflagged qualifying send; removed if none remain.
+  await deps.query(
+    `DELETE FROM season.score_event WHERE season_id = $1 AND id = 'first_send:' || $1 || ':' || $2`,
+    [seasonId, w]
+  )
+  await deps.query(
+    `INSERT INTO season.score_event
+       (id, season_id, wallet, verb, counterparty, usd, tx_hash, realized,
+        pending_until, pending_remaining, flagged, flag_reason, meta, timestamp)
+     SELECT 'first_send:' || $1 || ':' || $2, $1, $2, 'first_send', counterparty, usd, tx_hash,
+            true, NULL, NULL, false, NULL, '{}'::jsonb, timestamp
+       FROM season.score_event
+      WHERE season_id = $1 AND wallet = $2 AND verb = 'send' AND flagged = false AND usd >= $3
+      ORDER BY timestamp ASC, id ASC
+      LIMIT 1`,
+    [seasonId, w, minActiveUsd]
+  )
+
+  // (c) new_counterparty flagged unless an unflagged qualifying send to that cp remains.
+  await deps.query(
+    `UPDATE season.score_event nc
+        SET flagged = NOT keep.ok,
+            flag_reason = CASE WHEN keep.ok THEN NULL ELSE 'voided_value_out' END
+       FROM (
+         SELECT nc2.id,
+                EXISTS (
+                  SELECT 1 FROM season.score_event s
+                   WHERE s.season_id = $1 AND s.wallet = $2 AND s.verb = 'send'
+                     AND s.counterparty = nc2.counterparty AND s.flagged = false AND s.usd >= $3
+                ) AS ok
+           FROM season.score_event nc2
+          WHERE nc2.season_id = $1 AND nc2.wallet = $2 AND nc2.verb = 'new_counterparty'
+       ) keep
+      WHERE nc.season_id = $1 AND nc.id = keep.id`,
+    [seasonId, w, minActiveUsd]
+  )
+}
+
+/**
  * Recompute one wallet's score from its score_event rows and upsert season.score.
  * Assumes the wallet's transfer-derived events are already projected (callers
- * project first). Pure read → computeScore → upsert.
+ * project first). Reconciles derived events first, then computeScore → upsert.
  */
 async function rebuildWalletScore(wallet: string, seasonId: string, now: number): Promise<void> {
   const w = wallet.toLowerCase()
   const params = await loadParams(seasonId)
+  await reconcileDerivedEvents(seasonId, w, params.minActiveUsd)
   const res = await deps.query<EventRow>(
     `SELECT verb, usd, counterparty, timestamp, flagged
        FROM season.score_event
@@ -172,13 +249,17 @@ export async function recompute(
 
 /**
  * Full rebuild from scratch: delete the derived season.score rows, clear the
- * transfer-derived projection (send / receive / first_send) for this season,
- * re-project all current onchain.transfer rows, and recompute every wallet.
+ * transfer-derived projection for this season, re-project all current
+ * onchain.transfer rows, and recompute every wallet.
  *
- * Non-transfer Phase C events remain intact; only the projection that can be
- * derived from onchain.transfer is rebuilt. This is the "escape hatch" for
- * stale/orphaned transfer events if a reorg or verification change happened
- * outside the live hook.
+ * Transfer-derived = send / receive / first_send / onramp / new_counterparty. These
+ * are deleted and re-derived from onchain.transfer; first_send + the whole on-ramp
+ * realization (onramp_used + pending_remaining) are then re-derived per wallet by
+ * reconcileDerivedEvents in the recompute loop, and active_week by the job. The
+ * externally-emitted offramp + referral_* events are left intact (not derivable from
+ * the transfer feed; offramp realizations are re-derived by the per-wallet rebuild
+ * from the surviving offramp events). The escape hatch for stale/orphaned transfer
+ * events when the live hook didn't run.
  */
 export async function rebuildAll(
   opts: { now?: number; seasonId?: string } = {}
@@ -188,8 +269,18 @@ export async function rebuildAll(
   await db.rawQuery(
     `DELETE FROM season.score_event
       WHERE season_id = ?
-        AND verb IN ('send', 'receive', 'first_send')`,
+        AND verb IN ('send', 'receive', 'first_send', 'onramp', 'new_counterparty')`,
     [seasonId]
   )
-  return recompute(undefined, opts)
+  // onramp_used + pending_remaining are owned by reconcileDerivedEvents (it rebuilds
+  // them per wallet during the recompute below), so no explicit cleanup here.
+  const summary = await recompute(undefined, opts)
+  // Revert any referral unlock/retained whose qualifying send didn't survive the
+  // rebuild (reorged out / now flagged), then re-score the affected wallets (P1b).
+  const { reconcileReferralStages } = await import('#season/referral')
+  const reverted = await reconcileReferralStages(seasonId)
+  for (const w of reverted) {
+    await rebuildWalletScore(w, seasonId, opts.now ?? nowSeconds())
+  }
+  return summary
 }
