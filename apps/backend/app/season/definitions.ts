@@ -28,6 +28,7 @@ import db from '@adonisjs/lucid/services/db'
 import env from '#start/env'
 import { query as _query } from '#services/db'
 import { loadParams } from '#season/params'
+import { getQuestExcludedPhones } from '#utils/special_accounts'
 
 const SPENDER_ADDRESS = (env.get('SIPPY_SPENDER_ADDRESS', '') || '').toLowerCase().trim()
 const USDC_DECIMALS = 6
@@ -66,13 +67,41 @@ export function trailing(days: number, now: number): Period {
  * dashboard's "onboarded / volume" tiles may use the broad set, but "active /
  * MAW / distinct counterparties" use this strict floor.
  *
- * Phase C adds two more exclusions at this seam: exchange-staff / vendor wallets
- * (resolve `special_accounts.getQuestExcludedPhones()` → wallets via
- * phone_registry — note those are PHONES today, not in event_operator_wallets)
- * and the graph rules (circular / star / cluster). Until then the floor is
- * operator-float + spender only.
+ * Phase C (C2) adds vendor/exchange exclusion at this seam: exchange-staff / vendor
+ * wallets, resolved from `special_accounts.getQuestExcludedPhones()` (env-driven
+ * phones) → wallets via phone_registry. The graph rules (circular / star / cluster)
+ * live in #season/sybil and reuse THIS CTE (exported) so the verified floor is
+ * defined exactly once. The spender is still excluded at each comparison site.
  */
-function verifiedWalletCte(): string {
+export async function excludedVendorAddrs(): Promise<string[]> {
+  const phones = await getQuestExcludedPhones()
+  if (phones.length === 0) return []
+  // Match both canonical E.164 and legacy bare-digit phone_registry rows.
+  const bare = phones.map((p) => p.replace(/^\+/, ''))
+  const res = await deps.query<{ addr: string }>(
+    `SELECT DISTINCT LOWER(wallet_address) AS addr
+       FROM phone_registry
+      WHERE wallet_address IS NOT NULL
+        AND (phone_number = ANY($1::text[]) OR phone_number = ANY($2::text[]))`,
+    [phones, bare]
+  )
+  // Format-validate so the addresses are safe to inline as SQL literals below.
+  return res.rows.map((r) => r.addr).filter((a) => /^0x[0-9a-f]{40}$/.test(a))
+}
+
+/**
+ * The verified-wallet CTE, async because the Phase C vendor exclusion resolves
+ * env-driven exchange/vendor phones → wallets. Returns SQL `verified(addr)` for
+ * embedding in `WITH ${await verifiedWalletCte()} ...`. When no vendor phones are
+ * configured (the default), this degrades to the exact Phase A floor (phone_registry
+ * MINUS operator wallets), so existing behaviour and numbers are unchanged.
+ */
+export async function verifiedWalletCte(): Promise<string> {
+  const vendors = await excludedVendorAddrs()
+  const vendorExcept = vendors.length
+    ? `EXCEPT
+      SELECT addr FROM (VALUES ${vendors.map((a) => `('${a}')`).join(', ')}) AS vendor(addr)`
+    : ''
   return `
     verified AS (
       SELECT LOWER(wallet_address) AS addr
@@ -81,6 +110,7 @@ function verifiedWalletCte(): string {
       EXCEPT
       SELECT LOWER(wallet_address) AS addr
         FROM event_operator_wallets
+      ${vendorExcept}
     )
   `
 }
@@ -99,7 +129,7 @@ export async function isActive(wallet: string, period: Period): Promise<boolean>
   const w = wallet.toLowerCase()
   const minRaw = await minRawUnits()
   const res = await deps.query<{ active: boolean }>(
-    `WITH ${verifiedWalletCte()}
+    `WITH ${await verifiedWalletCte()}
      SELECT EXISTS (
        SELECT 1 FROM onchain.transfer t
         WHERE LOWER(t."from") = $1
@@ -123,7 +153,7 @@ export async function isActive(wallet: string, period: Period): Promise<boolean>
 export async function maw(period: Period): Promise<number> {
   const minRaw = await minRawUnits()
   const res = await deps.query<{ maw: string }>(
-    `WITH ${verifiedWalletCte()}
+    `WITH ${await verifiedWalletCte()}
      SELECT COUNT(DISTINCT LOWER(t."from")) AS maw
        FROM onchain.transfer t
       WHERE t.timestamp >= $1 AND t.timestamp < $2
@@ -161,7 +191,7 @@ export async function distinctVerifiedCounterparties(wallet: string): Promise<nu
   const w = wallet.toLowerCase()
   const minRaw = await minRawUnits()
   const res = await deps.query<{ n: string }>(
-    `WITH ${verifiedWalletCte()}
+    `WITH ${await verifiedWalletCte()}
      SELECT COUNT(DISTINCT LOWER(t."to")) AS n
        FROM onchain.transfer t
       WHERE LOWER(t."from") = $1
@@ -198,7 +228,7 @@ export async function distinctVerifiedCounterparties(wallet: string): Promise<nu
 export async function transactedVolume(period?: Period): Promise<string> {
   const minRaw = await minRawUnits()
   const res = await deps.query<{ total: string }>(
-    `WITH ${verifiedWalletCte()}
+    `WITH ${await verifiedWalletCte()}
      SELECT COALESCE(SUM(t.amount), 0)::text AS total
        FROM onchain.transfer t
       WHERE t.amount >= $1::numeric
@@ -224,7 +254,7 @@ export async function retention(now: number): Promise<{ retained: number; retent
   const prevStart = now - 60 * 86_400
   const mid = now - 30 * 86_400
   const res = await deps.query<{ prev_active: string; retained: string }>(
-    `WITH ${verifiedWalletCte()},
+    `WITH ${await verifiedWalletCte()},
      prev AS (
        SELECT DISTINCT LOWER(t."from") AS w
          FROM onchain.transfer t
@@ -266,7 +296,7 @@ export async function retention(now: number): Promise<{ retained: number; retent
 export async function distinctCounterpartiesNetwork(): Promise<number> {
   const minRaw = await minRawUnits()
   const res = await deps.query<{ n: string }>(
-    `WITH ${verifiedWalletCte()}
+    `WITH ${await verifiedWalletCte()}
      SELECT COUNT(*) AS n FROM (
        SELECT DISTINCT LOWER(t."from") AS f, LOWER(t."to") AS tt
          FROM onchain.transfer t
@@ -294,7 +324,7 @@ export async function dailyTransactedVolume(
   const minRaw = await minRawUnits()
   const start = now - days * 86_400
   const res = await deps.query<{ date: string; volume: string; count: string }>(
-    `WITH ${verifiedWalletCte()}
+    `WITH ${await verifiedWalletCte()}
      SELECT
        to_char(to_timestamp(t.timestamp) AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS date,
        COALESCE(SUM(t.amount), 0)::text AS volume,
@@ -320,7 +350,7 @@ export async function dailyTransactedVolume(
  * handle (batch read, not the DI seam) to match onchain_writer's style.
  */
 export async function getVerifiedWalletSet(): Promise<Set<string>> {
-  const res = await db.rawQuery(`WITH ${verifiedWalletCte()} SELECT addr FROM verified`)
+  const res = await db.rawQuery(`WITH ${await verifiedWalletCte()} SELECT addr FROM verified`)
   const set = new Set<string>()
   for (const row of res.rows as { addr: string }[]) {
     if (row.addr && row.addr !== SPENDER_ADDRESS) set.add(row.addr)

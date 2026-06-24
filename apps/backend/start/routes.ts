@@ -308,6 +308,14 @@ router
     router
       .post('/season/recompute', [SeasonController, 'recompute'])
       .use(middleware.adminRole({ role: 'admin' }))
+    // Season 1 (Phase C) sybil flag review queue. Admin-only; guarded again in the
+    // controller by SEASON1_ENABLED. open → confirmed | cleared (auditable).
+    router
+      .get('/season/flags', [ModerationController, 'seasonFlags'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .post('/season/flags/:id/review', [ModerationController, 'reviewSeasonFlag'])
+      .use(middleware.adminRole({ role: 'admin' }))
 
     // ── Operator-or-admin routes ──────────────────────────────────────
     // Operators see ONLY: their own send page, their assigned event's
