@@ -133,7 +133,7 @@ function TierBadge({ tier }: { tier: Tier }) {
   const color = isHigh ? 'var(--brand-crypto,#00D796)' : 'var(--brand-primary,#00AFD7)'
   return (
     <span
-      className="shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider"
+      className="shrink-0 rounded-full border px-2 py-0.5 font-mono text-[11px] uppercase tracking-wider"
       style={{ borderColor: color, color }}
     >
       {SEASON_TIER_NAME[tier]}

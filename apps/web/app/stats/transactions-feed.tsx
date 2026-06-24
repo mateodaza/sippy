@@ -130,10 +130,12 @@ export function TransactionsFeed() {
             <span className="indicator-dot indicator-dot-active" aria-hidden="true" />
             <p className="spec-label">LIVE TRANSACTIONS</p>
           </div>
-          {/* Scope is explicit: the feed/ticker are EVERY on-chain transfer (raw,
-              verifiable proof) — distinct from the verified value-out hero above. */}
-          <p className="mt-1.5 font-mono text-[10px] tracking-widest uppercase text-[var(--text-secondary)]">
-            ALL ON-CHAIN TRANSFERS · VERIFIABLE ON ARBISCAN
+          {/* Scope: real on-chain transfers — spend-permission relay pairs are
+              collapsed to one logical transfer and sub-$1 dust is filtered, so each
+              shows once. Still raw, verifiable proof (every row links to Arbiscan),
+              distinct from the value-out hero. */}
+          <p className="mt-1.5 font-mono text-xs tracking-widest uppercase text-[var(--text-secondary)]">
+            ON-CHAIN TRANSFERS · VERIFIABLE ON ARBISCAN
           </p>
         </div>
         {counts && (
@@ -142,7 +144,7 @@ export function TransactionsFeed() {
               <span className="font-display text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
                 {counts.today.toLocaleString()}
               </span>
-              <span className="ml-1.5 font-mono text-[10px] uppercase tracking-widest text-[var(--text-secondary)]">
+              <span className="ml-1.5 font-mono text-xs uppercase tracking-widest text-[var(--text-secondary)]">
                 TODAY
               </span>
             </div>
@@ -151,7 +153,7 @@ export function TransactionsFeed() {
               <span className="font-display text-xl font-bold text-[var(--text-primary)] sm:text-2xl">
                 {counts.thisWeek.toLocaleString()}
               </span>
-              <span className="ml-1.5 font-mono text-[10px] uppercase tracking-widest text-[var(--text-secondary)]">
+              <span className="ml-1.5 font-mono text-xs uppercase tracking-widest text-[var(--text-secondary)]">
                 THIS WEEK
               </span>
             </div>
@@ -188,19 +190,19 @@ export function TransactionsFeed() {
                   <span className="font-display text-lg font-bold tabular-nums text-[var(--text-primary)] sm:text-xl">
                     {formatUsd(tx.usd)}
                   </span>
-                  <span className="truncate font-mono text-[11px] tracking-wider text-[var(--text-secondary)]">
+                  <span className="truncate font-mono text-xs tracking-wider text-[var(--text-secondary)]">
                     {tx.from} <span className="text-brand-primary">→</span> {tx.to}
                   </span>
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <span className="font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
+                  <span className="font-mono text-xs tabular-nums text-[var(--text-secondary)]">
                     {nowMs ? relativeTime(tx.timestamp, nowMs) : ''}
                   </span>
                   <a
                     href={tx.arbiscanUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-mono text-[11px] uppercase tracking-wider text-brand-primary hover:underline focus-visible:underline focus-visible:outline-none"
+                    className="font-mono text-xs uppercase tracking-wider text-brand-primary hover:underline focus-visible:underline focus-visible:outline-none"
                     aria-label={`View transaction ${tx.txHash} on Arbiscan`}
                   >
                     ARBISCAN ↗
@@ -216,7 +218,7 @@ export function TransactionsFeed() {
                 type="button"
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="border border-[var(--border-strong)] px-6 py-2.5 font-mono text-[11px] uppercase tracking-widest text-[var(--text-primary)] transition-colors hover:border-brand-primary hover:text-brand-primary focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:outline-none disabled:opacity-50"
+                className="border border-[var(--border-strong)] px-6 py-2.5 font-mono text-xs uppercase tracking-widest text-[var(--text-primary)] transition-colors hover:border-brand-primary hover:text-brand-primary focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:outline-none disabled:opacity-50"
               >
                 {loadingMore ? 'LOADING…' : 'LOAD MORE'}
               </button>

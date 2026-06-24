@@ -8,9 +8,11 @@
  * implying a payout is D2 and ships only after Lina clears it). The
  * language-guard test (lib/season.test.ts) scans every string in this file.
  *
- * Tier names are fixed and language-independent (Nuevo · Activado · Activo ·
- * Regular · Power); the standing-line and next-action copy are localized. These
- * mirror the backend's messages.ts maps so WhatsApp and web read identically.
+ * Tier names are fixed and language-independent (Nuevo · En marcha · Activo ·
+ * Fiel · Estrella) — DISPLAY ONLY: the internal slugs (newcomer/activated/active/
+ * regular/power) and all thresholds are unchanged. The standing-line and
+ * next-action copy are localized. These mirror the backend's messages.ts maps so
+ * WhatsApp and web read identically.
  */
 
 import type { Language } from './i18n'
@@ -39,10 +41,10 @@ export const TIER_ORDER: readonly Tier[] = [
 /** Fixed, user-facing tier names — identical across languages and to the bot. */
 export const SEASON_TIER_NAME: Record<Tier, string> = {
   newcomer: 'Nuevo',
-  activated: 'Activado',
+  activated: 'En marcha',
   active: 'Activo',
-  regular: 'Regular',
-  power: 'Power',
+  regular: 'Fiel',
+  power: 'Estrella',
 }
 
 // ── API response shapes (from apps/backend season_score_controller) ──────────
@@ -88,24 +90,24 @@ export interface LeaderboardResponse {
 export const TIER_STANDING_LINE: Record<Language, Record<Tier, string>> = {
   en: {
     newcomer: 'just getting started',
-    activated: 'made your first send',
+    activated: 'took your first step',
     active: 'really using Sippy',
-    regular: 'part of your routine',
-    power: 'among the network regulars',
+    regular: 'you use Sippy week after week',
+    power: 'among the network stars',
   },
   es: {
     newcomer: 'apenas empiezas',
-    activated: 'ya hiciste tu primer envío',
+    activated: 'diste tu primer paso',
     active: 'usando Sippy de verdad',
-    regular: 'parte de tu rutina',
-    power: 'de los que más mueven la red',
+    regular: 'usas Sippy semana tras semana',
+    power: 'de las estrellas de la red',
   },
   pt: {
     newcomer: 'começando agora',
-    activated: 'já fez seu primeiro envio',
+    activated: 'deu seu primeiro passo',
     active: 'usando a Sippy de verdade',
-    regular: 'parte da sua rotina',
-    power: 'entre os que mais movem a rede',
+    regular: 'usa a Sippy semana após semana',
+    power: 'entre as estrelas da rede',
   },
 }
 

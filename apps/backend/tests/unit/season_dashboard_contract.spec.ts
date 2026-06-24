@@ -99,8 +99,18 @@ test.group('season/dashboard contract | transactions feed privacy + links', () =
     // "phone" to explain WHY — so assert on code shape, not prose.
     assert.notInclude(src, 'phone_registry')
     assert.notMatch(src, /phone\w*\s*:/i, 'tx payload must not carry a phone field')
-    // Positive proof: the SELECT pulls only public on-chain columns.
-    assert.include(src, 'id, "from", "to", amount, timestamp, tx_hash')
+    // Positive proof: the SELECT pulls only public on-chain columns from the
+    // relay-collapsed logical-transfer source (sender/recipient aliased from/to).
+    assert.include(src, 'FROM logical_transfer')
+    assert.include(src, 'sender AS "from", recipient AS "to"')
+  })
+
+  test('transactions controller reads the relay-aware logical-transfer source', ({ assert }) => {
+    const src = read(TXNS_SRC)
+    // The feed must NOT scan raw onchain.transfer directly (that double-shows the
+    // spender relay legs) — it reads the shared collapse CTE instead.
+    assert.include(src, 'logicalTransfersFeedCte')
+    assert.notMatch(src, /FROM\s+onchain\.transfer\b/)
   })
 
   test('transactions controller builds a well-formed Arbiscan tx URL', ({ assert }) => {
@@ -108,12 +118,12 @@ test.group('season/dashboard contract | transactions feed privacy + links', () =
     assert.include(src, 'https://arbiscan.io/tx/')
   })
 
-  test('transactions controller masks addresses and paginates on (timestamp DESC, id DESC)', ({
+  test('transactions controller masks addresses and paginates on (ts DESC, id DESC)', ({
     assert,
   }) => {
     const src = read(TXNS_SRC)
     assert.include(src, 'maskAddress')
-    assert.include(src, 'ORDER BY timestamp DESC, id DESC')
+    assert.include(src, 'ORDER BY lt.ts DESC, lt.id DESC')
   })
 
   test('transactions payload exposes a stable transferId (the onchain.transfer PK)', ({

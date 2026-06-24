@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
+import { SEASON_TIER_NAME, type Tier } from '@/lib/season'
 import { UpdatedTimestamp } from './updated-timestamp'
 import { TransactionsFeed } from './transactions-feed'
 
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
   title: 'Sippy Stats — Live On-Chain Proof',
   description:
-    'Real-time proof for the Sippy network: transacted volume (verified value-out), active wallets, retention, and a live on-chain transaction feed on Arbitrum.',
+    'Real-time proof for the Sippy network: USDC volume facilitated, onchain transactions, and monthly active wallets, plus a live on-chain transaction feed on Arbitrum.',
   alternates: {
     canonical: 'https://sippy.lat/stats',
   },
@@ -94,12 +95,12 @@ const COUNTRY_FLAGS: Record<string, string> = {
   OTHER: '🌎',
 }
 
-const TIER_LABELS: Record<string, string> = {
-  newcomer: 'NEWCOMER',
-  activated: 'ACTIVATED',
-  active: 'ACTIVE',
-  regular: 'REGULAR',
-  power: 'POWER',
+// Uppercased tier label for the score-distribution / top-senders tiles. Sourced
+// from the single shared tier-name map (lib/season) so the dashboard ladder can
+// never drift from the bot + /score + /temporada (Nuevo · En marcha · Activo ·
+// Fiel · Estrella). Falls back to the raw slug if an unknown tier ever appears.
+function tierLabel(tier: string): string {
+  return SEASON_TIER_NAME[tier as Tier]?.toUpperCase() ?? tier.toUpperCase()
 }
 
 function formatUSDC(raw: string): string {
@@ -149,46 +150,65 @@ export default async function StatsPage() {
   }
 
   const maxVolume = Math.max(...stats.dailyVolumes.map((d) => Number(d.volume)), 1)
+  // The daily chart now plots value-out; hide the whole panel cleanly if there's
+  // no positive series (e.g. before any qualifying sends land), no "NO DATA" box.
+  const hasDailyData = stats.dailyVolumes.some((d) => Number(d.volume) > 0)
 
-  // Secondary tiles. The hero (Transacted Volume) is rendered separately and on
-  // its own — on-ramped is a distinct tile here and is never folded into it.
+  // Lead "proof" row — the two grant-KPI metrics that join the Volume hero to
+  // make the front-and-center trio (M2 Growth KPIs: 200–400 onchain transactions
+  // · $50K–100K USDC volume · 75–100 MAW). Presented as honest RAW numbers only —
+  // never "X / 400" or "% of target" (that vs-KPI framing lives in the private
+  // Questbook M2 update, not on this public page). Transactions is the KPI Sippy
+  // is strongest on, so it leads; MAW uses the loosened value-out definition so
+  // it's non-zero and honest. Rendered only when meaningful (> 0).
+  const kpiTiles = [
+    {
+      label: 'ONCHAIN TRANSACTIONS',
+      raw: stats.transferCount,
+      value: formatCompact(stats.transferCount),
+      sublabel: 'USDC TRANSFERS · ALL-TIME',
+    },
+    {
+      label: 'MONTHLY ACTIVE WALLETS',
+      raw: stats.maw,
+      value: formatCompact(stats.maw),
+      sublabel: 'MAW · LAST 30 DAYS',
+    },
+  ].filter((tile) => tile.raw > 0)
+
+  // Secondary tiles — context around the lead trio. On-ramped is a distinct tile
+  // here and is never folded into the volume hero.
+  //
+  // We render a tile ONLY when its value is meaningful (> 0): on a ramp product
+  // the strict P2P metrics read ~0, and a wall of zeros reads as "dead" when the
+  // network is actually healthy. "DISTINCT VERIFIED COUNTERPARTIES" is dropped
+  // entirely — it's a Sippy↔Sippy breadth metric that stays ~0 here by design.
   const tiles = [
     {
       label: 'ON-RAMPED',
+      raw: Number(stats.onboarded),
       value: formatUSDC(stats.onboarded),
       sublabel: 'FUNDS ENTERING SIPPY',
     },
     {
-      label: 'ACTIVE WALLETS',
-      value: formatCompact(stats.maw),
-      sublabel: 'MAW · LAST 30 DAYS',
-    },
-    {
       label: 'ACTIVE THIS WEEK',
+      raw: stats.activeThisWeek,
       value: formatCompact(stats.activeThisWeek),
       sublabel: 'LAST 7 DAYS',
     },
     {
       label: 'RETAINED',
+      raw: stats.retained,
       value: formatCompact(stats.retained),
       sublabel: `${stats.retentionRate}% RETENTION RATE`,
     },
     {
-      label: 'COUNTERPARTIES',
-      value: formatCompact(stats.distinctCounterparties),
-      sublabel: 'DISTINCT VERIFIED PAIRS',
-    },
-    {
       label: 'USERS',
+      raw: stats.registeredUsers,
       value: formatCompact(stats.registeredUsers),
       sublabel: stats.activatedPct > 0 ? `${stats.activatedPct}% ACTIVATED` : 'REGISTERED',
     },
-    {
-      label: 'TRANSFERS',
-      value: formatCompact(stats.transferCount),
-      sublabel: 'ALL-TIME ON-CHAIN',
-    },
-  ]
+  ].filter((tile) => tile.raw > 0)
 
   const hasScores =
     (stats.scoreDistribution?.length ?? 0) > 0 || (stats.topSenders?.length ?? 0) > 0
@@ -202,7 +222,7 @@ export default async function StatsPage() {
           <div className="flex items-center gap-3 mb-2">
             <span className="indicator-dot indicator-dot-active" aria-hidden="true" />
             <span className="spec-label spec-label-muted">LIVE</span>
-            <span className="font-mono text-[11px] tracking-widest uppercase text-[var(--text-secondary)]">
+            <span className="font-mono text-xs tracking-widest uppercase text-[var(--text-secondary)]">
               · UPDATED <UpdatedTimestamp iso={updatedAtIso} />
             </span>
           </div>
@@ -231,7 +251,7 @@ export default async function StatsPage() {
                   <span className="mr-1.5 text-sm">{COUNTRY_FLAGS[c.code] ?? '🌎'}</span>
                   <span>{c.users}</span>
                   {i === 0 && c.code === 'CO' && (
-                    <span className="ml-1.5 rounded-sm border border-[var(--border-default)] px-1 py-[1px] text-[9px] tracking-wider text-[var(--text-secondary)]">
+                    <span className="ml-1.5 rounded-sm border border-[var(--border-default)] px-1 py-[1px] text-[11px] tracking-wider text-[var(--text-secondary)]">
                       HQ
                     </span>
                   )}
@@ -249,7 +269,7 @@ export default async function StatsPage() {
         <div className="panel-frame rounded-xl p-6 sm:p-10 mb-4 sm:mb-6">
           <div className="flex items-center gap-3 mb-4">
             <p className="spec-label">TRANSACTED VOLUME</p>
-            <span className="rounded-sm border border-brand-crypto/40 px-1.5 py-[1px] font-mono text-[9px] tracking-wider text-brand-crypto">
+            <span className="rounded-sm border border-brand-crypto/40 px-1.5 py-[1px] font-mono text-[11px] tracking-wider text-brand-crypto">
               VALUE-OUT
             </span>
           </div>
@@ -257,11 +277,31 @@ export default async function StatsPage() {
             {formatUSDC(stats.transactedVolume)}
           </p>
           <p className="mt-4 font-mono text-xs font-semibold tracking-[0.12em] uppercase text-[var(--text-secondary)]">
-            VERIFIED SENDS BY SIPPY USERS · ALL-TIME
+            USDC SENT BY SIPPY USERS · ALL-TIME
           </p>
         </div>
 
-        {/* Secondary KPI tiles — on-ramped is here, separate from the hero */}
+        {/* Lead grant-KPI proof row — Onchain Transactions + Monthly Active Wallets
+            join the Volume hero above as the front-and-center trio. Larger than the
+            secondary grid; raw numbers only, no targets or % framing. */}
+        {kpiTiles.length > 0 && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 mb-4 sm:mb-6">
+            {kpiTiles.map((tile) => (
+              <div key={tile.label} className="panel-frame rounded-xl p-6 sm:p-8">
+                <p className="spec-label mb-3">{tile.label}</p>
+                <p className="font-display text-5xl font-bold leading-none text-[var(--text-primary)] sm:text-6xl">
+                  {tile.value}
+                </p>
+                <p className="mt-3 font-mono text-xs font-semibold tracking-[0.12em] uppercase text-[var(--text-secondary)]">
+                  {tile.sublabel}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Secondary KPI tiles — context around the lead trio (on-ramped is here,
+            separate from the hero) */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 sm:gap-6 mb-8 sm:mb-12">
           {tiles.map((tile) => (
             <div key={tile.label} className="panel-frame rounded-xl p-5 sm:p-6">
@@ -269,7 +309,7 @@ export default async function StatsPage() {
               <p className="font-display text-3xl font-bold leading-none text-[var(--text-primary)] sm:text-4xl">
                 {tile.value}
               </p>
-              <p className="mt-3 font-mono text-[10px] font-semibold tracking-[0.12em] uppercase text-[var(--text-secondary)]">
+              <p className="mt-3 font-mono text-xs font-semibold tracking-[0.12em] uppercase text-[var(--text-secondary)]">
                 {tile.sublabel}
               </p>
             </div>
@@ -281,16 +321,16 @@ export default async function StatsPage() {
           <TransactionsFeed />
         </div>
 
-        {/* Daily value-out chart */}
-        <div className="panel-frame rounded-xl p-6 sm:p-8">
-          <div className="flex items-center justify-between mb-6">
-            <p className="spec-label">DAILY VALUE-OUT</p>
-            <p className="font-mono text-[11px] tracking-[0.15em] uppercase text-[var(--text-secondary)]">
-              VERIFIED SENDS · LAST 30 DAYS
-            </p>
-          </div>
+        {/* Daily value-out chart — hidden cleanly when there's no positive series */}
+        {hasDailyData && (
+          <div className="panel-frame rounded-xl p-6 sm:p-8">
+            <div className="flex items-center justify-between mb-6">
+              <p className="spec-label">DAILY VALUE-OUT</p>
+              <p className="font-mono text-xs tracking-[0.15em] uppercase text-[var(--text-secondary)]">
+                USDC SENT · LAST 30 DAYS
+              </p>
+            </div>
 
-          {stats.dailyVolumes.length > 0 ? (
             <div className="space-y-6">
               {/* Chart */}
               <div className="flex items-end gap-[2px] sm:gap-1" style={{ height: 200 }}>
@@ -305,12 +345,12 @@ export default async function StatsPage() {
                       style={{ height: '100%' }}
                       tabIndex={0}
                       role="img"
-                      aria-label={`${formatUSDC(row.volume)}, ${row.count} verified sends on ${row.date}`}
+                      aria-label={`${formatUSDC(row.volume)}, ${row.count} sends on ${row.date}`}
                     >
                       {/* Hover/focus tooltip */}
                       <div className="pointer-events-none absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 z-10">
                         <div
-                          className="whitespace-nowrap rounded-md bg-[var(--text-primary)] px-3 py-1.5 font-mono text-[11px] font-bold shadow-lg"
+                          className="whitespace-nowrap rounded-md bg-[var(--text-primary)] px-3 py-1.5 font-mono text-xs font-bold shadow-lg"
                           style={{ color: 'var(--bg-primary)' }}
                         >
                           {formatUSDC(row.volume)}
@@ -328,29 +368,21 @@ export default async function StatsPage() {
 
               {/* X-axis labels */}
               <div className="flex justify-between">
-                <span className="font-mono text-[11px] tracking-wider text-[var(--text-secondary)]">
-                  {stats.dailyVolumes.length > 0
-                    ? new Date(stats.dailyVolumes[0].date + 'T00:00:00').toLocaleDateString(
-                        'en-US',
-                        { month: 'short', day: 'numeric' }
-                      )
-                    : ''}
+                <span className="font-mono text-xs tracking-wider text-[var(--text-secondary)]">
+                  {new Date(stats.dailyVolumes[0].date + 'T00:00:00').toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                  })}
                 </span>
-                <span className="font-mono text-[11px] tracking-wider text-[var(--text-secondary)]">
-                  {stats.dailyVolumes.length > 0
-                    ? new Date(
-                        stats.dailyVolumes[stats.dailyVolumes.length - 1].date + 'T00:00:00'
-                      ).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                    : ''}
+                <span className="font-mono text-xs tracking-wider text-[var(--text-secondary)]">
+                  {new Date(
+                    stats.dailyVolumes[stats.dailyVolumes.length - 1].date + 'T00:00:00'
+                  ).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </span>
               </div>
             </div>
-          ) : (
-            <div className="flex items-center justify-center py-16">
-              <p className="font-mono text-xs text-[var(--text-secondary)]">NO DATA YET</p>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Score distribution + top senders — present only once season.score is
             populated (post-enable). In shadow mode the API returns null and this
@@ -363,8 +395,8 @@ export default async function StatsPage() {
                 <div className="space-y-4">
                   {stats.scoreDistribution.map((b) => (
                     <div key={b.tier} className="flex items-center gap-4">
-                      <span className="w-24 shrink-0 font-mono text-[11px] uppercase tracking-wider text-[var(--text-secondary)]">
-                        {TIER_LABELS[b.tier] ?? b.tier.toUpperCase()}
+                      <span className="w-24 shrink-0 font-mono text-xs uppercase tracking-wider text-[var(--text-secondary)]">
+                        {tierLabel(b.tier)}
                       </span>
                       <div className="h-3 flex-1 overflow-hidden rounded-sm bg-[var(--border-default)]">
                         <div
@@ -388,14 +420,14 @@ export default async function StatsPage() {
                   {stats.topSenders.map((s, i) => (
                     <li key={s.address} className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <span className="w-6 font-mono text-[11px] tabular-nums text-[var(--text-secondary)]">
+                        <span className="w-6 font-mono text-xs tabular-nums text-[var(--text-secondary)]">
                           {i + 1}
                         </span>
-                        <span className="font-mono text-[11px] tracking-wider text-[var(--text-primary)]">
+                        <span className="font-mono text-xs tracking-wider text-[var(--text-primary)]">
                           {s.address}
                         </span>
-                        <span className="rounded-sm border border-[var(--border-default)] px-1.5 py-[1px] font-mono text-[9px] uppercase tracking-wider text-[var(--text-secondary)]">
-                          {TIER_LABELS[s.tier] ?? s.tier.toUpperCase()}
+                        <span className="rounded-sm border border-[var(--border-default)] px-1.5 py-[1px] font-mono text-[11px] uppercase tracking-wider text-[var(--text-secondary)]">
+                          {tierLabel(s.tier)}
                         </span>
                       </div>
                       <span className="font-mono text-xs font-bold tabular-nums text-[var(--text-primary)]">
@@ -417,7 +449,7 @@ export default async function StatsPage() {
           >
             View the season board →
           </a>
-          <p className="mt-2 text-center font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">
+          <p className="mt-2 text-center font-mono text-xs uppercase tracking-[0.2em] text-[var(--text-secondary)]">
             Usage-ranked · anonymous
           </p>
         </div>
@@ -426,14 +458,14 @@ export default async function StatsPage() {
         <div className="mt-8 sm:mt-12 border-t border-[var(--border-default)] pt-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-[var(--text-secondary)]">
+              <span className="font-mono text-xs tracking-[0.2em] uppercase text-[var(--text-secondary)]">
                 NETWORK: ARBITRUM ONE
               </span>
-              <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-[var(--text-secondary)]">
+              <span className="font-mono text-xs tracking-[0.2em] uppercase text-[var(--text-secondary)]">
                 TOKEN: USDC
               </span>
             </div>
-            <span className="font-mono text-[11px] tracking-[0.2em] uppercase text-[var(--text-secondary)]">
+            <span className="font-mono text-xs tracking-[0.2em] uppercase text-[var(--text-secondary)]">
               SIPPY.LAT // {new Date().getFullYear()}
             </span>
           </div>

@@ -47,6 +47,7 @@ import {
   retention,
   distinctCounterpartiesNetwork,
   dailyTransactedVolume,
+  onchainTransactionCount,
 } from '#season/definitions'
 
 // Tier display order (low → high) for a stable score-distribution layout.
@@ -209,14 +210,15 @@ export default class SeasonStatsController {
     }
   }
 
-  /** All-time transfer count (raw activity counter). Degrades to 0. */
+  /**
+   * Onchain transaction count (grant KPI "200–400 onchain transactions"). The
+   * feed-consistent count of real Sippy transactions — relay legs (spender /
+   * operator) and sub-$1 dust removed — from #season/definitions, NOT the raw
+   * onchain.daily_volume rollup (which can't drop relay legs). Degrades to 0.
+   */
   private async transferCount(): Promise<number> {
     try {
-      const row = await db
-        .from('onchain.daily_volume')
-        .select(db.raw('COALESCE(SUM(transfer_count), 0)::text as total'))
-        .first()
-      return Number(row?.total ?? 0)
+      return await onchainTransactionCount()
     } catch (error) {
       logger.warn({ err: error }, 'season stats: transfer count degraded to 0')
       return 0

@@ -1235,37 +1235,42 @@ export function formatQuestNoActiveEvent(
 // formula (weights/caps/decay). See SEASON1_PHASE_D_PROMPT.md.
 // ============================================================================
 
-/** User-facing tier names (final, confirmed) — same five everywhere. */
+/**
+ * User-facing tier names (final, confirmed ladder) — same five everywhere.
+ * DISPLAY ONLY: the internal slugs (newcomer/activated/active/regular/power) and
+ * every threshold are unchanged; only the labels shown to users moved to
+ * Nuevo · En marcha · Activo · Fiel · Estrella.
+ */
 const SEASON_TIER_NAME: Record<Tier, string> = {
   newcomer: 'Nuevo',
-  activated: 'Activado',
+  activated: 'En marcha',
   active: 'Activo',
-  regular: 'Regular',
-  power: 'Power',
+  regular: 'Fiel',
+  power: 'Estrella',
 }
 
 /** One short, honest standing-line per tier (no perk promises), per language. */
 const SEASON_TIER_LINE: Record<Lang, Record<Tier, string>> = {
   en: {
     newcomer: 'just getting started',
-    activated: 'made your first send',
+    activated: 'took your first step',
     active: 'really using Sippy',
-    regular: 'part of your routine',
-    power: 'among the network regulars',
+    regular: 'you use Sippy week after week',
+    power: 'among the network stars',
   },
   es: {
     newcomer: 'apenas empiezas',
-    activated: 'ya hiciste tu primer envio',
+    activated: 'diste tu primer paso',
     active: 'usando Sippy de verdad',
-    regular: 'parte de tu rutina',
-    power: 'de los que mas mueven la red',
+    regular: 'usas Sippy semana tras semana',
+    power: 'de las estrellas de la red',
   },
   pt: {
     newcomer: 'comecando agora',
-    activated: 'ja fez seu primeiro envio',
+    activated: 'deu seu primeiro passo',
     active: 'usando a Sippy de verdade',
-    regular: 'parte da sua rotina',
-    power: 'entre os que mais movem a rede',
+    regular: 'usa a Sippy semana apos semana',
+    power: 'entre as estrelas da rede',
   },
 }
 

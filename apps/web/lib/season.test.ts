@@ -33,8 +33,8 @@ function collectStrings(): string[] {
       if (typeof v === 'string') out.push(v)
       // Localized templates — exercise both arities to capture their output.
       else if (typeof v === 'function') {
-        out.push((v as (a: unknown, b: unknown) => string)(50, 'Regular'))
-        out.push((v as (a: unknown) => string)('Regular'))
+        out.push((v as (a: unknown, b: unknown) => string)(50, 'Fiel'))
+        out.push((v as (a: unknown) => string)('Fiel'))
       }
     }
   }
@@ -53,10 +53,10 @@ describe('Season D1 web copy — language guard', () => {
   it('has the five final tier names', () => {
     expect(Object.values(SEASON_TIER_NAME)).toEqual([
       'Nuevo',
-      'Activado',
+      'En marcha',
       'Activo',
-      'Regular',
-      'Power',
+      'Fiel',
+      'Estrella',
     ])
   })
 })

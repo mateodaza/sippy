@@ -73,7 +73,7 @@ test.group('season score reply | shape', () => {
     )
     assert.include(msg, 'Activo') // tier name
     assert.include(msg, '320') // the score itself (reputation, allowed)
-    assert.include(msg, 'Regular') // next tier
+    assert.include(msg, 'Fiel') // next tier (regular slug → "Fiel" display)
     // WhatsApp bodies are accent-free (house style, like formatReferralCodeMessage).
     assert.include(msg, 'Enviale a un amigo') // a derived action
     assert.include(msg, '/score?phone=') // link to the web "your score" page
@@ -117,7 +117,7 @@ test.group('season score reply | shape', () => {
       'es'
     )
     assert.include(msg, 'verifica tu identidad')
-    assert.include(msg, 'Power')
+    assert.include(msg, 'Estrella') // power slug → "Estrella" display
   })
 })
 
