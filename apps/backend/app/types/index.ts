@@ -95,6 +95,7 @@ export interface ParsedCommand {
     | 'dashboard'
     | 'referral_code'
     | 'quest_status'
+    | 'season_score'
     | 'pizza_day'
     | 'poap_code'
     | 'unknown'

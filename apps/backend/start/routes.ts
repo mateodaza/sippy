@@ -30,6 +30,7 @@ const QrScanController = () => import('#controllers/qr_scan_controller')
 const MyPayQrController = () => import('#controllers/my_pay_qr_controller')
 const SeasonStatsController = () => import('#controllers/season_stats_controller')
 const SeasonTransactionsController = () => import('#controllers/season_transactions_controller')
+const SeasonScoreController = () => import('#controllers/season_score_controller')
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
@@ -61,6 +62,13 @@ router.get('/api/stats', [PublicStatsController, 'index']).use(middleware.ipThro
 router.get('/api/season/stats', [SeasonStatsController, 'index']).use(middleware.ipThrottle())
 router
   .get('/api/season/transactions', [SeasonTransactionsController, 'index'])
+  .use(middleware.ipThrottle())
+
+// ── Season 1 public leaderboard (Phase D) — usage-ranked, fully anonymous.
+//     Rows carry an HMAC `displayId` only (no phone/handle/raw wallet). Fed by
+//     apps/web /temporada. Empty state is a valid 200 (degradation-safe).
+router
+  .get('/api/season/leaderboard', [SeasonScoreController, 'leaderboard'])
   .use(middleware.ipThrottle())
 
 // ── Public event lookup (IP-throttled, name/active/endsAt only) ──────────────
@@ -120,6 +128,10 @@ router
     router.post('/revoke-permission', [EmbeddedWalletController, 'revokePermission'])
     router.post('/ensure-gas', [EmbeddedWalletController, 'ensureGas'])
     router.get('/wallet-status', [EmbeddedWalletController, 'walletStatus'])
+
+    // Season 1 — the signed-in user's own reputation standing (Phase D). Wallet
+    // resolved server-side from cdpUser.phoneNumber; no wallet/phone input trusted.
+    router.get('/season/score', [SeasonScoreController, 'score'])
     router.post('/log-export-event', [EmbeddedWalletController, 'logExportEvent'])
     router.post('/resolve-phone', [EmbeddedWalletController, 'resolvePhone'])
     router.post('/send', [EmbeddedWalletController, 'sendFromWeb'])
