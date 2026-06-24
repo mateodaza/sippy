@@ -409,6 +409,19 @@ export default async function StatsPage() {
           </div>
         )}
 
+        {/* Season board — usage-ranked, fully anonymous (Phase D). */}
+        <div className="mt-8 sm:mt-12">
+          <a
+            href="/temporada"
+            className="block w-full rounded border-2 border-[var(--brand-primary)] bg-[var(--brand-primary)] px-6 py-4 text-center font-mono text-sm font-semibold uppercase tracking-wider text-white transition hover:bg-[var(--brand-primary-hover)]"
+          >
+            View the season board →
+          </a>
+          <p className="mt-2 text-center font-mono text-[11px] uppercase tracking-[0.2em] text-[var(--text-secondary)]">
+            Usage-ranked · anonymous
+          </p>
+        </div>
+
         {/* Footer spec strip */}
         <div className="mt-8 sm:mt-12 border-t border-[var(--border-default)] pt-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
