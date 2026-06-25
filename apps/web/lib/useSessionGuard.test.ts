@@ -120,6 +120,7 @@ beforeEach(() => {
   mocks.getFreshToken.mockReturnValue(null)
   mocks.isTokenExpired.mockReturnValue(false)
   mocks.getTokenSecondsRemaining.mockReturnValue(3600)
+  mocks.authenticateWithJWT.mockResolvedValue({ user: {} })
   localStorage.clear()
 })
 
@@ -378,5 +379,43 @@ it('14 — expiry polling detects expired token and sets isAuthenticated: false'
 
   expect(hookResult!.isAuthenticated).toBe(false)
 
+  vi.useRealTimers()
+})
+
+it('15 — transient authenticateWithJWT failure does NOT immediately clear a valid token', async () => {
+  const token = makeJwt({ exp: Math.floor(Date.now() / 1000) + 3600 })
+  mocks.state.isSignedIn = false
+  mocks.getStoredToken.mockReturnValue(token)
+  mocks.isTokenExpired.mockReturnValue(false)
+  mocks.authenticateWithJWT.mockRejectedValue(new Error('SDK not initialized'))
+
+  await renderHook()
+
+  // A valid (non-expired) token that fails restore on the SDK init race must be
+  // retried, not nuked on the first miss.
+  expect(mocks.authenticateWithJWT).toHaveBeenCalledTimes(1)
+  expect(mocks.clearToken).not.toHaveBeenCalled()
+})
+
+it('16 — authenticateWithJWT failing past max retries eventually clears', async () => {
+  vi.useFakeTimers()
+  const token = makeJwt({ exp: Math.floor(Date.now() / 1000) + 3600 })
+  mocks.state.isSignedIn = false
+  mocks.getStoredToken.mockReturnValue(token)
+  mocks.isTokenExpired.mockReturnValue(false)
+  mocks.authenticateWithJWT.mockRejectedValue(new Error('SDK not initialized'))
+
+  await renderHook()
+  expect(mocks.clearToken).not.toHaveBeenCalled()
+
+  // Drive the retry timers to exhaustion (MAX_AUTH_ATTEMPTS = 4).
+  for (let i = 0; i < 4; i++) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800)
+    })
+  }
+
+  expect(mocks.clearToken).toHaveBeenCalledTimes(1)
+  expect(mocks.authenticateWithJWT.mock.calls.length).toBeGreaterThanOrEqual(4)
   vi.useRealTimers()
 })
