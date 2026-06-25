@@ -24,7 +24,7 @@ import {
   verifyColursEmail,
   uploadColursDocument,
   submitColursProfileDocuments,
-  idTypeToDocumentTypeId,
+  resolveProfileDocumentTypeId,
   getColursKycLevel,
 } from '#services/colurs_user.service'
 import { createCounterparty } from '#services/colurs_payment.service'
@@ -38,6 +38,7 @@ export type KycStatus =
   | 'email_verified'
   | 'documents_submitted'
   | 'approved'
+  | 'rejected'
 
 export type IdType = 'CC' | 'CE' | 'NIT' | 'PA'
 
@@ -71,6 +72,29 @@ export async function getKyc(phoneNumber: string): Promise<KycRecord | null> {
   }
 }
 
+/**
+ * Colurs full-KYC level. `kyc_level >= FULL_KYC_LEVEL` is the discriminator
+ * between quick-flow approval (level 0 — a counterparty exists but there is no
+ * real identity verification) and full KYC (level 5+, document-verified). See the
+ * onramp semantics at onramp_controller.kycStatus (`isFullKycApproved`).
+ */
+export const FULL_KYC_LEVEL = 5
+
+/**
+ * Real personhood signal: full, document-verified KYC — NOT quick-flow approval.
+ * A quick-flow row can be `approved` with a counterparty at level 0 ("no real
+ * verification"), which must NOT clear an identity gate. Single source of truth so
+ * the season Power-tier gate and the bot agree with the onramp's own definition.
+ */
+export function isFullKyc(kyc: KycRecord | null): boolean {
+  return (
+    !!kyc &&
+    kyc.kycStatus === 'approved' &&
+    (kyc.kycLevel ?? 0) >= FULL_KYC_LEVEL &&
+    !!kyc.counterpartyId
+  )
+}
+
 async function upsertKyc(
   phoneNumber: string,
   fields: Partial<{
@@ -100,8 +124,9 @@ async function upsertKyc(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
- * Step 1: Register user on Colurs.
- * Creates their account with basic info and derives a managed password.
+ * Step 1: Register user on Colurs (FULL KYC PATH).
+ * Creates their /user/ account with basic info and derives a managed password.
+ * Used for the upgrade path when a quick-flow user trips the monthly cap.
  */
 export async function kycRegister(opts: {
   phoneNumber: string
@@ -119,6 +144,105 @@ export async function kycRegister(opts: {
     colursUserId,
     kycStatus: 'registered',
   })
+}
+
+/**
+ * Quick-flow alternative to kycRegister.
+ *
+ * Per Colurs: natural persons making small-amount onramps don't require
+ * full KYC. We skip POST /user/ + OTPs + doc upload entirely and just
+ * create the R2P counterparty so the user can immediately generate
+ * payment links.
+ *
+ * Discriminator: colurs_user_id stays NULL. The /initiate gate uses that
+ * to apply the monthly USD cap. Once the user trips the cap, kycRegister
+ * (above) is invoked to fill in colurs_user_id and lift the cap.
+ *
+ * State after this call: { kycStatus: 'approved', kycLevel: 0,
+ *                          counterparty_id: cp_xxx, colurs_user_id: NULL }
+ */
+export async function kycQuickRegister(opts: {
+  phoneNumber: string
+  email: string
+  fullname: string
+  idType: IdType
+  idNumber: string
+}): Promise<string> {
+  logger.info(`colurs_kyc: quick-register for ${maskPhone(opts.phoneNumber)}`)
+
+  const cp = await createCounterparty({
+    phoneNumber: opts.phoneNumber,
+    fullname: opts.fullname,
+    idType: opts.idType,
+    idNumber: opts.idNumber,
+    email: opts.email,
+  })
+
+  // kyc_level = 0 (NOT 5): the user is "approved" for the quick-flow gate
+  // (counterparty + status='approved' is enough), but the monthly cap still
+  // applies until they complete real Colurs KYC review (which sets level to 5
+  // via kycRefreshLevel). This is the correct discriminator for the cap —
+  // colurs_user_id alone is too weak because it gets set when upgrade kicks
+  // off, before any actual verification has happened.
+  await upsertKyc(opts.phoneNumber, {
+    fullname: opts.fullname,
+    idType: opts.idType,
+    idNumber: opts.idNumber,
+    email: opts.email,
+    counterpartyId: cp.id,
+    kycLevel: 0,
+    kycStatus: 'approved',
+  })
+
+  logger.info(
+    `colurs_kyc: quick-register complete for ${maskPhone(opts.phoneNumber)} — cp=${cp.id}`
+  )
+  return cp.id
+}
+
+/**
+ * Escape hatch for users mid-full-KYC who don't want to wait for Colurs's
+ * compliance review. Uses the identity already on the colurs_kyc row to
+ * create a counterparty (if not present) and bumps the row to quick-flow
+ * approved state. Subject to the same monthly cap as fresh quick-flow users.
+ *
+ * Idempotent: returns the existing counterparty_id if one is already set.
+ *
+ * Throws 'MISSING_IDENTITY' if the row doesn't have enough data — caller
+ * should ask the user to register from scratch.
+ */
+export async function kycUseQuickFlow(opts: { phoneNumber: string }): Promise<string> {
+  const kyc = await getKyc(opts.phoneNumber)
+  if (!kyc?.fullname || !kyc.idType || !kyc.idNumber || !kyc.email) {
+    const err = new Error('Identity data missing on colurs_kyc row') as Error & { code?: string }
+    err.code = 'MISSING_IDENTITY'
+    throw err
+  }
+
+  let counterpartyId = kyc.counterpartyId
+  if (!counterpartyId) {
+    const cp = await createCounterparty({
+      phoneNumber: opts.phoneNumber,
+      fullname: kyc.fullname,
+      idType: kyc.idType,
+      idNumber: kyc.idNumber,
+      email: kyc.email,
+    })
+    counterpartyId = cp.id
+  }
+
+  // Don't pass kycLevel — preserve whatever the row has. Mid-full-KYC rows
+  // are at level 0 (correct for cap); already-approved rows would be at 5
+  // (preserved, no cap).
+  await upsertKyc(opts.phoneNumber, {
+    counterpartyId,
+    kycStatus: 'approved',
+  })
+
+  logger.info(
+    `colurs_kyc: switched to quick-flow for ${maskPhone(opts.phoneNumber)} — cp=${counterpartyId}`
+  )
+  return counterpartyId
 }
 
 /**
@@ -160,27 +284,48 @@ export async function kycVerifyEmail(phoneNumber: string, code: string): Promise
 }
 
 /**
- * Step 4: Upload identity document and submit for KYC review.
- * fileBase64: base64-encoded document image (front of ID).
+ * Step 4: Upload identity documents and submit for KYC review.
+ *
+ * Colombia CC requires BOTH front and back of the national ID. We upload each
+ * to S3 via /base/upload_file/, resolve each doc type's numeric id via
+ * /type_documents/, and submit both to /profile_documents/ in a single call.
+ *
  * After submission the user waits for Colurs compliance review (async).
  */
 export async function kycSubmitDocument(opts: {
   phoneNumber: string
-  fileBase64: string
-  mimeType: 'image/jpeg' | 'image/png'
+  frontBase64: string
+  frontMimeType: 'image/jpeg' | 'image/png'
+  backBase64: string
+  backMimeType: 'image/jpeg' | 'image/png'
 }): Promise<void> {
   const kyc = await getKyc(opts.phoneNumber)
   if (!kyc?.email || !kyc.idType) throw new Error('KYC record not found')
 
   const tokens = await loginColursUser({ phoneNumber: opts.phoneNumber, email: kyc.email })
 
-  const docTypeId = idTypeToDocumentTypeId(kyc.idType)
-  const codeName = 'national_id_front'
+  // Colurs code names for the CC front/back photos. The Postman's example used
+  // `national_id_front` but the real /type_documents/ catalog exposes these as
+  // `doc_identification_*`. Discovered at runtime from the "Available:" list in
+  // resolveProfileDocumentTypeId's error message.
+  const FRONT_CODE = 'doc_identification_front'
+  const BACK_CODE = 'doc_identification_back'
 
-  const url = await uploadColursDocument(tokens.access, opts.fileBase64, opts.mimeType, codeName)
+  // Resolve the TypeDocumentProfile.id for each code in parallel.
+  const [frontTypeId, backTypeId] = await Promise.all([
+    resolveProfileDocumentTypeId(FRONT_CODE),
+    resolveProfileDocumentTypeId(BACK_CODE),
+  ])
+
+  // Upload each side of the CC to Colurs's S3.
+  const [frontUrl, backUrl] = await Promise.all([
+    uploadColursDocument(tokens.access, opts.frontBase64, opts.frontMimeType, FRONT_CODE),
+    uploadColursDocument(tokens.access, opts.backBase64, opts.backMimeType, BACK_CODE),
+  ])
 
   await submitColursProfileDocuments(tokens.access, [
-    { code_name: codeName, url, type_document_id: docTypeId },
+    { id: frontTypeId, url: frontUrl },
+    { id: backTypeId, url: backUrl },
   ])
 
   await upsertKyc(opts.phoneNumber, { kycStatus: 'documents_submitted' })
@@ -204,7 +349,7 @@ export async function kycRefreshLevel(
   let status = kyc.kycStatus
   let counterpartyId = kyc.counterpartyId
 
-  if (level >= 5) {
+  if (level >= FULL_KYC_LEVEL) {
     if (status !== 'approved') {
       status = 'approved'
     }
@@ -231,6 +376,11 @@ export async function kycRefreshLevel(
         )
       }
     }
+  } else if (level === 2) {
+    // Colurs mapped "rejected" → level 2 (see getColursKycLevel).
+    // Surface it so the frontend can route the user back to the document step.
+    status = 'rejected'
+    logger.info(`colurs_kyc: documents rejected for ${maskPhone(phoneNumber)} — requires resubmit`)
   }
 
   await upsertKyc(phoneNumber, {

@@ -63,12 +63,21 @@ async function api(method: string, path: string, body?: Record<string, unknown>)
   return data
 }
 
+// Query-string "+" decodes to space per URL spec. Callers that forgot to
+// encodeURIComponent the phone land here with " 573..." — restore the +.
+function normalizePhoneParam(raw: string | null): string {
+  if (!raw) return ''
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  return trimmed.startsWith('+') ? trimmed : `+${trimmed}`
+}
+
 // ── Main content ───────────────────────────────────────────────────────────────
 
 function OfframpContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const phoneFromUrl = searchParams.get('phone') || ''
+  const phoneFromUrl = normalizePhoneParam(searchParams.get('phone'))
 
   const { isAuthenticated, isCheckingSession } = useSessionGuard()
 
@@ -95,12 +104,35 @@ function OfframpContent() {
   const [order, setOrder] = useState<OfframpOrder | null>(null)
   const [orderStatus, setOrderStatus] = useState<string | null>(null)
 
+  // Country eligibility — resolved from URL param or /api/wallet-status.
+  // null = unknown (still resolving), '' = no phone available.
+  const [userPhone, setUserPhone] = useState<string | null>(phoneFromUrl || null)
+
+  useEffect(() => {
+    if (phoneFromUrl) {
+      setUserPhone(phoneFromUrl)
+      return
+    }
+    if (!isAuthenticated) return
+    ;(async () => {
+      try {
+        const data = await api('GET', '/api/wallet-status')
+        setUserPhone(data.phoneNumber || '')
+      } catch {
+        setUserPhone('')
+      }
+    })()
+  }, [isAuthenticated, phoneFromUrl])
+
+  const isCountryEligible = userPhone == null ? null : userPhone.startsWith('+57')
+
   // ── Boot ─────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (isCheckingSession || !isAuthenticated) return
+    if (isCountryEligible !== true) return
     init()
-  }, [isAuthenticated, isCheckingSession]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, isCheckingSession, isCountryEligible]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function init() {
     try {
@@ -108,8 +140,8 @@ function OfframpContent() {
         api('GET', '/api/offramp/bank-accounts'),
         api('GET', '/api/offramp/banks'),
       ])
-      const list: BankAccount[] = accountsData.accounts ?? []
-      const bankList: Bank[] = banksData.banks ?? []
+      const list: BankAccount[] = Array.isArray(accountsData?.accounts) ? accountsData.accounts : []
+      const bankList: Bank[] = Array.isArray(banksData?.banks) ? banksData.banks : []
       setAccounts(list)
       setBanks(bankList)
 
@@ -226,6 +258,37 @@ function OfframpContent() {
   if (!isAuthenticated) {
     router.replace(`/setup?phone=${encodeURIComponent(phoneFromUrl)}`)
     return null
+  }
+
+  if (isCountryEligible === null) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
+        <div className="animate-pulse text-[var(--text-secondary)]">Loading...</div>
+      </div>
+    )
+  }
+
+  if (isCountryEligible === false) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-primary)] p-4 flex items-center justify-center">
+        <div className="max-w-md w-full panel-frame rounded-2xl p-8 text-center space-y-4">
+          <div className="text-4xl">🌎</div>
+          <h1 className="text-xl font-semibold text-[var(--text-primary)]">
+            Only available in Colombia
+          </h1>
+          <p className="text-sm text-[var(--text-secondary)]">
+            USDC ↔ COP ramps currently require a Colombian phone number (+57). Your account isn't
+            eligible.
+          </p>
+          <button
+            onClick={() => router.replace('/settings')}
+            className="w-full py-3 bg-brand-crypto text-white rounded-lg font-semibold hover:bg-brand-crypto/90"
+          >
+            Back to settings
+          </button>
+        </div>
+      </div>
+    )
   }
 
   const selectedAccount = accounts.find((a) => a.id === selectedAccountId)

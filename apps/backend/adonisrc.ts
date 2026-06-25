@@ -61,6 +61,7 @@ export default defineConfig({
     () => import('#providers/email_provider'),
     () => import('#providers/velocity_provider'),
     () => import('#providers/invite_provider'),
+    () => import('#providers/season_provider'),
     () => import('@adonisjs/static/static_provider'),
   ],
 

@@ -25,7 +25,7 @@ export default class AdminUser extends compose(BaseModel, AuthFinder) {
   declare password: string
 
   @column()
-  declare role: 'admin' | 'viewer'
+  declare role: 'admin' | 'viewer' | 'operator'
 
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime

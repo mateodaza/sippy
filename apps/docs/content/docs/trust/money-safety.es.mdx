@@ -1,0 +1,75 @@
+---
+title: Cómo se guarda tu dinero
+description: Dónde están tus fondos, quién puede acceder a ellos y cómo puedes verificarlo tú mismo.
+---
+
+## Tu billetera es tuya
+
+Cuando te registras en Sippy, se crea para ti una billetera de contrato inteligente
+en Arbitrum. Esta billetera guarda tu USDC. No es una fila en una base de datos, ni
+un saldo en el sistema de Sippy, ni un asiento en el libro contable de un banco. Es
+una billetera real en una blockchain pública, y solo tus claves pueden mover los
+fondos fuera de ella.
+
+Sippy te ayuda a interactuar con esa billetera a través de WhatsApp y la web. Pero
+Sippy en sí no puede retirar, redirigir ni congelar tu dinero.
+
+## Dónde está realmente el dinero
+
+Tu USDC vive en tu billetera de contrato inteligente en Arbitrum -- una red rápida
+y de bajo costo construida sobre Ethereum. Cada transacción queda registrada en la
+cadena (on-chain), lo que significa que cualquiera (incluido tú) puede verificar tu
+saldo y tu historial de transacciones usando un explorador de bloques público como
+[Arbiscan](https://arbiscan.io).
+
+Esto es diferente de un banco, donde confías en que la institución mantenga
+registros precisos. Aquí, los registros son públicos y verificables de forma
+independiente.
+
+## Qué puede y qué no puede hacer Sippy con tus fondos
+
+**Sippy puede:**
+
+- Mostrarte tu saldo y tu historial de transacciones
+- Enviar transacciones en tu nombre cuando lo pides (como "envía 20 a +57...")
+- Cubrir las comisiones de red (gas) de los envíos por WhatsApp para que no pagues costos de red
+
+**Sippy no puede:**
+
+- Mover tu dinero sin tu permiso
+- Congelar ni bloquear tu billetera
+- Quedarse con una parte de tu saldo
+- Acceder a tu billetera si revocas los permisos
+
+## Cómo funcionan los envíos por WhatsApp
+
+Cuando envías dinero a través de WhatsApp, le estás dando a Sippy permiso para
+enviar esa transacción específica por ti. Sippy actúa según tu instrucción -- no
+tiene acceso general a tus fondos. Cada envío pasa por avisos de confirmación y
+límites diarios antes de que se mueva nada.
+
+## Qué significa "no custodial" en términos sencillos
+
+Un servicio custodial guarda tu dinero por ti -- como un banco. Si el banco tiene
+un problema, tu acceso a tu dinero depende del banco.
+
+Sippy es no custodial. Tu billetera existe de forma independiente de Sippy. Si los
+servidores de Sippy se apagaran mañana, tus fondos seguirían estando en tu billetera
+en Arbitrum. Podrías acceder a ellos con cualquier aplicación de billetera
+compatible usando tu clave privada.
+
+La contrapartida: como Sippy no guarda tus fondos, Sippy no puede revertir una
+transacción que ya enviaste. Más sobre eso en
+[Recuperación de cuenta](/docs/trust/recovery).
+
+## Verifícalo tú mismo
+
+La dirección de tu billetera es visible en
+[Configuración](https://www.sippy.lat/settings). Cópiala, pégala en
+[Arbiscan](https://arbiscan.io) y verás tu saldo exacto y cada transacción. No se
+requiere confianza -- solo matemáticas.
+
+## ¿Qué sigue?
+
+- [Modelo de seguridad](/docs/trust/security) -- cómo Sippy protege tu cuenta día a día
+- [Recuperación de cuenta](/docs/trust/recovery) -- qué hacer si pierdes el acceso

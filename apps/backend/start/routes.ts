@@ -22,8 +22,16 @@ const EmbeddedWalletController = () => import('#controllers/embedded_wallet_cont
 const AuthApiController = () => import('#controllers/auth_api_controller')
 const SupportController = () => import('#controllers/support_controller')
 const WebhookAlchemyController = () => import('#controllers/webhook_alchemy_controller')
+const WebhookPimlicoController = () => import('#controllers/webhook_pimlico_controller')
 const OnrampController = () => import('#controllers/onramp_controller')
 const OfframpController = () => import('#controllers/offramp_controller')
+const EventController = () => import('#controllers/event_controller')
+const QuestController = () => import('#controllers/quest_controller')
+const QrScanController = () => import('#controllers/qr_scan_controller')
+const MyPayQrController = () => import('#controllers/my_pay_qr_controller')
+const SeasonStatsController = () => import('#controllers/season_stats_controller')
+const SeasonTransactionsController = () => import('#controllers/season_transactions_controller')
+const SeasonScoreController = () => import('#controllers/season_score_controller')
 
 // ── Health ──────────────────────────────────────────────────────────────────
 router.get('/', [HealthController, 'index'])
@@ -37,6 +45,11 @@ router.post('/webhook/whatsapp', [WebhookController, 'handle'])
 // ── Alchemy webhook (HMAC-verified, no session auth) ────────────────────
 router.post('/webhook/alchemy/address-activity', [WebhookAlchemyController, 'handle'])
 
+// ── Pimlico sponsorship webhook (Gas → AA). Raw-body signature-verified
+//     (@pimlico/webhook), no session auth. Authorizes paymaster spend ONLY
+//     against a DB-bound gas_aa_prepared_user_ops row. Inert unless GAS_AA_ENABLED.
+router.post('/webhook/pimlico/sponsorship', [WebhookPimlicoController, 'handle'])
+
 // ── Public resolution (IP-throttled, privacy-aware) ─────────────────────────
 router.get('/resolve-phone', [ResolveController, 'byPhone']).use(middleware.ipThrottle())
 router.get('/resolve-address', [ResolveController, 'byAddress']).use(middleware.ipThrottle())
@@ -46,6 +59,41 @@ router.post('/notify-fund', [NotifyController, 'fund'])
 
 // ── Public stats (aggregate-only, no PII) ────────────────────────────────────
 router.get('/api/stats', [PublicStatsController, 'index']).use(middleware.ipThrottle())
+
+// ── Season 1 public dashboard (Phase B) — aggregate-only, no PII. The believable
+//     usage metrics derive live from onchain.transfer + #season/definitions, so
+//     these ship UNGUARDED (honest in shadow mode); only score-derived tiles
+//     depend on season.score and degrade to null when empty. /api/stats is left
+//     untouched for back-compat; both surfaces now read the un-blended numbers.
+router.get('/api/season/stats', [SeasonStatsController, 'index']).use(middleware.ipThrottle())
+router
+  .get('/api/season/transactions', [SeasonTransactionsController, 'index'])
+  .use(middleware.ipThrottle())
+
+// ── Season 1 public leaderboard (Phase D) — usage-ranked, fully anonymous.
+//     Rows carry an HMAC `displayId` only (no phone/handle/raw wallet). Fed by
+//     apps/web /temporada. Empty state is a valid 200 (degradation-safe).
+router
+  .get('/api/season/leaderboard', [SeasonScoreController, 'leaderboard'])
+  .use(middleware.ipThrottle())
+
+// ── Public event lookup (IP-throttled, name/active/endsAt only) ──────────────
+router.get('/api/events/:slug', [EventController, 'getEventPublic']).use(middleware.ipThrottle())
+
+// ── Public Quest leaderboard (IP-throttled, masked phones only). Fed by
+//     apps/web /quest/[slug] page (server-side fetch). Phones are masked
+//     in the controller before serving so admin paths can still read raw
+//     FK-form phones via getLeaderboard() directly.
+router
+  .get('/api/quest/:slug/leaderboard', [QuestController, 'publicLeaderboard'])
+  .use(middleware.ipThrottle())
+
+// ── QR scan (public). Called by apps/web /q/:shortId page. ──────────────────
+// Throttle is intentionally controller-internal (per-shortId, not per-IP) so
+// that `rate_limited` outcome can be logged into qr_scans. The middleware
+// throttle would short-circuit with 429 before the controller runs, and the
+// per-IP key would always see the Next.js server IP. See QR_SYSTEM_SPEC.md.
+router.post('/api/qr/scan/:shortId', [QrScanController, 'scan'])
 
 // ── Public support (IP-throttled) ────────────────────────────────────────────
 router
@@ -69,6 +117,15 @@ router
   })
   .prefix('/api/auth')
 
+// Public onramp preview — proxies Colurs's public /api/reload/r2p/preview/{id}/ so
+// post-payment redirect pages can show status even if the Sippy session expired.
+router.get('/api/onramp/preview/:colursPaymentId', [OnrampController, 'preview'])
+
+// Public minimal status by our internal orderId — used by /onramp success page
+// when returning from a bank flow whose Sippy session may have expired. Returns
+// only the fields the success page needs (status, amount, method, links).
+router.get('/api/onramp/public-status/:orderId', [OnrampController, 'publicStatus'])
+
 // ── JWT-authenticated API routes ────────────────────────────────────────────
 router
   .group(() => {
@@ -77,6 +134,10 @@ router
     router.post('/revoke-permission', [EmbeddedWalletController, 'revokePermission'])
     router.post('/ensure-gas', [EmbeddedWalletController, 'ensureGas'])
     router.get('/wallet-status', [EmbeddedWalletController, 'walletStatus'])
+
+    // Season 1 — the signed-in user's own reputation standing (Phase D). Wallet
+    // resolved server-side from cdpUser.phoneNumber; no wallet/phone input trusted.
+    router.get('/season/score', [SeasonScoreController, 'score'])
     router.post('/log-export-event', [EmbeddedWalletController, 'logExportEvent'])
     router.post('/resolve-phone', [EmbeddedWalletController, 'resolvePhone'])
     router.post('/send', [EmbeddedWalletController, 'sendFromWeb'])
@@ -95,13 +156,27 @@ router
     router.get('/tos-status', [EmbeddedWalletController, 'tosStatus'])
     router.get('/profile', [EmbeddedWalletController, 'getProfile'])
     router.post('/support/tickets', [SupportController, 'create'])
+    router.post('/link-event', [EventController, 'linkEvent'])
+    router.post('/event-poap-claimed', [EventController, 'markPoapClaimed'])
+
+    // Personal pay-QR — user-minted, idempotent (one active per user).
+    // PATCH renames without changing shortId (printed sheets keep working).
+    router.get('/qr/my-pay-link', [MyPayQrController, 'show'])
+    router.post('/qr/my-pay-link', [MyPayQrController, 'create'])
+    router.patch('/qr/my-pay-link', [MyPayQrController, 'update'])
 
     // ── Colurs rails — Colombia (+57) only ───────────────────────────────────
     router
       .group(() => {
         // KYC (one-time Colurs user registration + verification)
         router.get('/onramp/kyc', [OnrampController, 'kycStatus'])
+        // Default register = quick flow (counterparty only, no /user/, no OTPs).
         router.post('/onramp/kyc/register', [OnrampController, 'kycRegister'])
+        // Upgrade-to-full-KYC: triggered when a quick-flow user trips the monthly cap.
+        router.post('/onramp/kyc/upgrade-to-full-kyc', [OnrampController, 'kycUpgradeToFullKyc'])
+        // Escape hatch from "Under review" — switch a mid-full-KYC user to
+        // quick-flow approved so they can start onramping small amounts now.
+        router.post('/onramp/kyc/use-quick-flow', [OnrampController, 'kycUseQuickFlow'])
         router
           .post('/onramp/kyc/send-otp', [OnrampController, 'kycSendOtp'])
           .use(middleware.ipThrottle())
@@ -137,21 +212,49 @@ const AdminUsersController = () => import('#controllers/admin/users_controller')
 const AnalyticsController = () => import('#controllers/admin/analytics_controller')
 const RolesController = () => import('#controllers/admin/roles_controller')
 const ModerationController = () => import('#controllers/admin/moderation_controller')
+const QrSheetsController = () => import('#controllers/admin/qr_sheets_controller')
+const AdminEventsController = () => import('#controllers/admin/events_controller')
+const OperatorSendController = () => import('#controllers/admin/operator_send_controller')
+const SmartModeEvalController = () => import('#controllers/admin/smart_mode_eval_controller')
+const SeasonController = () => import('#controllers/admin/season_controller')
 
 // Public admin routes
 router.get('/admin/login', [AdminAuthController, 'showLogin'])
 router.post('/admin/login', [AdminAuthController, 'login'])
 
-// Auth-protected admin routes
+// Auth-protected admin routes.
+//
+// SECURITY: allowlist pattern — every route gets an explicit role gate.
+// No route relies on "absence of middleware" being admin-only; that would
+// leak to operators on any new route added without thought.
+//
+// Layers of authorization:
+//   1. auth({guards:['web']}) — applied at the group level (login required)
+//   2. adminRole({role:'admin'|'operator'}) — applied per-route here
+//   3. Controller scope check — for routes operators CAN hit but only for
+//      their assigned event (qr-sheets/:slug, events/:slug/attendees)
+//
+// Spec: OPERATOR_FLOW_PLAN.md — "Authorization layer (3 capas)".
 router
   .group(() => {
+    // Logout: any authenticated user. No role gate.
     router.post('/logout', [AdminAuthController, 'logout'])
-    router.get('/', [DashboardController, 'index'])
-    router.get('/users', [AdminUsersController, 'index'])
-    router.get('/users/:phone', [AdminUsersController, 'show'])
-    router.get('/analytics', [AnalyticsController, 'index'])
-    router.get('/parse-patterns', [AnalyticsController, 'parsePatterns'])
-    router.get('/roles', [RolesController, 'index'])
+
+    // ── Admin-only routes ─────────────────────────────────────────────
+    router.get('/', [DashboardController, 'index']).use(middleware.adminRole({ role: 'admin' }))
+    router
+      .get('/users', [AdminUsersController, 'index'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .get('/users/:phone', [AdminUsersController, 'show'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .get('/analytics', [AnalyticsController, 'index'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .get('/parse-patterns', [AnalyticsController, 'parsePatterns'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router.get('/roles', [RolesController, 'index']).use(middleware.adminRole({ role: 'admin' }))
     router
       .put('/roles/:id', [RolesController, 'update'])
       .use(middleware.adminRole({ role: 'admin' }))
@@ -173,6 +276,85 @@ router
     router
       .post('/resume', [ModerationController, 'resume'])
       .use(middleware.adminRole({ role: 'admin' }))
+    // QR sheets POST endpoint removed — event QRs are auto-provisioned by
+    // GET (lazy-create on first read). Eliminates the admin-only role gate
+    // that confused operators trying to refresh their event's QR.
+
+    // Operator-wallet management (provision, revoke, drain, read). All admin-only.
+    router
+      .post('/events/:slug/operator', [AdminEventsController, 'assignOperator'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .delete('/events/:slug/operator', [AdminEventsController, 'revokeOperator'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .get('/events/:slug/operator-wallet', [AdminEventsController, 'getOperatorWallet'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .post('/events/:slug/operator-wallet/drain', [AdminEventsController, 'drainOperatorWallet'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    // Read-only POAP diagnostic. Admin-only (the assigned URL is the
+    // mintable POAP link — keep it behind the admin gate).
+    router
+      .get('/events/:slug/poap-status/:phone', [AdminEventsController, 'getPoapStatus'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    // POAP repair: force-claim + send DM. Heals the orphan-stamp state
+    // (poap_invite_sent_at set without a poap_codes assignment).
+    router
+      .post('/events/:slug/poap-status/:phone/repair', [AdminEventsController, 'repairPoap'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    // Quest raffle: pool audit (read-only) + winner draw. Admin-only so
+    // floor operators can't accidentally re-roll the draw mid-event.
+    router
+      .get('/events/:slug/raffle/pool', [AdminEventsController, 'getRafflePool'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .post('/events/:slug/raffle/draw', [AdminEventsController, 'drawRaffleWinners'])
+      .use(middleware.adminRole({ role: 'admin' }))
+
+    // SMART MODE classifier eval — runs the golden dataset against a model
+    // preset and returns per-case + summary metrics. Admin-only because
+    // every request burns Groq tokens (real LLM calls). Spec: hive-mind +
+    // Camello eval pattern, ported into Sippy.
+    router
+      .post('/smart-mode/eval', [SmartModeEvalController, 'run'])
+      .use(middleware.adminRole({ role: 'admin' }))
+
+    // Season 1 (Phase A) shadow-mode recompute. Admin-only — the only HTTP
+    // surface the season exposes until the Phase B dashboard. Guarded again in
+    // the controller by SEASON1_ENABLED.
+    router
+      .post('/season/recompute', [SeasonController, 'recompute'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    // Season 1 (Phase C) sybil flag review queue. Admin-only; guarded again in the
+    // controller by SEASON1_ENABLED. open → confirmed | cleared (auditable).
+    router
+      .get('/season/flags', [ModerationController, 'seasonFlags'])
+      .use(middleware.adminRole({ role: 'admin' }))
+    router
+      .post('/season/flags/:id/review', [ModerationController, 'reviewSeasonFlag'])
+      .use(middleware.adminRole({ role: 'admin' }))
+
+    // ── Operator-or-admin routes ──────────────────────────────────────
+    // Operators see ONLY: their own send page, their assigned event's
+    // QR sheets, their assigned event's attendees. Scope check inside
+    // the controllers enforces the slug match against the operator's
+    // assignment.
+    router
+      .get('/qr-sheets/:eventSlug', [QrSheetsController, 'show'])
+      .use(middleware.adminRole({ role: 'operator' }))
+    router
+      .get('/events/:slug/attendees', [AdminEventsController, 'attendees'])
+      .use(middleware.adminRole({ role: 'operator' }))
+    router
+      .get('/operator/send', [OperatorSendController, 'showSend'])
+      .use(middleware.adminRole({ role: 'operator' }))
+    router
+      .get('/operator/recipient/:phone', [OperatorSendController, 'validateRecipient'])
+      .use(middleware.adminRole({ role: 'operator' }))
+    router
+      .post('/operator/send', [OperatorSendController, 'send'])
+      .use(middleware.adminRole({ role: 'operator' }))
   })
   .prefix('/admin')
   .use(middleware.auth({ guards: ['web'] }))

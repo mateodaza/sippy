@@ -12,8 +12,8 @@ export function ThemeToggle() {
 
   useEffect(() => setMounted(true), [])
 
-  // Only show on pages with theme support
-  if (!mounted || (pathname !== '/' && pathname !== '/stats')) return null
+  const supportsTheme = pathname === '/' || pathname === '/stats' || pathname === '/wallet/pay-qr'
+  if (!mounted || !supportsTheme) return null
 
   const isDark = resolvedTheme === 'dark'
 
@@ -29,6 +29,7 @@ export function ThemeToggle() {
         text-[var(--text-secondary)]
         hover:text-[var(--text-primary)]
         transition-colors duration-200
+        print:hidden
       "
     >
       {isDark ? <Sun size={18} strokeWidth={2} /> : <Moon size={18} strokeWidth={2} />}

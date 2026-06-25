@@ -46,7 +46,13 @@ const STACK_TRACE = /(?:at\s+\w+\s+\(|Error:\s+\w+Error|node_modules\/)/
 // Trusted URL domains (positive allowlist with boundary checks)
 // ============================================================================
 
-const TRUSTED_DOMAINS = ['arbiscan.io', 'sippy.lat']
+// POAP URLs (poap.xyz/mint/<code>, poap.xyz/claim/<code>, app.poap.xyz/*)
+// are mintable artifacts we deliver to attendees post-payment via the
+// "mi poap" free-text handler. Without poap.xyz on the allowlist the
+// sanitizer would replace every claim URL with "[link removed]" and the
+// attendee can't mint. Added 2026-05-21 for Pizza Day; covers any future
+// event using POAP claim links.
+const TRUSTED_DOMAINS = ['arbiscan.io', 'sippy.lat', 'poap.xyz']
 
 function isUrlTrusted(url: string): boolean {
   try {

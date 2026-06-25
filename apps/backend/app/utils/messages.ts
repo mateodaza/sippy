@@ -10,6 +10,8 @@ export type Lang = 'en' | 'es' | 'pt'
 import { DAILY_LIMIT_VERIFIED } from '#services/cdp_wallet.service'
 import type { AmountErrorCode } from '#types/index'
 import type { Dialect } from '#utils/dialect'
+import type { Tier } from '#season/params'
+import type { ActionCode } from '#season/standing'
 
 const RECEIPT_BASE_URL = process.env.RECEIPT_BASE_URL || 'https://www.sippy.lat/receipt/'
 const FUND_URL = process.env.FUND_URL || 'https://fund.sippy.lat'
@@ -105,6 +107,82 @@ export function formatDateUTC(date: Date): string {
 // Message catalog
 // ============================================================================
 
+// --- Pizza Day ---
+
+/**
+ * Pizza Day Cartagena 2026 — answer to "qué es pizza day?" style questions.
+ *
+ * Warm one-liner + deep-link to the in-app guide. The guide has all the
+ * operational detail (when, where, how to pay, Quest rules) so this
+ * reply stays short on purpose. URL flips to ?lang=en so the in-app
+ * toggle starts on EN when the bot is already speaking EN.
+ */
+export function formatPizzaDayMessage(lang: Lang = 'en'): string {
+  const url = lang === 'en' ? `${FRONTEND_URL}/pizza-day?lang=en` : `${FRONTEND_URL}/pizza-day`
+  const m = {
+    en: () =>
+      `🍕 Pizza Day Cartagena 2026, Friday May 22. Sippy is the payments rail: ` +
+      `swap cash for USDC at our stand, pay vendors by scanning their QR. ` +
+      `Full guide:\n${url}`,
+    es: () =>
+      `🍕 Pizza Day Cartagena 2026, viernes 22 de mayo. Sippy es la billetera del evento: ` +
+      `cambias efectivo por USDC en nuestro stand y le pagas a los puestos escaneando su QR. ` +
+      `Guía completa:\n${url}`,
+    pt: () =>
+      `🍕 Pizza Day Cartagena 2026, sexta-feira 22 de maio. Sippy é a carteira do evento: ` +
+      `troque dinheiro por USDC no nosso stand e pague aos vendedores escaneando o QR deles. ` +
+      `Guia completo:\n${url}`,
+  }
+  return m[lang]()
+}
+
+// --- POAP code lookup ---
+
+/**
+ * Reply when the user asks "mi poap" but they're linked to an active
+ * pool-using event without a claim URL yet. Covers pool exhausted, send-
+ * then-release, AND the "linked but not paid yet" case — we don't try to
+ * discriminate, the copy is the same honest "it's on the way" line for all
+ * three. Names the event so the user knows which one we're tracking.
+ *
+ * Contrast with `formatNoPoapAssignedMessage` (the no-link-at-all case)
+ * which tells them how to qualify in the first place.
+ */
+export function formatPoapPendingMessage(eventName: string, lang: Lang = 'en'): string {
+  const m = {
+    en: () =>
+      `Your POAP for ${eventName} hasn't been sent yet. ` +
+      `The link will arrive here as soon as it's ready.`,
+    es: () =>
+      `Aún no te he enviado el POAP de ${eventName}. ` +
+      `El link te llegará aquí en cuanto esté listo.`,
+    pt: () =>
+      `Seu POAP para ${eventName} ainda não foi enviado. ` +
+      `O link chegará aqui assim que estiver pronto.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Reply when the user has no assigned POAP and no link to any active
+ * event — they haven't qualified for one yet. Generic copy because no
+ * specific event applies.
+ */
+export function formatNoPoapAssignedMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () =>
+      `You don't have a POAP yet. Get paid at a Sippy event ` +
+      `and your POAP claim link will arrive here automatically.`,
+    es: () =>
+      `Aún no tienes un POAP. Recibe un pago en un evento Sippy ` +
+      `y tu link para reclamar el POAP te llegará aquí automáticamente.`,
+    pt: () =>
+      `Você ainda não tem um POAP. Receba um pagamento em um evento ` +
+      `Sippy e seu link para resgatar o POAP chegará aqui automaticamente.`,
+  }
+  return m[lang]()
+}
+
 // --- Help ---
 
 export function formatHelpMessage(lang: Lang = 'en'): string {
@@ -115,30 +193,42 @@ export function formatHelpMessage(lang: Lang = 'en'): string {
       `💰 *Check your balance* — ask me anytime\n\n` +
       `📋 *See your transactions* — ask for your history\n\n` +
       `📇 *Contacts* — save, delete, or list contacts (e.g. "save mom +573...")\n\n` +
+      `📲 *Get your pay code* — say "my qr" or "pay qr"\n\n` +
       `👋 *Invite a friend* — give me their number\n\n` +
+      `📊 *Dashboard / web app* — see balance, activity, actions (say "dashboard")\n\n` +
       `⚙️ *Change settings or limits* — ask for settings\n\n` +
       `🌐 *Switch language* — just tell me which one\n\n` +
-      `Add funds: ${FUND_URL}`,
+      `Add funds: ${FUND_URL}\n\n` +
+      `❓ Questions, safety, recovery: ${FRONTEND_URL}/#faq\n\n` +
+      `🍕 Pizza Day Cartagena 2026: ${FRONTEND_URL}/pizza-day?lang=en`,
     es: () =>
       `Esto es lo que puedo hacer:\n\n` +
       `💸 *Enviar dinero* — dime a quien y cuanto\n\n` +
       `💰 *Ver tu saldo* — preguntame cuando quieras\n\n` +
       `📋 *Ver tus transacciones* — pideme tu historial\n\n` +
       `📇 *Contactos* — guardar, borrar o ver contactos (ej. "guardar mamá +573...")\n\n` +
+      `📲 *Tu codigo de pago* — di "mi qr" o "mi codigo de pago"\n\n` +
       `👋 *Invitar a un amigo* — dame su numero\n\n` +
+      `📊 *Dashboard / panel web* — saldo, actividad y acciones (di "dashboard")\n\n` +
       `⚙️ *Cambiar ajustes o limites* — pideme los ajustes\n\n` +
       `🌐 *Cambiar idioma* — solo dime cual\n\n` +
-      `Agregar fondos: ${FUND_URL}`,
+      `Agregar fondos: ${FUND_URL}\n\n` +
+      `❓ Preguntas, seguridad, recuperación: ${FRONTEND_URL}/#faq\n\n` +
+      `🍕 Pizza Day Cartagena 2026: ${FRONTEND_URL}/pizza-day`,
     pt: () =>
       `Aqui esta o que posso fazer:\n\n` +
       `💸 *Enviar dinheiro* — me diz pra quem e quanto\n\n` +
       `💰 *Ver seu saldo* — me pergunta quando quiser\n\n` +
       `📋 *Ver suas transacoes* — pede seu historico\n\n` +
       `📇 *Contatos* — salvar, apagar ou ver contatos (ex. "salvar mãe +5511...")\n\n` +
+      `📲 *Seu codigo de pagamento* — diz "meu qr" ou "meu codigo de pagamento"\n\n` +
       `👋 *Convidar um amigo* — me da o numero\n\n` +
+      `📊 *Dashboard / painel web* — saldo, atividade e acoes (diz "dashboard")\n\n` +
       `⚙️ *Mudar ajustes ou limites* — pede os ajustes\n\n` +
       `🌐 *Mudar idioma* — so me diz qual\n\n` +
-      `Adicionar fundos: ${FUND_URL}`,
+      `Adicionar fundos: ${FUND_URL}\n\n` +
+      `❓ Perguntas, segurança, recuperação: ${FRONTEND_URL}/#faq\n\n` +
+      `🍕 Pizza Day Cartagena 2026: ${FRONTEND_URL}/pizza-day`,
   }
   return m[lang]()
 }
@@ -228,6 +318,285 @@ export function formatGreetingIncomplete(phoneNumber: string, lang: Lang = 'en')
   return m[lang]()
 }
 
+// --- Event QR welcomes (bracket-token handler) ---
+
+/**
+ * Sent when a not-yet-onboarded phone scans an event QR. The /setup URL
+ * carries the event slug + source tag so the web flow can link them to
+ * the event on completion (PR #19's linkEvent handles those URL params).
+ */
+export function formatEventWelcomeNewUser(
+  phoneNumber: string,
+  eventName: string,
+  eventSlug: string,
+  sourceTag: string | null,
+  lang: Lang = 'en'
+): string {
+  const params = new URLSearchParams({ phone: phoneNumber, event: eventSlug })
+  if (sourceTag) params.set('source', sourceTag)
+  const setupUrl = `${FRONTEND_URL}/setup?${params.toString()}`
+  const m = {
+    en: () =>
+      `Welcome to Sippy at ${eventName}!\n\n` +
+      `Set up your wallet to get started (60 seconds):\n${setupUrl}\n\n` +
+      `Once you're in, send me a message and we'll go.`,
+    es: () =>
+      `Bienvenido a Sippy en ${eventName}!\n\n` +
+      `Configura tu billetera para empezar (60 segundos):\n${setupUrl}\n\n` +
+      `Cuando termines, mandame un mensaje y arrancamos.`,
+    pt: () =>
+      `Bem-vindo ao Sippy no ${eventName}!\n\n` +
+      `Configure sua carteira para comecar (60 segundos):\n${setupUrl}\n\n` +
+      `Quando terminar, me manda uma mensagem e a gente comeca.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when a scanned QR is revoked or its event is no longer active.
+ *
+ * Without this, attendees who scan a dead QR get silent fall-through to the
+ * LLM with their bracket token stripped — they see a generic "no entendi"
+ * reply and have no idea why. On event day that becomes repeat-scan churn
+ * at the door.
+ */
+export function formatQrInactiveMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `That QR code isn't active anymore. Ask an organizer for a current one.`,
+    es: () => `Este codigo QR ya no esta activo. Pidele uno nuevo al organizador.`,
+    pt: () => `Este codigo QR nao esta mais ativo. Peca um novo ao organizador.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when someone scans a pay-QR — asks the payer for the amount. The
+ * friendly display name (`qr_links.display_name`, set by the QR owner at
+ * issuance) is the social signal; no "merchant" framing because pay-QRs
+ * are universal (any user can mint one, vendors put a business name and
+ * individuals put their own).
+ */
+export function formatPayAskForAmount(displayName: string, lang: Lang = 'en'): string {
+  const m = {
+    en: () => `How much do you want to pay ${displayName}?`,
+    es: () => `¿Cuánto le pagas a ${displayName}?`,
+    pt: () => `Quanto voce paga a ${displayName}?`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Pay-QR confirmation prompt. Always shown (no below-threshold silent
+ * execute) so the payer can't accidentally double-pay — the pay-QR scan
+ * gesture is a "real money to a real person/business" act and deserves
+ * an explicit YES.
+ *
+ * displayName comes from `qr_links.display_name`; falls back to a masked
+ * phone if somehow missing (we log a warning when that happens).
+ */
+export function formatPayConfirmationPrompt(
+  amount: number,
+  displayName: string,
+  lang: Lang = 'en'
+): string {
+  const amt = formatCurrencyUSD(amount)
+  const m = {
+    en: () => `Confirm paying ${amt} USDC to ${displayName}? Reply YES to confirm.`,
+    es: () => `Confirmas pagar ${amt} USDC a ${displayName}? Responde SI para confirmar.`,
+    pt: () =>
+      `Confirmar pagamento de ${amt} USDC para ${displayName}? Responda SIM para confirmar.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when the QR-lookup DB call throws (transient outage, pool
+ * exhaustion). Distinct from `formatQrInactiveMessage` because the QR
+ * isn't necessarily dead — try again is the right ask.
+ */
+export function formatQrLookupTransientErrorMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `We couldn't read that QR code right now. Try again in a moment.`,
+    es: () => `No pudimos leer ese codigo QR ahora. Intenta de nuevo en un momento.`,
+    pt: () => `Nao conseguimos ler esse codigo QR agora. Tente novamente em um momento.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Surface the user's pay-QR share URL when they ask "how do I get paid?"
+ * / "mi codigo de pago" / "pay qr" etc.
+ *
+ * The URL `/wallet/pay-qr?phone=<X>` is treated by the web app as a
+ * SHARE LINK — anyone (owner, payer, authenticated or not) who opens it
+ * gets bounced to WhatsApp with a send-intent prefill. It is NOT a
+ * dashboard view. Don't suggest the owner click it to "see" or "print"
+ * their QR — that would just open WhatsApp to pay themselves.
+ *
+ * Owner dashboard (view / mint / print / edit display name) lives at
+ * `/wallet` (the unified hub) — surfaced as a secondary URL below so
+ * the owner can find it when they need to print.
+ */
+export function formatPayQrLinkMessage(phoneNumber: string, lang: Lang = 'en'): string {
+  const params = new URLSearchParams({ phone: phoneNumber })
+  const shareUrl = `${FRONTEND_URL}/wallet/pay-qr?${params.toString()}`
+  const dashboardUrl = `${FRONTEND_URL}/wallet?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () =>
+      `Your pay link — share this with anyone who wants to pay you:\n${shareUrl}\n\n` +
+      `Whoever opens it lands in WhatsApp ready to send you USDC.\n\n` +
+      `To view or print the QR, open your dashboard:\n${dashboardUrl}`,
+    es: () =>
+      `Tu link de pago — compártelo con quien te quiera pagar:\n${shareUrl}\n\n` +
+      `Quien lo abra cae en WhatsApp listo para enviarte USDC.\n\n` +
+      `Para ver o imprimir el QR, abre tu dashboard:\n${dashboardUrl}`,
+    pt: () =>
+      `Seu link de pagamento — compartilhe com quem quer te pagar:\n${shareUrl}\n\n` +
+      `Quem abrir cai no WhatsApp pronto para te enviar USDC.\n\n` +
+      `Para ver ou imprimir o QR, abra seu painel:\n${dashboardUrl}`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when a user scans their own pay-QR. Surfaces the no-op directly
+ * instead of dropping into an awkward "do you want to pay yourself?" flow.
+ */
+export function formatSelfPayMessage(lang: Lang = 'en'): string {
+  const m = {
+    en: () => `That's your own pay code. Share it so someone else can pay you.`,
+    es: () => `Ese es tu propio codigo de pago. Compartelo para que te paguen.`,
+    pt: () => `Esse e o seu proprio codigo de pagamento. Compartilhe para receber.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent when an already-onboarded phone scans an event QR. linkUserToEvent
+ * has already been called with step='returning' by the time this fires —
+ * the message is just the user-facing acknowledgement.
+ */
+export function formatEventWelcomeReturning(
+  eventName: string,
+  _sourceTag: string | null,
+  lang: Lang = 'en'
+): string {
+  const m = {
+    en: () =>
+      `Welcome back to ${eventName}! You're checked in.\n\n` +
+      `Type *balance* to see your wallet, or *help* for what I can do.`,
+    es: () =>
+      `Bienvenido de vuelta a ${eventName}! Estas registrado.\n\n` +
+      `Escribe *saldo* para ver tu billetera, o *ayuda* para ver que puedo hacer.`,
+    pt: () =>
+      `Bem-vindo de volta ao ${eventName}! Voce esta registrado.\n\n` +
+      `Digite *saldo* para ver sua carteira, ou *ajuda* para ver o que posso fazer.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent to a recipient when an event operator pays them USDC in exchange for
+ * cash at the venue. Fired AFTER the on-chain send is confirmed — never on
+ * a still-pending submission, so the operator can confidently hand over
+ * cash before the user gets the ping (the message is the receipt, not the
+ * promise). Amount is already in USDC; we format to 2 decimals like the rest
+ * of the catalog.
+ */
+export function formatOperatorPaymentReceived(
+  amountUsdc: number,
+  eventName: string,
+  lang: Lang = 'en'
+): string {
+  const amount = formatCurrencyUSD(amountUsdc)
+  const m = {
+    en: () =>
+      `You received ${amount} USDC at ${eventName}.\n\n` + `Type *balance* to see your wallet.`,
+    es: () =>
+      `Recibiste ${amount} USDC en ${eventName}.\n\n` + `Escribe *saldo* para ver tu billetera.`,
+    pt: () =>
+      `Voce recebeu ${amount} USDC em ${eventName}.\n\n` + `Digite *saldo* para ver sua carteira.`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sent to a user who paid at an event that uses a finite POAP code pool
+ * (e.g. Pizza Day: 300 unique mint links) AFTER every code has been
+ * assigned. "Distributed" / "se entregaron" is deliberate: the pool
+ * exhaustion state means every code has an `assigned_to_phone`, NOT
+ * that every POAP was minted on-chain. An attendee with a reserved code
+ * might still not have clicked the mint link. Avoid claiming the state
+ * we don't measure.
+ *
+ * `poap_invite_sent_at` is intentionally NOT stamped server-side when
+ * the pool is exhausted, so a restock makes the user eligible again on
+ * their next payment.
+ */
+export function formatPoapPoolExhausted(eventName: string, lang: Lang = 'en'): string {
+  const m = {
+    en: () =>
+      `Sorry — all ${eventName} POAPs have already been distributed. Thanks for joining the event!`,
+    es: () =>
+      `Lo sentimos — los POAPs de ${eventName} ya se entregaron todos. Gracias por venir al evento!`,
+    pt: () =>
+      `Desculpe — todos os POAPs de ${eventName} ja foram distribuidos. Obrigado por participar do evento!`,
+  }
+  return m[lang]()
+}
+
+/**
+ * POAP claim link reply.
+ *
+ * Used in two contexts:
+ *   - Fallback path when the combined `event_announcement` template send
+ *     fails (`sendPoapInviteIfPending`).
+ *   - On-demand reply when the user types "mi poap" / "my poap" /
+ *     "donde esta mi poap" (poap_code intent in webhook_controller).
+ *
+ * Copy is intentionally neutral — no "welcome" framing — because the
+ * vast majority of calls land on the on-demand path AFTER the user is
+ * already at the event (or even post-event), asking for their link a
+ * second time. A "Welcome to …" greeting reads as awkward / robotic in
+ * that context. The first-time welcome moment is owned by the combined
+ * template (`event_announcement` + `formatOperatorDropBody`) — see
+ * notification.service.ts.
+ */
+export function formatPoapClaimInvite(
+  params: { poapClaimUrl: string; eventName: string; sippyWalletAddress: string },
+  lang: Lang = 'en'
+): string {
+  // Push side (operator_send → sendPoapInviteIfPending fallback) always
+  // has the wallet address because the USDC was just deposited into it.
+  // The chat-pull handler (`poap_code` intent) reads the wallet
+  // separately via `getEmbeddedWallet`, which can transiently miss. When
+  // it does, we still want to send the URL — it's the load-bearing
+  // artifact — so we drop the wallet-paste section instead of rendering
+  // an empty "paste your Sippy wallet:\n\n" stub.
+  const hasWallet = params.sippyWalletAddress.length > 0
+  const m = {
+    en: () =>
+      `Your POAP for ${params.eventName}:\n` +
+      `${params.poapClaimUrl}` +
+      (hasWallet
+        ? `\n\nIf POAP asks for a wallet address, paste:\n` + `${params.sippyWalletAddress}`
+        : ''),
+    es: () =>
+      `Tu POAP de ${params.eventName}:\n` +
+      `${params.poapClaimUrl}` +
+      (hasWallet
+        ? `\n\nSi POAP te pide una dirección de billetera, pega:\n` + `${params.sippyWalletAddress}`
+        : ''),
+    pt: () =>
+      `Seu POAP de ${params.eventName}:\n` +
+      `${params.poapClaimUrl}` +
+      (hasWallet
+        ? `\n\nSe o POAP pedir um endereço de carteira, cole:\n` + `${params.sippyWalletAddress}`
+        : ''),
+  }
+  return m[lang]()
+}
+
 // --- About ---
 
 export function formatAboutMessage(lang: Lang = 'en'): string {
@@ -264,6 +633,11 @@ export function formatBalanceMessage(
     phoneNumber?: string
     localRate?: number | null
     localCurrency?: string | null
+    // True when the routing came from an address-specific phrase
+    // ("mi address", "cuál es mi billetera", "wallet address", …). The
+    // user named the wallet itself, not the balance number, so render
+    // the FULL public address instead of the default masked form.
+    addressQuery?: boolean
   },
   lang: Lang = 'en'
 ): string {
@@ -272,26 +646,40 @@ export function formatBalanceMessage(
     params.localRate ?? null,
     params.localCurrency ?? null
   )
-  const addr = maskAddress(params.wallet)
+  const addr = params.addressQuery ? params.wallet : maskAddress(params.wallet)
+
+  // Dashboard link: phone-scoped /wallet URL. Surfaces the web hub at
+  // the most-engaged moment (user just asked about their money), without
+  // a full second message. Suppressed when phoneNumber is missing — the
+  // /wallet route requires a phone to deep-link cleanly.
+  const dashboardUrl = params.phoneNumber
+    ? `${FRONTEND_URL}/wallet?phone=${encodeURIComponent(params.phoneNumber)}`
+    : null
 
   const m = {
     en: () => {
       let msg = `Balance\n\nUSD: ${amt}\nWallet: ${addr}`
       if (params.ethBalance)
         msg = `Balance\n\nTransfer credit: ${params.ethBalance} ETH\nUSD: ${amt}\nWallet: ${addr}`
-      return msg + `\n\nAdd funds: ${FUND_URL}`
+      msg += `\n\nAdd funds: ${FUND_URL}`
+      if (dashboardUrl) msg += `\nFull view: ${dashboardUrl}`
+      return msg
     },
     es: () => {
       let msg = `Saldo\n\nUSD: ${amt}\nBilletera: ${addr}`
       if (params.ethBalance)
         msg = `Saldo\n\nCredito de transferencia: ${params.ethBalance} ETH\nUSD: ${amt}\nBilletera: ${addr}`
-      return msg + `\n\nAgregar fondos: ${FUND_URL}`
+      msg += `\n\nAgregar fondos: ${FUND_URL}`
+      if (dashboardUrl) msg += `\nVer todo: ${dashboardUrl}`
+      return msg
     },
     pt: () => {
       let msg = `Saldo\n\nUSD: ${amt}\nCarteira: ${addr}`
       if (params.ethBalance)
         msg = `Saldo\n\nCredito de transferencia: ${params.ethBalance} ETH\nUSD: ${amt}\nCarteira: ${addr}`
-      return msg + `\n\nAdicionar fundos: ${FUND_URL}`
+      msg += `\n\nAdicionar fundos: ${FUND_URL}`
+      if (dashboardUrl) msg += `\nVer tudo: ${dashboardUrl}`
+      return msg
     },
   }
   return m[lang]()
@@ -597,8 +985,38 @@ export function formatAskForAmount(recipient: string, lang: Lang = 'en'): string
   return m[lang]()
 }
 
-export function formatAskForRecipient(amount: number, lang: Lang = 'en'): string {
-  const amt = formatCurrencyUSD(amount)
+/**
+ * Map of FX currency codes to the human word users typed. Used to echo
+ * the amount back in the recipient prompt: when the user said "200 pesos"
+ * we should ask "200 pesos a quien?", not "$200.00 a quien?" (which
+ * looks like a USDC send and panicked a tester on 2026-05-17 even
+ * though the conversion runs correctly at the next turn).
+ *
+ * `LOCAL` defaults to "pesos" because every market we serve that uses
+ * the LOCAL sentinel (COP, MXN, ARS) calls the currency "pesos".
+ */
+const CURRENCY_WORD_BY_CODE: Record<string, string> = {
+  LOCAL: 'pesos',
+  BRL: 'reais',
+  PEN: 'soles',
+  HNL: 'lempiras',
+  GTQ: 'quetzales',
+  CRC: 'colones',
+  VES: 'bolivares',
+  PYG: 'guaranies',
+}
+
+export function formatAskForRecipient(
+  amount: number,
+  lang: Lang = 'en',
+  localCurrency?: string
+): string {
+  // When the partial carries a local-currency signal, echo the user's
+  // original phrasing ("200 pesos a quien?") so it doesn't look like
+  // Sippy is about to send USDC face value. FX runs on the completing
+  // turn regardless; this is purely a display fix.
+  const word = localCurrency ? CURRENCY_WORD_BY_CODE[localCurrency] : undefined
+  const amt = word ? `${amount} ${word}` : formatCurrencyUSD(amount)
   const m = {
     en: () => `${amt} to whom? Send me the phone number.`,
     es: () => `${amt} a quien? Mandame el numero de telefono.`,
@@ -625,6 +1043,374 @@ export function formatHistoryMessage(phoneNumber: string, lang: Lang = 'en'): st
     en: () => `Transaction history\n\nView your activity at:\n${url}`,
     es: () => `Historial de transacciones\n\nVer tu actividad en:\n${url}`,
     pt: () => `Historico de transacoes\n\nVeja sua atividade em:\n${url}`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sippy Quest — referral-code reply. Returns the user's unique invite
+ * code embedded in a share link friends can tap to land in WhatsApp
+ * with the code pre-filled as a [REF-XXXXXX] bracket token.
+ *
+ * Share URL points at `sippy.lat/r/<code>`, NOT raw wa.me. Background
+ * (2026-05-18 field bug): WhatsApp suppresses wa.me links that target
+ * the same bot sending the message — the user's chat showed
+ * "Comparte tu link: [link removed]" because Meta's anti-spam guard
+ * stripped the deeplink. Bouncing through our own domain (apps/web
+ * route `/r/[code]/route.ts` does the 302 to wa.me) sidesteps that
+ * filter and ALSO gives us a clean brand URL that renders correctly
+ * when shared on SMS, Twitter, copy-paste, etc.
+ *
+ * Drift warning: if the redirect route changes its URL shape, update
+ * here too — share-link tests pin the shape.
+ */
+export function formatReferralCodeMessage(
+  args: { code: string; maxEntries: number; leaderboardUrl?: string },
+  lang: Lang = 'en'
+): string {
+  const shareUrl = `${FRONTEND_URL}/r/${args.code}`
+  const boardLine = args.leaderboardUrl
+    ? {
+        en: `\n\nLive leaderboard:\n${args.leaderboardUrl}`,
+        es: `\n\nMira el tablero en vivo:\n${args.leaderboardUrl}`,
+        pt: `\n\nVeja o ranking ao vivo:\n${args.leaderboardUrl}`,
+      }[lang]
+    : ''
+  const m = {
+    en: () =>
+      `Your Quest invite code: *${args.code}*\n\n` +
+      `Each friend who joins with your code = 1 draw entry (max ${args.maxEntries}).\n\n` +
+      `Share your link:\n${shareUrl}${boardLine}`,
+    es: () =>
+      `Tu codigo de Quest: *${args.code}*\n\n` +
+      `Cada amigo que se una con tu codigo = 1 entrada al sorteo (max ${args.maxEntries}).\n\n` +
+      `Comparte tu link:\n${shareUrl}${boardLine}`,
+    pt: () =>
+      `Seu codigo do Quest: *${args.code}*\n\n` +
+      `Cada amigo que entrar com seu codigo = 1 entrada no sorteio (max ${args.maxEntries}).\n\n` +
+      `Compartilhe seu link:\n${shareUrl}${boardLine}`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Sippy Quest — status reply. Shows the user's current entries, what
+ * makes up that score, and (when they have any) their rank. Designed to
+ * land in WhatsApp at the size of one bubble, so the breakdown line is
+ * short and the call-to-action sits at the bottom.
+ *
+ * Rank rendering rules:
+ *   - entries = 0 → no rank shown ("aún no tienes entradas")
+ *   - entries > 0 → "#N de M" — gives them context for how competitive
+ *     the leaderboard is without exposing names
+ *
+ * The "share your link" line embeds the same `sippy.lat/r/<code>` URL
+ * shape as the `mi codigo` reply. Drift between the two would split
+ * the share funnel — keep both pointing at the redirect route.
+ *
+ * `shareUrl` is built by the caller (not derived here) because the
+ * caller already had to `ensureReferralCode` to fetch the code, and
+ * passing the resolved code keeps this function purely formatting.
+ * When a user has 0 entries we still show the share link — that's the
+ * primary action that converts zero → first entry.
+ */
+export function formatQuestStatusMessage(
+  args: {
+    entries: number
+    cap: number
+    activity: 0 | 1
+    referrals: number
+    rank: number | null
+    totalRanked: number
+    code: string
+    leaderboardUrl?: string
+  },
+  lang: Lang = 'en'
+): string {
+  const shareUrl = `${FRONTEND_URL}/r/${args.code}`
+  const rankLine =
+    args.rank !== null
+      ? {
+          en: `Rank: #${args.rank} of ${args.totalRanked}`,
+          es: `Posicion: #${args.rank} de ${args.totalRanked}`,
+          pt: `Posicao: #${args.rank} de ${args.totalRanked}`,
+        }[lang]
+      : null
+  const boardLine = args.leaderboardUrl
+    ? {
+        en: `Live leaderboard:\n${args.leaderboardUrl}`,
+        es: `Mira el tablero en vivo:\n${args.leaderboardUrl}`,
+        pt: `Veja o ranking ao vivo:\n${args.leaderboardUrl}`,
+      }[lang]
+    : null
+  const m = {
+    en: () => {
+      const lines = [
+        `*Your Quest: ${args.entries}/${args.cap} entries*`,
+        rankLine,
+        '',
+        `- Attended: ${args.activity ? '1' : '0'}`,
+        `- Friends joined: ${args.referrals}`,
+        '',
+        args.entries < args.cap
+          ? `Invite more to climb. Share:\n${shareUrl}`
+          : `Max entries reached. Good luck on the draw!`,
+        boardLine ? '' : null,
+        boardLine,
+      ].filter((l): l is string => l !== null)
+      return lines.join('\n')
+    },
+    es: () => {
+      const lines = [
+        `*Tu Quest: ${args.entries}/${args.cap} entradas*`,
+        rankLine,
+        '',
+        `- Asistencia: ${args.activity ? '1' : '0'}`,
+        `- Amigos unidos: ${args.referrals}`,
+        '',
+        args.entries < args.cap
+          ? `Invita mas y sube. Comparte:\n${shareUrl}`
+          : `Llegaste al maximo de entradas. Suerte en el sorteo!`,
+        boardLine ? '' : null,
+        boardLine,
+      ].filter((l): l is string => l !== null)
+      return lines.join('\n')
+    },
+    pt: () => {
+      const lines = [
+        `*Seu Quest: ${args.entries}/${args.cap} entradas*`,
+        rankLine,
+        '',
+        `- Presenca: ${args.activity ? '1' : '0'}`,
+        `- Amigos entraram: ${args.referrals}`,
+        '',
+        args.entries < args.cap
+          ? `Convide mais e suba. Compartilhe:\n${shareUrl}`
+          : `Atingiu o maximo de entradas. Boa sorte no sorteio!`,
+        boardLine ? '' : null,
+        boardLine,
+      ].filter((l): l is string => l !== null)
+      return lines.join('\n')
+    },
+  }
+  return m[lang]()
+}
+
+/**
+ * Sippy Quest — fallback reply when no event is currently active
+ * (SIPPY_CURRENT_EVENT_SLUG unset). Still surfaces the user's referral
+ * code so they have something useful, just no entries/rank/leaderboard.
+ */
+export function formatQuestNoActiveEvent(
+  args: { code: string; maxEntries: number },
+  lang: Lang = 'en'
+): string {
+  const shareUrl = `${FRONTEND_URL}/r/${args.code}`
+  const m = {
+    en: () =>
+      `No active Sippy Quest right now.\n\n` +
+      `Your invite code stays the same: *${args.code}*\n` +
+      `(Up to ${args.maxEntries} entries per event when the next one opens.)\n\n` +
+      `Share your link:\n${shareUrl}`,
+    es: () =>
+      `No hay un Sippy Quest activo ahora mismo.\n\n` +
+      `Tu codigo de invitacion sigue siendo: *${args.code}*\n` +
+      `(Hasta ${args.maxEntries} entradas por evento cuando se abra el proximo.)\n\n` +
+      `Comparte tu link:\n${shareUrl}`,
+    pt: () =>
+      `Nao ha Sippy Quest ativo no momento.\n\n` +
+      `Seu codigo de convite continua: *${args.code}*\n` +
+      `(Ate ${args.maxEntries} entradas por evento quando o proximo abrir.)\n\n` +
+      `Compartilhe seu link:\n${shareUrl}`,
+  }
+  return m[lang]()
+}
+
+// ============================================================================
+// Season 1 — reputation standing (Phase D / D1). Reputation-only: every string
+// describes what the user DID and what RAISES their standing. NEVER "reward",
+// "token", "redeem", "airdrop", "earn" — a tier is status, not a payout (anything
+// implying a payout is D2 and ships only after Lina clears it). The reply shows
+// tier + one progress line + 2-3 next actions; it NEVER renders the scoring
+// formula (weights/caps/decay). See SEASON1_PHASE_D_PROMPT.md.
+// ============================================================================
+
+/**
+ * User-facing tier names (final, confirmed ladder) — same five everywhere.
+ * DISPLAY ONLY: the internal slugs (newcomer/activated/active/regular/power) and
+ * every threshold are unchanged; only the labels shown to users moved to
+ * Nuevo · En marcha · Activo · Fiel · Estrella.
+ */
+const SEASON_TIER_NAME: Record<Tier, string> = {
+  newcomer: 'Nuevo',
+  activated: 'En marcha',
+  active: 'Activo',
+  regular: 'Fiel',
+  power: 'Estrella',
+}
+
+/** One short, honest standing-line per tier (no perk promises), per language. */
+const SEASON_TIER_LINE: Record<Lang, Record<Tier, string>> = {
+  en: {
+    newcomer: 'just getting started',
+    activated: 'took your first step',
+    active: 'really using Sippy',
+    regular: 'you use Sippy week after week',
+    power: 'among the network stars',
+  },
+  es: {
+    newcomer: 'apenas empiezas',
+    activated: 'diste tu primer paso',
+    active: 'usando Sippy de verdad',
+    regular: 'usas Sippy semana tras semana',
+    power: 'de las estrellas de la red',
+  },
+  pt: {
+    newcomer: 'comecando agora',
+    activated: 'deu seu primeiro passo',
+    active: 'usando a Sippy de verdade',
+    regular: 'usa a Sippy semana apos semana',
+    power: 'entre as estrelas da rede',
+  },
+}
+
+/** Next-action copy per code per language — the derived guidance, not the formula. */
+const SEASON_ACTION_LINE: Record<Lang, Record<ActionCode, string>> = {
+  en: {
+    first_send: 'Make your first send to a friend',
+    new_counterparty: 'Send to a friend you have not paid yet',
+    weekly: 'Use Sippy every week',
+    send_more: 'Keep sending to your contacts',
+    offramp: 'Cash out to your local currency',
+    invite: 'Invite a friend to Sippy',
+    verify: 'Verify your identity',
+  },
+  es: {
+    first_send: 'Haz tu primer envio a un amigo',
+    new_counterparty: 'Enviale a un amigo al que no le has pagado',
+    weekly: 'Usa Sippy cada semana',
+    send_more: 'Sigue enviando a tus contactos',
+    offramp: 'Saca a tu moneda local',
+    invite: 'Invita a un amigo a Sippy',
+    verify: 'Verifica tu identidad',
+  },
+  pt: {
+    first_send: 'Faca seu primeiro envio a um amigo',
+    new_counterparty: 'Envie para um amigo que ainda nao pagou',
+    weekly: 'Use a Sippy toda semana',
+    send_more: 'Continue enviando aos seus contatos',
+    offramp: 'Saque para sua moeda local',
+    invite: 'Convide um amigo para a Sippy',
+    verify: 'Verifique sua identidade',
+  },
+}
+
+/**
+ * Season standing reply (Phase D). Shows the user's tier, one line of progress to
+ * the next tier, and their 2-3 next actions — plus a link to the web "your score"
+ * page. NO formula, ever. `nextTier` is the API's shape (slug + progressPct +
+ * verificationRequired); the Power step shows identity verification, never a
+ * points-only path. Accent-free ES/PT bodies match the house style.
+ */
+export function formatSeasonScoreMessage(
+  args: {
+    score: number
+    tier: Tier
+    nextTier: {
+      tier: Tier
+      progressPct: number
+      verificationRequired: boolean
+    } | null
+    topActions: ActionCode[]
+    phoneNumber: string
+  },
+  lang: Lang = 'en'
+): string {
+  const url = `${FRONTEND_URL}/score?phone=${encodeURIComponent(args.phoneNumber)}`
+  const tierName = SEASON_TIER_NAME[args.tier]
+  const tierLine = SEASON_TIER_LINE[lang][args.tier]
+  const nextName = args.nextTier ? SEASON_TIER_NAME[args.nextTier.tier] : null
+
+  const progress = (() => {
+    if (!args.nextTier) {
+      return {
+        en: 'You are at the top tier — keep it up.',
+        es: 'Estas en el nivel mas alto, sigue asi.',
+        pt: 'Voce esta no nivel mais alto, continue assim.',
+      }[lang]
+    }
+    if (args.nextTier.verificationRequired) {
+      return {
+        en: `To reach ${nextName}, verify your identity.`,
+        es: `Para llegar a ${nextName}, verifica tu identidad.`,
+        pt: `Para chegar a ${nextName}, verifique sua identidade.`,
+      }[lang]
+    }
+    if (args.nextTier.tier === 'activated') {
+      return {
+        en: `Make your first send to reach ${nextName}.`,
+        es: `Haz tu primer envio para llegar a ${nextName}.`,
+        pt: `Faca seu primeiro envio para chegar a ${nextName}.`,
+      }[lang]
+    }
+    const pct = args.nextTier.progressPct
+    return {
+      en: `You are ${pct}% of the way to ${nextName}.`,
+      es: `Vas ${pct}% en camino a ${nextName}.`,
+      pt: `Voce esta ${pct}% rumo a ${nextName}.`,
+    }[lang]
+  })()
+
+  const actionLines = args.topActions.map((a) => `- ${SEASON_ACTION_LINE[lang][a]}`).join('\n')
+  const header = {
+    en: `*Your level: ${tierName}* (${tierLine})\nScore: ${args.score}`,
+    es: `*Tu nivel: ${tierName}* (${tierLine})\nPuntaje: ${args.score}`,
+    pt: `*Seu nivel: ${tierName}* (${tierLine})\nPontuacao: ${args.score}`,
+  }[lang]
+  const upLabel = { en: 'To move up:', es: 'Para subir:', pt: 'Para subir:' }[lang]
+  const seeLabel = {
+    en: `See your progress:\n${url}`,
+    es: `Mira tu progreso:\n${url}`,
+    pt: `Veja seu progresso:\n${url}`,
+  }[lang]
+
+  return `${header}\n${progress}\n\n${upLabel}\n${actionLines}\n\n${seeLabel}`
+}
+
+/**
+ * Season standing — friendly empty state. Shown when the season is off, the user
+ * has no wallet, or the wallet has no score yet (per Phase D: "haz tu primer envio
+ * para empezar", never a zero or an error). No mention of rewards or a season.
+ */
+export function formatSeasonScoreEmpty(phoneNumber: string, lang: Lang = 'en'): string {
+  const url = `${FRONTEND_URL}/score?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () =>
+      `You do not have a Sippy level yet.\n\n` +
+      `Make your first send to a friend to get started.\n\n${url}`,
+    es: () =>
+      `Aun no tienes un nivel en Sippy.\n\n` +
+      `Haz tu primer envio a un amigo para empezar.\n\n${url}`,
+    pt: () =>
+      `Voce ainda nao tem um nivel na Sippy.\n\n` +
+      `Faca seu primeiro envio a um amigo para comecar.\n\n${url}`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Dashboard deep-link reply. The `/wallet` page is the authenticated app
+ * hub: balance, activity, send, settings link. Bot keyword `dashboard` /
+ * `mi cuenta` / `meu painel` routes here. Also appended (as a one-liner)
+ * to the balance reply so users who ask for their balance discover the
+ * fuller view at the most-engaged moment.
+ */
+export function formatDashboardMessage(phoneNumber: string, lang: Lang = 'en'): string {
+  const url = `${FRONTEND_URL}/wallet?phone=${encodeURIComponent(phoneNumber)}`
+  const m = {
+    en: () => `Your Sippy dashboard: balance, activity, send, pay QR, fund.\n${url}`,
+    es: () => `Tu panel de Sippy: saldo, actividad, enviar, mi QR, recargar.\n${url}`,
+    pt: () => `Seu painel Sippy: saldo, atividade, enviar, meu QR, recarregar.\n${url}`,
   }
   return m[lang]()
 }
@@ -946,42 +1732,72 @@ export function formatCommandErrorMessage(lang: Lang = 'en'): string {
 
 // --- Greeting (regex-matched, zero LLM cost) ---
 
-export function formatGreetingMessage(lang: Lang = 'en', dialect: Dialect = 'neutral'): string {
-  if (lang === 'es' && dialect !== 'neutral') {
-    const d: Record<string, string> = {
-      co: `Hola! Que necesitas? Puedo ver tu saldo o enviar plata — solo dime.`,
-      mx: `Hola! Que necesitas? Puedo ver tu saldo o enviar dinero — solo dime.`,
-      ar: `Hola! Que necesitas? Puedo ver tu saldo o enviar plata — solo decime.`,
-      ve: `Hola! Que necesitas? Puedo ver tu saldo o enviar plata — solo dime.`,
-    }
-    if (d[dialect]) return d[dialect]
+// Pick one variant at random. Tiny helper — purely for adding warmth +
+// variety to the deterministic copy. No persistence: a user sending
+// "hola" twice in a row gets two different greetings, which actually
+// reads more human than always-identical.
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+/**
+ * Greeting reply — used when SMART/regex routes to `greeting`. Warm,
+ * open-ended ("¿qué necesitas?"), never a closed yes/no question.
+ *
+ * Single neutral pool per language. Earlier dialect-specific variants
+ * (voseo, "bacano", "chévere", "joya") reintroduced the same field-test
+ * regression we hit on 2026-05-17 with unknown_variants — regional
+ * particles feel off at WhatsApp scale. Variety comes from the variant
+ * count within each language, not from regional flavor. `dialect` is
+ * accepted for signature compatibility with existing callers but does
+ * not change the pool.
+ */
+export function formatGreetingMessage(lang: Lang = 'en', _dialect: Dialect = 'neutral'): string {
+  const m: Record<Lang, string[]> = {
+    en: [
+      `Hey! What do you need? I can check your balance or help you send, just tell me.`,
+      `Hello! Around if you need anything. Balance, send money, your QR, your call.`,
+      `Hi! How can I help? Balance, send, your QR, just say the word.`,
+    ],
+    es: [
+      `Hola! ¿Qué necesitas? Te muestro tu saldo o te ayudo a enviar dinero, tú me dices.`,
+      `Hola! Por aquí estoy. Saldo, enviar dinero, tu QR, lo que necesites.`,
+      `Hola! ¿En qué te ayudo? Te muestro saldo, te ayudo a enviar, o te paso tu QR.`,
+      `Hola! ¿Qué hacemos? Saldo, enviar dinero, QR, todo desde aquí.`,
+    ],
+    pt: [
+      `Oi! O que precisa? Posso ver seu saldo ou ajudar a enviar dinheiro, é só me dizer.`,
+      `Oi! Estou por aqui. Saldo, enviar, seu QR, o que precisar.`,
+      `Olá! Em que ajudo? Saldo, enviar dinheiro, seu QR, é só falar.`,
+    ],
   }
-  const m = {
-    en: () => `Hey! What do you need? I can check your balance or send money — just tell me.`,
-    es: () => `Hola! Que necesitas? Puedo ver tu saldo o enviar dinero — solo dime.`,
-    pt: () => `Oi! O que precisa? Posso ver seu saldo ou enviar dinheiro — so me diz.`,
-  }
-  return m[lang]()
+  return pick(m[lang])
 }
 
 // --- Social phrases (regex-matched, zero LLM cost) ---
 
-export function formatSocialReplyMessage(lang: Lang = 'en', dialect: Dialect = 'neutral'): string {
-  if (lang === 'es' && dialect !== 'neutral') {
-    const d: Record<string, string> = {
-      co: `Listo. Aqui estoy por si necesitas algo.`,
-      mx: `Dale. Aqui estoy por si necesitas algo.`,
-      ar: `Dale. Aca estoy por si necesitas algo.`,
-      ve: `Dale. Aqui estoy por si necesitas algo.`,
-    }
-    if (d[dialect]) return d[dialect]
+/**
+ * Social acknowledgement — "gracias", "ok", "listo" type messages.
+ * Short, warm, never a follow-up question. Single neutral pool per
+ * language to match the field-tested tone (no regional slang particles
+ * like "bacano" / "chévere" / "joya" that field-tested as off on
+ * 2026-05-17).
+ */
+export function formatSocialReplyMessage(lang: Lang = 'en', _dialect: Dialect = 'neutral'): string {
+  const m: Record<Lang, string[]> = {
+    en: [
+      `Got it. I'm here if you need anything.`,
+      `Sounds good. Around if you need me.`,
+      `Cool. Let me know if you need something.`,
+    ],
+    es: [
+      `Listo. Aquí estoy si necesitas algo.`,
+      `Vale. Cualquier cosa me dices.`,
+      `Perfecto. Por aquí ando.`,
+    ],
+    pt: [`Beleza. Estou aqui se precisar.`, `Tranquilo. Por aqui.`, `Ok. Qualquer coisa me chama.`],
   }
-  const m = {
-    en: () => `Got it. I'm here if you need anything.`,
-    es: () => `Dale. Aqui estoy por si necesitas algo.`,
-    pt: () => `Beleza. To aqui se precisar.`,
-  }
-  return m[lang]()
+  return pick(m[lang])
 }
 
 // --- Media messages (non-text) ---
@@ -1186,6 +2002,82 @@ export function formatContactNotFound(name: string, lang: Lang): string {
       `No encontre a "${name}". Responde con el numero, o guardalo primero:\n"guardar contacto ${name} +573001234567"`,
     pt: () =>
       `Nao encontrei "${name}". Responda com o numero, ou salve primeiro:\n"salvar contato ${name} +5511999887766"`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Friendlier TOO_SMALL message used when we know the user's original
+ * amount + currency + intended recipient. Replaces the bare
+ * "El monto mínimo es 0.10 USDC" with a line that:
+ *   1. Shows what they typed AND the USDC conversion (so the failure
+ *      reason is obvious — 200 pesos → ~$0.05 USDC).
+ *   2. Names the recipient (display name or masked phone).
+ *   3. Asks for a new amount in the SAME currency, signaling that Sippy
+ *      kept the recipient + currency context (the partial state was
+ *      re-seeded on the way out — see reseedRecoverableSendError).
+ *
+ * Falls back to `formatAmountTooSmallMessage` when context is missing.
+ */
+export function formatAmountBelowMinWithContext(
+  args: {
+    localAmount?: number
+    localCurrency?: string | null
+    usdcAmount: number
+    recipientLabel: string
+  },
+  lang: Lang
+): string {
+  const currencyWord =
+    args.localCurrency && args.localCurrency in CURRENCY_WORD_BY_CODE
+      ? CURRENCY_WORD_BY_CODE[args.localCurrency]
+      : null
+  // No local currency context — show plain USDC; still useful (names the
+  // recipient + asks for a new amount).
+  if (!currencyWord || args.localAmount === undefined) {
+    const m = {
+      en: () =>
+        `${formatCurrencyUSD(args.usdcAmount)} is below the 0.10 USDC minimum. How much do you want to send to ${args.recipientLabel}?`,
+      es: () =>
+        `${formatCurrencyUSD(args.usdcAmount)} es menos del minimo de 0.10 USDC. ¿Cuanto quieres enviar a ${args.recipientLabel}?`,
+      pt: () =>
+        `${formatCurrencyUSD(args.usdcAmount)} e menos do minimo de 0.10 USDC. Quanto voce quer enviar para ${args.recipientLabel}?`,
+    }
+    return m[lang]()
+  }
+  const m = {
+    en: () =>
+      `${args.localAmount} ${currencyWord} is about ${formatCurrencyUSD(args.usdcAmount)} USDC, below the 0.10 USDC minimum. How much ${currencyWord} do you want to send to ${args.recipientLabel}?`,
+    es: () =>
+      `${args.localAmount} ${currencyWord} son aproximadamente ${formatCurrencyUSD(args.usdcAmount)} USDC, menos del minimo de 0.10 USDC. ¿Cuanto quieres enviar a ${args.recipientLabel} en ${currencyWord}?`,
+    pt: () =>
+      `${args.localAmount} ${currencyWord} sao cerca de ${formatCurrencyUSD(args.usdcAmount)} USDC, menos do minimo de 0.10 USDC. Quanto voce quer enviar para ${args.recipientLabel} em ${currencyWord}?`,
+  }
+  return m[lang]()
+}
+
+/**
+ * Short follow-up appended after `formatInsufficientBalanceMessage` when
+ * the send fired through a partial-resolution path (so we know the
+ * recipient and can keep them across the retry). The recipient hint is
+ * what tells the user "your context is preserved, just send a smaller
+ * amount" — without it the failure looks total.
+ */
+export function formatInsufficientBalanceRetryHint(
+  args: { recipientLabel: string; localCurrency?: string | null },
+  lang: Lang
+): string {
+  const currencyWord =
+    args.localCurrency && args.localCurrency in CURRENCY_WORD_BY_CODE
+      ? CURRENCY_WORD_BY_CODE[args.localCurrency]
+      : null
+  const suffix = currencyWord ? ` en ${currencyWord}` : ''
+  const en = currencyWord ? ` in ${currencyWord}` : ''
+  const pt = currencyWord ? ` em ${currencyWord}` : ''
+  const m = {
+    en: () => `Want to try a smaller amount${en} to ${args.recipientLabel}?`,
+    es: () => `Quieres intentar con un monto menor${suffix} a ${args.recipientLabel}?`,
+    pt: () => `Quer tentar um valor menor${pt} para ${args.recipientLabel}?`,
   }
   return m[lang]()
 }

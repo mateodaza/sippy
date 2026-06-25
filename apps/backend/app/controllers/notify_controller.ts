@@ -13,6 +13,7 @@ import { getUserLanguage } from '#services/db'
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { notifyFundReceived } from '#services/notification.service'
 import { canonicalizePhone, getLanguageForPhone, maskPhone } from '#utils/phone'
+import { isSeason1Enabled } from '#season/guard'
 
 export default class NotifyController {
   /**
@@ -89,6 +90,20 @@ export default class NotifyController {
       })
 
       logger.info(`Notification sent to ${maskPhone(canonicalPhone)}`)
+
+      // Season 1 (Phase C) — corroborate the canonical on-chain on-ramp signal.
+      // Guarded + lazy + best-effort: the on-chain projector is the source of truth,
+      // this only annotates the matching pending on-ramp. Must never affect the
+      // notify response, so its own hook swallows errors and we don't await-block on
+      // a failure path.
+      if (type === 'usdc' && isSeason1Enabled()) {
+        try {
+          const { corroborateNotifyFund } = await import('#season/emissions')
+          await corroborateNotifyFund({ txHash })
+        } catch (err) {
+          logger.warn('[season1] notify-fund corroboration dispatch failed (non-blocking): %o', err)
+        }
+      }
 
       return response.json({
         success: true,

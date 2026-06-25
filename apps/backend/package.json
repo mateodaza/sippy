@@ -9,18 +9,20 @@
     "./registry": "./.adonisjs/client/registry/index.ts"
   },
   "scripts": {
-    "start": "node bin/server.js",
+    "start": "node ace migration:run --force && node bin/server.js",
     "build": "vite build && node ace build",
     "dev": "node ace serve --watch",
     "test": "node ace test",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eval:smart": "node ace smart:eval"
   },
   "imports": {
     "#commands/*": "./app/commands/*.js",
     "#controllers/*": "./app/controllers/*.js",
     "#exceptions/*": "./app/exceptions/*.js",
+    "#season/*": "./app/season/*.js",
     "#models/*": "./app/models/*.js",
     "#mails/*": "./app/mails/*.js",
     "#services/*": "./app/services/*.js",
@@ -81,6 +83,7 @@
     "@inertiajs/react": "^2.3.17",
     "@japa/api-client": "^3.2.1",
     "@lifi/sdk": "^3.16.0",
+    "@pimlico/webhook": "^0.0.6",
     "@sippy/shared": "workspace:*",
     "@tuyau/client": "^0.2.10",
     "@tuyau/core": "^1.0.0",
@@ -95,10 +98,12 @@
     "node-cron": "^3.0.3",
     "openai": "^6.32.0",
     "pg": "^8.19.0",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "reflect-metadata": "^0.2.2",
     "resend": "^6.9.3",
+    "viem": "~2.47.2",
     "zod": "^3.25.76"
   },
   "hotHook": {

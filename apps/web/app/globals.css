@@ -2,8 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Smooth scroll */
+/* Base readability — bump the root size so every rem-based step (body copy,
+   captions, tile sublabels, spec labels) scales up app-wide while proportions and
+   the visual system stay intact. ~17px base (was the 16px browser default). */
 html {
+  font-size: 106.25%;
   scroll-behavior: smooth;
 }
 
@@ -232,9 +235,10 @@ html {
   /* ── Spec label — equipment annotation ── */
   .spec-label {
     font-family: var(--font-space-mono), monospace;
-    font-size: 11px;
+    /* was 11px — bumped + switched to rem so it scales with the root base. */
+    font-size: 0.75rem;
     font-weight: 700;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--brand-primary);
   }

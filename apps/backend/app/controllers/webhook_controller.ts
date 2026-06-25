@@ -16,7 +16,19 @@ import app from '@adonisjs/core/services/app'
 import type { WebhookPayload, ParsedCommand, PendingTransaction, PartialSend } from '#types/index'
 import '#types/container'
 import type { Lang } from '#utils/messages'
-import { parseMessage, parseAndValidateAmount } from '#utils/message_parser'
+import {
+  parseMessage,
+  parseMessageWithRegex,
+  matchHighConfidencePreLlm,
+  parseAndValidateAmount,
+} from '#utils/message_parser'
+import {
+  extractBracketToken,
+  extractReferralToken,
+  dispatchBracketToken,
+} from '#services/bracket_token.service'
+import { captureReferral, ensureReferralCode } from '#services/quest/referral.service'
+import { getUserQuestStatus } from '#services/quest/scoring.service'
 import { sendTextMessage, markAsReadWithTyping } from '#services/whatsapp.service'
 import {
   getUserLanguage,
@@ -28,10 +40,16 @@ import { detectLanguage, PERSIST_THRESHOLD } from '#utils/language'
 import {
   formatHelpMessage,
   formatAboutMessage,
+  formatPizzaDayMessage,
   formatInvalidSendFormat,
   formatHistoryMessage,
   formatSettingsMessage,
-  formatUnknownCommandMessage,
+  formatDashboardMessage,
+  formatReferralCodeMessage,
+  formatQuestStatusMessage,
+  formatQuestNoActiveEvent,
+  formatSeasonScoreMessage,
+  formatSeasonScoreEmpty,
   formatLanguageSetMessage,
   formatCommandErrorMessage,
   formatGreetingMessage,
@@ -64,7 +82,14 @@ import {
   formatInviteAlreadyOnSippy,
   formatEmailNudge,
   formatInsufficientBalanceMessage,
+  formatAmountBelowMinWithContext,
+  formatInsufficientBalanceRetryHint,
   formatContactNotFound,
+  formatPayConfirmationPrompt,
+  formatPayQrLinkMessage,
+  formatPoapClaimInvite,
+  formatPoapPendingMessage,
+  formatNoPoapAssignedMessage,
 } from '#utils/messages'
 
 import { DateTime } from 'luxon'
@@ -75,6 +100,9 @@ import { handleSendCommand } from '#commands/send_command'
 import { createInvite } from '#services/invite.service'
 import { getUserWallet } from '#services/cdp_wallet.service'
 import { generateResponse } from '#services/llm.service'
+import { isSeason1Enabled } from '#season/guard'
+import { getStanding } from '#season/standing'
+import { getKyc, isFullKyc } from '#services/colurs_kyc.service'
 import {
   type SetupStatus,
   getSetupStatus,
@@ -95,11 +123,16 @@ import {
   handleListContacts,
   handleContactCard,
 } from '#commands/contact_command'
+import { isSmartModeEnabledFor } from '#services/smart_mode/cohort'
+import { dispatchSmartMode } from '#services/smart_mode/dispatcher'
+import { selectUnknownVariant } from '#services/smart_mode/unknown_variants'
+import { findAssignedPoapForPhone } from '#services/event.service'
 
 // Exported so tests can seed/inspect state directly
 export const pendingTransactions = new Map<string, PendingTransaction>()
 export const partialSends = new Map<string, PartialSend>()
 export const activeSends = new Set<string>()
+export const pendingInvites = new Map<string, { timestamp: number; lang: Lang }>()
 export const pendingContactOverwrites = new Map<
   string,
   { alias: string; newPhone: string; timestamp: number }
@@ -168,6 +201,131 @@ const ACTIVE_SEND_TIMEOUT_MS = 60_000 // safety valve — clears stuck sends
 const PENDING_TX_TTL_MS = 2 * 60 * 1000 // 2 minutes
 const PENDING_OVERWRITE_TTL_MS = 60_000 // 60 seconds for contact overwrite confirmation
 
+/**
+ * Friendly label for the recipient in recoverable-error retry copy.
+ * Display name wins (alias / pay-QR), then masked phone, then raw text.
+ *
+ * Invariant: returns a label ONLY when reseedRecoverableSendError will
+ * actually have something to seed (i.e. `recipient || recipientRaw`).
+ * A label without a seedable identifier would tell the user "retry to
+ * Carlos" while the bot silently drops Carlos on the next inbound —
+ * exactly the trust-breaking context loss this whole subsystem exists
+ * to prevent. If a future flow has only `recipientDisplayName` and no
+ * canonical/raw recipient, fix the upstream so it carries one rather
+ * than relaxing this guard.
+ */
+function recipientLabelFor(command: ParsedCommand): string | null {
+  if (!command.recipient && !command.recipientRaw) return null
+  if (command.recipientDisplayName) return command.recipientDisplayName
+  if (command.recipient) return maskPhone(command.recipient)
+  return command.recipientRaw ?? null
+}
+
+/**
+ * Re-seed `partialSends` after a RECOVERABLE send error so the user can
+ * retry by sending just a replacement amount (or amount + currency word)
+ * and the resolver picks up where we left off — recipient, currency,
+ * pay-QR scan context all preserved across the retry.
+ *
+ * Per the 2026-05-17 design call: only fires for TOO_SMALL (post-FX) and
+ * insufficient-balance. Cancels, confirms, successful sends, self-sends,
+ * invalid phones, and ambiguous aliases MUST NOT re-seed (they're either
+ * terminal or already represented by a different partial state).
+ *
+ * No-op when neither `recipient` nor `recipientRaw` is set — there's
+ * nothing to preserve, and seeding a partial with only `localCurrency`
+ * would confuse the resolver about what to ask for next.
+ */
+function reseedRecoverableSendError(from: string, command: ParsedCommand, lang: Lang): void {
+  if (!command.recipient && !command.recipientRaw) return
+  partialSends.set(from, {
+    recipient: command.recipient,
+    recipientRaw: command.recipientRaw,
+    localCurrency: command.localCurrency,
+    recipientDisplayName: command.recipientDisplayName,
+    payQrScan: command.payQrScan,
+    timestamp: Date.now(),
+    lang,
+  })
+}
+
+// Non-financial intents that should accrue conversation context. Kept outside
+// processWebhook so SMART-routed and regex-routed paths share the same set —
+// any drift would mean SMART-handled greetings/help don't grow context the
+// way regex/LLM-routed ones do (regression risk for state-aware copy).
+const CONTEXT_INTENTS = new Set<string>([
+  'greeting',
+  'social',
+  'help',
+  'about',
+  'history',
+  'settings',
+  'language',
+  'start',
+  'dashboard',
+])
+
+/**
+ * Append conversation context (for eligible intents) and resolve the final
+ * language used for routing + outbound copy. Mirrors the persistence the
+ * old inline block ran at the same lifecycle point, factored out so the
+ * SMART execute branch and the regular parseMessage branch can't drift.
+ *
+ * Side effects:
+ *   - appendConversationMessage when command is in CONTEXT_INTENTS
+ *   - setUserLanguage when the high-confidence detected lang differs from
+ *     the stored preference (skipped on `unknown` — a single typo must not
+ *     flip the user's language)
+ *
+ * `cachedUserLang` lets the caller skip a redundant getUserLanguage round-trip
+ * when it already fetched the value (e.g. the SMART path uses it for the
+ * classifier's `preferredLang` hint). `undefined` = not provided, fetch it;
+ * `null` = caller fetched and got no preference; `Lang` = caller fetched value.
+ *
+ * Exported for future webhook integration tests; not part of the public API.
+ */
+export async function appendContextAndResolveLang(
+  from: string,
+  text: string,
+  command: ParsedCommand,
+  cachedUserLang?: Lang | null
+): Promise<Lang> {
+  if (CONTEXT_INTENTS.has(command.command)) {
+    appendConversationMessage(from, text)
+  }
+
+  let userLang: Lang | null =
+    cachedUserLang !== undefined ? cachedUserLang : await getUserLanguage(from)
+
+  // Explicit language command always wins
+  if (command.command === 'language' && command.detectedLanguage) {
+    const lang = command.detectedLanguage as Lang
+    await setUserLanguage(from, lang)
+    return lang
+  }
+
+  const detection = detectLanguage(text)
+  const llmLang =
+    command.detectedLanguage && command.detectedLanguage !== 'ambiguous'
+      ? (command.detectedLanguage as Lang)
+      : null
+  const detectedLang =
+    llmLang || (detection && detection.confidence >= PERSIST_THRESHOLD ? detection.lang : null)
+
+  if (detectedLang) {
+    if (detectedLang !== userLang && command.command !== 'unknown') {
+      await setUserLanguage(from, detectedLang)
+    }
+    if (command.command !== 'unknown' || !userLang) {
+      userLang = detectedLang
+    }
+  } else if (!userLang && detection) {
+    userLang = detection.lang
+  }
+
+  return userLang || getLanguageForPhone(from)
+}
+
 // GC interval — removes entries that were never confirmed/cancelled.
 // Correctness is NOT reliant on this interval; expiry is enforced lazily
 // on access in the confirm handler.
@@ -186,6 +344,11 @@ const pendingTxCleanupInterval = setInterval(() => {
         partialSends.delete(phone)
       }
     }
+    for (const [phone, invite] of pendingInvites.entries()) {
+      if (now - invite.timestamp > PENDING_TX_TTL_MS) {
+        pendingInvites.delete(phone)
+      }
+    }
     for (const [phone, ow] of pendingContactOverwrites.entries()) {
       if (now - ow.timestamp > PENDING_OVERWRITE_TTL_MS) {
         pendingContactOverwrites.delete(phone)
@@ -197,7 +360,47 @@ const pendingTxCleanupInterval = setInterval(() => {
 }, 30_000)
 pendingTxCleanupInterval.unref()
 
-function clearPendingIfUnrelated(
+/**
+ * Pre-SMART deterministic short-circuit.
+ *
+ * SMART MODE's classifier vocabulary excludes `confirm`/`cancel` (see
+ * smart_mode/types.ts:80-87), so a bare "si" / "no" / "cancel" while a
+ * transfer is pending gets classified as `social` — which then trips
+ * `clearPendingIfUnrelated` and the user's pending tx is silently lost.
+ * Likewise, "mi address" / "cuál es mi billetera" already have
+ * deterministic owners (`matchHighConfidencePreLlm` → `balance`), but
+ * that gate lives inside `parseMessage` which SMART pre-empts.
+ *
+ * This helper restores deterministic ownership for two tightly scoped
+ * classes ahead of SMART:
+ *   1. Pending confirm/cancel — strict regex routes "si"/"sí"/"yes"/
+ *      "sim"/"confirmar"/"dale"/"va" and the cancel siblings to the
+ *      pending-tx handler without an LLM in the loop.
+ *   2. High-confidence loose patterns — the same set
+ *      `matchHighConfidencePreLlm` already enforces inside parseMessage,
+ *      now lifted ahead of SMART so SMART can't override (e.g. address →
+ *      pay_qr instead of balance).
+ *
+ * Returns null when no rule fires — caller proceeds to SMART → parseMessage.
+ *
+ * Pure function. Exported for direct unit testing.
+ */
+export function tryPreSmartShortCircuit(
+  text: string,
+  hasPendingConfirmable: boolean
+): ParsedCommand | null {
+  if (hasPendingConfirmable) {
+    const strict = parseMessageWithRegex(text)
+    if (strict.command === 'confirm' || strict.command === 'cancel') {
+      return strict
+    }
+  }
+  return matchHighConfidencePreLlm(text)
+}
+
+// Exported for tests: pins the contract that new send/invite intents clear
+// stale pending tx + contact overwrites, while confirm/cancel preserve them.
+export function clearPendingIfUnrelated(
   from: string,
   command: ParsedCommand,
   pendingTxs: Map<string, PendingTransaction>
@@ -216,6 +419,9 @@ function clearPendingIfUnrelated(
   // Clear partial sends on any non-send command (user moved on)
   if (command.command !== 'send') {
     partialSends.delete(from)
+  }
+  if (command.command !== 'invite') {
+    pendingInvites.delete(from)
   }
 }
 
@@ -356,6 +562,25 @@ export async function routeCommand(
         break
       }
 
+      case 'pizza_day': {
+        // Replies regardless of setup status — Pizza Day info is useful
+        // even to brand-new users (it's literally the event Sippy is at).
+        await sendMessageFn(phoneNumber, formatPizzaDayMessage(lang), lang)
+        break
+      }
+
+      case 'pay_qr': {
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+        } else {
+          await sendMessageFn(phoneNumber, formatPayQrLinkMessage(phoneNumber, lang), lang)
+        }
+        break
+      }
+
       case 'fund': {
         const s = await resolveStatus()
         if (s === 'new_user') {
@@ -373,7 +598,13 @@ export async function routeCommand(
       }
 
       case 'balance':
-        await balanceHandler(phoneNumber, lang, rateCtx.senderRate, rateCtx.senderCurrency)
+        await balanceHandler(
+          phoneNumber,
+          lang,
+          rateCtx.senderRate,
+          rateCtx.senderCurrency,
+          command.addressQuery === true
+        )
         break
 
       case 'send': {
@@ -394,7 +625,35 @@ export async function routeCommand(
             if (rate && rate > 0) {
               const usdcAmount = Math.round((command.localAmount / rate) * 100) / 100
               if (usdcAmount < 0.1) {
-                await sendMessageFn(phoneNumber, formatAmountError('TOO_SMALL', lang), lang)
+                // Context-aware error + re-seed so user can retry with a
+                // larger amount in the SAME currency to the SAME recipient.
+                // Falls back to the plain TOO_SMALL copy when we have no
+                // recipient context to preserve (e.g., classifier-only path
+                // that somehow reached send without a recipient — defensive).
+                const label = recipientLabelFor(command)
+                if (label) {
+                  // Seed-after-send: reseed the partial only after the
+                  // retry-hint prompt actually lands. Otherwise a WhatsApp
+                  // failure leaves a partial active that interprets the
+                  // user's next reply as a retry amount for a flow they
+                  // didn't see opened.
+                  await sendMessageFn(
+                    phoneNumber,
+                    formatAmountBelowMinWithContext(
+                      {
+                        localAmount: command.localAmount,
+                        localCurrency: command.localCurrency,
+                        usdcAmount,
+                        recipientLabel: label,
+                      },
+                      lang
+                    ),
+                    lang
+                  )
+                  reseedRecoverableSendError(phoneNumber, command, lang)
+                } else {
+                  await sendMessageFn(phoneNumber, formatAmountError('TOO_SMALL', lang), lang)
+                }
                 return
               }
               command.amount = usdcAmount
@@ -417,12 +676,6 @@ export async function routeCommand(
 
           if (matches.length === 1) {
             const match = matches[0]
-            pendingTxs.set(phoneNumber, {
-              amount: command.amount,
-              recipient: match.targetPhone,
-              timestamp: Date.now(),
-              lang,
-            })
             const amtStr = formatAmountWithLocal(
               command.amount,
               command.localAmount,
@@ -434,14 +687,26 @@ export async function routeCommand(
               es: `\u00bfEnviar ${amtStr} a ${match.aliasDisplay} (${match.targetPhone})? Responde S\u00cd para confirmar.`,
               pt: `Enviar ${amtStr} para ${match.aliasDisplay} (${match.targetPhone})? Responda SIM para confirmar.`,
             }
+            // Seed-after-send: pendingTxs is what the pre-SMART confirm
+            // guard reads on the next "Si". If WhatsApp throws and we'd
+            // already set it, an unrelated later "Si" could land on this
+            // stale pending and trigger the send the user never saw asked
+            // about. Send first; only stash after the prompt lands.
             await sendMessageFn(phoneNumber, confirmMsg[lang], lang)
-            return
-          } else if (matches.length > 1) {
-            partialSends.set(phoneNumber, {
+            pendingTxs.set(phoneNumber, {
               amount: command.amount,
+              recipient: match.targetPhone,
               timestamp: Date.now(),
               lang,
+              // Alias-resolution path: by definition not a QR scan.
+              payQrScan: false,
             })
+            return
+          } else if (matches.length > 1) {
+            // Seed-after-send: only stash the partial if the user actually
+            // receives the disambiguation prompt. A send failure here would
+            // otherwise leave their next unrelated message being parsed as
+            // a recipient name for a flow they didn't see opened.
             const safeRaw = sanitizeAlias(command.recipientRaw) ?? command.recipientRaw.slice(0, 30)
             const lines = matches.map((m, i) => `${i + 1}. ${m.aliasDisplay} (${m.targetPhone})`)
             const disambigMsg = {
@@ -450,16 +715,24 @@ export async function routeCommand(
               pt: `V\u00e1rios contatos correspondem a "${safeRaw}":\n${lines.join('\n')}\nResponda com o nome exato do contato.`,
             }
             await sendMessageFn(phoneNumber, disambigMsg[lang], lang)
-            return
-          } else {
-            // No match — store partial send so follow-up resolves as recipient
             partialSends.set(phoneNumber, {
               amount: command.amount,
               timestamp: Date.now(),
               lang,
             })
+            return
+          } else {
+            // Seed-after-send: store the partial only after the
+            // "contact not found" prompt actually lands. A WhatsApp failure
+            // otherwise leaves a partial active that would interpret the
+            // user's next unrelated message as a recipient for this send.
             const safeRaw = sanitizeAlias(command.recipientRaw) ?? command.recipientRaw.slice(0, 30)
             await sendMessageFn(phoneNumber, formatContactNotFound(safeRaw, lang), lang)
+            partialSends.set(phoneNumber, {
+              amount: command.amount,
+              timestamp: Date.now(),
+              lang,
+            })
             return
           }
         }
@@ -478,7 +751,14 @@ export async function routeCommand(
         }
         if (command.amount && command.recipient) {
           const threshold = env.get('CONFIRM_THRESHOLD') ?? CONFIRM_THRESHOLD_DEFAULT
-          if (command.amount <= threshold) {
+          // Force the confirmation path when this command came from a
+          // pay-QR scan. The payer should never silently send because the
+          // amount is below the personal-send threshold — scanning a QR is
+          // a "real money to someone via a code" gesture and deserves an
+          // explicit YES. Context is carried over from the bracket
+          // dispatcher via the partial-send.
+          const isPayQrScan = command.payQrScan === true
+          if (command.amount <= threshold && !isPayQrScan) {
             // At or below threshold — concurrent guard + execute immediately
             if (activeSendsSet.has(phoneNumber)) {
               await sendMessageFn(phoneNumber, formatConcurrentSendMessage(lang), lang)
@@ -505,64 +785,135 @@ export async function routeCommand(
               activeSendsSet.delete(phoneNumber)
             }
           } else {
-            // Above threshold — check balance before asking for confirmation
+            // Above threshold OR vendor recipient — confirmation required.
+            // Check balance first so we don't ask the user to confirm a
+            // send they can't afford.
             try {
               const balance = await getEmbeddedBalance(phoneNumber)
               if (balance < command.amount) {
-                await sendMessageFn(
-                  phoneNumber,
-                  formatInsufficientBalanceMessage(
-                    {
-                      balance,
-                      needed: command.amount,
-                      localRate: rateCtx.senderRate,
-                      localCurrency: rateCtx.senderCurrency,
-                    },
-                    lang
-                  ),
+                // Re-seed so user can retry with a smaller amount to the
+                // SAME recipient. Pay-QR scans are also re-seeded — a
+                // payer at a register typically retries with the right
+                // amount rather than walking away.
+                //
+                // Seed-after-send: reseed only after the user actually
+                // sees the insufficient-balance message. A WhatsApp
+                // failure would otherwise leave a partial active that
+                // interprets their next reply as a retry amount for a
+                // flow they didn't see opened.
+                const label = recipientLabelFor(command)
+                const baseMsg = formatInsufficientBalanceMessage(
+                  {
+                    balance,
+                    needed: command.amount,
+                    localRate: rateCtx.senderRate,
+                    localCurrency: rateCtx.senderCurrency,
+                  },
                   lang
                 )
+                const fullMsg = label
+                  ? `${baseMsg}\n\n${formatInsufficientBalanceRetryHint(
+                      { recipientLabel: label, localCurrency: command.localCurrency },
+                      lang
+                    )}`
+                  : baseMsg
+                await sendMessageFn(phoneNumber, fullMsg, lang)
+                reseedRecoverableSendError(phoneNumber, command, lang)
                 return
               }
-            } catch {
-              // Balance check failed — proceed to confirmation anyway.
-              // sendHandler will re-check balance before executing.
+            } catch (err) {
+              // Balance check failed. For regular sends we let the user
+              // see the confirm prompt (sendHandler re-checks balance
+              // before executing). For pay-QR scans that's not safe: a
+              // payer at a register types YES, the inner send fails with
+              // a generic insufficient-balance reply, and the receiver
+              // walks away believing they were paid. Short-circuit instead.
+              if (isPayQrScan) {
+                logger.warn(
+                  { phone: maskPhone(phoneNumber), err },
+                  'pay-QR scan: balance check failed — surfacing generic error instead of confirm'
+                )
+                await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+                return
+              }
             }
 
-            // Store pending, ask for confirmation
+            // Ask for confirmation. Pay-QR scans get the friendly display
+            // name (carried over from the bracket dispatcher) in the
+            // confirm prompt; everyone else gets the standard prompt with
+            // the recipient phone.
+            //
+            // displayName is required by createQrLink at issuance time, so
+            // missing it on a pay-QR confirm means something is drifting
+            // (someone synthesized a pay-QR command outside the bracket
+            // flow, or the partial-send lost the field). Surface it without
+            // breaking the user-facing flow.
+            if (isPayQrScan && !command.recipientDisplayName) {
+              logger.warn(
+                { phone: maskPhone(phoneNumber), recipient: maskPhone(command.recipient) },
+                'pay-QR confirm prompt missing recipientDisplayName — falling back to maskPhone'
+              )
+            }
+            const confirmPrompt = isPayQrScan
+              ? formatPayConfirmationPrompt(
+                  command.amount,
+                  command.recipientDisplayName ?? maskPhone(command.recipient),
+                  lang
+                )
+              : formatConfirmationPromptWithWarning(
+                  command.amount,
+                  command.recipient,
+                  command.isLargeAmount ?? false,
+                  lang
+                )
+            // Seed-after-send: pendingTxs is the pre-SMART confirm
+            // guard's read source. If WhatsApp throws and we'd already
+            // set it, an unrelated later "Si" could land on this stale
+            // pending and execute the send the user never saw asked
+            // about. Send first; only stash after the prompt lands.
+            await sendMessageFn(phoneNumber, confirmPrompt, lang)
             pendingTxs.set(phoneNumber, {
               amount: command.amount,
               recipient: command.recipient,
               timestamp: Date.now(),
               lang,
+              payQrScan: isPayQrScan,
             })
-            await sendMessageFn(
-              phoneNumber,
-              formatConfirmationPromptWithWarning(
-                command.amount,
-                command.recipient,
-                command.isLargeAmount ?? false,
-                lang
-              ),
-              lang
-            )
           }
         } else if (command.amount && !command.recipient) {
-          // Has amount, missing recipient → store partial, ask for phone or alias
+          // Has amount, missing recipient → ask for phone or alias.
+          // Persist `localCurrency` when present so the next-turn resolver
+          // can synthesize a complete send with FX still wired up — without
+          // this, "envia 200 pesos" with no recipient stored amount=200
+          // and the follow-up "+57…" produced a $200 USDC send (same
+          // class of bug as the SMART dispatcher ambiguous-seed path).
+          // Echo with the original currency word for the same reason the
+          // amount needs to display correctly mid-flow (see
+          // formatAskForRecipient header).
+          //
+          // Seed-after-send: stash the partial only after the prompt
+          // actually lands. If WhatsApp throws, a partial would otherwise
+          // interpret the user's next unrelated message as a recipient.
+          await sendMessageFn(
+            phoneNumber,
+            formatAskForRecipient(command.amount, lang, command.localCurrency),
+            lang
+          )
           partialSends.set(phoneNumber, {
             amount: command.amount,
+            localCurrency: command.localCurrency,
             timestamp: Date.now(),
             lang,
           })
-          await sendMessageFn(phoneNumber, formatAskForRecipient(command.amount, lang), lang)
         } else if (command.recipient && !command.amount) {
-          // Has recipient, missing amount → store partial, ask for amount
+          // Has recipient, missing amount → ask for amount.
+          // Seed-after-send: same invariant as the missing-recipient branch.
+          await sendMessageFn(phoneNumber, formatAskForAmount(command.recipient, lang), lang)
           partialSends.set(phoneNumber, {
             recipient: command.recipient,
             timestamp: Date.now(),
             lang,
           })
-          await sendMessageFn(phoneNumber, formatAskForAmount(command.recipient, lang), lang)
         } else {
           await sendMessageFn(phoneNumber, formatInvalidSendFormat(lang), lang)
         }
@@ -635,6 +986,13 @@ export async function routeCommand(
           command.phone ?? '',
           lang
         )
+        // Seed-after-send: only stash the overwrite confirmation if the
+        // user actually sees the "alias X already maps to Y — confirm
+        // overwrite?" prompt. Otherwise their next "si" (which our
+        // pre-SMART guard now correctly routes through the confirm
+        // handler) would consume a phantom overwrite they never saw asked
+        // about.
+        await sendMessageFn(phoneNumber, result.message, lang)
         if (result.pendingOverwrite) {
           pendingContactOverwrites.set(phoneNumber, {
             alias: result.pendingOverwrite.alias,
@@ -642,7 +1000,6 @@ export async function routeCommand(
             timestamp: Date.now(),
           })
         }
-        await sendMessageFn(phoneNumber, result.message, lang)
         break
       }
 
@@ -696,19 +1053,18 @@ export async function routeCommand(
         if (!pending || Date.now() - pending.timestamp > PENDING_TX_TTL_MS) {
           if (pending) pendingTxs.delete(phoneNumber) // clean up expired entry
           // No pending tx — "dale"/"sí"/"va" is just acknowledgment, not a real confirm.
-          // Treat like social instead of showing confusing "No pending transfer."
+          // Use the deterministic social reply rather than the LLM-generated
+          // path: an LLM here can produce ungrounded suggestions ("¿revisamos
+          // tu saldo?") with no state machine behind them, leading the user
+          // to retype "si" again and get another disconnected reply. Until
+          // we add a real `pendingSuggestion` store, no LLM follow-up.
           const s = await resolveStatus()
           if (s === 'new_user') {
             await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
           } else if (s === 'embedded_incomplete') {
             await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
           } else {
-            const text = command.originalText ?? ''
-            const raw = text
-              ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
-              : null
-            const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
-            await sendMessageFn(phoneNumber, reply || formatSocialReplyMessage(lang, dialect), lang)
+            await sendMessageFn(phoneNumber, formatSocialReplyMessage(lang, dialect), lang)
           }
         } else {
           // Guard 2: concurrent-send check — BEFORE consuming pending tx
@@ -781,16 +1137,258 @@ export async function routeCommand(
         break
       }
 
-      case 'greeting': {
+      case 'dashboard': {
+        // Mirror `settings`: gate on setup status so we don't deep-link a
+        // new user into a wallet they haven't created yet. Pre-setup users
+        // get the same setup nudge; complete users get the /wallet link.
         const s = await resolveStatus()
-        const text = command.originalText ?? ''
-        const raw = text
-          ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
-          : null
-        const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
-        if (reply) {
-          await sendMessageFn(phoneNumber, reply, lang)
-        } else if (s === 'new_user') {
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+        } else if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+        } else {
+          await sendMessageFn(phoneNumber, formatDashboardMessage(phoneNumber, lang), lang)
+        }
+        break
+      }
+
+      case 'referral_code': {
+        // Sippy Quest — return the user's invite code (generate on first
+        // request via ensureReferralCode). Gated on setup status because
+        // pre-setup users don't have a `user_preferences` row yet, and
+        // `referral_codes.phone_number` FK-references that table.
+        //
+        // No event slug: the Quest is global, the code is one-per-user-
+        // lifetime (see GLOBAL_REFERRAL_CAMPAIGN). The prize draw is
+        // event-scoped (see scoring service), but the share code itself
+        // outlives any specific event.
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+          break
+        }
+        if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+          break
+        }
+        const maxEntries = env.get('QUEST_MAX_ENTRIES_PER_USER') ?? 5
+        const currentEventSlug = env.get('SIPPY_CURRENT_EVENT_SLUG')
+        const leaderboardUrl = currentEventSlug
+          ? `${env.get('FRONTEND_URL') ?? 'https://www.sippy.lat'}/quest/${currentEventSlug}`
+          : undefined
+        try {
+          const codeRow = await ensureReferralCode(phoneNumber)
+          // Share URL is built inside `formatReferralCodeMessage` against
+          // `FRONTEND_URL` and points at `/r/<code>` on the web app — NOT
+          // a raw wa.me link. See the format function header for why
+          // (WhatsApp's anti-spam guard suppresses self-targeting wa.me
+          // URLs in bot replies; the web redirect sidesteps it).
+          await sendMessageFn(
+            phoneNumber,
+            formatReferralCodeMessage(
+              {
+                code: codeRow.code,
+                maxEntries: Number(maxEntries),
+                leaderboardUrl,
+              },
+              lang
+            ),
+            lang
+          )
+        } catch (err) {
+          logger.error({ err, phone: maskPhone(phoneNumber) }, 'referral_code: ensure failed')
+          await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+        }
+        break
+      }
+
+      case 'quest_status': {
+        // Sippy Quest — show the user's current standing (entries +
+        // breakdown + rank). Same setup gating as `referral_code`:
+        // pre-setup users have no user_preferences row so the FK
+        // joins in `getUserQuestStatus` would silently miss; nudge to
+        // finish onboarding instead of surfacing a confusing "0/5".
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+          break
+        }
+        if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+          break
+        }
+        // Quest standing is scoped to the currently-active prize event.
+        // The CODE returned in the share-link CTA is global (one per user,
+        // lifetime) — only the entries / rank are event-scoped. When no
+        // event is active (SIPPY_CURRENT_EVENT_SLUG unset), fall back to a
+        // "no active event" reply that still shares the user's code.
+        const currentEventSlug = env.get('SIPPY_CURRENT_EVENT_SLUG')
+        const questMaxEntries = Number(env.get('QUEST_MAX_ENTRIES_PER_USER') ?? 5)
+        try {
+          if (!currentEventSlug) {
+            const codeRow = await ensureReferralCode(phoneNumber)
+            await sendMessageFn(
+              phoneNumber,
+              formatQuestNoActiveEvent({ code: codeRow.code, maxEntries: questMaxEntries }, lang),
+              lang
+            )
+            break
+          }
+          const leaderboardUrl = `${env.get('FRONTEND_URL') ?? 'https://www.sippy.lat'}/quest/${currentEventSlug}`
+          // Fetch global code + event-scoped status in parallel — both
+          // are independent reads needed for the reply. Status query
+          // returns zero-state when the user hasn't earned entries yet
+          // so the share-link CTA still fires.
+          const [codeRow, status] = await Promise.all([
+            ensureReferralCode(phoneNumber),
+            getUserQuestStatus({ phone: phoneNumber, eventSlug: currentEventSlug }),
+          ])
+          await sendMessageFn(
+            phoneNumber,
+            formatQuestStatusMessage(
+              {
+                entries: status.entries,
+                cap: status.cap,
+                activity: status.activity,
+                referrals: status.referrals,
+                rank: status.rank,
+                totalRanked: status.totalRanked,
+                code: codeRow.code,
+                leaderboardUrl,
+              },
+              lang
+            ),
+            lang
+          )
+        } catch (err) {
+          logger.error({ err, phone: maskPhone(phoneNumber) }, 'quest_status: fetch failed')
+          await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+        }
+        break
+      }
+
+      case 'season_score': {
+        // Season 1 reputation standing (Phase D). Reputation-only: the reply
+        // shows tier + one progress line + 2-3 next actions, never the scoring
+        // formula. Same setup gating as referral_code/quest_status — a pre-setup
+        // user has no wallet, so nudge them to onboard first.
+        const s = await resolveStatus()
+        if (s === 'new_user') {
+          await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
+          break
+        }
+        if (s === 'embedded_incomplete') {
+          await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+          break
+        }
+        // Master switch off → friendly empty state, never an error or a zero.
+        if (!isSeason1Enabled()) {
+          await sendMessageFn(phoneNumber, formatSeasonScoreEmpty(phoneNumber, lang), lang)
+          break
+        }
+        try {
+          // Resolve the wallet from the sender's phone (server-side). Resolve full
+          // KYC in parallel via the SAME shared predicate the /api/season/score
+          // surface uses, so the bot and web agree on the Power verification gate
+          // for a full-KYC user. getKyc failure degrades to "not verified".
+          const [wallet, kyc] = await Promise.all([
+            getUserWallet(phoneNumber),
+            getKyc(phoneNumber).catch(() => null),
+          ])
+          const standing = wallet?.walletAddress
+            ? await getStanding({ wallet: wallet.walletAddress, hasKyc: isFullKyc(kyc) })
+            : null
+          if (!standing) {
+            // Onboarded but unscored yet (shadow data / no qualifying send).
+            await sendMessageFn(phoneNumber, formatSeasonScoreEmpty(phoneNumber, lang), lang)
+            break
+          }
+          await sendMessageFn(
+            phoneNumber,
+            formatSeasonScoreMessage(
+              {
+                score: standing.score,
+                tier: standing.tier,
+                nextTier: standing.nextTier
+                  ? {
+                      tier: standing.nextTier.tier,
+                      progressPct: standing.nextTier.progressPct,
+                      verificationRequired: standing.nextTier.verificationRequired,
+                    }
+                  : null,
+                topActions: standing.topActions,
+                phoneNumber,
+              },
+              lang
+            ),
+            lang
+          )
+        } catch (err) {
+          logger.error({ err, phone: maskPhone(phoneNumber) }, 'season_score: fetch failed')
+          await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+        }
+        break
+      }
+
+      case 'poap_code': {
+        // User asking for their POAP claim link. We look up the row that
+        // `claimPendingPoapInvite` previously assigned — pool path
+        // (`poap_codes.assigned_to_phone`) or legacy shared URL
+        // (`events.poap_claim_url`, gated by
+        // `user_event_links.poap_invite_sent_at`) — and re-send it inline.
+        //
+        // No template needed: this is user-initiated, so we're inside
+        // WhatsApp's 24h session window. Templates are only required
+        // when the bot initiates outside that window (the original push
+        // notification).
+        //
+        // Reply body mirrors the push-side `poap_claim_invite` template
+        // 1:1 (event name + URL + Sippy wallet address as paste fallback
+        // for POAP's claim form). The wallet comes from
+        // `getEmbeddedWallet`; we still send the URL even if the wallet
+        // lookup misses, because the URL alone is the load-bearing piece.
+        try {
+          const outcome = await findAssignedPoapForPhone(phoneNumber)
+          if (outcome.kind === 'assigned') {
+            const wallet = await getEmbeddedWallet(phoneNumber).catch(() => null)
+            await sendMessageFn(
+              phoneNumber,
+              formatPoapClaimInvite(
+                {
+                  poapClaimUrl: outcome.claimUrl,
+                  eventName: outcome.eventName,
+                  sippyWalletAddress: wallet?.walletAddress ?? '',
+                },
+                lang
+              ),
+              lang
+            )
+          } else if (outcome.kind === 'pool_pending') {
+            await sendMessageFn(
+              phoneNumber,
+              formatPoapPendingMessage(outcome.eventName, lang),
+              lang
+            )
+          } else {
+            await sendMessageFn(phoneNumber, formatNoPoapAssignedMessage(lang), lang)
+          }
+        } catch (err) {
+          logger.error({ err, phone: maskPhone(phoneNumber) }, 'poap_code: lookup failed')
+          await sendMessageFn(phoneNumber, formatCommandErrorMessage(lang), lang)
+        }
+        break
+      }
+
+      case 'greeting': {
+        // Deterministic copy only. The LLM-generated greeting path was
+        // producing ungrounded action-questions ("¿revisamos tu saldo?")
+        // with no state machine behind them, so user affirmations ("muy
+        // bien si") landed back in this case with nothing to bind to.
+        // Until a `pendingSuggestion` store exists for non-money intents,
+        // greetings stay on the deterministic formatter — open-ended
+        // ("¿qué necesitas?") rather than closed yes/no traps.
+        const s = await resolveStatus()
+        if (s === 'new_user') {
           await sendMessageFn(phoneNumber, formatGreetingNewUser(phoneNumber, lang), lang)
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatGreetingIncomplete(phoneNumber, lang), lang)
@@ -801,15 +1399,9 @@ export async function routeCommand(
       }
 
       case 'social': {
+        // Same bug class as greeting: see note above. Always deterministic.
         const s = await resolveStatus()
-        const text = command.originalText ?? ''
-        const raw = text
-          ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
-          : null
-        const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
-        if (reply) {
-          await sendMessageFn(phoneNumber, reply, lang)
-        } else if (s === 'new_user') {
+        if (s === 'new_user') {
           await sendMessageFn(phoneNumber, formatGreetingNewUser(phoneNumber, lang), lang)
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatGreetingIncomplete(phoneNumber, lang), lang)
@@ -858,10 +1450,32 @@ export async function routeCommand(
 
       case 'unknown': {
         const s = await resolveStatus()
+        // Deterministic floor message — used whenever the LLM-driven paths
+        // (helpfulMessage or generateResponse) produce nothing usable.
+        // SMART's verdict (when fall-through stamped the command) selects
+        // the OOS pool and surfaces the sanitized hint when present;
+        // otherwise default to the 'gibberish' pool — the most neutral
+        // framing for unmatched input that didn't go through SMART.
+        const fallbackUnknown = selectUnknownVariant({
+          lang,
+          category: command.smartCategory ?? 'gibberish',
+          text: command.originalText ?? '',
+          dialect,
+          oosRedirect: command.smartOosRedirect ?? null,
+        })
         if (s === 'new_user') {
           await sendMessageFn(phoneNumber, formatNudgeSetup(phoneNumber, lang), lang)
         } else if (s === 'embedded_incomplete') {
           await sendMessageFn(phoneNumber, formatNudgeFinishSetup(phoneNumber, lang), lang)
+        } else if (command.smartCategory) {
+          // SMART already classified this unknown as out-of-scope/gibberish.
+          // If it also produced a sanitizer-cleared OOS hint, fallbackUnknown
+          // is that tailored redirect; otherwise it is a deterministic
+          // state-aware variant. In both cases we skip the LLM-driven
+          // helpfulMessage / generateResponse paths: a generic LLM reply
+          // can drift into jokes/weather/etc. after SMART already decided
+          // the turn is outside Sippy's action surface.
+          await sendMessageFn(phoneNumber, fallbackUnknown, lang)
         } else if (command.helpfulMessage) {
           const validated = await validateAndFallback(
             command.helpfulMessage,
@@ -870,28 +1484,19 @@ export async function routeCommand(
             s,
             dialectHint(dialect)
           )
-          await sendMessageFn(
-            phoneNumber,
-            validated || formatUnknownCommandMessage(command.originalText || '', lang, dialect),
-            lang
-          )
+          await sendMessageFn(phoneNumber, validated || fallbackUnknown, lang)
         } else {
           // No helpfulMessage — try generating a conversational reply via LLM
-          // before falling back to the static unknown message
+          // before falling back to the variant-selector floor. Reachable ONLY
+          // for non-SMART unknowns (cohort off, SMART couldn't classify, or
+          // SMART executed/replied/never ran for this turn); SMART-stamped
+          // unknowns hit the `smartCategory` branch above and never get here.
           const text = command.originalText ?? ''
           const raw = text
             ? await generateResponseFn(text, lang, context, s, dialectHint(dialect))
             : null
           const reply = await validateAndFallback(raw, text, context, s, dialectHint(dialect))
-          if (reply) {
-            await sendMessageFn(phoneNumber, reply, lang)
-          } else {
-            await sendMessageFn(
-              phoneNumber,
-              formatUnknownCommandMessage(command.originalText || '', lang, dialect),
-              lang
-            )
-          }
+          await sendMessageFn(phoneNumber, reply || fallbackUnknown, lang)
         }
         break
       }
@@ -957,42 +1562,242 @@ export async function dispatchCommand(
   )
 }
 
+export type PartialSendResolution =
+  | {
+      kind: 'complete'
+      amount: number
+      recipient: string
+      /** Set when the user typed the amount with a local-currency word
+       *  (or the seed already carried one). Plumbed into the synthesized
+       *  ParsedCommand so the FX step converts before sending. */
+      localCurrency?: string
+    }
+  | { kind: 'progress'; partial: PartialSend; prompt: 'amount' | 'recipient' }
+
+function stripRecipientLead(text: string): string {
+  return text
+    .trim()
+    .replace(/^(?:a|al|para|to|for)\s+/i, '')
+    .trim()
+}
+
 /**
- * Try to fill in the missing piece of a partial send.
- * Returns { amount, recipient } if successful, null otherwise.
+ * Map of currency-word slot replies to the ISO/LOCAL code used by the
+ * downstream FX step. Mirrors `CURRENCY_WORD_MAP` in message_parser.ts —
+ * kept in sync so a standalone "200 pesos" reply produces the same
+ * `localCurrency` value as "envia 200 pesos a +57…" through the regex
+ * path. Null entries mean USD-equivalent (no FX conversion).
  */
-async function resolvePartialSend(
+const STANDALONE_CURRENCY_MAP: Record<string, string | null> = {
+  dollar: null,
+  dollars: null,
+  dolar: null,
+  dolares: null,
+  usd: null,
+  plata: null,
+  peso: 'LOCAL',
+  pesos: 'LOCAL',
+  real: 'BRL',
+  reais: 'BRL',
+  sol: 'PEN',
+  soles: 'PEN',
+  lempira: 'HNL',
+  lempiras: 'HNL',
+  quetzal: 'GTQ',
+  quetzales: 'GTQ',
+  colon: 'CRC',
+  colones: 'CRC',
+  bolivar: 'VES',
+  bolivares: 'VES',
+  guarani: 'PYG',
+  guaranies: 'PYG',
+}
+
+interface StandaloneAmountParse {
+  amount: number
+  /** null = USD/no currency word; non-null = local currency code for FX. */
+  localCurrency: string | null
+}
+
+/**
+ * Parse a standalone amount reply, capturing both the numeric value and
+ * any currency word the user appended. Returning the currency separately
+ * is what keeps "200 pesos" from becoming $200 USDC in the partial-send
+ * resolver — caller must thread `localCurrency` into the synthesized
+ * command so FX runs.
+ */
+function parseStandaloneAmount(text: string): StandaloneAmountParse | null {
+  const trimmed = text.trim().replace(/^\$/, '')
+  // Capture the trailing currency word (accent-stripped match key).
+  const currencyMatch = trimmed.match(
+    /\s+(d[oó]lar(?:es)?|dollars?|pesos?|usd|plata|rea(?:is|l)|soles?|lempiras?|quetzales?|colone?s?|bol[ií]vares?|guaranie?s?)\s*$/i
+  )
+  let localCurrency: string | null = null
+  let cleaned = trimmed
+  if (currencyMatch) {
+    const key = currencyMatch[1]
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+    if (key in STANDALONE_CURRENCY_MAP) {
+      localCurrency = STANDALONE_CURRENCY_MAP[key]
+    }
+    cleaned = trimmed.slice(0, currencyMatch.index).trim()
+  }
+  const result = parseAndValidateAmount(cleaned)
+  if (result.value === null || result.errorCode !== null) return null
+  return { amount: result.value, localCurrency }
+}
+
+/**
+ * Try to advance or complete a partial send.
+ * Returns a complete send when both slots are known, a progressed partial
+ * when one standalone reply filled exactly one slot, or null when the text
+ * should fall back to normal parsing.
+ *
+ * Exported for the SMART-seed → resolve integration tests; not part of
+ * the public webhook API.
+ */
+export async function resolvePartialSend(
   partial: PartialSend,
   text: string,
   ownerPhone: string
-): Promise<{ amount: number; recipient: string } | null> {
+): Promise<PartialSendResolution | null> {
   const trimmed = text.trim()
 
-  if (partial.recipient && !partial.amount) {
+  if ((partial.recipient || partial.recipientRaw) && !partial.amount) {
     // We have the recipient, user should be sending the amount.
-    // Strip currency words: "4 dólares", "$5", "10 pesos" → number
-    const cleaned = trimmed
-      .replace(/^\$/, '')
-      .replace(/\s*(d[oó]lar(?:es)?|dollars?|pesos?|usd|plata)\s*$/i, '')
-      .trim()
-    const result = parseAndValidateAmount(cleaned)
-    if (result.value !== null && result.errorCode === null) {
-      return { amount: result.value, recipient: partial.recipient }
+    const parsed = parseStandaloneAmount(trimmed)
+    if (parsed !== null) {
+      // Prefer the freshly-typed currency; fall back to whatever the seed
+      // already carried (e.g. dispatcher pre-filled amount with a currency
+      // and recipient came in later, then amount came in — unlikely but
+      // mirrored for completeness).
+      const localCurrency = parsed.localCurrency ?? partial.localCurrency ?? undefined
+      if (partial.recipient) {
+        return {
+          kind: 'complete',
+          amount: parsed.amount,
+          recipient: partial.recipient,
+          localCurrency,
+        }
+      }
+
+      const candidate = partial.recipientRaw!
+      const phone = canonicalizePhone(candidate)
+      if (phone) {
+        return { kind: 'complete', amount: parsed.amount, recipient: phone, localCurrency }
+      }
+      const matches = await smartResolveAlias(ownerPhone, candidate)
+      if (matches.length === 1) {
+        return {
+          kind: 'complete',
+          amount: parsed.amount,
+          recipient: matches[0].targetPhone,
+          localCurrency,
+        }
+      }
+
+      return {
+        kind: 'progress',
+        partial: {
+          ...partial,
+          amount: parsed.amount,
+          localCurrency,
+          recipientRaw: undefined,
+          timestamp: Date.now(),
+        },
+        prompt: 'recipient',
+      }
     }
   }
 
   if (partial.amount && !partial.recipient) {
     // We have the amount, user should be sending the phone number or alias.
-    const phone = canonicalizePhone(trimmed)
+    const candidate = stripRecipientLead(trimmed)
+    const phone = canonicalizePhone(candidate)
     if (phone) {
-      return { amount: partial.amount, recipient: phone }
+      return {
+        kind: 'complete',
+        amount: partial.amount,
+        recipient: phone,
+        localCurrency: partial.localCurrency,
+      }
     }
     // Try smart alias resolution (prefix, word, contains, typo)
-    const matches = await smartResolveAlias(ownerPhone, trimmed)
+    const matches = await smartResolveAlias(ownerPhone, candidate)
     if (matches.length === 1) {
-      return { amount: partial.amount, recipient: matches[0].targetPhone }
+      return {
+        kind: 'complete',
+        amount: partial.amount,
+        recipient: matches[0].targetPhone,
+        localCurrency: partial.localCurrency,
+      }
     }
     // Multiple matches or no match → fall through to normal parsing
+  }
+
+  if (partial.sendIntent && !partial.amount && !partial.recipient) {
+    const parsed = parseStandaloneAmount(trimmed)
+    if (parsed !== null) {
+      return {
+        kind: 'progress',
+        partial: {
+          ...partial,
+          amount: parsed.amount,
+          localCurrency: parsed.localCurrency ?? undefined,
+          timestamp: Date.now(),
+        },
+        prompt: 'recipient',
+      }
+    }
+
+    const candidate = stripRecipientLead(trimmed)
+    const phone = canonicalizePhone(candidate)
+    if (phone) {
+      return {
+        kind: 'progress',
+        partial: {
+          ...partial,
+          recipient: phone,
+          recipientRaw: undefined,
+          timestamp: Date.now(),
+        },
+        prompt: 'amount',
+      }
+    }
+
+    const matches = await smartResolveAlias(ownerPhone, candidate)
+    if (matches.length === 1) {
+      return {
+        kind: 'progress',
+        partial: {
+          ...partial,
+          recipient: matches[0].targetPhone,
+          recipientRaw: undefined,
+          timestamp: Date.now(),
+        },
+        prompt: 'amount',
+      }
+    }
+  }
+
+  return null
+}
+
+export async function resolvePendingInvite(
+  ownerPhone: string,
+  text: string
+): Promise<ParsedCommand | null> {
+  const candidate = stripRecipientLead(text)
+  const phone = canonicalizePhone(candidate)
+  if (phone) {
+    return { command: 'invite', recipient: phone, originalText: text }
+  }
+
+  const matches = await smartResolveAlias(ownerPhone, candidate)
+  if (matches.length === 1) {
+    return { command: 'invite', recipient: matches[0].targetPhone, originalText: text }
   }
 
   return null
@@ -1195,21 +2000,237 @@ export default class WebhookController {
       return
     }
 
+    // ── QR bracket-token first-contact handler ─────────────────────────
+    // Runs BEFORE the partial-send resolver, parser, and LLM. A scanned QR
+    // lands the user in WhatsApp with `Hola Sippy! [ABC23XYZ]`; the token
+    // is routing metadata (event_slug + source_tag), not natural-language
+    // intent, so it never enters the LLM prompt — we strip it to context
+    // before any parsing happens. Spec: QR_SYSTEM_SPEC.md "Locked decision #3".
+    //
+    // Wrapped in try/catch because processWebhook is invoked fire-and-forget
+    // by the route handler — any throw escaping here aborts processing
+    // without sending a reply and without marking the message processed,
+    // which makes Meta retry the same webhook in a loop. At Pizza Day that
+    // means an attendee scans a QR, sees nothing, scans again, still nothing.
+    // The catch mirrors the contact-card pattern above: log, send a generic
+    // error fallback, mark processed, return.
+    // ── Referral token [REF-XXXXXX] ────────────────────────────────────
+    // Runs BEFORE the QR bracket extractor — the two patterns can't
+    // collide today (prefix + length differ) but parsing-order discipline
+    // keeps that property explicit so any future widening of either
+    // pattern can't accidentally route a referral through the QR path.
+    //
+    // Capture is silent: we record the attribution (or stash it pending
+    // if the user hasn't finished onboarding) and let downstream parsing
+    // continue on the stripped text. No reply, no markProcessed — the
+    // user typed `[REF-XXX]` because they were invited; the welcome /
+    // greeting / setup-nudge that fires from the stripped text IS the
+    // user-facing acknowledgment.
+    const referralExtracted = extractReferralToken(text)
+    if (referralExtracted.code) {
+      text = referralExtracted.stripped
+      try {
+        const senderPref = await findUserPrefByPhone(from)
+        // attributionEventSlug = the event this referral lands under.
+        // Codes are global (GLOBAL_REFERRAL_CAMPAIGN), but attributions
+        // record where the referee actually showed up so the prize-draw
+        // scoring can filter. When SIPPY_CURRENT_EVENT_SLUG is unset
+        // (no active event), skip the capture — the user still onboards
+        // via the stripped text; we just don't tag the referral.
+        const attributionEventSlug = env.get('SIPPY_CURRENT_EVENT_SLUG')
+        if (!attributionEventSlug) {
+          logger.info(
+            { phone: maskPhone(from), code: referralExtracted.code },
+            'webhook: referral skipped (no active event)'
+          )
+        } else {
+          const capture = await captureReferral({
+            code: referralExtracted.code,
+            refereePhone: from,
+            refereeOnboarded: !!senderPref,
+            attributionEventSlug,
+          })
+          logger.info(
+            { phone: maskPhone(from), code: referralExtracted.code, capture: capture.kind },
+            'webhook: referral captured'
+          )
+        }
+      } catch (err) {
+        // Referral capture must never block message processing — log and
+        // continue with the stripped text. Worst case: an attribution
+        // intent is dropped, which is better than swallowing the message.
+        logger.error({ err, phone: maskPhone(from) }, 'webhook: referral capture threw')
+      }
+    }
+
+    const { shortId, stripped } = extractBracketToken(text)
+    if (shortId) {
+      const bracketLang: Lang = (await getUserLanguage(from)) || getLanguageForPhone(from)
+      try {
+        const dispatch = await dispatchBracketToken({
+          shortId,
+          phoneNumber: from,
+          lang: bracketLang,
+        })
+        if (dispatch.reply) {
+          // Event dispatch handled the message end-to-end (linked + welcomed,
+          // or sent the new-user setup URL, or surfaced an inactive-QR notice,
+          // or prompted for a pay-QR amount).
+          //
+          // CLEAR BEFORE SEND — a QR scan shifts the user's attention to a
+          // new flow. ANY pending money confirmation from before the scan is
+          // now stale, and a delayed "si" must not be allowed to confirm a
+          // transfer the user mentally moved on from. If `sendTextMessage`
+          // throws AFTER we cleared, the user just doesn't see the reply —
+          // safe. If we cleared AFTER and `sendTextMessage` threw, the catch
+          // block below marks processed and returns, leaving the stale
+          // confirmable state alive on the next inbound — unsafe. Same
+          // ordering as the SMART-reply stale-clear; the bracket branch
+          // matches.
+          //   • pay_prompt_for_amount = new send intent in progress →
+          //     {command:'send'} clears stale pending tx + overwrites.
+          //     `clearPendingIfUnrelated` intentionally PRESERVES partialSends
+          //     for send-class commands (so a partial flow can advance), so
+          //     we explicitly drop any prior partialSends below — the pay-QR
+          //     scan starts a new send flow against a different recipient
+          //     and inheriting a stale partial would corrupt it.
+          //   • Other outcomes (event link, setup nudge, inactive QR) = no
+          //     new intent continuation → {command:'unknown'} drops all
+          //     confirmable state plus any leftover partial-send / invite
+          //     from a prior abandoned flow.
+          const payRecipient =
+            dispatch.outcome === 'pay_prompt_for_amount' ? dispatch.payRecipient : null
+          const syntheticCommand: ParsedCommand = payRecipient
+            ? { command: 'send', originalText: text }
+            : { command: 'unknown', originalText: text }
+          clearPendingIfUnrelated(from, syntheticCommand, pendingTransactions)
+          // Explicit partialSends.delete for the pay-QR path: see note above.
+          // No-op for the {unknown} path — clearPendingIfUnrelated already
+          // dropped partialSends there.
+          if (payRecipient) partialSends.delete(from)
+
+          await sendTextMessage(from, dispatch.reply, bracketLang)
+
+          // Pay-QR scan: stash a partial-send so the next inbound message
+          // resolves as the amount for this recipient. `payQrScan: true`
+          // is the signal the downstream send branch reads to force the
+          // confirmation prompt (regardless of CONFIRM_THRESHOLD) and use
+          // the friendly display name in the confirm copy.
+          //
+          // Seeded AFTER sendTextMessage succeeds: if the WhatsApp send
+          // throws, the user never saw the "how much?" prompt, so we must
+          // not leave an active pay partial that would interpret their next
+          // unrelated message as an amount for this recipient. The catch
+          // block below sends the error fallback and returns; no pay
+          // partial survives that path.
+          //
+          // The TTL-based GC + per-command partialSends.delete elsewhere in
+          // this file ensure a long-forgotten pay scan eventually expires.
+          if (payRecipient) {
+            partialSends.set(from, {
+              recipient: payRecipient,
+              recipientDisplayName: dispatch.payDisplayName ?? undefined,
+              payQrScan: true,
+              timestamp: Date.now(),
+              lang: bracketLang,
+            })
+          }
+
+          rateLimitService.markProcessed(messageId)
+          return
+        }
+        // not_found / unsupported_kind without a reply: fall through to normal
+        // parsing on the stripped text. We don't want a stale/invalid token to
+        // swallow the rest of the user's message ("hola sippy [ABC23XYZ] balance"
+        // still resolves the balance intent).
+        text = stripped
+      } catch (err) {
+        logger.error(
+          { shortId, phone: maskPhone(from), err },
+          'bracket-token handler threw — sending error fallback'
+        )
+        await sendTextMessage(from, formatCommandErrorMessage(bracketLang), bracketLang)
+        rateLimitService.markProcessed(messageId)
+        return
+      }
+    }
+
     // ── Fetch conversation context (non-financial follow-ups) ──────────
     const context = await getConversationContext(from)
+
+    // ── Multi-turn invite: resolve the phone/contact after SMART asked ─
+    const pendingInvite = pendingInvites.get(from)
+    if (pendingInvite && Date.now() - pendingInvite.timestamp <= PENDING_TX_TTL_MS) {
+      const command = await resolvePendingInvite(from, text)
+      if (command) {
+        pendingInvites.delete(from)
+        const lang: Lang =
+          (await getUserLanguage(from)) || pendingInvite.lang || getLanguageForPhone(from)
+        clearPendingIfUnrelated(from, command, pendingTransactions)
+        const rateCtx = await fetchRateContext(from, undefined)
+        try {
+          await this.handleCommand(from, command, lang, rateCtx, context)
+          logger.info('Message %s processed (pending invite resolved)', messageId)
+        } finally {
+          rateLimitService.markProcessed(messageId)
+        }
+        return
+      }
+      pendingInvites.delete(from)
+    } else if (pendingInvite) {
+      // expired — drop the stale entry and log it so a user who took
+      // longer than PENDING_TX_TTL_MS to reply with the contact/number
+      // doesn't silently get their message re-parsed as an unknown
+      // command (the previous turn's invite prompt becomes invisible
+      // context). Parity with the partial-send `// expired` branch below.
+      pendingInvites.delete(from)
+      logger.info(
+        'Pending invite for %s expired (>%dms since prompt) — dropped',
+        maskPhone(from),
+        PENDING_TX_TTL_MS
+      )
+    }
 
     // ── Multi-turn send: resolve partial sends before parsing ──────────
     // If the user previously gave an incomplete send (amount or recipient only),
     // try to interpret this message as the missing piece.
     const partial = partialSends.get(from)
     if (partial && Date.now() - partial.timestamp <= PENDING_TX_TTL_MS) {
-      let resolved: { amount: number; recipient: string } | null = null
+      let resolved: PartialSendResolution | null = null
       try {
         resolved = await resolvePartialSend(partial, text, from)
       } catch (err) {
         logger.error('resolvePartialSend failed for %s: %o', maskPhone(from), err)
       }
-      if (resolved) {
+      if (resolved?.kind === 'progress') {
+        const lang: Lang =
+          (await getUserLanguage(from)) || resolved.partial.lang || getLanguageForPhone(from)
+        const prompt =
+          resolved.prompt === 'recipient'
+            ? formatAskForRecipient(resolved.partial.amount!, lang, resolved.partial.localCurrency)
+            : formatAskForAmount(resolved.partial.recipient!, lang)
+        // Seed-after-send invariant: only advance the partial-send state
+        // if the user actually receives the next-step prompt. If the
+        // WhatsApp send throws, leaving the advanced partial alive would
+        // make the user's next unrelated reply be parsed as the missing
+        // slot for a flow they don't know is still pending. The prior
+        // partial entry (`partial` captured above) survives — that's
+        // intentional: the user can retry their last input and re-enter
+        // the resolver from the same state.
+        let sendSucceeded = false
+        try {
+          await sendTextMessage(from, prompt, lang)
+          sendSucceeded = true
+          logger.info('Message %s processed (partial send progressed)', messageId)
+        } finally {
+          rateLimitService.markProcessed(messageId)
+        }
+        if (sendSucceeded) {
+          partialSends.set(from, resolved.partial)
+        }
+        return
+      }
+      if (resolved?.kind === 'complete') {
         partialSends.delete(from)
         logger.info(
           'Partial send resolved for %s: amount=%s recipient=%s',
@@ -1217,13 +2238,32 @@ export default class WebhookController {
           resolved.amount,
           maskPhone(resolved.recipient)
         )
-        // Synthesize a complete send command and skip normal parsing
+        // Synthesize a complete send command and skip normal parsing.
+        // Carry the pay-QR scan context forward so the downstream send
+        // branch can force confirmation + use the display name in the
+        // confirm prompt. recipientDisplayName is undefined for non-pay
+        // partials and the send branch falls back to the default copy.
+        //
+        // When `resolved.localCurrency` is set, mirror the dual-field
+        // semantics used by `parseSendMatch` (`message_parser.ts`) and
+        // `synthesizeParsedCommand` (`smart_mode/dispatcher.ts`): both
+        // `amount` AND `localAmount` carry the raw pre-conversion value;
+        // the downstream FX step replaces `amount` with the USDC
+        // equivalent using `localCurrency` as the signal. Setting only
+        // `amount` would skip conversion entirely and send local face
+        // value as USDC.
         const command: ParsedCommand = {
           command: 'send',
           amount: resolved.amount,
           recipient: resolved.recipient,
           isLargeAmount: resolved.amount > 500,
           originalText: text,
+          recipientDisplayName: partial.recipientDisplayName,
+          payQrScan: partial.payQrScan,
+        }
+        if (resolved.localCurrency) {
+          command.localAmount = resolved.amount
+          command.localCurrency = resolved.localCurrency
         }
         // Language, rate context, and routing — same path as normal sends
         const lang: Lang =
@@ -1244,70 +2284,196 @@ export default class WebhookController {
       partialSends.delete(from) // expired
     }
 
+    // ── Pre-SMART deterministic short-circuit ──────────────────────────
+    // Safety rails for two classes SMART would mis-route:
+    //   • confirm/cancel while a pending tx or contact-overwrite exists
+    //     (SMART's vocabulary excludes confirm/cancel — see
+    //     smart_mode/types.ts:80-87 — so "si"/"no" classifies as social
+    //     and silently drops the pending tx via clearPendingIfUnrelated).
+    //   • high-confidence loose patterns (mi address, cuál es mi
+    //     billetera, dashboard, …) that already have deterministic owners
+    //     in `matchHighConfidencePreLlm` but live inside parseMessage —
+    //     which SMART pre-empts when cohort-enabled.
+    // See `tryPreSmartShortCircuit` for the routing rules.
+    const hasPendingConfirmable =
+      pendingTransactions.has(from) || pendingContactOverwrites.has(from)
+    const shortCircuit = tryPreSmartShortCircuit(text, hasPendingConfirmable)
+    if (shortCircuit) {
+      const lang = await appendContextAndResolveLang(from, text, shortCircuit)
+      // confirm/cancel pass through clearPendingIfUnrelated untouched;
+      // any other short-circuited command (balance from "mi address",
+      // dashboard, referral_code, quest_status) correctly drops stale
+      // pending state — matches the existing post-parse behavior.
+      clearPendingIfUnrelated(from, shortCircuit, pendingTransactions)
+      const recipientPhone =
+        shortCircuit.command === 'confirm' ? pendingTransactions.get(from)?.recipient : undefined
+      const rateCtx = await fetchRateContext(from, recipientPhone)
+      try {
+        await this.handleCommand(from, shortCircuit, lang, rateCtx, context)
+        logger.info(
+          'Message %s processed (pre-smart short-circuit: %s)',
+          messageId,
+          shortCircuit.command
+        )
+      } finally {
+        rateLimitService.markProcessed(messageId)
+      }
+      return
+    }
+
+    // ── SMART MODE — cohort-gated triage layer ─────────────────────────
+    // Runs AFTER partial-send resolution (which owns mid-flow continuation)
+    // and BEFORE the regex/LLM parser. Three outcomes:
+    //   • execute      — synthesized ParsedCommand goes through the SAME
+    //                    handleCommand chokepoint as regex-routed messages,
+    //                    so force-confirm/threshold/self-send/balance guards
+    //                    all still apply. Context append + language learning
+    //                    flow through `appendContextAndResolveLang` so SMART
+    //                    and regex paths stay in sync.
+    //   • reply        — send the sanitized clarifying question and stop.
+    //                    No command synthesized, so no context/lang side
+    //                    effects (matches: an unanswered ambiguity isn't
+    //                    a real intent yet).
+    //   • fall_through — let parseMessage have a shot. Pass `skipSmart:true`
+    //                    so any future code that adds a SMART call inside
+    //                    parseMessage can't loop classifier→fall→classifier.
+    //
+    // Cohort/env gate fails closed; SMART MODE skipped on DB error.
+    const smartEnabled = await isSmartModeEnabledFor(from)
+    let cachedUserLang: Lang | null | undefined
+    // SMART fall-through verdict (category + sanitized OOS hint), captured
+    // here so the unknown handler downstream can pick a state-aware variant
+    // instead of the single static fallback. Stays undefined on non-SMART
+    // paths (cohort off) — the variant selector handles that case too.
+    let smartFallThroughCategory: 'out_of_scope' | 'gibberish' | undefined
+    let smartFallThroughOosRedirect: string | undefined
+    if (smartEnabled) {
+      cachedUserLang = await getUserLanguage(from)
+      const outcome = await dispatchSmartMode({
+        text,
+        phoneNumber: from,
+        context,
+        preferredLang: cachedUserLang ?? undefined,
+      })
+      logger.info(
+        {
+          msgId: messageId,
+          phone: maskPhone(from),
+          lang: cachedUserLang ?? null,
+          category: outcome.classification.category,
+          intent: outcome.classification.intent ?? null,
+          confidence: outcome.classification.confidence,
+          dispatcherDecision: outcome.kind,
+        },
+        'smart_mode.webhook'
+      )
+      if (outcome.kind === 'execute') {
+        const lang = await appendContextAndResolveLang(from, text, outcome.command, cachedUserLang)
+        if (outcome.command.llmStatus) {
+          logger.info('LLM status: %s', outcome.command.llmStatus)
+        }
+        clearPendingIfUnrelated(from, outcome.command, pendingTransactions)
+        const recipientPhone =
+          outcome.command.command === 'send' ? outcome.command.recipient : undefined
+        const rateCtx = await fetchRateContext(from, recipientPhone)
+        try {
+          await this.handleCommand(from, outcome.command, lang, rateCtx, context)
+          logger.info('Message %s processed (smart_mode execute)', messageId)
+        } finally {
+          rateLimitService.markProcessed(messageId)
+        }
+        return
+      }
+      if (outcome.kind === 'reply') {
+        const lang: Lang = cachedUserLang || getLanguageForPhone(from)
+        // Stale-state clear: a SMART reply that seeds a NEW partial send /
+        // pending invite is a new user intent — same semantics as a
+        // fully-parsed `send`/`invite` command going through
+        // `clearPendingIfUnrelated`. Without this, an unrelated
+        // pendingTransactions / pendingContactOverwrites entry outlives
+        // the new intent and the pre-SMART confirm guard could later
+        // consume the STALE transfer on the user's next "si" reply.
+        // Clear runs BEFORE send because stale confirmations must die
+        // immediately, even if the prompt send fails.
+        if (outcome.pending?.kind === 'send' || outcome.pending?.kind === 'invite') {
+          const syntheticCommand: ParsedCommand = {
+            command: outcome.pending.kind,
+            originalText: text,
+          }
+          clearPendingIfUnrelated(from, syntheticCommand, pendingTransactions)
+        }
+        let sendSucceeded = false
+        try {
+          await sendTextMessage(from, outcome.text, lang)
+          sendSucceeded = true
+          logger.info('Message %s processed (smart_mode reply)', messageId)
+        } finally {
+          // Mark processed even if WhatsApp send throws — otherwise Meta
+          // retries the inbound and we loop on the same failing send.
+          // Same dedupe semantics as the SMART execute branch above and
+          // the regular handleCommand branch in `processWebhook`.
+          rateLimitService.markProcessed(messageId)
+        }
+        // Seed the new continuation state ONLY after the user actually
+        // received the prompt. If sendTextMessage threw, the user never
+        // saw "¿a quién?" / "how much?" — leaving an active partial would
+        // make their next unrelated message be parsed as a continuation
+        // of a flow they didn't know was active.
+        if (sendSucceeded) {
+          if (outcome.pending?.kind === 'send') {
+            partialSends.set(from, {
+              ...outcome.pending.partial,
+              timestamp: Date.now(),
+              lang,
+            })
+          } else if (outcome.pending?.kind === 'invite') {
+            pendingInvites.set(from, {
+              timestamp: Date.now(),
+              lang,
+            })
+          }
+        }
+        return
+      }
+      // fall_through — capture the verdict so the unknown handler can pick
+      // a state-aware variant downstream, then drop into parseMessage with
+      // the recursion guard set.
+      if (
+        outcome.classification.category === 'out_of_scope' ||
+        outcome.classification.category === 'gibberish'
+      ) {
+        smartFallThroughCategory = outcome.classification.category
+      }
+      if (outcome.kind === 'fall_through' && outcome.oosRedirect) {
+        smartFallThroughOosRedirect = outcome.oosRedirect
+      }
+    }
+
     // ── Parse command ──────────────────────────────────────────────────
-    const command = await parseMessage(text, { messageId, phoneNumber: from }, context)
+    const command = await parseMessage(text, { messageId, phoneNumber: from }, context, {
+      skipSmart: smartEnabled,
+    })
     logger.info('Command parsed: %o', command)
 
-    // ── Store context for eligible intents (fire-and-forget, before handler) ──
-    // Written early to reduce race window if a second message arrives quickly.
-    // Only non-financial intents — never store send attempts or unknown messages.
-    const CONTEXT_INTENTS = new Set([
-      'greeting',
-      'social',
-      'help',
-      'about',
-      'history',
-      'settings',
-      'language',
-      'start',
-    ])
-    if (CONTEXT_INTENTS.has(command.command)) {
-      appendConversationMessage(from, text)
+    // Thread the SMART fall-through verdict into the unknown branch so
+    // the unknown handler can pick a state-aware variant. We only set
+    // these when the parser ALSO returned unknown — if parseMessage
+    // recovered a real intent (e.g. SMART said OOS but regex caught
+    // a simple "balance"), there's nothing to clarify.
+    if (command.command === 'unknown') {
+      if (smartFallThroughCategory) command.smartCategory = smartFallThroughCategory
+      if (smartFallThroughOosRedirect) command.smartOosRedirect = smartFallThroughOosRedirect
     }
+
+    // ── Context append + language detection + persistence ─────────────
+    // Shared with SMART execute branch (see appendContextAndResolveLang).
+    // `cachedUserLang` is set when the SMART branch already fetched the
+    // user's stored preference; passing it avoids a redundant round-trip.
+    const lang = await appendContextAndResolveLang(from, text, command, cachedUserLang)
 
     // Log LLM status for observability
     if (command.llmStatus) {
       logger.info('LLM status: %s', command.llmStatus)
-    }
-
-    // ── Language detection + persistence ──────────────────────────────
-    let userLang = await getUserLanguage(from)
-
-    // Explicit language command always wins
-    if (command.command === 'language' && command.detectedLanguage) {
-      const lang = command.detectedLanguage as 'en' | 'es' | 'pt'
-      await setUserLanguage(from, lang)
-      userLang = lang
-    } else {
-      // Auto-detect from message text (regex-based)
-      const detection = detectLanguage(text)
-
-      // LLM detection (higher quality for natural language)
-      const llmLang =
-        command.detectedLanguage && command.detectedLanguage !== 'ambiguous'
-          ? (command.detectedLanguage as 'en' | 'es' | 'pt')
-          : null
-
-      // Best signal: LLM (when available) > regex (when high confidence)
-      const detectedLang =
-        llmLang || (detection && detection.confidence >= PERSIST_THRESHOLD ? detection.lang : null)
-
-      if (detectedLang) {
-        // Update persisted preference if different — language follows the user.
-        // Skip persistence for unknown commands: a single typo or gibberish
-        // message shouldn't permanently flip the user's language.
-        if (detectedLang !== userLang && command.command !== 'unknown') {
-          await setUserLanguage(from, detectedLang)
-        }
-        // Use detected lang for this message (even on unknown), but only
-        // override if user has no persisted preference
-        if (command.command !== 'unknown' || !userLang) {
-          userLang = detectedLang
-        }
-      } else if (!userLang && detection) {
-        // Low confidence, no persisted preference — use for this message only
-        userLang = detection.lang
-      }
     }
 
     // Cancel stale pending tx if user sends an unrelated command
@@ -1323,7 +2489,6 @@ export default class WebhookController {
     const rateCtx = await fetchRateContext(from, recipientPhone)
 
     // ── Route to command handler ──────────────────────────────────────
-    const lang: Lang = userLang || getLanguageForPhone(from)
     try {
       await this.handleCommand(from, command, lang, rateCtx, context)
       logger.info('Message %s processed successfully', messageId)

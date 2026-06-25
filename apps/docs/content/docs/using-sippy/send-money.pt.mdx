@@ -1,0 +1,95 @@
+---
+title: Enviar dinheiro
+description: Envie dólares digitais pelo WhatsApp ou pela carteira web. Vários idiomas, dois modos de envio, confirmações integradas.
+---
+
+## Duas formas de enviar
+
+Você pode enviar dinheiro pelo **WhatsApp** (basta mandar uma mensagem ao Sippy) ou pela **carteira web**
+em [sippy.lat/wallet](https://www.sippy.lat/wallet). Ambas movimentam USDC de verdade -- mesmo
+dinheiro, mesma velocidade, mesmo destinatário.
+
+---
+
+## Enviando pelo WhatsApp
+
+Abra seu chat com o Sippy e digite o que você quer enviar. O Sippy entende
+linguagem natural em inglês, espanhol e português.
+
+### Exemplos
+
+**Inglês:**
+> send 10 to +573001234567
+
+**Espanhol:**
+> enviar 10 a +573001234567
+
+**Português:**
+> enviar 10 para +573001234567
+
+Você também pode enviar apenas parte das informações e o Sippy vai pedir o resto:
+
+> enviar 25
+
+O Sippy vai responder: "Para quem você quer enviar?"
+
+> +573001234567
+
+E ele continua a partir daí.
+
+### Confirmação
+
+Para qualquer envio acima de $5, o Sippy pede que você confirme antes de executar. Você verá
+o valor, o número de telefone do destinatário e um aviso de "sim ou não?". Nada
+se movimenta até você confirmar.
+
+Envios de $5 ou menos são executados na hora, para manter as transferências pequenas rápidas.
+
+### O que o destinatário vê
+
+O destinatário recebe uma mensagem do Sippy pelo WhatsApp avisando que recebeu dinheiro.
+A mensagem inclui o valor e um link para a carteira dele. Se o destinatário ainda não estiver
+no Sippy, veja [Convidar alguém](/docs/using-sippy/invite-someone) para saber o que acontece.
+
+### Taxas de rede (gas)
+
+O Sippy cobre a taxa de rede (gas) de todos os envios pelo WhatsApp. Você envia $10, o
+destinatário recebe $10. O custo da taxa de rede (gas) vem do Sippy, não do seu saldo.
+
+---
+
+## Enviando pela carteira web
+
+Acesse [sippy.lat/wallet](https://www.sippy.lat/wallet) e toque em **Enviar**. Digite o
+número de telefone do destinatário e o valor.
+
+Você verá dois modos:
+
+### Modo Gás grátis
+
+O Sippy envia a transação e cobre a taxa de rede (gas) -- igual ao WhatsApp. Isso
+conta para o seu [limite diário](/docs/using-sippy/limits).
+
+### Modo Direto
+
+Você mesmo envia a transação usando sua carteira conectada. Você paga uma pequena
+taxa de rede (gas) (normalmente menos de $0,01 na Arbitrum). Isso **não** conta para o
+seu limite diário, então não há teto.
+
+O modo Direto é útil quando você atingiu seu limite diário ou quer enviar valores
+maiores sem restrições.
+
+---
+
+## Referência rápida
+
+| Método | Taxa de rede (gas) | Limite diário se aplica? |
+|---|---|---|
+| WhatsApp | O Sippy paga | Sim |
+| Web -- Gás grátis | O Sippy paga | Sim |
+| Web -- Direto | Você paga (< $0,01) | Não |
+
+## E agora?
+
+- [Convidar alguém](/docs/using-sippy/invite-someone) -- o que acontece quando você envia para uma pessoa que ainda não está no Sippy
+- [Entender seus limites](/docs/using-sippy/limits) -- tetos diários e como aumentá-los

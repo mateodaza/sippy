@@ -1,0 +1,887 @@
+/**
+ * Event Service Unit Tests
+ *
+ * Covers the three service entry points used by the event-onboarding flow:
+ *  - getActiveEventBySlug — silent reject (returns null) for unknown,
+ *    inactive, or out-of-window events
+ *  - linkUserToEvent — idempotent upsert with ON CONFLICT DO NOTHING; the
+ *    first contact's linked_at_step wins on re-link
+ *  - markPoapClaimed — discriminated outcome ('claimed' | 'already-claimed'
+ *    | 'not-linked') so the UI doesn't lie when the user isn't linked
+ *
+ * Mocking strategy mirrors poll_colurs_movements.spec.ts:
+ *  - db.rawQuery monkey-patched to capture SQL + return canned rows
+ *  - Event.findBy and UserPreference.findBy monkey-patched
+ */
+
+import { test } from '@japa/runner'
+import { DateTime } from 'luxon'
+import db from '@adonisjs/lucid/services/db'
+import Event from '#models/event'
+import UserPreference from '#models/user_preference'
+import {
+  getActiveEventBySlug,
+  linkUserToEvent,
+  markPoapClaimed,
+  claimPendingPoapInvite,
+  releasePoapInvite,
+} from '#services/event.service'
+
+// ── DB mock infrastructure ──────────────────────────────────────────────────────
+
+type RawQueryCall = { sql: string; bindings?: unknown[] }
+type RawQueryResponse = { rows?: unknown[]; rowCount?: number }
+
+let rawQueryCalls: RawQueryCall[] = []
+let rawQueryHandlers: Array<{ pattern: string; response: RawQueryResponse }> = []
+let origRawQuery: typeof db.rawQuery
+let origTransaction: typeof db.transaction
+
+function installDbMock() {
+  rawQueryCalls = []
+  rawQueryHandlers = []
+  origRawQuery = db.rawQuery
+  origTransaction = db.transaction
+  db.rawQuery = (async (sql: string, bindings?: unknown[]) => {
+    rawQueryCalls.push({ sql, bindings })
+    for (const { pattern, response } of rawQueryHandlers) {
+      if (sql.includes(pattern)) return response
+    }
+    return { rows: [], rowCount: 0 }
+  }) as any
+  // Stub `db.transaction(cb)` so service code that wraps multi-step writes
+  // (e.g. releasePoapInvite) hits the same mock handlers. The `trx` handle
+  // we pass to the callback only needs `rawQuery` — that's the surface the
+  // services use; we route it through the same mock so SQL is captured.
+  db.transaction = (async (cb: any) => {
+    const trxStub = {
+      rawQuery: db.rawQuery,
+    }
+    return cb(trxStub)
+  }) as any
+}
+
+function restoreDbMock() {
+  db.rawQuery = origRawQuery
+  db.transaction = origTransaction
+}
+
+function setQueryResponse(pattern: string, response: RawQueryResponse) {
+  rawQueryHandlers.push({ pattern, response })
+}
+
+function queriesMatching(pattern: string): RawQueryCall[] {
+  return rawQueryCalls.filter((c) => c.sql.includes(pattern))
+}
+
+// ── Model mock helpers ──────────────────────────────────────────────────────────
+
+function mockEvent(row: Partial<Event> | null) {
+  ;(Event as any).findBy = async (_col: string, _val: string) => row
+}
+
+/**
+ * Mock UserPreference.findBy. Mirrors resolveUserPrefKey's two lookups:
+ * canonical `+<digits>` first, then bare digits as a fallback. Returns a row
+ * only when the queried value exactly matches `row.phoneNumber` so the helper
+ * doesn't mistakenly strip the `+` for a non-existent bare-digit row.
+ */
+function mockUserPref(row: { phoneNumber: string } | null) {
+  ;(UserPreference as any).findBy = async (_col: string, val: string) => {
+    if (!row) return null
+    return row.phoneNumber === val ? row : null
+  }
+}
+
+function restoreModels() {
+  delete (Event as any).findBy
+  delete (UserPreference as any).findBy
+}
+
+function makeEvent(overrides: Partial<Event> = {}): Partial<Event> {
+  return {
+    id: 'evt-uuid-1',
+    slug: 'pizza-day',
+    name: 'Pizza Day',
+    description: null,
+    startsAt: null,
+    endsAt: null,
+    poapClaimUrl: 'https://poap.example/claim/abc',
+    active: true,
+    ...overrides,
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// getActiveEventBySlug — silent reject
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('event.service | getActiveEventBySlug', (group) => {
+  group.each.setup(installDbMock)
+  group.each.teardown(() => {
+    restoreDbMock()
+    restoreModels()
+  })
+
+  test('returns null for unknown slug', async ({ assert }) => {
+    mockEvent(null)
+    const result = await getActiveEventBySlug('does-not-exist')
+    assert.isNull(result)
+  })
+
+  test('returns null when event is inactive', async ({ assert }) => {
+    mockEvent(makeEvent({ active: false }))
+    const result = await getActiveEventBySlug('pizza-day')
+    assert.isNull(result)
+  })
+
+  test('returns null when current time is before startsAt', async ({ assert }) => {
+    mockEvent(makeEvent({ startsAt: DateTime.now().plus({ days: 1 }) }))
+    const result = await getActiveEventBySlug('pizza-day')
+    assert.isNull(result)
+  })
+
+  test('returns null when current time is past endsAt', async ({ assert }) => {
+    mockEvent(makeEvent({ endsAt: DateTime.now().minus({ days: 1 }) }))
+    const result = await getActiveEventBySlug('pizza-day')
+    assert.isNull(result)
+  })
+
+  test('returns event when active and inside window', async ({ assert }) => {
+    mockEvent(
+      makeEvent({
+        startsAt: DateTime.now().minus({ days: 1 }),
+        endsAt: DateTime.now().plus({ days: 1 }),
+      })
+    )
+    const result = await getActiveEventBySlug('pizza-day')
+    assert.isNotNull(result)
+    assert.equal(result?.slug, 'pizza-day')
+  })
+
+  test('returns event when no window is configured', async ({ assert }) => {
+    mockEvent(makeEvent({ startsAt: null, endsAt: null }))
+    const result = await getActiveEventBySlug('pizza-day')
+    assert.isNotNull(result)
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// linkUserToEvent — silent reject + idempotent first-contact-wins
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('event.service | linkUserToEvent', (group) => {
+  group.each.setup(installDbMock)
+  group.each.teardown(() => {
+    restoreDbMock()
+    restoreModels()
+  })
+
+  test('returns { linked: false } for unknown slug — no INSERT issued', async ({ assert }) => {
+    mockEvent(null)
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    const result = await linkUserToEvent('+573001234567', 'unknown-slug')
+
+    assert.deepEqual(result, { linked: false })
+    assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)
+  })
+
+  test('returns { linked: false } for inactive event — no INSERT issued', async ({ assert }) => {
+    mockEvent(makeEvent({ active: false }))
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    const result = await linkUserToEvent('+573001234567', 'pizza-day')
+
+    assert.deepEqual(result, { linked: false })
+    assert.equal(queriesMatching('INSERT INTO user_event_links').length, 0)
+  })
+
+  test('issues idempotent INSERT … ON CONFLICT … with the canonical bindings', async ({
+    assert,
+  }) => {
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    // SELECT readback after the upsert returns the (just inserted) row state
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'done', 'qr-booth')
+
+    const inserts = queriesMatching('INSERT INTO user_event_links')
+    assert.equal(inserts.length, 1, 'should issue exactly one upsert')
+    // "First contact wins" is now implemented via ON CONFLICT DO UPDATE
+    // with a narrow source-upgrade rule (venue source upgrades stale
+    // NULL/non-venue sources). All other fields stay preserved by the
+    // WHERE clause on the UPDATE.
+    assert.include(inserts[0].sql, 'ON CONFLICT (phone_number, event_id) DO UPDATE')
+    assert.include(inserts[0].sql, "EXCLUDED.metadata->>'source' = 'venue'")
+
+    const bindings = inserts[0].bindings as unknown[]
+    assert.equal(bindings[0], '+573001234567', 'phone_number binding')
+    assert.equal(bindings[1], 'evt-uuid-1', 'event_id binding')
+    assert.equal(bindings[2], 'done', 'linked_at_step binding')
+    assert.equal(bindings[3], JSON.stringify({ source: 'qr-booth' }), 'metadata binding')
+  })
+
+  test('first-contact-wins: re-link returns the original linked_at_step from readback', async ({
+    assert,
+  }) => {
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    // Simulate the row was originally inserted with step='done' at the booth.
+    // A later 'returning' re-link should hit ON CONFLICT DO NOTHING and the
+    // readback should return the preserved 'done' value.
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: false }],
+    })
+
+    const result = await linkUserToEvent('+573001234567', 'pizza-day', 'returning')
+
+    assert.isTrue(result.linked)
+    if (result.linked) {
+      assert.equal(
+        result.linkedAtStep,
+        'done',
+        'should preserve original step, not overwrite with the re-link step'
+      )
+    }
+  })
+
+  test('preserves poap_claimed=true from a prior claim on re-link', async ({ assert }) => {
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: true }],
+    })
+
+    const result = await linkUserToEvent('+573001234567', 'pizza-day', 'returning')
+
+    assert.isTrue(result.linked)
+    if (result.linked) {
+      assert.isTrue(result.poapClaimed, 'should reflect the stored claim state')
+    }
+  })
+
+  test('actions includes "poap" when event has a poapClaimUrl', async ({ assert }) => {
+    mockEvent(makeEvent({ poapClaimUrl: 'https://poap.example/x' }))
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: false }],
+    })
+
+    const result = await linkUserToEvent('+573001234567', 'pizza-day')
+
+    assert.isTrue(result.linked)
+    if (result.linked) {
+      assert.includeMembers(result.actions, ['poap'])
+    }
+  })
+
+  test('actions omits "poap" when event has no poapClaimUrl', async ({ assert }) => {
+    mockEvent(makeEvent({ poapClaimUrl: null }))
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: false }],
+    })
+
+    const result = await linkUserToEvent('+573001234567', 'pizza-day')
+
+    assert.isTrue(result.linked)
+    if (result.linked) {
+      assert.notInclude(result.actions, 'poap')
+    }
+  })
+
+  test('omits metadata when no source is provided', async ({ assert }) => {
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'done')
+
+    const inserts = queriesMatching('INSERT INTO user_event_links')
+    const bindings = inserts[0].bindings as unknown[]
+    assert.isNull(bindings[3], 'metadata binding should be null when no source')
+  })
+
+  // ── Sippy Quest drain hook ────────────────────────────────────────────
+  //
+  // On a genuine attendance write we drain any pending referral row for
+  // this phone into a real attribution. The hook MUST:
+  //   - fire on 'done' (new user onboarding completed at the event)
+  //   - fire on 'returning' AND source ∈ venue allowlist (existing user
+  //     physically scanned a venue QR — including the viral-referral
+  //     attendee who onboarded via /r/<code> and only later showed up)
+  //   - NOT fire on 'returning' with no source or a non-venue source
+  //     (Twitter/SMS deep-link tap from home — anti-farming, mirrors
+  //     the scoring CTE's allowlist exactly)
+  //   - swallow drain errors (a Quest hiccup must never block onboarding)
+  //   - run AFTER the upsert succeeds (the FK from referral_attributions
+  //     to user_preferences would otherwise be premature)
+  //
+  // The 'returning + venue' branch was added 2026-05-18 to close the
+  // viral-referral attribution gap: pre-fix, a friend-shared `/r/<code>`
+  // sign-up that later attended landed as 'returning' and skipped drain,
+  // costing the referrer credit.
+
+  test('drain hook: fires DELETE FROM pending_referrals on step=done', async ({ assert }) => {
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'done', 'qr-booth')
+
+    const drains = queriesMatching('DELETE FROM pending_referrals')
+    assert.equal(drains.length, 1, 'drain hook must fire exactly once on done')
+  })
+
+  test('drain hook: fires on step=returning + source=venue (viral-referral attendance)', async ({
+    assert,
+  }) => {
+    // The Pizza Day viral path: a friend taps /r/<code>, signs up via
+    // /setup (no event link yet because /r/ carries no event slug),
+    // then later scans the printed venue QR. Bracket dispatcher sees an
+    // already-onboarded user and writes step='returning' with
+    // source='venue' (the qr_sheets-controller default). Drain MUST
+    // fire here or the referrer never gets credit for bringing them.
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'returning', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'returning', 'venue')
+
+    const drains = queriesMatching('DELETE FROM pending_referrals')
+    assert.equal(
+      drains.length,
+      1,
+      'returning + venue source is genuine attendance — drain must fire to credit the referrer'
+    )
+  })
+
+  test('drain hook: does NOT fire on step=returning with no source', async ({ assert }) => {
+    // Returning with a null source = pre-venue-tag legacy path or a
+    // non-bracket deep-link write. Without an explicit venue marker we
+    // can't distinguish from a remote tap; fail closed = no drain.
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'returning', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'returning')
+
+    const drains = queriesMatching('DELETE FROM pending_referrals')
+    assert.equal(
+      drains.length,
+      0,
+      'returning without an explicit venue source must not drain (anti-farming, fail-closed)'
+    )
+  })
+
+  test('drain hook: does NOT fire on step=returning + non-venue source (anti-farming)', async ({
+    assert,
+  }) => {
+    // Twitter / SMS / any social deep-link tap arrives as returning
+    // with a non-venue source. These come from REMOTE taps, not the
+    // physical venue — crediting attendance from them would re-open
+    // the farming hole the venue allowlist exists to close. Mirrors the
+    // scoring CTE's same rule for symmetric semantics.
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'returning', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'returning', 'twitter')
+
+    const drains = queriesMatching('DELETE FROM pending_referrals')
+    assert.equal(
+      drains.length,
+      0,
+      'non-venue source on returning must not drain — anti-farming gate'
+    )
+  })
+
+  test('drain hook: passes the FK-form phone (not the canonical raw input)', async ({ assert }) => {
+    // resolveUserPrefKey is mocked so the canonical input is preserved
+    // (modern path). The drain hook should reuse that resolved key,
+    // not re-derive a different one — otherwise a future bare-row
+    // path would have the upsert and the drain looking at different
+    // phone forms.
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: false }],
+    })
+
+    await linkUserToEvent('+573001234567', 'pizza-day', 'done')
+
+    const drains = queriesMatching('DELETE FROM pending_referrals')
+    assert.equal(drains.length, 1)
+    // drainPendingReferral builds a CTE with $1 = phone. Last binding
+    // of the call is the phone key the drain SQL keys on.
+    const bindings = drains[0].bindings as unknown[]
+    assert.equal(bindings[0], '+573001234567', 'drain must key on the FK-form phone')
+  })
+
+  test('drain hook: a drain failure does NOT break the link result', async ({ assert }) => {
+    // Wrap the existing rawQuery mock so DELETE FROM pending_referrals
+    // throws while every other call passes. The caller (linkUserToEvent)
+    // must still return a successful linked: true response — Quest is a
+    // bonus mechanic, never the gate.
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('SELECT linked_at_step, poap_claimed', {
+      rows: [{ linked_at_step: 'done', poap_claimed: false }],
+    })
+    const wrapped = db.rawQuery
+    db.rawQuery = (async (sql: string, bindings?: unknown[]) => {
+      if (sql.includes('DELETE FROM pending_referrals')) {
+        throw new Error('simulated drain failure')
+      }
+      return wrapped(sql, bindings as any)
+    }) as any
+
+    const result = await linkUserToEvent('+573001234567', 'pizza-day', 'done')
+
+    assert.isTrue(result.linked, 'link must still succeed even when drain throws')
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// markPoapClaimed — state machine: claimed | already-claimed | not-linked
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('event.service | markPoapClaimed', (group) => {
+  group.each.setup(installDbMock)
+  group.each.teardown(() => {
+    restoreDbMock()
+    restoreModels()
+  })
+
+  test('returns not-linked for unknown/inactive event without touching the DB', async ({
+    assert,
+  }) => {
+    mockEvent(null)
+
+    const result = await markPoapClaimed('+573001234567', 'unknown-slug')
+
+    assert.deepEqual(result, { status: 'not-linked' })
+    assert.equal(queriesMatching('UPDATE user_event_links').length, 0)
+  })
+
+  test('returns claimed when the conditional UPDATE flips poap_claimed→true', async ({
+    assert,
+  }) => {
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    // UPDATE … WHERE poap_claimed = FALSE matches → RETURNING yields one row
+    setQueryResponse('UPDATE user_event_links', { rows: [{ '?column?': 1 }] })
+
+    const result = await markPoapClaimed('+573001234567', 'pizza-day')
+
+    assert.deepEqual(result, { status: 'claimed' })
+    // We shouldn't need the disambiguation SELECT when the UPDATE succeeded
+    assert.equal(
+      queriesMatching('SELECT 1 FROM user_event_links').length,
+      0,
+      'no disambiguation SELECT when UPDATE matched'
+    )
+  })
+
+  test('returns already-claimed when UPDATE misses but the link row exists', async ({ assert }) => {
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    // UPDATE … RETURNING 1 misses (row exists but poap_claimed is already TRUE)
+    setQueryResponse('UPDATE user_event_links', { rows: [] })
+    // Disambiguation SELECT finds the existing link row
+    setQueryResponse('SELECT 1 FROM user_event_links', { rows: [{ '?column?': 1 }] })
+
+    const result = await markPoapClaimed('+573001234567', 'pizza-day')
+
+    assert.deepEqual(result, { status: 'already-claimed' })
+  })
+
+  test('returns not-linked when UPDATE misses and no link row exists', async ({ assert }) => {
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    setQueryResponse('UPDATE user_event_links', { rows: [] })
+    setQueryResponse('SELECT 1 FROM user_event_links', { rows: [] })
+
+    const result = await markPoapClaimed('+573001234567', 'pizza-day')
+
+    assert.deepEqual(result, { status: 'not-linked' })
+  })
+
+  test("UPDATE uses COALESCE(poap_claimed_at, now()) so re-flips don't move the timestamp", async ({
+    assert,
+  }) => {
+    mockEvent(makeEvent())
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('UPDATE user_event_links', { rows: [{ '?column?': 1 }] })
+
+    await markPoapClaimed('+573001234567', 'pizza-day')
+
+    const updates = queriesMatching('UPDATE user_event_links')
+    assert.equal(updates.length, 1)
+    assert.include(updates[0].sql, 'COALESCE(poap_claimed_at, now())')
+    assert.include(updates[0].sql, 'poap_claimed = FALSE', 'UPDATE is conditional on prior false')
+    assert.include(
+      updates[0].sql,
+      'RETURNING 1',
+      'uses RETURNING for driver-agnostic row detection'
+    )
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// claimPendingPoapInvite — pool path + legacy path + race observability
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Phase 1: eligibility SELECT (no lock) returns the user_event_link plus a
+// `has_pool` flag so the service can pick the pool or legacy code path.
+// Phase 2: locking UPDATE — multi-CTE for the pool path, single CTE for
+// legacy. Pool exhaustion is signalled by `eligible_locked = true` AND
+// `claim_url = null` (the link UPDATE is FROM next_code, so an empty pool
+// also leaves the link unstamped → restock-friendly).
+//
+// Mock query-pattern keys:
+//   • Phase 1:      `EXISTS(SELECT 1 FROM poap_codes`
+//   • Pool path:    `next_code`
+//   • Legacy path:  `RETURNING eligible.name AS event_name`
+
+test.group('event.service | claimPendingPoapInvite', (group) => {
+  group.each.setup(installDbMock)
+  group.each.teardown(() => {
+    restoreDbMock()
+    restoreModels()
+  })
+
+  test('returns kind=none when no eligible link exists', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', { rows: [] })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.deepEqual(result, { kind: 'none' })
+  })
+
+  // ── Pool path ────────────────────────────────────────────────────────
+
+  test('pool path: returns kind=reserved with the assigned code URL', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    // Phase 1: eligible + has_pool=true.
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'pizza-day-ctg-2026',
+          event_name: 'Pizza Day',
+          shared_url: null,
+          has_pool: true,
+        },
+      ],
+    })
+    // Phase 2 (pool): eligible_locked + claim_url assigned.
+    setQueryResponse('next_code', {
+      rows: [
+        {
+          eligible_locked: true,
+          claim_url: 'https://poap.example/mint/code-001',
+        },
+      ],
+    })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.equal(result.kind, 'reserved')
+    if (result.kind === 'reserved') {
+      assert.deepEqual(result.reservation, {
+        eventName: 'Pizza Day',
+        eventSlug: 'pizza-day-ctg-2026',
+        poapClaimUrl: 'https://poap.example/mint/code-001',
+      })
+    }
+  })
+
+  test('pool path: returns kind=pool_exhausted when no code is available', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'pizza-day-ctg-2026',
+          event_name: 'Pizza Day',
+          shared_url: null,
+          has_pool: true,
+        },
+      ],
+    })
+    // Phase 2 (pool): link locked but pool empty → claim_url=null.
+    setQueryResponse('next_code', {
+      rows: [{ eligible_locked: true, claim_url: null }],
+    })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.deepEqual(result, {
+      kind: 'pool_exhausted',
+      eventName: 'Pizza Day',
+      eventSlug: 'pizza-day-ctg-2026',
+    })
+  })
+
+  test("pool path: returns kind=contended when SKIP LOCKED can't lock the link", async ({
+    assert,
+  }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'pizza-day-ctg-2026',
+          event_name: 'Pizza Day',
+          shared_url: null,
+          has_pool: true,
+        },
+      ],
+    })
+    // Phase 2 (pool): parallel claimer holds the link → eligible_locked=false.
+    setQueryResponse('next_code', {
+      rows: [{ eligible_locked: false, claim_url: null }],
+    })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.deepEqual(result, { kind: 'contended' })
+  })
+
+  test('pool path SQL: FIFO + locking + atomic stamp invariants (regression guard)', async ({
+    assert,
+  }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'pizza-day-ctg-2026',
+          event_name: 'Pizza Day',
+          shared_url: null,
+          has_pool: true,
+        },
+      ],
+    })
+    setQueryResponse('next_code', {
+      rows: [{ eligible_locked: true, claim_url: 'https://poap.example/x' }],
+    })
+
+    await claimPendingPoapInvite('+573001234567')
+
+    const updates = queriesMatching('next_code')
+    assert.equal(updates.length, 1, 'exactly one pool-path query')
+    assert.include(updates[0].sql, 'ORDER BY pc.id', 'pool assigns codes FIFO')
+    assert.include(
+      updates[0].sql,
+      'FOR UPDATE OF uel SKIP LOCKED',
+      'locks user_event_link with SKIP LOCKED'
+    )
+    assert.include(
+      updates[0].sql,
+      'FOR UPDATE OF pc SKIP LOCKED',
+      'locks the next poap_code with SKIP LOCKED'
+    )
+    // The link UPDATE pulls FROM eligible, next_code — both required. With no
+    // code in `next_code`, the link is not stamped, leaving the user
+    // eligible for restock.
+    assert.include(
+      updates[0].sql,
+      'FROM eligible, next_code',
+      'link stamp is gated on a code being available (restock-friendly)'
+    )
+    assert.include(updates[0].sql, 'SET assigned_to_phone = ?, assigned_at = now()')
+    assert.include(updates[0].sql, 'SET poap_invite_sent_at = now()')
+  })
+
+  test('pool path bindings: phone → eligible filter; phone → code assignment', async ({
+    assert,
+  }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'pizza-day-ctg-2026',
+          event_name: 'Pizza Day',
+          shared_url: null,
+          has_pool: true,
+        },
+      ],
+    })
+    setQueryResponse('next_code', {
+      rows: [{ eligible_locked: true, claim_url: 'https://poap.example/x' }],
+    })
+
+    await claimPendingPoapInvite('+573001234567')
+
+    const bindings = queriesMatching('next_code')[0].bindings as unknown[]
+    assert.equal(bindings[0], '+573001234567', 'phone binding for eligible CTE')
+    assert.equal(bindings[1], 'evt-uuid-1', 'event_id binding for eligible CTE')
+    assert.equal(
+      bindings[2],
+      '+573001234567',
+      'phone binding for code assignment (must match payer)'
+    )
+  })
+
+  // ── Legacy (shared URL) path ─────────────────────────────────────────
+
+  test('legacy path: returns kind=reserved with the shared event URL', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    // Phase 1: eligible + has_pool=false (event has shared URL, no pool).
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'legacy-event',
+          event_name: 'Legacy Event',
+          shared_url: 'https://poap.example/legacy',
+          has_pool: false,
+        },
+      ],
+    })
+    setQueryResponse('RETURNING eligible.name AS event_name', {
+      rows: [
+        {
+          event_name: 'Legacy Event',
+          event_slug: 'legacy-event',
+          poap_claim_url: 'https://poap.example/legacy',
+        },
+      ],
+    })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.equal(result.kind, 'reserved')
+    if (result.kind === 'reserved') {
+      assert.deepEqual(result.reservation, {
+        eventName: 'Legacy Event',
+        eventSlug: 'legacy-event',
+        poapClaimUrl: 'https://poap.example/legacy',
+      })
+    }
+  })
+
+  test('legacy path: returns kind=contended when SKIP LOCKED misses', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'legacy-event',
+          event_name: 'Legacy Event',
+          shared_url: 'https://poap.example/legacy',
+          has_pool: false,
+        },
+      ],
+    })
+    setQueryResponse('RETURNING eligible.name AS event_name', { rows: [] })
+
+    const result = await claimPendingPoapInvite('+573001234567')
+
+    assert.deepEqual(result, { kind: 'contended' })
+  })
+
+  test('legacy path SQL: stamps poap_invite_sent_at in the same UPDATE', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+    setQueryResponse('EXISTS(SELECT 1 FROM poap_codes', {
+      rows: [
+        {
+          event_id: 'evt-uuid-1',
+          event_slug: 'legacy-event',
+          event_name: 'Legacy Event',
+          shared_url: 'https://poap.example/legacy',
+          has_pool: false,
+        },
+      ],
+    })
+    setQueryResponse('RETURNING eligible.name AS event_name', {
+      rows: [
+        {
+          event_name: 'Legacy Event',
+          event_slug: 'legacy-event',
+          poap_claim_url: 'https://poap.example/legacy',
+        },
+      ],
+    })
+
+    await claimPendingPoapInvite('+573001234567')
+
+    const updates = queriesMatching('RETURNING eligible.name AS event_name')
+    assert.equal(updates.length, 1)
+    assert.include(updates[0].sql, 'SET poap_invite_sent_at = now()')
+    assert.include(updates[0].sql, 'FOR UPDATE OF uel SKIP LOCKED')
+    // Legacy path must NOT touch poap_codes.
+    assert.notInclude(updates[0].sql, 'poap_codes')
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// releasePoapInvite — undo reservation on send failure (link + code)
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('event.service | releasePoapInvite', (group) => {
+  group.each.setup(installDbMock)
+  group.each.teardown(() => {
+    restoreDbMock()
+    restoreModels()
+  })
+
+  test('un-stamps poap_invite_sent_at on the link with the right bindings', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    await releasePoapInvite({
+      phoneNumber: '+573001234567',
+      eventSlug: 'pizza-day-ctg-2026',
+    })
+
+    const linkUpdates = queriesMatching('UPDATE user_event_links uel')
+    assert.equal(linkUpdates.length, 1, 'exactly one link release UPDATE')
+    assert.include(linkUpdates[0].sql, 'SET poap_invite_sent_at = NULL')
+    const bindings = linkUpdates[0].bindings as unknown[]
+    assert.equal(bindings[0], '+573001234567', 'phone binding')
+    assert.equal(bindings[1], 'pizza-day-ctg-2026', 'event slug binding')
+  })
+
+  test('un-assigns any pool code held by this phone (pool path safety)', async ({ assert }) => {
+    mockUserPref({ phoneNumber: '+573001234567' })
+
+    await releasePoapInvite({
+      phoneNumber: '+573001234567',
+      eventSlug: 'pizza-day-ctg-2026',
+    })
+
+    // The release MUST also clear poap_codes.assigned_to_phone for this
+    // phone+event so the code returns to the pool. Without this, a code
+    // would be lost when the WhatsApp send fails.
+    const codeUpdates = queriesMatching('UPDATE poap_codes pc')
+    assert.equal(codeUpdates.length, 1, 'exactly one code release UPDATE')
+    assert.include(codeUpdates[0].sql, 'SET assigned_to_phone = NULL, assigned_at = NULL')
+    const bindings = codeUpdates[0].bindings as unknown[]
+    assert.equal(bindings[0], '+573001234567', 'phone binding (must match assignee)')
+    assert.equal(bindings[1], 'pizza-day-ctg-2026', 'event slug binding (scope to event)')
+  })
+})

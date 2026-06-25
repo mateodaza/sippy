@@ -8,6 +8,12 @@ interface AuthUser {
   fullName: string | null
   role: string
   initials: string
+  /** Populated for `role === 'operator'`. Drives nav scoping. */
+  assignedEventSlug?: string | null
+  /** True for `admin@sippy.lat` (SUPER_ADMIN_EMAIL). Surfaces the
+   *  cross-event SEND nav entry — regular admins don't get it because
+   *  they can't act through another operator's wallet anyway. */
+  isSuperAdmin?: boolean
 }
 
 interface FlashMessages {
@@ -172,6 +178,53 @@ function ThemeToggle() {
   )
 }
 
+/**
+ * Bilingual toggle, rendered globally in the admin layout header.
+ *
+ * The cookie is server-readable (plain, not signed) so the Inertia
+ * middleware's share() hook can localize props on the next page load.
+ * After a click we trigger `router.reload()` so the server re-evaluates
+ * every component prop with the new lang — much simpler than threading
+ * the value through every React subtree client-side.
+ *
+ * Scope of what actually changes when toggled: operator_send.tsx,
+ * event_attendees.tsx, the operator-only sidebar nav labels, and JSON
+ * error responses from operator_send_controller. Other admin pages
+ * (users, analytics, roles, dashboard root, OperatorWalletPanel) remain
+ * English regardless of the toggle state — they are admin-only surfaces.
+ */
+function LangToggle() {
+  const page = usePage<{ adminLang?: 'es' | 'en' }>()
+  const current = page.props.adminLang ?? 'es'
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+
+  function toggle() {
+    const next: 'es' | 'en' = current === 'es' ? 'en' : 'es'
+    // max-age = 1 year. Cookie name kept in sync with admin_lang.ts.
+    document.cookie = `sippy_admin_lang=${next}; path=/; max-age=31536000; samesite=lax`
+    router.reload()
+  }
+
+  if (!mounted) return <div className="h-7 w-9" />
+
+  return (
+    <button
+      onClick={toggle}
+      className="flex h-7 min-w-9 items-center justify-center rounded px-1.5 font-mono text-[10px] font-bold tracking-[0.1em] transition-colors focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:outline-none"
+      style={{
+        borderColor: 'var(--admin-border)',
+        color: 'var(--admin-text-muted)',
+        border: '1px solid var(--admin-border)',
+      }}
+      title={current === 'es' ? 'Cambiar a inglés' : 'Switch to Spanish'}
+      aria-label={current === 'es' ? 'Cambiar a inglés' : 'Switch to Spanish'}
+    >
+      {current === 'es' ? 'ES' : 'EN'}
+    </button>
+  )
+}
+
 function PollerStatus({
   indexerStatus,
   isAdmin,
@@ -245,18 +298,131 @@ function PollerStatus({
 }
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const { auth, flash, indexerStatus } = usePage().props as {
+  const { auth, flash, indexerStatus, adminLang } = usePage().props as unknown as {
     auth: AuthUser | null
     flash: FlashMessages
     indexerStatus: IndexerStatus | null
+    adminLang?: 'es' | 'en'
   }
   const currentPath = usePage().url
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const lang: 'es' | 'en' = adminLang ?? 'es'
+  // Operator-nav labels live alongside everything else operator-facing.
+  // The rest of the sidebar (admin-only nav) stays English by decision.
+  const operatorNavLabels =
+    lang === 'es'
+      ? { send: 'ENVIAR', attendees: 'ASISTENTES', qrSheets: 'HOJAS QR' }
+      : { send: 'SEND', attendees: 'ATTENDEES', qrSheets: 'QR SHEETS' }
 
   function isActive(href: string) {
     if (href === '/admin') return currentPath === '/admin'
     return currentPath.startsWith(href)
   }
+
+  // Superadmin-only SEND entry — opens the operator UI cross-event so
+  // admin@sippy.lat can pick a wallet to act through. Renders BEFORE the
+  // generic admin nav so it's visually near the top. Regular admins don't
+  // see this because the controller would refuse any override they tried.
+  const superadminSendItem = {
+    href: '/admin/operator/send',
+    label: 'SEND',
+    icon: (
+      <svg
+        className="h-4 w-4"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <line x1="22" y1="2" x2="11" y2="13" />
+        <polygon points="22 2 15 22 11 13 2 9 22 2" />
+      </svg>
+    ),
+  }
+
+  // Role-aware nav. Operators see ONLY their send page, their assigned
+  // event's attendees, and the same event's QR sheets. All other admin
+  // surfaces (users, analytics, roles, dashboard root) are hidden.
+  // Spec: OPERATOR_FLOW_PLAN.md — "Operator role is strict-scope".
+  const effectiveNavItems =
+    auth?.role === 'operator'
+      ? (() => {
+          const slug = auth.assignedEventSlug
+          const items = [
+            {
+              href: '/admin/operator/send',
+              label: operatorNavLabels.send,
+              icon: (
+                <svg
+                  className="h-4 w-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              ),
+            },
+          ]
+          if (slug) {
+            items.push(
+              {
+                href: `/admin/events/${encodeURIComponent(slug)}/attendees`,
+                label: operatorNavLabels.attendees,
+                icon: (
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                  </svg>
+                ),
+              },
+              {
+                href: `/admin/qr-sheets/${encodeURIComponent(slug)}`,
+                label: operatorNavLabels.qrSheets,
+                icon: (
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                  </svg>
+                ),
+              }
+            )
+          }
+          return items
+        })()
+      : auth?.isSuperAdmin
+        ? [superadminSendItem, ...navItems]
+        : navItems
 
   const sidebarContent = (
     <>
@@ -293,6 +459,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           </svg>
         </div>
         <div className="flex items-center gap-2">
+          <LangToggle />
           <ThemeToggle />
           {/* Close button — mobile only */}
           <button
@@ -319,7 +486,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
       {/* Navigation */}
       <div className="space-y-0.5 px-3 py-4">
-        {navItems.map((item) => (
+        {effectiveNavItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}
@@ -339,6 +506,14 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             {item.label}
           </Link>
         ))}
+        {auth?.role === 'operator' && !auth.assignedEventSlug && (
+          <div
+            className="mt-3 rounded border-l-4 border-amber-600 bg-amber-50 px-3 py-2 font-mono text-xs text-amber-900"
+            role="alert"
+          >
+            No event assigned. Ask an admin to assign you.
+          </div>
+        )}
       </div>
 
       {/* Indexer status */}

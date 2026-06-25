@@ -54,6 +54,15 @@ Thumbs.db
 wallets.json
 *.backup.json
 
+# POAP claim/mint links — anyone with these URLs can claim a POAP.
+# Public-repo backstop: never commit them. Primary storage is
+# apps/backend/data/pizza_day_poap_codes.txt (already gitignored), but
+# entries here defend against accidental commits if a list ever lands
+# at the repo root or under a *_poap_*.txt name.
+poaps.txt
+*_poap_codes*.txt
+*_poaps*.txt
+
 # Test files
 test-*.js
 *-test.js
@@ -73,6 +82,7 @@ legal/
 
 # Agent tooling
 .nightcrawler/
+.firecrawl/
 .cursor/
 PROGRESS.md
 

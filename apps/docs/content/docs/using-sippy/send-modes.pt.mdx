@@ -1,0 +1,68 @@
+---
+title: Gás grátis vs modo Direto
+description: Duas formas de enviar dinheiro pela carteira web -- e quando usar cada uma.
+---
+
+Quando você envia dinheiro pela [carteira web](https://www.sippy.lat/wallet), você escolhe
+entre dois modos. Ambos enviam USDC na Arbitrum. A diferença é quem paga a taxa de rede
+(gas) e se um limite diário se aplica.
+
+## Gás grátis
+
+O Sippy envia a transação por você e cobre a taxa de rede (gas).
+
+- **Custo para você:** $0
+- **Limite diário:** $500 (ou $50 sem um e-mail verificado)
+- **Como funciona:** a infraestrutura do Sippy movimenta o dinheiro em seu nome, usando uma
+  permissão que você concedeu durante a configuração
+- **Também usado por:** envios pelo WhatsApp (mesmo mecanismo)
+
+Este é o padrão. É a forma mais simples de enviar -- não precisa de ETH, nem de etapas extras.
+
+## Direto
+
+Você mesmo envia a transação e paga uma pequena taxa de rede (gas).
+
+- **Custo para você:** menos de $0,01 em ETH por transação (as taxas da Arbitrum são muito baixas)
+- **Limite diário:** nenhum
+- **Como funciona:** sua carteira assina a transação diretamente. A infraestrutura do Sippy
+  não está envolvida.
+- **Requer:** uma pequena quantia de ETH na sua carteira para a taxa de rede (gas)
+
+Use o modo Direto quando quiser enviar mais do que seu limite diário permite, ou quando você
+preferir assinar as transações você mesmo.
+
+## Lado a lado
+
+|  | Gás grátis | Direto |
+|---|---|---|
+| Taxa de rede (gas) | O Sippy paga | Você paga (~$0,01) |
+| Limite diário | $500 / $50 | Nenhum |
+| ETH necessário | Não | Sim (pequena quantia) |
+| Disponível em | WhatsApp + Web | Apenas Web |
+| Quem assina | Sippy (em seu nome) | Você |
+
+## Qual devo usar?
+
+**Na maioria das vezes, Gás grátis basta.** É gratuito, é rápido, e o limite diário de $500
+cobre os envios do dia a dia.
+
+**Use o Direto quando:**
+- Você precisar enviar mais de $500 em um dia
+- Você quiser controle total sobre a transação (sem intermediário)
+- Você preferir a abordagem não custodial, em que o Sippy nunca toca nos seus fundos
+
+## Como alternar
+
+Na carteira web, os dois modos aparecem como uma chave acima do formulário de envio:
+- **"Gas gratis"** / **"Gás grátis"** -- o padrão
+- **"Directo"** / **"Direto"** -- disponível quando sua carteira tem ETH
+
+Se sua carteira não tiver ETH, o modo Direto mostra uma mensagem explicando o que você precisa.
+Você pode depositar ETH no endereço da sua carteira na Arbitrum para desbloqueá-lo.
+
+## E agora?
+
+- [Enviar dinheiro](/docs/using-sippy/send-money) -- guia de envio passo a passo
+- [Limites](/docs/using-sippy/limits) -- como funcionam os limites diários e como aumentá-los
+- [Adicionar fundos](/docs/using-sippy/add-funds) -- como obter USDC e ETH na sua carteira

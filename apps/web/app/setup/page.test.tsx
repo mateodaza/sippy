@@ -191,17 +191,6 @@ async function goToOtpStep(phone = '+573001234567') {
   })
 }
 
-// Advance through the ToS step (checkbox + Continue)
-async function goThroughTosStep() {
-  await act(async () => {
-    const checkbox = container!.querySelector('input[type="checkbox"]') as HTMLInputElement
-    checkbox.click()
-  })
-  await act(async () => {
-    findButton('Continue')!.click()
-  })
-}
-
 /**
  * Flush pending microtasks/promises so async handlers (fetch chains) resolve.
  * Uses process.nextTick which flushes microtasks in jsdom better than setTimeout.
@@ -245,10 +234,10 @@ async function waitForRedirect(path: string, timeoutMs = 3000) {
   )
 }
 
-// Advance to email step (after OTP verification)
-// When BACKEND_URL is set, handleVerifyOtp makes async fetch calls
-// (register-wallet, wallet-status, email-status) that need extra flushing.
-async function goToEmailStep(otpCode = '123456') {
+// Advance past OTP verification. With the event-day fast path, this no longer
+// lands on a recovery-email screen; it either redirects, completes setup, or
+// auto-creates the spend permission.
+async function goPastOtpStep(otpCode = '123456') {
   await act(async () => {
     const input = container!.querySelector('input[type="text"]') as HTMLInputElement
     setInputValue(input, otpCode)
@@ -260,37 +249,23 @@ async function goToEmailStep(otpCode = '123456') {
   await flushAsync()
 }
 
-async function goThroughEmailStep() {
-  // Enter email
+// Accept ToS: tick the checkbox and click Continue. This advances to the
+// hidden permission step, whose effect auto-creates the spend permission.
+async function acceptTos() {
   await act(async () => {
-    const input = container!.querySelector('input[type="email"]') as HTMLInputElement
-    setInputValue(input, 'test@example.com')
+    const checkbox = container!.querySelector('input[type="checkbox"]') as HTMLInputElement
+    checkbox.click()
   })
-  // Send code
   await act(async () => {
-    findButton('Send code')!.click()
-  })
-  await flushAsync()
-  // Enter verification code
-  await act(async () => {
-    const input = container!.querySelector('input[type="text"]') as HTMLInputElement
-    setInputValue(input, '123456')
-  })
-  // Verify
-  await act(async () => {
-    findButton('Verify')!.click()
+    findButton('Continue')!.click()
   })
   await flushAsync()
-  // Email verified -> auto-advances to ToS after 1500ms timer
-  // Wait for the timer to fire naturally
-  await waitForContent('Terms of Service', 5000)
 }
 
-// Advance to permission step (verify email, accept ToS)
+// Advance to the hidden permission step: past OTP, then accept ToS.
 async function goToPermissionStep(otpCode = '123456') {
-  await goToEmailStep(otpCode)
-  await goThroughEmailStep()
-  await goThroughTosStep()
+  await goPastOtpStep(otpCode)
+  await acceptTos()
 }
 
 // --- Setup / Teardown ---
@@ -307,7 +282,7 @@ beforeEach(() => {
   )
   vi.stubEnv('NEXT_PUBLIC_CDP_PROJECT_ID', 'test-project-id')
   vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', '')
-  vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '')
+  vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '0xspender')
   vi.stubEnv('NEXT_PUBLIC_SIPPY_NETWORK', 'arbitrum')
 })
 
@@ -354,23 +329,31 @@ describe('handleSendOtp', () => {
 })
 
 describe('handleVerifyOtp', () => {
-  it('happy path: verifies OTP, stores token, authenticates, advances to email step', async () => {
+  it('happy path: verifies OTP, skips email, accepts ToS, and completes setup', async () => {
     mocks.sendOtp.mockResolvedValue(undefined)
     mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
     mocks.authenticateWithJWT.mockResolvedValue({
       user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
       isNewUser: false,
     })
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
     await renderPage()
 
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
+    await flushAsync()
 
     expect(mocks.verifyOtp).toHaveBeenCalledWith('+573001234567', '123456')
     expect(mocks.storeToken).toHaveBeenCalledWith('jwt-token-abc')
     expect(mocks.authenticateWithJWT).toHaveBeenCalled()
-    // Should now be on email step
-    expect(container!.textContent).toContain('Add a recovery email (recommended)')
+    // Email is never collected during onboarding; ToS is shown and required.
+    expect(container!.textContent).not.toContain('Add a recovery email')
+    expect(container!.textContent).toContain('Terms of Service')
+
+    // Accept ToS → hidden permission step auto-creates the spend permission → done.
+    await acceptTos()
+    expect(mocks.createSpendPermission).toHaveBeenCalled()
+    expect(container!.textContent).toContain("You're All Set")
   })
 
   it('shows error and stays on otp step when verifyOtp throws', async () => {
@@ -379,7 +362,7 @@ describe('handleVerifyOtp', () => {
     await renderPage()
 
     await goToOtpStep('+573001234567')
-    await goToEmailStep('000000')
+    await goPastOtpStep('000000')
 
     expect(container!.textContent).toContain('Verification failed')
     // Should still be on OTP step (text input for OTP visible)
@@ -393,7 +376,7 @@ describe('handleVerifyOtp', () => {
     await renderPage()
 
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
 
     expect(container!.textContent).toContain('Verification failed')
   })
@@ -407,7 +390,7 @@ describe('handleVerifyOtp', () => {
     await renderPage()
 
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
 
     // Should be in loading state waiting for wallet to populate
     // (awaitingCdpWallet = true, useEffect polling currentUser)
@@ -438,15 +421,19 @@ describe('session recovery', () => {
     expect((registerCall![1] as RequestInit).headers).toMatchObject({
       Authorization: 'Bearer stored-token-xyz',
     })
-    // Recovery routes to tos (not email) when tosAccepted is falsy
+    // Recovery with ToS not yet accepted resumes at the ToS step (never bypasses
+    // ToS into permission creation).
+    await flushAsync()
     expect(container!.textContent).toContain('Terms of Service')
+    expect(container!.textContent).not.toContain('Add a recovery email')
 
     vi.unstubAllGlobals()
   })
 
-  it('routes to tos step (not email) when hasPermission is false — covers skipped-email recovery', async () => {
-    // Covers all hasPermission:false recovery cases: skipped email, mid-email, never-saw-email.
-    // None of them should show the email step on recovery ("no nag on this page").
+  it('routes to ToS step when hasPermission is false and ToS not accepted (no bypass)', async () => {
+    // A user who reloads mid-onboarding (signed in, no permission, no ToS) must
+    // resume at ToS — not be routed into permission creation. Email is never
+    // shown on recovery ("no nag on this page").
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
@@ -455,15 +442,22 @@ describe('session recovery', () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       text: async () => '',
-      json: async () => ({ hasPermission: false }),
+      json: async () => ({ hasPermission: false, tosAccepted: false }),
     })
     vi.stubGlobal('fetch', mockFetch)
 
     await renderPage()
 
-    // Must show tos step, NOT email step (tosAccepted is falsy in response)
+    // Must land on ToS, never email.
+    await flushAsync()
     expect(container!.textContent).toContain('Terms of Service')
     expect(container!.textContent).not.toContain('Add a recovery email')
+    // ToS not accepted → must NOT attempt to register a spend permission.
+    const registerPermCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('/api/register-permission')
+    )
+    expect(registerPermCalls).toHaveLength(0)
     // No email-status fetch should occur during recovery
     const emailStatusCalls = mockFetch.mock.calls.filter(
       (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/auth/email-status')
@@ -473,7 +467,47 @@ describe('session recovery', () => {
     vi.unstubAllGlobals()
   })
 
-  it('routes to tos step when wallet-status returns non-OK', async () => {
+  it('returning user with ToS accepted but no permission → recovers/creates permission (not ToS)', async () => {
+    // The legitimate interrupted-registration path: ToS already accepted, so
+    // recovery proceeds to register/create the permission rather than re-prompting ToS.
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
+    _storedToken = 'stored-token-xyz'
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasPermission: false, tosAccepted: true }),
+        })
+      }
+      // register-permission recovery fails (no existing on-chain permission) →
+      // falls through to the permission step.
+      if (url.includes('/api/register-permission')) {
+        return Promise.resolve({ ok: false, text: async () => 'not found', json: async () => ({}) })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await flushAsync()
+
+    // ToS already accepted → recovery attempts permission registration.
+    const registerPermCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('/api/register-permission')
+    )
+    expect(registerPermCalls.length).toBeGreaterThan(0)
+    // Does not re-prompt ToS.
+    expect(container!.textContent).not.toContain('Terms of Service')
+
+    vi.unstubAllGlobals()
+  })
+
+  it('routes to ToS step when wallet-status returns non-OK (safe default, no bypass)', async () => {
     vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
     mocks.state.isSignedIn = true
     mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
@@ -493,8 +527,15 @@ describe('session recovery', () => {
 
     await renderPage()
 
+    // Can't confirm ToS status → resume at ToS (never bypass into permission).
+    await flushAsync()
     expect(container!.textContent).toContain('Terms of Service')
     expect(container!.textContent).not.toContain('Add a recovery email')
+    const registerPermCalls = mockFetch.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' && call[0].includes('/api/register-permission')
+    )
+    expect(registerPermCalls).toHaveLength(0)
 
     vi.unstubAllGlobals()
   })
@@ -569,216 +610,12 @@ describe('handleApprovePermission', () => {
     expect((registerPermCall![1] as RequestInit).headers).toMatchObject({
       Authorization: 'Bearer jwt-token',
     })
-
-    vi.unstubAllGlobals()
-  })
-})
-
-describe('handleSendEmailCode', () => {
-  it('happy path: calls POST /api/auth/send-email-code and shows code input', async () => {
-    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
-      isNewUser: false,
-    })
-    // Token is set automatically by storeToken() during OTP verify
-
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => '',
-      json: async () => ({}),
-    })
-    vi.stubGlobal('fetch', mockFetch)
-
-    await renderPage()
-    await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-
-    // Enter email and click Send code
-    await act(async () => {
-      const input = container!.querySelector('input[type="email"]') as HTMLInputElement
-      setInputValue(input, 'user@example.com')
-    })
-    await act(async () => {
-      findButton('Send code')!.click()
+    expect(JSON.parse((registerPermCall![1] as RequestInit).body as string)).toEqual({
+      dailyLimit: '50',
     })
 
-    const sendCodeCall = mockFetch.mock.calls.find(
-      (call: unknown[]) =>
-        typeof call[0] === 'string' && call[0].includes('/api/auth/send-email-code')
-    )
-    expect(sendCodeCall).toBeDefined()
-    expect((sendCodeCall![1] as RequestInit).headers).toMatchObject({
-      'Authorization': 'Bearer jwt-token-abc',
-      'Content-Type': 'application/json',
-    })
-    expect((sendCodeCall![1] as RequestInit).body).toBe(
-      JSON.stringify({ email: 'user@example.com' })
-    )
-    // Code input should now be visible
-    expect(container!.textContent).toContain('Code sent to user@example.com')
-
-    vi.unstubAllGlobals()
-  })
-
-  it('shows error when send-email-code returns non-OK', async () => {
-    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
-      isNewUser: false,
-    })
-    // Token is set automatically by storeToken() during OTP verify
-
-    // register-wallet (from handleVerifyOtp) must succeed so we reach the email step;
-    // send-email-code should fail to exercise the error branch.
-    const mockFetch = vi.fn().mockImplementation((url: string) => {
-      if (typeof url === 'string' && url.includes('/api/auth/send-email-code')) {
-        return Promise.resolve({
-          ok: false,
-          text: async () => 'Invalid email address',
-          json: async () => ({}),
-        })
-      }
-      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
-    })
-    vi.stubGlobal('fetch', mockFetch)
-
-    await renderPage()
-    await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-
-    await act(async () => {
-      const input = container!.querySelector('input[type="email"]') as HTMLInputElement
-      setInputValue(input, 'bad-email')
-    })
-    await act(async () => {
-      findButton('Send code')!.click()
-    })
-
-    expect(container!.textContent).toContain('Failed to send email code')
-    // Still on email step (email input still visible)
-    expect(container!.querySelector('input[type="email"]')).not.toBeNull()
-
-    vi.unstubAllGlobals()
-  })
-})
-
-describe('handleVerifyEmailCode', () => {
-  it('happy path: verifies code, shows confirmation, advances to tos after 1500ms', async () => {
-    vi.useFakeTimers()
-    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
-      isNewUser: false,
-    })
-    // Token is set automatically by storeToken() during OTP verify
-
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => '',
-      json: async () => ({}),
-    })
-    vi.stubGlobal('fetch', mockFetch)
-
-    await renderPage()
-    await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-
-    // Send email code
-    await act(async () => {
-      const input = container!.querySelector('input[type="email"]') as HTMLInputElement
-      setInputValue(input, 'user@example.com')
-    })
-    await act(async () => {
-      findButton('Send code')!.click()
-    })
-
-    // Enter verification code
-    await act(async () => {
-      const input = container!.querySelector('input[type="text"]') as HTMLInputElement
-      setInputValue(input, '654321')
-    })
-    await act(async () => {
-      findButton('Verify')!.click()
-    })
-
-    const verifyCall = mockFetch.mock.calls.find(
-      (call: unknown[]) =>
-        typeof call[0] === 'string' && call[0].includes('/api/auth/verify-email-code')
-    )
-    expect(verifyCall).toBeDefined()
-    expect((verifyCall![1] as RequestInit).headers).toMatchObject({
-      'Authorization': 'Bearer jwt-token-abc',
-      'Content-Type': 'application/json',
-    })
-    expect((verifyCall![1] as RequestInit).body).toBe(
-      JSON.stringify({ email: 'user@example.com', code: '654321' })
-    )
-    // Confirmation shown before auto-advance
-    expect(container!.textContent).toContain('Email verified')
-
-    // Advance timer to trigger setStep('tos')
-    await act(async () => {
-      vi.advanceTimersByTime(1500)
-    })
-    expect(container!.textContent).toContain('Terms of Service')
-
-    vi.useRealTimers()
-    vi.unstubAllGlobals()
-  })
-
-  it('shows error when verify-email-code returns non-OK', async () => {
-    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
-    mocks.sendOtp.mockResolvedValue(undefined)
-    mocks.verifyOtp.mockResolvedValue('jwt-token-abc')
-    mocks.authenticateWithJWT.mockResolvedValue({
-      user: { evmSmartAccounts: ['0xabc'], evmAccounts: [] },
-      isNewUser: false,
-    })
-    // Token is set automatically by storeToken() during OTP verify
-
-    // verify-email-code fails; all other endpoints succeed
-    const mockFetch = vi.fn().mockImplementation((url: string) => {
-      if (typeof url === 'string' && url.includes('/api/auth/verify-email-code')) {
-        return Promise.resolve({
-          ok: false,
-          text: async () => 'Invalid code',
-          json: async () => ({}),
-        })
-      }
-      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
-    })
-    vi.stubGlobal('fetch', mockFetch)
-
-    await renderPage()
-    await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-
-    await act(async () => {
-      const input = container!.querySelector('input[type="email"]') as HTMLInputElement
-      setInputValue(input, 'user@example.com')
-    })
-    await act(async () => {
-      findButton('Send code')!.click()
-    })
-
-    await act(async () => {
-      const input = container!.querySelector('input[type="text"]') as HTMLInputElement
-      setInputValue(input, '000000')
-    })
-    await act(async () => {
-      findButton('Verify')!.click()
-    })
-
-    expect(container!.textContent).toContain('Failed to verify email code')
-    // Still on email step (code input still visible)
-    expect(container!.textContent).toContain('Code sent to user@example.com')
+    const viem = await import('viem')
+    expect(viem.parseUnits).toHaveBeenCalledWith('50', 6)
 
     vi.unstubAllGlobals()
   })
@@ -938,7 +775,7 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
     await waitForRedirect('/settings')
   })
 
@@ -954,7 +791,7 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
     // useEffect auto-fires handleApprovePermission
     await flushAsync()
     await flushAsync()
@@ -962,36 +799,79 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
     expect(mocks.createSpendPermission).toHaveBeenCalled()
   })
 
-  it('returning user with verified email but no ToS → skips email, goes to tos step', async () => {
+  it('returning user with no ToS → shows ToS (not email), auto-creates permission on accept', async () => {
     setupOtpMocksWithBackend()
-    mockFetchByUrl({
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
+    const fetchMock = mockFetchByUrl({
       '/api/wallet-status': { hasWallet: true, hasPermission: false, tosAccepted: false },
-      '/api/auth/email-status': { hasEmail: true, verified: true, maskedEmail: 'u***@example.com' },
+      '/api/ensure-gas': { ready: true },
+      '/api/register-permission': { ok: true },
     })
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-    await waitForContent('Terms of Service')
+    await goPastOtpStep('123456')
+    await flushAsync()
+    // ToS is shown; email is never collected during onboarding.
+    expect(container!.textContent).toContain('Terms of Service')
+    expect(container!.textContent).not.toContain('Add a recovery email')
+
+    await acceptTos()
+    expect(mocks.createSpendPermission).toHaveBeenCalled()
+    // Routing no longer consults email-status.
+    expect(
+      fetchMock.mock.calls.some(
+        (call: unknown[]) =>
+          typeof call[0] === 'string' && call[0].includes('/api/auth/email-status')
+      )
+    ).toBe(false)
+    // ToS acceptance is recorded.
+    expect(
+      fetchMock.mock.calls.some(
+        (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/accept-tos')
+      )
+    ).toBe(true)
   })
 
-  it('fresh user (no email, no ToS) → shows email step', async () => {
+  it('fresh user (no email, no ToS) → shows ToS (not email), auto-creates permission on accept', async () => {
     setupOtpMocksWithBackend()
-    mockFetchByUrl({
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
+    const fetchMock = mockFetchByUrl({
       '/api/wallet-status': { hasWallet: true, hasPermission: false, tosAccepted: false },
-      '/api/auth/email-status': { hasEmail: false, verified: false, maskedEmail: null },
+      '/api/ensure-gas': { ready: true },
+      '/api/register-permission': { ok: true },
     })
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
+    await goPastOtpStep('123456')
+    await flushAsync()
 
-    expect(container!.textContent).toContain('Add a recovery email')
+    // ToS is shown; email is never collected during onboarding.
+    expect(container!.textContent).not.toContain('Add a recovery email')
+    expect(container!.textContent).toContain('Terms of Service')
+
+    await acceptTos()
+    expect(mocks.createSpendPermission).toHaveBeenCalled()
+    // Routing no longer consults email-status.
+    expect(
+      fetchMock.mock.calls.some(
+        (call: unknown[]) =>
+          typeof call[0] === 'string' && call[0].includes('/api/auth/email-status')
+      )
+    ).toBe(false)
+    // ToS acceptance is recorded; user is not bounced to /settings.
+    expect(
+      fetchMock.mock.calls.some(
+        (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/api/accept-tos')
+      )
+    ).toBe(true)
     expect(mocks.routerReplace).not.toHaveBeenCalledWith('/settings')
   })
 
-  it('wallet-status returns non-OK → falls back to email step (does not block onboarding)', async () => {
+  it('wallet-status returns non-OK → falls back to ToS step (does not block onboarding)', async () => {
     setupOtpMocksWithBackend()
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
     const fn = vi.fn().mockImplementation((url: string) => {
       if (url.includes('/api/wallet-status')) {
         return Promise.resolve({
@@ -1000,14 +880,27 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
           json: async () => ({}),
         })
       }
+      if (url.includes('/api/ensure-gas')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ ready: true }),
+        })
+      }
       return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
     })
     vi.stubGlobal('fetch', fn)
 
     await renderPage()
     await goToOtpStep('+573001234567')
-    await goToEmailStep('123456')
-    await waitForContent('Add a recovery email')
+    await goPastOtpStep('123456')
+    await flushAsync()
+    // Status failure must not block onboarding: fall back to ToS, not email.
+    expect(container!.textContent).not.toContain('Add a recovery email')
+    expect(container!.textContent).toContain('Terms of Service')
+
+    await acceptTos()
+    expect(mocks.createSpendPermission).toHaveBeenCalled()
   })
 })
 
@@ -1097,5 +990,345 @@ describe('source integrity', () => {
     const source = readFileSync(join(__dir, 'page.tsx'), 'utf-8')
     expect(source).toMatch(/getDefaultChannel/)
     expect(source).toMatch(/canSwitchChannel/)
+  })
+})
+
+// ──────────────────────────────────────────────────────────────────────────────
+// linkEventFiredRef guard — single-call invariant across the three call sites
+//
+// The setup page links the user to an event from three different places
+// (see the block comment above `SetupContent`). All three are guarded by the
+// same `linkEventFiredRef` so exactly one network call goes out per mount.
+// If anyone adds a fourth call site without wiring the guard, these tests
+// should catch it.
+//
+// Sites 2 (post-OTP `advanceToCorrectStep`) and 3 (mount-time session
+// recovery) are driven directly here. Site 1 (the `done`-step effect) is
+// covered by the source-code invariants below — driving it would require
+// stepping through the full onboarding flow.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('event linking — linkEventFiredRef guard', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    window.sessionStorage.clear()
+    window.localStorage?.clear?.()
+  })
+
+  // URL: ?phone=…&event=…&source=…
+  function stubEventSearchParams(slug: string | null, source: string | null = null) {
+    mocks.searchParamsGet.mockImplementation((key: string) => {
+      if (key === 'phone') return '573001234567'
+      if (key === 'event') return slug
+      if (key === 'source') return source
+      return null
+    })
+  }
+
+  function countLinkEventCalls(mockFetch: ReturnType<typeof vi.fn>): RequestInit[] {
+    return mockFetch.mock.calls
+      .filter(
+        (c: unknown[]) => typeof c[0] === 'string' && (c[0] as string).includes('/api/link-event')
+      )
+      .map((c: unknown[]) => c[1] as RequestInit)
+  }
+
+  it('session recovery (signed-in user lands on /setup?event=…): fires linkEvent("returning") once and shows event-tagged step', async () => {
+    // Site 3 — the mount-time recovery effect. The slug/source readers are
+    // called inside the hasPermission branch (rather than reading the
+    // closure-captured `eventSlug` state), which is what makes this path
+    // reliable even on first-render-with-event-in-URL.
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    stubEventSearchParams('pizza-day', 'qr-booth')
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
+    _storedToken = 'stored-token-xyz'
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      if (url.includes('/api/link-event')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({
+            linked: true,
+            event: { slug: 'pizza-day', name: 'Pizza Day', endsAt: null },
+            actions: ['poap'],
+            poapClaimUrl: 'https://poap.example/x',
+            poapClaimed: false,
+            linkedAtStep: 'returning',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await flushAsync()
+    await flushAsync()
+
+    const calls = countLinkEventCalls(mockFetch)
+    expect(calls.length).toBe(1)
+    const body = JSON.parse(calls[0].body as string)
+    expect(body).toEqual({
+      eventSlug: 'pizza-day',
+      linkedAtStep: 'returning',
+      source: 'qr-booth',
+    })
+    // Stays on /setup rendering the event-tagged screen — does NOT redirect.
+    expect(mocks.routerReplace).not.toHaveBeenCalledWith('/settings')
+  })
+
+  it('session recovery falls back to sessionStorage when URL has no event param', async () => {
+    // Refresh case: user originally arrived via ?event=pizza-day, the slug
+    // was persisted to sessionStorage, then the URL was cleaned. On a fresh
+    // mount with no URL param, readAndPersistEventSlug picks up the stored
+    // slug and site 3 still fires linkEvent.
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    // No event in URL
+    mocks.state.isSignedIn = true
+    mocks.state.currentUser = { evmSmartAccounts: ['0xwallet'], evmAccounts: [] }
+    _storedToken = 'stored-token-xyz'
+    window.sessionStorage.setItem('sippy:event-slug', 'pizza-day')
+    window.sessionStorage.setItem('sippy:event-source', 'qr-booth')
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      if (url.includes('/api/link-event')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({
+            linked: true,
+            event: { slug: 'pizza-day', name: 'Pizza Day', endsAt: null },
+            actions: [],
+            poapClaimUrl: null,
+            poapClaimed: false,
+            linkedAtStep: 'returning',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await flushAsync()
+    await flushAsync()
+
+    const calls = countLinkEventCalls(mockFetch)
+    expect(calls.length).toBe(1)
+    const body = JSON.parse(calls[0].body as string)
+    expect(body.eventSlug).toBe('pizza-day')
+    expect(body.source).toBe('qr-booth')
+  })
+
+  it('post-OTP advanceToCorrectStep (hasPermission + eventSlug): fires linkEvent("returning") exactly once', async () => {
+    // Fresh OTP verify path: user enters phone + OTP, server reports
+    // hasPermission=true, advanceToCorrectStep should fire linkEvent('returning')
+    // exactly once with the canonical body (eventSlug + linkedAtStep + source).
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    stubEventSearchParams('pizza-day', 'twitter')
+    setupOtpMocksWithBackend()
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      if (url.includes('/api/link-event')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({
+            linked: true,
+            event: { slug: 'pizza-day', name: 'Pizza Day', endsAt: null },
+            actions: [],
+            poapClaimUrl: null,
+            poapClaimed: false,
+            linkedAtStep: 'returning',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goPastOtpStep('123456')
+    await flushAsync()
+    // Extra flushes in case a stray re-render attempts a second call.
+    await flushAsync()
+
+    const calls = countLinkEventCalls(mockFetch)
+    expect(calls.length).toBe(1)
+    const body = JSON.parse(calls[0].body as string)
+    expect(body).toEqual({
+      eventSlug: 'pizza-day',
+      linkedAtStep: 'returning',
+      source: 'twitter',
+    })
+  })
+
+  it('source param is omitted from the request body when absent', async () => {
+    // Defensive: lib/events.ts.linkEvent should only include `source` when
+    // explicitly passed. Confirms attribution doesn't get polluted with an
+    // empty-string source from a missing URL param.
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    stubEventSearchParams('pizza-day', null)
+    setupOtpMocksWithBackend()
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      if (url.includes('/api/link-event')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({
+            linked: true,
+            event: { slug: 'pizza-day', name: 'Pizza Day', endsAt: null },
+            actions: [],
+            poapClaimUrl: null,
+            poapClaimed: false,
+            linkedAtStep: 'returning',
+          }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goPastOtpStep('123456')
+    await flushAsync()
+
+    const calls = countLinkEventCalls(mockFetch)
+    expect(calls.length).toBe(1)
+    const body = JSON.parse(calls[0].body as string)
+    expect(body).toEqual({ eventSlug: 'pizza-day', linkedAtStep: 'returning' })
+    expect(body).not.toHaveProperty('source')
+  })
+
+  it('silent reject (linked:false) still fires exactly once — guard flips before await', async () => {
+    // Server returns { linked: false } for unknown/inactive slugs. The guard
+    // should still flip (it's set BEFORE the await), so a re-render of any
+    // dependent effect can't double-fire even on rejection.
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    stubEventSearchParams('unknown-slug', 'twitter')
+    setupOtpMocksWithBackend()
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      if (url.includes('/api/link-event')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ linked: false }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goPastOtpStep('123456')
+    await flushAsync()
+    await flushAsync()
+
+    expect(countLinkEventCalls(mockFetch).length).toBe(1)
+  })
+
+  it('does not fire linkEvent on the post-OTP path when no eventSlug is present', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    setupOtpMocksWithBackend()
+
+    const mockFetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes('/api/wallet-status')) {
+        return Promise.resolve({
+          ok: true,
+          text: async () => '',
+          json: async () => ({ hasWallet: true, hasPermission: true, tosAccepted: true }),
+        })
+      }
+      return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goPastOtpStep('123456')
+    await flushAsync()
+
+    expect(countLinkEventCalls(mockFetch).length).toBe(0)
+    // Without an event slug, hasPermission redirects straight to /settings.
+    await waitForRedirect('/settings')
+  })
+})
+
+describe('event linking — source code invariants', () => {
+  // Belt-and-suspenders: if someone removes the guard or adds a 4th call
+  // site without wiring the ref, these tests fail fast — even when the
+  // runtime path for that call site is hard to drive from JSDom.
+  const source = readFileSync(join(__dir, 'page.tsx'), 'utf-8')
+
+  // Strip line comments and block comments so the regexes below don't match
+  // identifiers that only appear in comments. Cheap-and-cheerful: doesn't
+  // handle every JS lexical edge case, but it's good enough for this file
+  // where comments don't contain `//` or `/*` inside strings.
+  function stripComments(src: string): string {
+    return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  }
+  const code = stripComments(source)
+
+  it('declares the linkEventFiredRef ref exactly once', () => {
+    const declarations = code.match(/const linkEventFiredRef = useRef\(/g) ?? []
+    expect(declarations.length).toBe(1)
+  })
+
+  it('every call to linkEvent() has a paired linkEventFiredRef.current = true assignment', () => {
+    // Count `linkEvent(` invocations (excluding the named import in
+    // `import { linkEvent, ... }`) vs ref-set sites. They should match —
+    // if someone adds a 4th call site, this test forces them to wire the
+    // guard too.
+    const callSites = code.match(/(?:^|[^a-zA-Z_])linkEvent\(/g) ?? []
+    // Drop the named-import occurrence: `  linkEvent,` inside the import block.
+    // The import has a `,` immediately after, the calls have `(`. We already
+    // matched `linkEvent(` so imports are excluded by construction.
+    const refSets = code.match(/linkEventFiredRef\.current = true/g) ?? []
+    expect(callSites.length).toBe(refSets.length)
+    // And there really are three of them — the contract the block comment
+    // above SetupContent describes.
+    expect(callSites.length).toBe(3)
   })
 })

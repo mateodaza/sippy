@@ -24,29 +24,56 @@ import { randomUUID } from 'node:crypto'
 import logger from '@adonisjs/core/services/logger'
 import OnrampOrder from '#models/onramp_order'
 import { exchangeRateService } from '#services/exchange_rate_service'
-import { initiatePayment, type OnrampMethod } from '#services/colurs_payment.service'
+import { createOnrampQuote, getQuoteRate } from '#services/colurs_fx.service'
+import {
+  initiatePayment,
+  getPaymentPreview,
+  type OnrampMethod,
+} from '#services/colurs_payment.service'
+import { PSE_BANKS_FALLBACK } from '#services/pse_banks'
 import { colursHeaders } from '#services/colurs_auth.service'
 import {
   getKyc,
-  getCounterpartyId,
   kycRegister,
+  kycQuickRegister,
+  kycUseQuickFlow,
   kycRequestOtp,
   kycVerifyPhone,
   kycVerifyEmail,
   kycSubmitDocument,
   kycRefreshLevel,
+  isFullKyc,
+  FULL_KYC_LEVEL,
   type IdType,
 } from '#services/colurs_kyc.service'
+import {
+  onPaymentSucceeded,
+  TERMINAL_STATUSES,
+  normalizeColursStatus,
+} from '#jobs/poll_r2p_payments'
 import env from '#start/env'
 import { maskPhone } from '#utils/phone'
 
 const VALID_METHODS: OnrampMethod[] = ['pse', 'nequi', 'bancolombia']
-const VALID_ID_TYPES: IdType[] = ['CC', 'CE', 'NIT', 'PA']
+// CC-only in this release. KYC doc upload is hardcoded to national_id_front +
+// national_id_back — re-add CE/PA/NIT once type_documents codes for their pairs
+// are mapped in colurs_kyc.service.kycSubmitDocument.
+const VALID_ID_TYPES: IdType[] = ['CC']
 const DEPOSIT_ADDRESS = () => env.get('SIPPY_ETH_DEPOSIT_ADDRESS', '')
 
 // ~$2,500 USD at current rates. Generous enough for real use, low enough
 // to cap exposure through the hot-wallet bridge path.
 const MAX_ONRAMP_COP = 10_000_000
+
+// Minimum order size. Below this, Colurs fees + LiFi bridge gas eat the
+// entire spread and the bridge route reverts or completes for a tiny dust
+// amount that strands the order. Enforced on both /quote and /initiate.
+const MIN_ONRAMP_COP = 200_000
+
+// Monthly limit for users on the quick-flow (no full KYC).
+// ≈ $1,000 USD at ~4,000 COP/USD. Above this, /initiate returns
+// KYC_REQUIRED_FOR_AMOUNT and the frontend prompts the user to upgrade.
+const QUICK_FLOW_LIMIT_COP = 4_000_000
 
 export default class OnrampController {
   // ── GET /api/onramp/kyc ──────────────────────────────────────────────────────
@@ -59,10 +86,17 @@ export default class OnrampController {
     return ctx.response.json({
       kycStatus: kyc?.kycStatus ?? 'unregistered',
       kycLevel: kyc?.kycLevel ?? 0,
-      // Mirror the same rule as refresh-level: Level 5 + counterparty required.
-      // Without counterparty the user cannot initiate an onramp payment.
-      isApproved:
-        kyc?.kycStatus === 'approved' && (kyc?.kycLevel ?? 0) >= 5 && !!kyc?.counterpartyId,
+      // "Approved enough to onramp" requires only counterparty + status='approved'.
+      // The kyc_level field discriminates between quick-flow (0) and full-KYC
+      // approved (FULL_KYC_LEVEL); only full KYC lifts the monthly cap. Both
+      // states are "approved" for routing the user to the method picker.
+      isApproved: kyc?.kycStatus === 'approved' && !!kyc?.counterpartyId,
+      // Shared single definition of full, document-verified KYC. Deliberate
+      // (correct) tightening over the old inline check: isFullKyc ALSO requires a
+      // counterparty_id, so a level-5/approved row whose counterparty creation
+      // transiently failed (see kycRefreshLevel) now reports false here —
+      // consistent with isApproved above, which already excludes that state.
+      isFullKycApproved: isFullKyc(kyc),
       fullname: kyc?.fullname ?? null,
       idType: kyc?.idType ?? null,
       email: kyc?.email ?? null,
@@ -91,18 +125,108 @@ export default class OnrampController {
     if (!email || typeof email !== 'string' || !(email as string).includes('@'))
       return response.status(400).json({ error: 'email is required' })
 
+    // Default register flow is now the QUICK FLOW (counterparty only, no /user/).
+    // The full KYC flow is only triggered by POST /api/onramp/kyc/upgrade-to-full-kyc
+    // when the user trips the monthly cap on /initiate.
     try {
-      await kycRegister({
+      await kycQuickRegister({
         phoneNumber,
         email: (email as string).trim().toLowerCase(),
         fullname: (fullname as string).trim(),
         idType: idType as IdType,
         idNumber: (idNumber as string).trim(),
       })
+      // isApproved=true means the frontend can jump straight to the method picker.
+      return response.status(201).json({ ok: true, kycStatus: 'approved', isApproved: true })
+    } catch (err) {
+      logger.error({ err }, `onramp/kyc: quick-register failed for ${maskPhone(phoneNumber)}`)
+      return response.status(502).json({ error: 'Registration failed. Please try again.' })
+    }
+  }
+
+  // ── POST /api/onramp/kyc/upgrade-to-full-kyc ────────────────────────────────
+  //
+  // Triggered when a quick-flow user trips the monthly cap (KYC_REQUIRED_FOR_AMOUNT
+  // from /initiate). Reuses the identity already collected during quick-register
+  // and creates the Colurs /user/ account on top of the existing counterparty.
+  // After this, the user goes through the existing OTP → doc upload flow.
+
+  async kycUpgradeToFullKyc(ctx: HttpContext) {
+    const { response } = ctx
+    const phoneNumber = ctx.cdpUser?.phoneNumber
+    if (!phoneNumber) return response.status(401).json({ error: 'Unauthorized' })
+
+    const kyc = await getKyc(phoneNumber)
+    if (!kyc?.counterpartyId) {
+      return response.status(400).json({
+        error: 'Quick-flow registration required first.',
+        code: 'QUICK_FLOW_REQUIRED',
+      })
+    }
+    if (kyc.colursUserId !== null && kyc.colursUserId !== undefined) {
+      return response.status(409).json({
+        error: 'Already upgraded.',
+        code: 'ALREADY_UPGRADED',
+      })
+    }
+    if (!kyc.fullname || !kyc.idType || !kyc.idNumber || !kyc.email) {
+      return response.status(400).json({
+        error: 'Missing identity data; please re-register.',
+        code: 'MISSING_IDENTITY',
+      })
+    }
+
+    try {
+      await kycRegister({
+        phoneNumber,
+        email: kyc.email,
+        fullname: kyc.fullname,
+        idType: kyc.idType,
+        idNumber: kyc.idNumber,
+      })
+      // kycStatus moves to 'registered' so the frontend routes the user into
+      // the existing OTP/doc upload flow (kyc_phone_otp → … → kyc_pending).
       return response.status(201).json({ ok: true, kycStatus: 'registered' })
     } catch (err) {
-      logger.error({ err }, `onramp/kyc: register failed for ${maskPhone(phoneNumber)}`)
-      return response.status(502).json({ error: 'Registration failed. Please try again.' })
+      logger.error({ err }, `onramp/kyc: upgrade failed for ${maskPhone(phoneNumber)}`)
+      return response.status(502).json({ error: 'Identity verification setup failed.' })
+    }
+  }
+
+  // ── POST /api/onramp/kyc/use-quick-flow ─────────────────────────────────────
+  //
+  // Escape hatch from the "Under review" wait. A user who already started full
+  // KYC (registered / phone_verified / email_verified / documents_submitted)
+  // and is waiting on Colurs's compliance team can opt into the quick-flow
+  // experience — capped at the same monthly limit — to start onramping small
+  // amounts immediately.
+  //
+  // Idempotent: if a counterparty already exists on the row, we just bump
+  // status. If not, we create one using the identity already collected during
+  // registration.
+
+  async kycUseQuickFlow(ctx: HttpContext) {
+    const { response } = ctx
+    const phoneNumber = ctx.cdpUser?.phoneNumber
+    if (!phoneNumber) return response.status(401).json({ error: 'Unauthorized' })
+
+    try {
+      await kycUseQuickFlow({ phoneNumber })
+      return response.status(200).json({
+        ok: true,
+        kycStatus: 'approved',
+        isApproved: true,
+      })
+    } catch (err) {
+      const code = (err as Error & { code?: string }).code
+      if (code === 'MISSING_IDENTITY') {
+        return response.status(400).json({
+          error: 'Identity data missing; please re-register.',
+          code: 'MISSING_IDENTITY',
+        })
+      }
+      logger.error({ err }, `onramp/kyc: switch-to-quick-flow failed for ${maskPhone(phoneNumber)}`)
+      return response.status(502).json({ error: 'Could not enable quick-flow.' })
     }
   }
 
@@ -139,8 +263,8 @@ export default class OnrampController {
     if (!phoneNumber) return response.status(401).json({ error: 'Unauthorized' })
 
     const { code } = request.body() as { code: unknown }
-    if (!code || typeof code !== 'string' || code.length !== 6)
-      return response.status(400).json({ error: 'code must be a 6-digit string' })
+    if (!code || typeof code !== 'string' || code.length !== 4)
+      return response.status(400).json({ error: 'code must be a 4-digit string' })
 
     try {
       await kycVerifyPhone(phoneNumber, code)
@@ -160,8 +284,8 @@ export default class OnrampController {
     if (!phoneNumber) return response.status(401).json({ error: 'Unauthorized' })
 
     const { code } = request.body() as { code: unknown }
-    if (!code || typeof code !== 'string' || code.length !== 6)
-      return response.status(400).json({ error: 'code must be a 6-digit string' })
+    if (!code || typeof code !== 'string' || code.length !== 4)
+      return response.status(400).json({ error: 'code must be a 4-digit string' })
 
     try {
       await kycVerifyEmail(phoneNumber, code)
@@ -175,8 +299,12 @@ export default class OnrampController {
   // ── POST /api/onramp/kyc/upload-document ─────────────────────────────────────
 
   /**
-   * Body: { fileBase64: string, mimeType: 'image/jpeg' | 'image/png' }
-   * Uploads the document photo to Colurs and submits for compliance review.
+   * Body: {
+   *   frontBase64: string, frontMimeType: 'image/jpeg' | 'image/png',
+   *   backBase64:  string, backMimeType:  'image/jpeg' | 'image/png'
+   * }
+   * Colombia CC requires both front and back of the national ID. This endpoint
+   * uploads both sides to Colurs and submits them for compliance review.
    * After this step the user waits for Level 5 approval (async).
    */
   async kycUploadDocument(ctx: HttpContext) {
@@ -184,47 +312,56 @@ export default class OnrampController {
     const phoneNumber = ctx.cdpUser?.phoneNumber
     if (!phoneNumber) return response.status(401).json({ error: 'Unauthorized' })
 
-    const { fileBase64, mimeType } = request.body() as {
-      fileBase64: unknown
-      mimeType: unknown
+    const { frontBase64, frontMimeType, backBase64, backMimeType } = request.body() as {
+      frontBase64: unknown
+      frontMimeType: unknown
+      backBase64: unknown
+      backMimeType: unknown
     }
 
-    if (!fileBase64 || typeof fileBase64 !== 'string')
-      return response.status(400).json({ error: 'fileBase64 is required' })
-    if (mimeType !== 'image/jpeg' && mimeType !== 'image/png')
-      return response.status(400).json({ error: 'mimeType must be image/jpeg or image/png' })
+    const validateSide = (
+      label: 'front' | 'back',
+      b64: unknown,
+      mime: unknown
+    ): { ok: true; bytes: Buffer } | { ok: false; error: string } => {
+      if (!b64 || typeof b64 !== 'string') return { ok: false, error: `${label}Base64 is required` }
+      if (mime !== 'image/jpeg' && mime !== 'image/png')
+        return { ok: false, error: `${label}MimeType must be image/jpeg or image/png` }
+      if (b64.length > 14_000_000)
+        return { ok: false, error: `${label} file too large. Maximum 10MB.` }
 
-    // Basic size guard — base64 of 10MB = ~13.3M chars
-    if (fileBase64.length > 14_000_000)
-      return response.status(400).json({ error: 'File too large. Maximum 10MB.' })
+      let bytes: Buffer
+      try {
+        bytes = Buffer.from(b64, 'base64')
+      } catch {
+        return { ok: false, error: `${label}Base64 is not valid base64` }
+      }
+      if (bytes.length === 0) return { ok: false, error: `${label} file is empty` }
 
-    // Decode and validate: reject invalid base64 and files whose magic bytes
-    // don't match the claimed MIME type.
-    let fileBytes: Buffer
-    try {
-      fileBytes = Buffer.from(fileBase64, 'base64')
-    } catch {
-      return response.status(400).json({ error: 'fileBase64 is not valid base64' })
+      // JPEG magic: FF D8 FF | PNG magic: 89 50 4E 47
+      const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+      const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47
+
+      if (mime === 'image/jpeg' && !isJpeg)
+        return { ok: false, error: `${label} content does not match image/jpeg` }
+      if (mime === 'image/png' && !isPng)
+        return { ok: false, error: `${label} content does not match image/png` }
+      return { ok: true, bytes }
     }
 
-    if (fileBytes.length === 0) return response.status(400).json({ error: 'File is empty' })
-
-    // JPEG magic: FF D8 FF
-    // PNG magic:  89 50 4E 47 (‌.PNG)
-    const isJpeg = fileBytes[0] === 0xff && fileBytes[1] === 0xd8 && fileBytes[2] === 0xff
-    const isPng =
-      fileBytes[0] === 0x89 &&
-      fileBytes[1] === 0x50 &&
-      fileBytes[2] === 0x4e &&
-      fileBytes[3] === 0x47
-
-    if (mimeType === 'image/jpeg' && !isJpeg)
-      return response.status(400).json({ error: 'File content does not match image/jpeg' })
-    if (mimeType === 'image/png' && !isPng)
-      return response.status(400).json({ error: 'File content does not match image/png' })
+    const front = validateSide('front', frontBase64, frontMimeType)
+    if (!front.ok) return response.status(400).json({ error: front.error })
+    const back = validateSide('back', backBase64, backMimeType)
+    if (!back.ok) return response.status(400).json({ error: back.error })
 
     try {
-      await kycSubmitDocument({ phoneNumber, fileBase64, mimeType })
+      await kycSubmitDocument({
+        phoneNumber,
+        frontBase64: frontBase64 as string,
+        frontMimeType: frontMimeType as 'image/jpeg' | 'image/png',
+        backBase64: backBase64 as string,
+        backMimeType: backMimeType as 'image/jpeg' | 'image/png',
+      })
       return response.json({ ok: true, kycStatus: 'documents_submitted' })
     } catch (err) {
       logger.error({ err }, `onramp/kyc: upload-document failed for ${maskPhone(phoneNumber)}`)
@@ -244,14 +381,17 @@ export default class OnrampController {
 
     try {
       const result = await kycRefreshLevel(phoneNumber)
-      // isApproved requires both Level 5 AND a counterparty ID.
-      // Level 5 alone is not enough — the counterparty is required to initiate
+      // isApproved requires both full KYC level AND a counterparty ID.
+      // The level alone is not enough — the counterparty is required to initiate
       // an R2P payment. If counterparty creation failed, the UI must keep polling
       // (kycRefreshLevel retries it on every call) rather than exiting the flow.
+      // This mirrors isFullKyc, but the poll result is { level, status,
+      // counterpartyId } — not a KycRecord — so we use FULL_KYC_LEVEL directly
+      // instead of force-fitting the predicate onto the wrong shape.
       return ctx.response.json({
         kycLevel: result.level,
         kycStatus: result.status,
-        isApproved: result.level >= 5 && !!result.counterpartyId,
+        isApproved: result.level >= FULL_KYC_LEVEL && !!result.counterpartyId,
       })
     } catch (err) {
       logger.error({ err }, `onramp/kyc: refresh-level failed for ${maskPhone(phoneNumber)}`)
@@ -260,49 +400,175 @@ export default class OnrampController {
   }
 
   // ── POST /api/onramp/quote ───────────────────────────────────────────────────
+  //
+  // Calls Colurs's stateless /v2/exchange/quotes/ endpoint to surface the
+  // real fee breakdown to the user BEFORE they pay. The quote returned here
+  // is a price preview only — nothing is reserved or executed. The dispersion
+  // job re-quotes at execute time so the user-displayed rate may move slightly
+  // by the time the COP actually lands.
+  //
+  // Falls back to the indicative-rate stub if Colurs is unreachable so the UI
+  // doesn't get stuck on amount entry.
 
   async quote({ request, response }: HttpContext) {
     const { amountCop } = request.body() as { amountCop: unknown }
 
     if (!amountCop || typeof amountCop !== 'number' || amountCop <= 0)
       return response.status(400).json({ error: 'amountCop must be a positive number' })
+    if (amountCop < MIN_ONRAMP_COP)
+      return response
+        .status(400)
+        .json({ error: `Minimum onramp is ${MIN_ONRAMP_COP.toLocaleString('en-US')} COP` })
 
-    const copRate = await exchangeRateService.getLocalRate('COP')
-    if (!copRate)
-      return response.status(503).json({ error: 'Exchange rate unavailable, try again shortly' })
+    // Try the real Colurs quote first
+    try {
+      const quote = await createOnrampQuote(amountCop)
+      const rate = getQuoteRate(quote)
+      const previewRaw = (quote as unknown as Record<string, unknown>).preview_comisiones
+      const preview = (
+        typeof previewRaw === 'object' && previewRaw !== null
+          ? (previewRaw as Record<string, unknown>)
+          : {}
+      ) as Record<string, unknown>
+      const feesRaw = (quote as unknown as Record<string, unknown>).fees_breakdown
+      const fees = (
+        typeof feesRaw === 'object' && feesRaw !== null ? (feesRaw as Record<string, unknown>) : {}
+      ) as Record<string, unknown>
+
+      const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v ?? 0)) || 0
+      const costoEnvio = num(preview.costo_envio)
+      const iva = num(preview.iva)
+      const gmf = num(preview.gmf)
+      const spread = num(fees.spread)
+      const destinationAmount = num(quote.destination_amount)
+
+      // For COP→USDC: source_amount converts to destination_amount at the FX
+      // rate, and fees (costo_envio, iva, gmf — all in COP) are charged ON TOP
+      // of source_amount. So:
+      //   - The user RECEIVES destination_amount in USDC.
+      //   - The user PAYS source_amount + sum(COP fees) via R2P.
+      const sourceAmount = num(quote.source_amount) || amountCop
+      const totalCop = sourceAmount + costoEnvio + iva + gmf
+
+      return response.json({
+        amountCop,
+        estimatedUsdc: Number(destinationAmount.toFixed(6)),
+        rate,
+        sourceAmount,
+        totalCop,
+        fees: {
+          costoEnvio,
+          iva,
+          gmf,
+          spread,
+        },
+        validUntil: quote.valid_until ?? quote.expires_at ?? null,
+        note: 'Quote valid for 1 minute. Rate may shift by a fraction of a percent at settlement.',
+      })
+    } catch (err) {
+      logger.warn({ err }, `onramp.quote: Colurs quote failed, falling back to indicative rate`)
+      const copRate = await exchangeRateService.getLocalRate('COP')
+      if (!copRate)
+        return response.status(503).json({ error: 'Exchange rate unavailable, try again shortly' })
+
+      return response.json({
+        amountCop,
+        estimatedUsdc: Number((amountCop / copRate).toFixed(6)),
+        rate: copRate,
+        totalCop: amountCop,
+        fees: null,
+        validUntil: null,
+        note: 'Indicative quote (live FX unavailable). Final amount set by Colurs after payment clears.',
+      })
+    }
+  }
+
+  // ── GET /api/onramp/preview/:colursPaymentId ────────────────────────────────
+  //
+  // Public (no auth) — proxies Colurs's public /api/reload/r2p/preview/{id}/.
+  // Used by post-redirect success pages where the user's Sippy session may have
+  // expired during the bank / Nequi flow.
+
+  async preview(ctx: HttpContext) {
+    const { params, response } = ctx
+    const colursPaymentId = params.colursPaymentId as string | undefined
+    if (!colursPaymentId) return response.status(400).json({ error: 'colursPaymentId required' })
+
+    try {
+      const data = await getPaymentPreview(colursPaymentId)
+      // Return only fields safe for public display — drop any metadata Colurs
+      // might add over time that could leak user info.
+      return response.json({
+        moneyMovementId: data.money_movement_id,
+        status: data.status,
+        statusCode: data.status_code ?? null,
+        statusDescription: data.status_description ?? null,
+        trackingKey: data.tracking_key ?? null,
+      })
+    } catch (err) {
+      logger.error({ err, colursPaymentId }, 'onramp: preview failed')
+      return response.status(502).json({ error: 'Could not load payment status.' })
+    }
+  }
+
+  // ── GET /api/onramp/public-status/:orderId ──────────────────────────────────
+  //
+  // Public (no auth) — minimal status read for the post-payment redirect-resume
+  // path. If the user's Sippy session expired during the bank flow (Bancolombia
+  // PSE / Nequi can take 5+ min), the authed /status endpoint 401s. This route
+  // returns just enough for the success page to render: status + amount + method.
+  // No PII, no private details. orderId is a UUID (hard to guess); risk of
+  // someone enumerating orderIds is acceptable given the trivial info exposed.
+
+  async publicStatus(ctx: HttpContext) {
+    const { params, response } = ctx
+    const orderId = params.orderId as string | undefined
+    if (!orderId) return response.status(400).json({ error: 'orderId required' })
+
+    const order = await OnrampOrder.query().where('id', orderId).first()
+    if (!order) return response.status(404).json({ error: 'Order not found' })
 
     return response.json({
-      amountCop,
-      estimatedUsdc: Number((amountCop / copRate).toFixed(6)),
-      rate: copRate,
-      note: 'Indicative quote. Final amount set by Colurs after payment clears.',
+      orderId: order.id,
+      method: order.method,
+      amountCop: Number.parseFloat(order.amountCop),
+      status: order.status,
+      paymentLink: order.paymentLink ?? null,
+      trackingKey: order.trackingKey ?? null,
+      createdAt: order.createdAt,
     })
   }
 
   // ── GET /api/onramp/pse-banks ────────────────────────────────────────────────
+  //
+  // Tries Colurs's live `/api/reload/r2p/pse/banks/` first. As of 2026-04-27
+  // that endpoint is returning 500 (Django generic error page) on prod, so we
+  // fall back to a static list of common Colombian ACH PSE codes. PSE create
+  // accepts the `code` directly without first calling this endpoint, so the
+  // fallback unblocks the dropdown without losing functionality.
 
   async pseBanks({ response }: HttpContext) {
     const baseUrl = env.get('COLURS_BASE_URL', 'https://sandbox.colurs.com')
     try {
       const headers = await colursHeaders()
       const res = await fetch(`${baseUrl}/api/reload/r2p/pse/banks/`, { headers })
-      if (!res.ok) {
-        const text = await res.text()
-        let errorKeys: string | undefined
-        try {
-          const parsed = JSON.parse(text) as Record<string, unknown>
-          errorKeys = Object.keys(parsed).join(', ')
-        } catch {
-          /* non-JSON body — omit */
+      if (res.ok) {
+        const data = (await res.json()) as { banks?: unknown[] } | unknown[]
+        const banks = Array.isArray(data) ? data : Array.isArray(data?.banks) ? data.banks : null
+        if (banks && banks.length > 0) {
+          return response.json({ banks })
         }
-        logger.warn({ status: res.status, errorKeys }, 'onramp: PSE banks request failed')
-        throw new Error(`Colurs PSE banks (${res.status})`)
+        logger.warn('onramp: PSE banks live response empty, using fallback')
+      } else {
+        logger.warn(
+          { status: res.status },
+          'onramp: PSE banks live fetch returned non-2xx, using fallback'
+        )
       }
-      return response.json(await res.json())
     } catch (err) {
-      logger.error({ err }, 'onramp: failed to fetch PSE banks')
-      return response.status(502).json({ error: 'Could not load banks. Try again.' })
+      logger.warn({ err: String(err) }, 'onramp: PSE banks live fetch threw, using fallback')
     }
+    return response.json({ banks: PSE_BANKS_FALLBACK })
   }
 
   // ── POST /api/onramp/initiate ────────────────────────────────────────────────
@@ -345,8 +611,10 @@ export default class OnrampController {
 
     if (!method || !VALID_METHODS.includes(method as OnrampMethod))
       return response.status(400).json({ error: 'method must be pse, nequi, or bancolombia' })
-    if (!amountCop || typeof amountCop !== 'number' || amountCop < 1000)
-      return response.status(400).json({ error: 'amountCop must be >= 1000' })
+    if (!amountCop || typeof amountCop !== 'number' || amountCop < MIN_ONRAMP_COP)
+      return response
+        .status(400)
+        .json({ error: `Minimum onramp is ${MIN_ONRAMP_COP.toLocaleString('en-US')} COP` })
     if (amountCop > MAX_ONRAMP_COP)
       return response
         .status(400)
@@ -358,12 +626,76 @@ export default class OnrampController {
     if (method === 'pse' && !financialInstitutionCode)
       return response.status(400).json({ error: 'financialInstitutionCode required for PSE' })
 
-    const counterpartyId = await getCounterpartyId(phoneNumber)
+    const kyc = await getKyc(phoneNumber)
+    const counterpartyId = kyc?.counterpartyId
     if (!counterpartyId) {
       return response.status(400).json({
-        error: 'KYC approval required before onramp.',
+        error: 'Identity verification required before onramp.',
         code: 'KYC_REQUIRED',
       })
+    }
+
+    // Monthly cap until the user has completed full Colurs KYC review.
+    // Discriminator is `kyc_level >= FULL_KYC_LEVEL` — that's the value
+    // kycRefreshLevel writes when Colurs approves the documents. Quick-flow rows
+    // are at level 0 (counterparty exists but no real verification), and
+    // mid-upgrade rows are also at level 0 until Colurs's compliance team
+    // completes review. Both stay capped.
+    //
+    // Intentionally a level-only gate, NOT isFullKyc: the counterparty is
+    // already guaranteed by the KYC_REQUIRED guard above, and the cap keys off
+    // whether Colurs has granted the level — not the full counterparty/status
+    // bundle. Behavior is identical to isFullKyc here given that guard.
+    //
+    // Status filter is an ALLOW-LIST of states that represent real,
+    // committed money in flight. `initiating_payment` and other transient
+    // pre-Colurs states do NOT count — otherwise an orphan row would
+    // permanently consume quota.
+    if ((kyc.kycLevel ?? 0) < FULL_KYC_LEVEL) {
+      const startOfMonth = new Date()
+      startOfMonth.setUTCDate(1)
+      startOfMonth.setUTCHours(0, 0, 0, 0)
+
+      const sumResult = await OnrampOrder.query()
+        .where('phoneNumber', phoneNumber)
+        .whereIn('status', [
+          // R2P leg — committed money
+          'pending',
+          'processing',
+          'succeeded',
+          'paid',
+          // COP→USDT dispersion leg — Colurs is moving funds
+          'fx_quoting',
+          'fx_executing',
+          'fx_settling',
+          'usdt_received',
+          // Bridge leg
+          'initiating_bridge',
+          'bridging',
+          'delivered',
+          'completed',
+        ])
+        .where('createdAt', '>=', startOfMonth.toISOString())
+        .sum('amount_cop as total')
+        .first()
+
+      const monthSoFar = Number(
+        (sumResult as unknown as { $extras?: { total?: string | number } } | null)?.$extras
+          ?.total ?? 0
+      )
+      if (monthSoFar + (amountCop as number) > QUICK_FLOW_LIMIT_COP) {
+        logger.info(
+          `onramp: cap hit for ${maskPhone(phoneNumber)} — monthSoFar=${monthSoFar} + ${amountCop} > ${QUICK_FLOW_LIMIT_COP}`
+        )
+        return response.status(403).json({
+          error:
+            'You have reached the monthly limit for unverified accounts. Verify your identity to keep onramping.',
+          code: 'KYC_REQUIRED_FOR_AMOUNT',
+          limitCop: QUICK_FLOW_LIMIT_COP,
+          usedCop: monthSoFar,
+          remainingCop: Math.max(0, QUICK_FLOW_LIMIT_COP - monthSoFar),
+        })
+      }
     }
 
     // ── Idempotency check ───────────────────────────────────────────────────
@@ -477,8 +809,11 @@ export default class OnrampController {
       const payment = await initiatePayment(method as OnrampMethod, {
         counterpartyId,
         amountCop: amountCop as number,
-        externalId,
+        externalId: env.get('COLURS_USERNAME') || externalId,
         financialInstitutionCode,
+        // Pass our internal orderId so Colurs's redirect URL points back to
+        // /onramp?orderId=<id> — the success page polls by that param.
+        orderId,
       })
 
       // Persist paymentLink + trackingKey so idempotent replays can return them
@@ -532,12 +867,56 @@ export default class OnrampController {
     const phoneNumber = ctx.cdpUser?.phoneNumber
     if (!phoneNumber) return response.status(401).json({ error: 'Unauthorized' })
 
-    const order = await OnrampOrder.query()
+    let order = await OnrampOrder.query()
       .where('id', params.orderId)
       .where('phoneNumber', phoneNumber)
       .first()
 
     if (!order) return response.status(404).json({ error: 'Order not found' })
+
+    // Force a fresh Colurs check while still waiting on the user payment.
+    // The background poller does this every ~30s, but the Refresh button on the
+    // success page is meant to feel responsive — so we hit /preview/ inline,
+    // advance the order through the same logic the poller uses, and re-read.
+    if (
+      order.colursPaymentId &&
+      (order.status === 'pending' || order.status === 'initiating_payment')
+    ) {
+      try {
+        const payment = await getPaymentPreview(order.colursPaymentId)
+        const normalized = normalizeColursStatus(payment.status)
+        logger.info(
+          `onramp.status: order ${order.id} colurs status="${payment.status}" code="${payment.status_code ?? ''}" normalized="${normalized}"`
+        )
+        if (TERMINAL_STATUSES.includes(normalized)) {
+          if (normalized === 'succeeded') {
+            await onPaymentSucceeded(
+              order.externalId,
+              phoneNumber,
+              payment as unknown as Record<string, unknown>
+            )
+          } else {
+            await OnrampOrder.query()
+              .where('id', order.id)
+              .whereIn('status', ['pending', 'initiating_payment'])
+              .update({
+                status: 'failed',
+                error: `R2P payment ${normalized} (raw=${payment.status})`,
+              })
+          }
+          // Re-read so the response reflects the advanced state
+          const refreshed = await OnrampOrder.query().where('id', order.id).first()
+          if (refreshed) order = refreshed
+        }
+      } catch (err) {
+        // Non-fatal — fall back to whatever the DB currently has.
+        // Background poller will retry on its next tick.
+        logger.warn(
+          { err, orderId: order.id },
+          'onramp.status: Colurs preview check failed, returning DB state'
+        )
+      }
+    }
 
     return response.json({
       orderId: order.id,

@@ -6,7 +6,12 @@
  */
 
 import { test } from '@japa/runner'
-import { parseMessage, parseMessageWithRegex } from '#utils/message_parser'
+import {
+  parseMessage,
+  parseMessageWithRegex,
+  matchLooseCommand,
+  matchHighConfidencePreLlm,
+} from '#utils/message_parser'
 
 test.group('Message Parser | Exact Commands (Regex Compatibility)', () => {
   const tests = [
@@ -85,6 +90,15 @@ test.group('Message Parser | Loose Keyword Matching (Natural Language)', () => {
     { input: 'where are the settings?', expected: 'settings' },
     { input: 'como cambio la configuración?', expected: 'settings' },
     { input: 'what is sippy exactly?', expected: 'about' },
+    // pay_qr — discoverability of the /wallet/pay-qr surface
+    { input: 'mi qr', expected: 'pay_qr' },
+    { input: 'mi codigo de pago', expected: 'pay_qr' },
+    { input: 'mi código de pago por favor', expected: 'pay_qr' },
+    { input: 'pay qr', expected: 'pay_qr' },
+    { input: 'pay link', expected: 'pay_qr' },
+    { input: 'como me pagan', expected: 'pay_qr' },
+    { input: 'my pay qr please', expected: 'pay_qr' },
+    { input: 'meu codigo de pagamento', expected: 'pay_qr' },
   ]
 
   for (const t of tests) {
@@ -320,5 +334,523 @@ test.group('Message Parser | Context Parameter', () => {
   test('parseMessage works normally with no context argument', async ({ assert }) => {
     const result = await parseMessage('balance')
     assert.equal(result.command, 'balance')
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Partial-amount currency capture (P1 money-correctness regression)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Trace from 2026-05-17: "envia 200 pesos" via the regex partial-amount
+// path returned `{amount: 200}` with NO `localCurrency`, so the stored
+// partial later resolved into a $200 USDC send instead of 200 COP.
+// The amount-only regex now captures the currency word and sets BOTH
+// `amount` + `localAmount` + `localCurrency` so the downstream FX step
+// runs on the completing turn. Mirrors the action-path semantics.
+
+test.group('Message Parser | Partial-amount currency capture', () => {
+  test('"envia 200 pesos" (ES) sets localCurrency=LOCAL and localAmount', ({ assert }) => {
+    const result = parseMessageWithRegex('envia 200 pesos')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 200)
+    assert.equal(result.localAmount, 200, 'localAmount must mirror amount for FX')
+    assert.equal(result.localCurrency, 'LOCAL', 'pesos must map to LOCAL')
+    assert.isUndefined(result.recipient, 'still no recipient — partial')
+  })
+
+  test('"manda 50 reais" (PT) sets localCurrency=BRL', ({ assert }) => {
+    const result = parseMessageWithRegex('manda 50 reais')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 50)
+    assert.equal(result.localCurrency, 'BRL')
+  })
+
+  test('"send 100 pesos" (EN) captures pesos as LOCAL', ({ assert }) => {
+    const result = parseMessageWithRegex('send 100 pesos')
+    assert.equal(result.command, 'send')
+    assert.equal(result.localCurrency, 'LOCAL')
+  })
+
+  test('"envia 200" (no currency word) does NOT set localCurrency', ({ assert }) => {
+    const result = parseMessageWithRegex('envia 200')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 200)
+    assert.isUndefined(result.localCurrency, 'plain USDC: no FX trigger')
+    assert.isUndefined(result.localAmount)
+  })
+
+  test('"envia 5 dolares" (USD-equivalent word) does NOT set localCurrency', ({ assert }) => {
+    // dolar/dolares/plata/usd/dollars all map to null in CURRENCY_WORD_MAP
+    // and must NOT trigger FX — they're spoken shorthand for USDC.
+    const result = parseMessageWithRegex('envia 5 dolares')
+    assert.equal(result.command, 'send')
+    assert.equal(result.amount, 5)
+    assert.isUndefined(result.localCurrency)
+  })
+
+  test('accent variants ("envía 200 pesos") still capture currency', ({ assert }) => {
+    const result = parseMessageWithRegex('envía 200 pesos')
+    assert.equal(result.localCurrency, 'LOCAL')
+  })
+
+  // Dashboard keyword — new bot command pointing to `/wallet`. Coverage
+  // matters because "bot is the front door" relies on every web surface
+  // being reachable; we also need to confirm dashboard doesn't shadow
+  // balance keywords (which intentionally still route to `balance`).
+  const DASHBOARD_KEYWORDS = [
+    'dashboard',
+    'my app',
+    'home',
+    'mi app',
+    'mi cuenta',
+    'panel',
+    'meu painel',
+    'meu app',
+  ]
+  for (const kw of DASHBOARD_KEYWORDS) {
+    test(`"${kw}" routes to dashboard`, ({ assert }) => {
+      const result = parseMessageWithRegex(kw)
+      assert.equal(result.command, 'dashboard', `${kw} must route to dashboard`)
+    })
+  }
+
+  // Balance-keyword shadowing guard: keywords historically owned by
+  // `balance` MUST keep routing to balance (we surface the dashboard
+  // through the appended "Ver todo" link instead, not by rerouting).
+  const BALANCE_KEYWORDS = ['balance', 'saldo', 'mi wallet', 'my wallet', 'mi billetera']
+  for (const kw of BALANCE_KEYWORDS) {
+    test(`"${kw}" still routes to balance (not dashboard)`, ({ assert }) => {
+      const result = parseMessageWithRegex(kw)
+      assert.equal(result.command, 'balance', `${kw} must still be balance`)
+    })
+  }
+
+  // Unified currency-word grammar: partial path now supports every currency
+  // SEND_PATTERNS supports. Pins parity so a future addition to one path
+  // can't drift from the other (silent USDC fallback = real money bug).
+  const UNIFIED_CASES: Array<{ input: string; localCurrency: string; lang: string }> = [
+    { input: 'envia 50 soles', localCurrency: 'PEN', lang: 'ES partial' },
+    { input: 'envia 100 lempiras', localCurrency: 'HNL', lang: 'ES partial' },
+    { input: 'envia 25 quetzales', localCurrency: 'GTQ', lang: 'ES partial' },
+    { input: 'envia 5000 colones', localCurrency: 'CRC', lang: 'ES partial' },
+    { input: 'envia 30 bolivares', localCurrency: 'VES', lang: 'ES partial' },
+    { input: 'envia 10000 guaranies', localCurrency: 'PYG', lang: 'ES partial' },
+    { input: 'send 50 soles', localCurrency: 'PEN', lang: 'EN partial' },
+    { input: 'manda 50 reais', localCurrency: 'BRL', lang: 'PT partial' },
+  ]
+  for (const { input, localCurrency, lang } of UNIFIED_CASES) {
+    test(`unified currency: ${lang} "${input}" → localCurrency=${localCurrency}`, ({ assert }) => {
+      const result = parseMessageWithRegex(input)
+      assert.equal(result.command, 'send', `${input} must match as send`)
+      assert.equal(
+        result.localCurrency,
+        localCurrency,
+        `${input} must set localCurrency=${localCurrency} (parity with SEND_PATTERNS)`
+      )
+    })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Loose dashboard routing — discoverability fix from 2026-05-18
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// User transcript: "No hay un Dashboard?" got back "you can check balance
+// here" — the bot didn't know about the dashboard it had just learned to
+// link to. Strict regex only matches exact tokens (`dashboard` alone);
+// conversational forms fell through. These tests pin the loose patterns
+// that catch the natural phrasings users actually type.
+//
+// `matchLooseCommand` runs as Step 4 in `parseMessage` (after LLM). We
+// test it directly because the LLM-on path is non-deterministic in CI.
+
+test.group('Message Parser | Loose dashboard routing (P0 discoverability)', () => {
+  const DASHBOARD_LOOSE_CASES = [
+    'no hay un dashboard?',
+    'y no hay un panel?',
+    'como entro a mi cuenta',
+    'donde esta mi panel',
+    'hay dashboard?',
+    'mi cuenta',
+    'panel',
+    'meu painel',
+  ]
+  for (const input of DASHBOARD_LOOSE_CASES) {
+    test(`"${input}" routes to dashboard via loose match`, ({ assert }) => {
+      const result = matchLooseCommand(input)
+      assert.exists(result, `${input} must match a loose pattern`)
+      assert.equal(result?.command, 'dashboard')
+    })
+  }
+
+  // Shadow guard — "mi cuenta de banco" / "mi cuenta de gmail" are NOT
+  // about the Sippy dashboard. The loose pattern requires `mi cuenta` to
+  // be at end-of-string (after punctuation strip) to avoid this shadow.
+  // If this breaks, the regex got too greedy and a real user will get a
+  // wrong-route reply.
+  const SHADOW_GUARD_CASES = [
+    'mi cuenta de banco',
+    'mi cuenta de gmail',
+    'cuenta de ahorros',
+    'panel de yeso',
+  ]
+  for (const input of SHADOW_GUARD_CASES) {
+    test(`shadow guard: "${input}" does NOT route to dashboard`, ({ assert }) => {
+      const result = matchLooseCommand(input)
+      if (result) {
+        assert.notEqual(
+          result.command,
+          'dashboard',
+          `${input} must NOT shadow into dashboard (got ${result.command})`
+        )
+      }
+    })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Address queries route to balance (balance reply already includes address)
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// User transcript: "Sabes cuál es mi address pública?" → routed to
+// settings (wrong). Per design call, route address-style queries to
+// balance — the existing reply already shows `Billetera: 0x...` so no
+// new format function is needed.
+
+test.group('Message Parser | Address queries → balance', () => {
+  const ADDRESS_LOOSE_CASES = [
+    'mi address',
+    'mi direccion',
+    'mi dirección',
+    'cual es mi direccion',
+    'cuál es mi dirección',
+    'cual es mi wallet',
+    'cual es mi address',
+    'direccion de mi wallet',
+    'dirección de mi billetera',
+    'billetera publica',
+    'billetera pública',
+    'wallet address',
+    'my address',
+  ]
+  for (const input of ADDRESS_LOOSE_CASES) {
+    test(`"${input}" routes to balance via loose match`, ({ assert }) => {
+      const result = matchLooseCommand(input)
+      assert.exists(result, `${input} must match a loose pattern`)
+      assert.equal(result?.command, 'balance')
+    })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Sippy Quest — referral_code command routing + pay_qr shadow guard
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Critical no-shadow rule: the existing `mi codigo de pago` MUST keep
+// routing to `pay_qr` (it's been the pay-QR keyword for months). Adding
+// `mi codigo` for referrals would silently break pay-QR if the patterns
+// weren't anchored carefully. pay_qr requires the `de pago|qr` suffix,
+// referral_code matches BARE `mi codigo` only — these tests pin both
+// sides so a future regex tweak can't reintroduce the shadow.
+
+test.group('Message Parser | referral_code command (strict regex)', () => {
+  const REFERRAL_CASES = [
+    'mi codigo',
+    'mi código',
+    'MI CODIGO',
+    'mi codigo de referido',
+    'mi código de referido',
+    'mi codigo de invitacion',
+    'mi código de invitación',
+    'mi codigo invite',
+    'mi código referral',
+    'my code',
+    'my referral',
+    'my invite code',
+    'my referral code',
+    'meu codigo',
+    'meu código',
+    'meu codigo de convite',
+    'meu código de convite',
+    // Question-form variants — regression from 2026-05-18 transcript.
+    // `parseMessageWithRegex` calls `trim()` only (no punctuation
+    // strip), so the regex itself must tolerate trailing `?` and
+    // whitespace. Without this, "Mi código ?" falls through to the LLM
+    // and gets mis-classified.
+    'mi codigo?',
+    'mi código?',
+    'Mi código ?',
+    'mi codigo de referido?',
+    'Mi código de referido ?',
+    'my code?',
+    'my referral code?',
+    'meu código?',
+  ]
+  for (const input of REFERRAL_CASES) {
+    test(`"${input}" routes to referral_code`, ({ assert }) => {
+      const result = parseMessageWithRegex(input)
+      assert.equal(result.command, 'referral_code', `${input} must route to referral_code`)
+    })
+  }
+
+  // Shadow guard — pay_qr must remain the owner of `mi codigo de pago`
+  // and friends, since that wording predates the referral feature and
+  // is documented in user-facing help copy.
+  const PAY_QR_KEEP_CASES = [
+    'mi codigo de pago',
+    'mi código de pago',
+    'mi qr de pago',
+    'mi qr',
+    'meu codigo de pagamento',
+    'meu qr de pagamento',
+    'como me pagan',
+    'cómo me pagan',
+    'pay qr',
+    'pay code',
+    'my pay qr',
+    'my pay code',
+  ]
+  for (const input of PAY_QR_KEEP_CASES) {
+    test(`shadow guard: "${input}" still routes to pay_qr (not referral_code)`, ({ assert }) => {
+      const result = parseMessageWithRegex(input)
+      assert.equal(result.command, 'pay_qr', `${input} must stay pay_qr`)
+    })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Sippy Quest — quest_status command routing
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// `quest_status` answers "how am I doing on the Quest" (entries, rank).
+// Distinct from `referral_code` (which returns the share link) and from
+// `balance` (which is money, not entries). Strict regex covers the
+// canonical bot-keyword forms; pre-LLM gate (separate group) catches
+// conversational wrapping.
+
+test.group('Message Parser | quest_status command (strict regex)', () => {
+  const QUEST_STATUS_CASES = [
+    'mi quest',
+    'mis entradas',
+    'mi entradas',
+    'cuantas entradas tengo',
+    'cuántas entradas tengo',
+    'cuantas entradas',
+    'cómo voy',
+    'como voy',
+    'como voy en el quest',
+    'cómo voy en el quest',
+    'my quest',
+    'my entries',
+    'quest entries',
+    'quest status',
+    'how am I doing',
+    'how many entries',
+    'meu quest',
+    'minhas entradas',
+    'quantas entradas tenho',
+    'quantas entradas',
+    // Question-form variants
+    'mi quest?',
+    'mis entradas?',
+    'cuántas entradas tengo?',
+    'cómo voy?',
+    'quest status?',
+  ]
+  for (const input of QUEST_STATUS_CASES) {
+    test(`"${input}" routes to quest_status`, ({ assert }) => {
+      const result = parseMessageWithRegex(input)
+      assert.equal(result.command, 'quest_status', `${input} must route to quest_status`)
+    })
+  }
+
+  // Shadow guards: must NOT route balance / referral_code phrasing to
+  // quest_status. The cap is real money is balance, the cap is the
+  // code is referral_code. Status is its own thing.
+  const SHADOW_GUARDS: Array<{ input: string; expected: string }> = [
+    { input: 'mi saldo', expected: 'balance' },
+    { input: 'cuanto tengo', expected: 'balance' },
+    { input: 'mi codigo', expected: 'referral_code' },
+    { input: 'mi código de referido', expected: 'referral_code' },
+  ]
+  for (const c of SHADOW_GUARDS) {
+    test(`shadow guard: "${c.input}" routes to ${c.expected}, not quest_status`, ({ assert }) => {
+      const result = parseMessageWithRegex(c.input)
+      assert.equal(result.command, c.expected, `${c.input} must stay ${c.expected}`)
+    })
+  }
+})
+
+test.group('Message Parser | quest_status pre-LLM gate', () => {
+  const PRE_LLM_CASES = [
+    'mi quest',
+    'mis entradas',
+    'cuantas entradas tengo',
+    'cómo voy en el quest',
+    'como voy',
+    'quest status',
+    'how am I doing',
+    'how many entries',
+    'meu quest',
+    'quantas entradas tenho',
+    // Punctuation variants — pre-LLM gate strips ? before matching.
+    'mi quest?',
+    'cuántas entradas tengo?',
+    '¿cómo voy?',
+  ]
+  for (const input of PRE_LLM_CASES) {
+    test(`pre-LLM: "${input}" → quest_status`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      assert.exists(result, `${input} must match the pre-LLM gate`)
+      assert.equal(result?.command, 'quest_status')
+    })
+  }
+
+  // Shadow guards — quest_status pre-LLM regex must not eat unrelated
+  // phrases that mention "quest" or "entry" in a different context.
+  const SHADOW_GUARDS = [
+    'quest no es lo mio', // partial mention, not a status query
+    'mi entrada al evento', // singular `entrada` = event ticket (not entries)
+  ]
+  for (const input of SHADOW_GUARDS) {
+    test(`pre-LLM shadow guard: "${input}" → not quest_status`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      if (result) {
+        assert.notEqual(
+          result.command,
+          'quest_status',
+          `${input} should not match quest_status pre-LLM`
+        )
+      }
+    })
+  }
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Pre-LLM gate — high-confidence patterns must beat the LLM
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Audit P1 from 2026-05-18: post-LLM loose patterns don't fire when the LLM
+// returns a wrong-but-valid command. The May-17/18 transcripts proved
+// dashboard and address queries get misclassified into settings. The fix
+// is a Step 1.5 in `parseMessage` that runs `matchHighConfidencePreLlm`
+// BEFORE the LLM gets a chance. These tests pin both the pattern set and
+// the structural ordering — if either drifts, the original bug returns.
+
+test.group('Message Parser | Pre-LLM gate (P1)', () => {
+  const DASHBOARD_PRE_LLM_CASES = [
+    'no hay un dashboard?',
+    'y no hay un panel?',
+    'como entro a mi cuenta',
+    'hay dashboard?',
+    'mi cuenta',
+    'panel',
+  ]
+  for (const input of DASHBOARD_PRE_LLM_CASES) {
+    test(`pre-LLM: "${input}" → dashboard`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      assert.exists(result, `${input} must match the pre-LLM gate`)
+      assert.equal(result?.command, 'dashboard')
+    })
+  }
+
+  const ADDRESS_PRE_LLM_CASES = [
+    'mi address',
+    'cual es mi direccion',
+    'cuál es mi dirección',
+    'billetera publica',
+    'wallet address',
+    'my address',
+  ]
+  for (const input of ADDRESS_PRE_LLM_CASES) {
+    test(`pre-LLM: "${input}" → balance`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      assert.exists(result, `${input} must match the pre-LLM gate`)
+      assert.equal(result?.command, 'balance')
+    })
+  }
+
+  // Shadow guards still hold pre-LLM (same patterns as post-LLM).
+  const PRE_LLM_SHADOW_GUARDS = [
+    'mi cuenta de banco',
+    'mi cuenta de gmail',
+    'cuenta de ahorros',
+    'panel de yeso',
+  ]
+  for (const input of PRE_LLM_SHADOW_GUARDS) {
+    test(`pre-LLM shadow guard: "${input}" → null`, ({ assert }) => {
+      const result = matchHighConfidencePreLlm(input)
+      assert.isNull(result, `${input} must NOT match the pre-LLM gate`)
+    })
+  }
+
+  // Negative: the pre-LLM gate is INTENTIONALLY narrow — only the
+  // deterministic, no-slot intents (dashboard, balance/address,
+  // referral_code, quest_status). Money paths (send, withdraw, fund)
+  // MUST stay LLM-mediated so we never deterministically infer an
+  // amount from a typo. If someone widens the gate to a money intent,
+  // this test forces a deliberate decision.
+  test('pre-LLM gate stays no-slot only: never produces a money intent', ({ assert }) => {
+    const MONEY_INTENTS = new Set(['send', 'withdraw', 'fund', 'pay_qr', 'invite'])
+    const seen = new Set<string>()
+    for (const input of [
+      ...DASHBOARD_PRE_LLM_CASES,
+      ...ADDRESS_PRE_LLM_CASES,
+      'agregar saldo',
+      'retirar plata',
+      'cuanto tengo',
+      'hola',
+      'mi codigo',
+      'mi quest',
+      'enviar 10 a +573001234567',
+      'send 5 to +12345678901',
+    ]) {
+      const result = matchHighConfidencePreLlm(input)
+      if (result) seen.add(result.command)
+    }
+    for (const intent of seen) {
+      assert.isFalse(
+        MONEY_INTENTS.has(intent),
+        `pre-LLM produced money intent "${intent}" — this MUST stay LLM-mediated`
+      )
+    }
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Production-path integration: parseMessage routes through the pre-LLM
+// gate when LLM is disabled (most direct test we can do without mocking
+// the LLM service in ESM).
+// ══════════════════════════════════════════════════════════════════════════════
+
+test.group('Message Parser | parseMessage pre-LLM integration', (group) => {
+  let originalUseLlm: string | undefined
+  group.each.setup(() => {
+    originalUseLlm = process.env.USE_LLM
+    process.env.USE_LLM = 'false' // disable LLM so we hit pre-LLM + post-LLM only
+  })
+  group.each.teardown(() => {
+    if (originalUseLlm === undefined) delete process.env.USE_LLM
+    else process.env.USE_LLM = originalUseLlm
+  })
+
+  test('parseMessage("no hay un dashboard?") → dashboard (pre-LLM wins)', async ({ assert }) => {
+    const result = await parseMessage('no hay un dashboard?')
+    assert.equal(result.command, 'dashboard')
+  })
+
+  test('parseMessage("como entro a mi cuenta") → dashboard', async ({ assert }) => {
+    const result = await parseMessage('como entro a mi cuenta')
+    assert.equal(result.command, 'dashboard')
+  })
+
+  test('parseMessage("cual es mi address") → balance', async ({ assert }) => {
+    const result = await parseMessage('cual es mi address')
+    assert.equal(result.command, 'balance')
+  })
+
+  test('parseMessage("mi cuenta de banco") does NOT route to dashboard', async ({ assert }) => {
+    const result = await parseMessage('mi cuenta de banco')
+    assert.notEqual(result.command, 'dashboard')
   })
 })

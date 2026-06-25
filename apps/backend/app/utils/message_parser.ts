@@ -52,7 +52,12 @@ function isAttemptedSend(text: string): boolean {
  */
 const COMMAND_PATTERNS: Record<string, RegExp[]> = {
   start: [/^(start|begin)$/i, /^(comenzar|iniciar)$/i, /^(come[cç]ar|iniciar)$/i],
-  help: [/^(help|\?)$/i, /^ayuda$/i, /^ajuda$/i],
+  // Trailing-char repetition tolerated ("AYUDAAAA", "helppp", "ajudaaa"):
+  // WhatsApp users elongate help asks for emphasis. Without this the
+  // strict regex misses, the request falls into SMART/LLM, and an
+  // unrelated outbound (e.g. a POAP DM firing in parallel) can look
+  // like the bot ignored the help ask. Real transcript 2026-05-22.
+  help: [/^(help+|\?)$/i, /^ayuda+$/i, /^ajuda+$/i],
   about: [
     /^about$/i,
     /^(what is sippy|whats sippy|what's sippy)$/i,
@@ -65,7 +70,11 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^balance$/i,
     /^(saldo|cu[aá]nto tengo|mi saldo)$/i,
     /^(saldo|quanto tenho|meu saldo)$/i,
-    // Wallet queries: "cuál es mi wallet", "mi billetera", "my wallet"
+    // Wallet queries: "cuál es mi wallet", "mi billetera", "my wallet".
+    // These are also address queries — handled in the matcher to set
+    // `addressQuery: true` so the balance reply shows the full public
+    // address. Kept in the same array (vs a separate top-level list) so
+    // the trilingual coverage stays grouped with the rest of balance.
     /^(cu[aá]l es )?mi (wallet|billetera|cartera)$/i,
     /^(my wallet|minha carteira)$/i,
   ],
@@ -73,6 +82,21 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(settings?|config)$/i,
     /^(configuraci[oó]n|ajustes)$/i,
     /^(configura[cç][aã]o|ajustes)$/i,
+  ],
+  // Dashboard / web hub link — `/wallet`. Mirrors the bot-as-front-door
+  // principle: every web destination should be reachable from chat, and
+  // the dashboard is the most common "show me the app" request.
+  //
+  // Deliberately does NOT include `mi wallet` / `my wallet` /
+  // `mi billetera` / `minha carteira` — those are claimed by `balance`
+  // (showing the balance text is the older, higher-frequency expectation).
+  // The balance reply now appends the dashboard link, so users who type
+  // those keywords still discover the hub. SMART not wired: keywords are
+  // explicit, no need for fuzzy classification.
+  dashboard: [
+    /^(dashboard|my\s?app|home)$/i,
+    /^(mi\s?app|mi\s?cuenta|panel)$/i,
+    /^(meu\s?painel|meu\s?app)$/i,
   ],
   history: [
     /^(history|transactions?)$/i,
@@ -112,6 +136,91 @@ const COMMAND_PATTERNS: Record<string, RegExp[]> = {
     /^(gracias|listo|vale|bien|bueno|genial|perfecto|ok[aá]y?|chao|adi[oó]s|hasta luego|de nada|ya|ya vi|entendido|enterado|arre|sale|joya|de una|todo bien|a la orden)$/i,
     /^(obrigado|obrigada|valeu|beleza|legal|perfeito|tchau|at[eé] logo|de nada|entendi|entendido|j[oó]ia|firmeza|falou|blz)$/i,
   ],
+  // pay_qr — the LLM classifier sometimes routes "mi qr" / "pay qr" to greeting
+  // because it's a 2-word phrase with no verb. Strict patterns run before the
+  // LLM so these short phrases get the right route deterministically.
+  pay_qr: [
+    /^mi (?:c[oó]digo (?:de )?pago|qr (?:de )?pago|qr para (?:cobrar|recibir)|qr)$/i,
+    /^(?:c[oó]mo|como) me (?:pagan|paga|cobran)\??$/i,
+    /^(?:pay\s?qr|pay\s?link|pay\s?code|my (?:pay\s?(?:qr|code|link)|qr))$/i,
+    /^meu (?:c[oó]digo|qr) de pagamento$/i,
+    /^como me pagam\??$/i,
+  ],
+  // referral_code — user's Sippy Quest referral code. Distinct from
+  // `pay_qr` (which is `mi codigo de pago`) by requiring either no
+  // suffix or an explicit "referido" / "invite" word. Anti-collision:
+  // `pay_qr` already requires the `de pago|qr` suffix, so bare `mi
+  // codigo` falls here cleanly.
+  //
+  // Trailing `\s*\??` tolerates the question-form ("Mi código ?",
+  // "Mi código de referido?") — without it, `parseMessageWithRegex`
+  // misses these and the LLM mis-classifies as settings/about (real
+  // 2026-05-18 transcript). Also wired into HIGH_CONFIDENCE_PRE_LLM_PATTERNS
+  // below so the LLM can never beat us to it even on conversational forms.
+  referral_code: [
+    /^mi c[oó]digo\s*\??$/i,
+    /^mi c[oó]digo (?:de )?(?:referido|invitaci[oó]n|invite|referral)\s*\??$/i,
+    /^my (?:code|referral|invite code|referral code)\s*\??$/i,
+    /^meu c[oó]digo(?: de convite)?\s*\??$/i,
+  ],
+  // quest_status — user asking how they're doing on Sippy Quest. Distinct
+  // from `referral_code` (which returns the share link) by keyword:
+  // status queries ask about ENTRIES / RANKING / PROGRESS, while
+  // referral_code asks for THE CODE itself. Strict patterns here cover
+  // the unambiguous forms; the pre-LLM gate below catches conversational
+  // wrapping ("cuantas entradas tengo?", "como voy en el quest?").
+  //
+  // Spanish-leaning vocabulary because Pizza Day is Cartagena-first; EN
+  // and PT included so non-LATAM testers + Brazil users land cleanly.
+  quest_status: [
+    /^(?:mi |mis )?(?:quest|entradas)\s*\??$/i,
+    /^(?:cu[aá]ntas?|cuanto)\s+entradas?\s*(?:tengo)?\s*\??$/i,
+    /^(?:c[oó]mo|como)\s+voy(?:\s+(?:en\s+)?(?:el\s+)?quest)?\s*\??$/i,
+    /^(?:my\s+)?(?:quest|entries)\s*\??$/i,
+    /^how\s+(?:am\s+i\s+doing|many\s+entries)\s*\??$/i,
+    /^(?:my\s+)?quest\s+(?:status|entries)\s*\??$/i,
+    /^(?:meu\s+|minhas\s+)?(?:quest|entradas)\s*\??$/i,
+    /^(?:quantas?)\s+entradas?\s*(?:tenho)?\s*\??$/i,
+  ],
+  // season_score — Season 1 reputation standing (Phase D). All of
+  // `puntos` / `mi nivel` / `mi puntaje` / `score` are EQUAL triggers (no single
+  // canonical — any of them fires the reply), plus the natural EN/PT forms.
+  // Reputation-only: the reply shows tier + progress + next actions, never the
+  // scoring formula. Anchored so a bare keyword lands here; conversational forms
+  // ("cuantos puntos tengo?") are caught by the pre-LLM gate below. `puntos` /
+  // `puntaje` / `nivel` / `score` don't collide with pay_qr (`codigo de pago`) or
+  // balance (`saldo`), so bare keywords resolve cleanly.
+  season_score: [
+    /^(?:mi |mis )?(?:puntaje|puntos|nivel|score)\s*\??$/i,
+    /^(?:cu[aá]l|cual)\s+es\s+mi\s+(?:puntaje|puntos|nivel|score)\s*\??$/i,
+    /^my\s+(?:score|level|points|standing|rank)\s*\??$/i,
+    /^(?:meu\s+|minha\s+)?(?:n[ií]vel|pontos|pontua[cç][aã]o|score)\s*\??$/i,
+  ],
+  // pizza_day — user asking about the Pizza Day Cartagena 2026 event.
+  // Distinct from `about` (which is "what is Sippy"); pizza_day is "what
+  // is the event Sippy is at". Handler returns the deep-link to the in-app
+  // /pizza-day guide. ES-first vocabulary, EN/PT included for completeness.
+  pizza_day: [
+    /^(?:pizza\s?day|pizzaday)\s*\??$/i,
+    /^(?:qu[eé]|que)\s+es\s+(?:el\s+)?pizza\s?day\s*\??$/i,
+    /^(?:what\s+is|what's|whats)\s+(?:the\s+)?pizza\s?day\s*\??$/i,
+    /^(?:info|infos|cu[eé]ntame|cuentame|h[aá]blame|hablame|dime)\s+(?:de(?:l)?\s+)?pizza\s?day\s*\??$/i,
+    /^(?:o\s+que\s+[eé]|o\s+que\s+e)\s+(?:o\s+)?pizza\s?day\s*\??$/i,
+  ],
+  // poap_code — user asks for the POAP claim link already assigned to
+  // their phone (poap_codes.assigned_to_phone). Handler re-sends the URL
+  // inline so a user who lost the original claim DM can recover it.
+  //
+  // Strict patterns only — must include the literal word "poap" so we
+  // don't shadow `referral_code` ("mi código") or `pay_qr`
+  // ("mi código de pago"). Trailing `\s*\??` tolerates the question form.
+  poap_code: [
+    /^(?:mi |my |meu )?poap\s*\??$/i,
+    /^(?:mi |my |meu )?(?:c[oó]digo|code) (?:de )?poap\s*\??$/i,
+    /^poap (?:code|c[oó]digo)\s*\??$/i,
+    /^(?:claim|reclamar|resgatar) (?:mi |my |meu )?poap\s*\??$/i,
+    /^(?:d[oó]nde|donde|where|cad[eê])\s+(?:est[aá]|is)?\s*(?:mi|my|meu)\s+poap\s*\??$/i,
+  ],
 }
 
 /** Privacy patterns — each paired with the language it signals */
@@ -141,11 +250,41 @@ const LOOSE_COMMAND_PATTERNS: Array<[string, RegExp]> = [
     'fund',
     /(?:^|\s)(fund|fundear|add funds|add money|deposit|top.?up|agregar (?:fondos|plata|dinero|saldo)|agregar$|recargar|depositar|adicionar (?:fundos|dinheiro|saldo)|cargar|carregar)(?:\s|$)/i,
   ],
+  // balance — also catches "address" / "dirección" / "billetera pública"
+  // queries because the balance reply already includes the wallet address.
+  // The May-17 transcript showed users asking "Sabes cuál es mi address?"
+  // and getting routed to settings (wrong). Per design call, route these
+  // to balance rather than building a dedicated `address` intent.
   [
     'balance',
-    /(?:^|\s)(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi|mi (?:wallet|billetera|cartera)|my wallet|minha carteira)(?:\s|$)/i,
+    /(?:^|\s)(balance|saldo|cu[aá]nto tengo|quanto tenho|meu saldo|mi saldo|mi balance|cu[aá]nto es mi|mi (?:wallet|billetera|cartera)|my wallet|minha carteira|mi (?:address|direcci[oó]n)|cu[aá]l es mi (?:address|direcci[oó]n|wallet)|direcci[oó]n de mi (?:wallet|billetera)|billetera p[uú]blica|wallet address|my address)(?:\s|$)/i,
   ],
-  ['help', /(?:^|\s)(help(?!ful|less|ing|er|ed)|ayuda|ajuda)(?:\s|$)/i],
+  // dashboard — the web hub at /wallet. Matches END-of-string only so a
+  // benign phrase like "mi cuenta de banco" doesn't shadow into dashboard
+  // (it'd otherwise match "mi cuenta" mid-sentence). Catches the natural
+  // conversational forms users actually type: "no hay un dashboard?",
+  // "y no hay un panel?", "como entro a mi cuenta". Fuzzier phrasing
+  // ("¿cómo accedo a mi cuenta?") is left to SMART MODE.
+  [
+    'dashboard',
+    /(?:^|\s)(dashboard|panel|mi (?:cuenta|app)|meu painel|meu app|home|my app)\??\s*$/i,
+  ],
+  // pay_qr — surface the user's pay-QR link. Trigger phrases focus on
+  // "how can someone pay me" / "my QR" / "my pay code". Placed above help
+  // so "mi codigo de pago" doesn't fall into the help bucket.
+  [
+    'pay_qr',
+    /(?:^|\s)(mi (?:c[oó]digo (?:de )?pago|qr (?:de )?pago|qr para (?:cobrar|recibir)|qr)|c[oó]mo me pagan|como me pagan|pay\s?qr|pay\s?link|pay\s?code|my (?:pay\s?(?:qr|code|link)|qr)|meu (?:c[oó]digo|qr) de pagamento|como me pagam)(?:\s|$)/i,
+  ],
+  // poap_code — natural-language asking for the user's already-assigned
+  // POAP claim link. Must include the literal "poap" token so we don't
+  // shadow referral_code or pay_qr. Placed above help so a phrase like
+  // "help me find my poap" still routes to poap_code.
+  [
+    'poap_code',
+    /(?:^|\s)(?:(?:mi|my|meu)\s+poap|poap(?:\s+(?:code|c[oó]digo|link))?|(?:c[oó]digo|code)\s+(?:de\s+)?poap|(?:claim|reclamar|resgatar)\s+(?:mi|my|meu)?\s*poap|(?:d[oó]nde|donde|where|cad[eê])\s+(?:est[aá]\s+|is\s+)?(?:mi|my|meu)\s+poap)(?:\s|$)/i,
+  ],
+  ['help', /(?:^|\s)(help+(?!ful|less|ing|er|ed)|ayuda+|ajuda+)(?:\s|$)/i],
   [
     'history',
     /(?:^|\s)(history|historial|hist[oó]rico|transactions?|transacciones?|transa[cç][oõ]es?)(?:\s|$)/i,
@@ -188,9 +327,18 @@ const INVITE_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
   { pattern: /^convid[aá]r?\s+(?:(?:o|a)\s+)?(.+)$/i, lang: 'pt' },
 ]
 
-// Optional currency word after amount: "1 dólar", "5 dolares", "10 pesos", "20 reais"
-// Capturing group so parseSendMatch can detect local currency sends.
-const CURRENCY_WORD = `(?:\\s+(d[oó]lar(?:es)?|dollars?|pesos?|usd|plata|rea(?:is|l)|soles?|lempiras?|quetzales?|colone?s?|bol[ií]vares?|guaranie?s?))?`
+// Currency-word alternation. Used in BOTH the action-path send regex
+// (`SEND_PATTERNS`) and the amount-only partial regex
+// (`PARTIAL_AMOUNT_PATTERNS`) so any future currency added here is
+// supported in BOTH paths. Keeping the two in sync matters for money
+// correctness: an action-path "envia 200 soles a +51..." that matched
+// while a partial-path "envia 200 soles" did not would silently
+// downgrade the partial to USDC and ship the wrong amount.
+const CURRENCY_WORD_INNER = `d[oó]lar(?:es)?|dollars?|pesos?|usd|plata|rea(?:is|l)|soles?|lempiras?|quetzales?|colone?s?|bol[ií]vares?|guaranie?s?`
+
+// Optional capturing wrap used by SEND_PATTERNS (recipient follows the
+// currency word, so the wrap doesn't include the end-of-string anchor).
+const CURRENCY_WORD = `(?:\\s+(${CURRENCY_WORD_INNER}))?`
 
 /** Map currency words (accent-stripped, lowercase) to ISO currency codes */
 const CURRENCY_WORD_MAP: Record<string, string | null> = {
@@ -288,6 +436,17 @@ const SEND_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
 ]
 
 /**
+ * Address-query subset of the strict `balance` patterns. Used by
+ * `parseMessageWithRegex` to mark balance hits where the user named the
+ * wallet itself ("mi wallet", "mi billetera", "my wallet") so the
+ * downstream balance reply can show the full public address instead of
+ * the masked one. Mirrors the corresponding entries in
+ * `COMMAND_PATTERNS.balance`; if those change, this must too.
+ */
+const ADDRESS_QUERY_REGEX_BALANCE =
+  /^(cu[aá]l es )?mi (wallet|billetera|cartera)$|^(my wallet|minha carteira)$/i
+
+/**
  * Parse message with regex (exact matching).
  * This is the primary parser — handles 80%+ of messages at zero cost.
  */
@@ -315,7 +474,18 @@ export function parseMessageWithRegex(text: string): ParsedCommand {
   for (const [command, patterns] of Object.entries(COMMAND_PATTERNS)) {
     if (command === 'language') continue // Already handled above
     if (patterns.some((p) => p.test(normalizedText))) {
-      return { command: command as ParsedCommand['command'], originalText: text }
+      // Address-query subset of `balance`: phrases like "mi wallet" /
+      // "mi billetera" / "my wallet" name the wallet itself, not the
+      // balance number. The balance reply masks the address by default
+      // for compactness; addressQuery=true tells the handler to show
+      // the full public address so the user can copy/share it.
+      const addressQuery = command === 'balance' && ADDRESS_QUERY_REGEX_BALANCE.test(normalizedText)
+      const result: ParsedCommand = {
+        command: command as ParsedCommand['command'],
+        originalText: text,
+      }
+      if (addressQuery) result.addressQuery = true
+      return result
     }
   }
 
@@ -426,23 +596,37 @@ const PARTIAL_RECIPIENT_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | '
   },
 ]
 
-/** Patterns for "send <amount>" without recipient */
+/** Patterns for "send <amount>" without recipient.
+ *
+ *  Group 1: amount (digits + optional decimal).
+ *  Group 2 (optional): currency word — captured so `matchPartialSend` can
+ *  thread `localCurrency` into the partial. Without the capture, "envia
+ *  200 pesos" stored only `amount=200` and the next-turn resolver
+ *  completed it as USDC face value (the 2026-05-17 regex-path money bug).
+ *
+ *  Currency-word alternation MUST stay synchronized with `CURRENCY_WORD`
+ *  used by SEND_PATTERNS (interpolated via `CURRENCY_WORD_INNER` —
+ *  edit there, not here). */
 const PARTIAL_AMOUNT_PATTERNS: Array<{ pattern: RegExp; lang: 'en' | 'es' | 'pt' }> = [
-  // EN: "send 5", "send $10"
+  // EN: "send 5", "send $10", "send 200 pesos", "send 50 soles"
   {
-    pattern: /^send\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|dollars?|pesos?|usd|plata))?$/i,
+    pattern: new RegExp(`^send\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}$`, 'i'),
     lang: 'en',
   },
-  // ES: "enviar 5", "envía 10 dólares"
+  // ES: "enviar 5", "envía 10 dólares", "manda 200 pesos", "transferir 50 soles"
   {
-    pattern:
-      /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir|pas[aá]r?)(?:le|les)?\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|pesos?|usd|plata))?$/i,
+    pattern: new RegExp(
+      `^(?:env[ií][ae]?r?|mand[aáe]r?|transferir|pas[aá]r?)(?:le|les)?\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}$`,
+      'i'
+    ),
     lang: 'es',
   },
-  // PT: "enviar 5", "manda 10"
+  // PT: "enviar 5", "manda 10 reais"
   {
-    pattern:
-      /^(?:env[ií][ae]?r?|mand[aáe]r?|transferir)\s+\$?(\d+(?:[.,]\d+)?)(?:\s+(?:d[oó]lar(?:es)?|reais?|usd|grana))?$/i,
+    pattern: new RegExp(
+      `^(?:env[ií][ae]?r?|mand[aáe]r?|transferir)\\s+\\$?(\\d+(?:[.,]\\d+)?)${CURRENCY_WORD}$`,
+      'i'
+    ),
     lang: 'pt',
   },
 ]
@@ -464,12 +648,35 @@ function matchPartialSend(text: string): ParsedCommand | null {
     }
   }
 
-  // Amount-only: "enviar 5"
+  // Amount-only: "enviar 5", "envia 200 pesos"
   for (const { pattern, lang } of PARTIAL_AMOUNT_PATTERNS) {
     const match = text.match(pattern)
     if (match) {
       const result = parseAndValidateAmount(match[1])
       if (result.value !== null && result.errorCode === null) {
+        // Currency word capture (group 2). When present and mappable to a
+        // local-currency code, set BOTH `amount` and `localAmount` so the
+        // downstream FX step converts (mirrors `parseSendMatch`). USD-
+        // equivalent words (dollar, plata, usd) map to null and stay USDC.
+        const rawCurrency = match[2]
+        const currencyKey = rawCurrency
+          ? rawCurrency
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/\p{Diacritic}/gu, '')
+          : null
+        const currencyCode = currencyKey ? CURRENCY_WORD_MAP[currencyKey] : null
+        if (currencyCode) {
+          return {
+            command: 'send',
+            amount: result.value,
+            localAmount: result.value,
+            localCurrency: currencyCode,
+            isLargeAmount: result.isLarge,
+            detectedLanguage: lang,
+            originalText: text,
+          }
+        }
         return {
           command: 'send',
           amount: result.value,
@@ -493,10 +700,130 @@ function matchPartialSend(text: string): ParsedCommand | null {
 }
 
 /**
+ * High-confidence loose patterns that MUST run BEFORE the LLM. These
+ * are conversational forms of routing queries (dashboard, address) that
+ * the LLM has historically misclassified into settings/help (real
+ * transcript bugs from 2026-05-17 and 2026-05-18). Running them pre-LLM
+ * is deterministic, zero-cost, and prevents an LLM "valid but wrong"
+ * classification from beating us to the answer.
+ *
+ * Kept as a separate array from `LOOSE_COMMAND_PATTERNS` (rather than
+ * extracted into shared constants) because the two serve different
+ * roles — this one is the pre-LLM gate for high-confidence cases, that
+ * one is the post-LLM safety net for broader read-only intents. The
+ * duplication is intentional; same patterns appear there too as a
+ * defense-in-depth fallback if a future refactor accidentally removes
+ * this Step 1.5 call.
+ *
+ * Membership criteria:
+ *   - Unambiguous: cannot reasonably mean anything else in context
+ *   - End-anchored or otherwise shadow-guarded so benign phrases like
+ *     "mi cuenta de banco" don't match (covered by the spec tests)
+ *   - Pre-existing LLM misclassification proven by a real transcript
+ */
+const HIGH_CONFIDENCE_PRE_LLM_PATTERNS: Array<[string, RegExp]> = [
+  // Dashboard — natural-language asking about the web hub. End-anchored.
+  [
+    'dashboard',
+    /(?:^|\s)(dashboard|panel|mi (?:cuenta|app)|meu painel|meu app|home|my app)\??\s*$/i,
+  ],
+  // Address queries → balance (existing reply already shows the wallet
+  // address). NOT end-anchored because phrases like "mi address" /
+  // "wallet address" can sit anywhere in a question.
+  [
+    'balance',
+    /(?:^|\s)(mi (?:address|direcci[oó]n|wallet|billetera|cartera)|cu[aá]l es mi (?:address|direcci[oó]n|wallet|billetera|cartera)|direcci[oó]n de mi (?:wallet|billetera|cartera)|billetera p[uú]blica|wallet address|my address)(?:\s|$)/i,
+  ],
+  // Referral code — Sippy Quest invite code. Strict regex above also
+  // catches these (with `\s*\??$`), but punctuation/whitespace variants
+  // ("¿mi código?", "mi codigo!") still slip through. The pre-LLM gate
+  // normalizes punctuation before matching, so it catches every form
+  // that includes the keyword. Must NOT shadow pay_qr (`mi codigo de
+  // pago`) — that's owned by the strict pay_qr pattern that runs first.
+  [
+    'referral_code',
+    /(?:^|\s)(mi c[oó]digo(?: (?:de )?(?:referido|invitaci[oó]n|invite|referral))?|my (?:code|referral|invite code|referral code)|meu c[oó]digo(?: de convite)?)$/i,
+  ],
+  // Quest status — "how am I doing on the quest". Anchored at end so
+  // a casual mention inside a longer sentence ("tengo el quest activo
+  // y…") doesn't hijack a different intent. Pre-LLM gate exists because
+  // the LLM occasionally classifies "como voy" as a greeting (it's
+  // ambiguous in isolation), and "mi quest" without verb is too short
+  // for reliable LLM intent.
+  [
+    'quest_status',
+    /(?:^|\s)((?:mi|mis|my|meu|minhas)\s+(?:quest|entradas|entries)|(?:cu[aá]nt[ao]s?|quantas?)\s+entradas?(?:\s+tengo|\s+tenho)?|(?:c[oó]mo|como)\s+voy(?:\s+(?:en\s+)?(?:el\s+)?quest)?|quest\s+status|how\s+am\s+i\s+doing|how\s+many\s+entries)$/i,
+  ],
+  // season_score — Season 1 reputation standing. Pre-LLM gate so the short
+  // aliases ("puntos", "mi nivel", "score") and conversational forms
+  // ("cuantos puntos tengo", "cual es mi nivel") win deterministically
+  // instead of the LLM guessing greeting/about. Anchored at end. EQUAL
+  // aliases — any of puntos/nivel/puntaje/score triggers it.
+  [
+    'season_score',
+    /(?:^|\s)((?:mi|mis|my|meu|minha)\s+(?:puntaje|puntos|nivel|score|level|points|standing|n[ií]vel|pontos|pontua[cç][aã]o)|puntaje|puntos|nivel|score|(?:cu[aá]ntos?|quantos?)\s+puntos?(?:\s+tengo|\s+tenho)?|(?:cu[aá]l|cual)\s+es\s+mi\s+(?:puntaje|puntos|nivel|score)|(?:c[oó]mo|como)\s+voy\s+(?:de\s+)?(?:puntaje|puntos|nivel))$/i,
+  ],
+  // Pizza Day — bot must answer "qué es pizza day" etc. without the LLM
+  // re-classifying it as out_of_scope (real bug from 2026-05-21
+  // transcript: "Que es el pizza day?" → "no sé de pizza day"). Strict
+  // pre-LLM gate ensures the dedicated handler always wins.
+  [
+    'pizza_day',
+    /(?:^|\s)(pizza\s?day|pizzaday|(?:qu[eé]|que)\s+es\s+(?:el\s+)?pizza\s?day|(?:what\s+is|what's|whats)\s+(?:the\s+)?pizza\s?day|(?:o\s+que\s+[eé])\s+(?:o\s+)?pizza\s?day)\??\s*$/i,
+  ],
+  // poap_code — user asking for their assigned POAP claim link. The LLM
+  // intent vocabulary now includes `poap_code` (see slug map earlier in
+  // this file), but this pre-LLM regex gate stays as a deterministic
+  // short-circuit: zero token spend, zero latency, and immune to any
+  // classifier drift on the canonical phrasings ("mi poap", "my poap",
+  // "donde esta mi poap", etc.). Out-of-scope / about classifications
+  // would lose the user their claim link.
+  [
+    'poap_code',
+    /(?:^|\s)((?:mi|my|meu)\s+poap|poap(?:\s+(?:code|c[oó]digo|link))?|(?:c[oó]digo|code)\s+(?:de\s+)?poap|(?:claim|reclamar|resgatar)\s+(?:mi|my|meu)?\s*poap|(?:d[oó]nde|donde|where|cad[eê])\s+(?:est[aá]\s+|is\s+)?(?:mi|my|meu)\s+poap)\??\s*$/i,
+  ],
+]
+
+/**
+ * Match high-confidence patterns that should beat the LLM. Returns null
+ * when no pattern fires — caller falls through to Step 2 (send
+ * normalizer) and onward to LLM classification.
+ *
+ * Exported for direct testing.
+ */
+export function matchHighConfidencePreLlm(text: string): ParsedCommand | null {
+  const normalized = text
+    .trim()
+    .toLowerCase()
+    .replace(/[?!.,;:¿¡]+/g, '')
+    .trim()
+  for (const [command, pattern] of HIGH_CONFIDENCE_PRE_LLM_PATTERNS) {
+    if (pattern.test(normalized)) {
+      const result: ParsedCommand = {
+        command: command as ParsedCommand['command'],
+        originalText: text,
+      }
+      // Every `balance` entry in HIGH_CONFIDENCE_PRE_LLM_PATTERNS is
+      // an address query by design ("mi address", "cuál es mi
+      // billetera", "wallet address", "dirección de mi cartera", …) —
+      // the user named the wallet/address, not the balance number, so
+      // flag it so the balance handler shows the full public address.
+      if (command === 'balance') result.addressQuery = true
+      return result
+    }
+  }
+  return null
+}
+
+/**
  * Try loose keyword matching for read-only commands.
  * Only fires when strict regex returned 'unknown'.
+ *
+ * Exported for direct testing — production `parseMessage` calls this as
+ * Step 4 (after LLM), so unit tests need a way to verify the loose
+ * patterns without the LLM happening to classify first.
  */
-function matchLooseCommand(text: string): ParsedCommand | null {
+export function matchLooseCommand(text: string): ParsedCommand | null {
   const normalized = text
     .trim()
     .toLowerCase()
@@ -657,12 +984,37 @@ function parseSendMatch(
  *    detection, no helpful messages) but prevents "unknown command" for
  *    clear queries like "cuanto es mi balance?"
  *
- * Send commands are NEVER accepted from LLM for M1.
+ * Send commands accepted from LLM (`parseMessage` itself): only via the
+ * Step 2 NORMALIZER path — the LLM rewrites slang into canonical
+ * "enviar X a Y" text and the result is RE-PARSED through strict regex.
+ * The raw LLM classifier (Step 3) NEVER returns a send command directly;
+ * the validator strips any LLM-asserted `send` to prevent prompt-injected
+ * recipients/amounts from reaching the send handler.
+ *
+ * SMART MODE runs BEFORE this function (see webhook_controller.ts) and can
+ * synthesize a `send` ParsedCommand from its classifier output. SMART's
+ * synthesizer mirrors `parseSendMatch` and is gated by Zod validation +
+ * the same downstream guards (force-confirm threshold, self-send,
+ * balance, alias canonicalization). Audit it there, not here.
  */
+export interface ParseMessageOptions {
+  /**
+   * Recursion guard for SMART MODE fall-through. When the dispatcher's
+   * outcome is `fall_through`, it re-enters `parseMessage` with this set
+   * to `true`. Today parseMessage doesn't invoke SMART internally (SMART
+   * runs BEFORE it in the webhook), so the flag is forward-discipline:
+   * any future code that adds a SMART call inside this function must
+   * respect `skipSmart` to prevent classifier→fall_through→classifier loops.
+   */
+  skipSmart?: boolean
+}
+
 export async function parseMessage(
   text: string,
   ctx?: ParseContext,
-  context: ContextMessage[] = []
+  context: ContextMessage[] = [],
+
+  _options: ParseMessageOptions = {}
 ): Promise<ParsedCommand> {
   const startTime = Date.now()
 
@@ -673,6 +1025,20 @@ export async function parseMessage(
     const result: ParsedCommand = { ...regexResult, usedLLM: false, llmStatus: 'skipped' }
     if (ctx) {
       logParse(ctx, result, 'regex', 'regex-matched', Date.now() - startTime)
+    }
+    return result
+  }
+
+  // Step 1.5: High-confidence pre-LLM loose patterns. Catches dashboard +
+  // address conversational queries before the LLM gets a chance to
+  // misclassify them (real transcript bugs: "no hay un dashboard?" →
+  // settings, "mi address" → settings). Same patterns are also in
+  // LOOSE_COMMAND_PATTERNS as a post-LLM safety net.
+  const preLlmResult = matchHighConfidencePreLlm(text)
+  if (preLlmResult) {
+    const result: ParsedCommand = { ...preLlmResult, usedLLM: false, llmStatus: 'skipped' }
+    if (ctx) {
+      logParse(ctx, result, 'regex', 'pre-llm-loose-matched', Date.now() - startTime)
     }
     return result
   }

@@ -79,6 +79,12 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.cmdBalance': 'balance',
     'setup.cmdSend': 'send $XX to a friend',
     'setup.cmdHistory': 'history',
+    'setup.eventCheckedIn': "You're in for",
+    'setup.claimPoap': 'Claim your POAP',
+    'setup.eventTaggedTitle': "You're checked in!",
+    'setup.eventTaggedBody': 'We marked your attendance.',
+    'setup.continueToWallet': 'Continue to wallet',
+    'setup.poapAlreadyClaimed': 'POAP claimed',
     'setup.poweredBy': 'Sippy — powered by Arbitrum',
     // error keys — critical: these must match existing test assertions
     'setup.errSendCode': 'Failed to send verification code',
@@ -149,6 +155,17 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'wallet.settings': 'Settings',
     'wallet.signOut': 'Sign Out',
     'wallet.poweredBy': 'Sippy — powered by Arbitrum',
+    // Dashboard action row labels — short, scannable.
+    'wallet.action.send': 'Send',
+    'wallet.action.payQr': 'Pay QR',
+    'wallet.action.fund': 'Fund',
+    'wallet.action.invite': 'Invite',
+    // Invite share-sheet copy. Title is the share-sheet header; text is the
+    // message body that pre-fills WhatsApp / SMS / etc. Both kept tight
+    // because share sheets truncate long content on iOS.
+    'wallet.invite.shareTitle': 'Try Sippy',
+    'wallet.invite.shareText': "Hey, I'm using Sippy to send money on WhatsApp. Try it:",
+    'wallet.invite.copied': 'Link copied',
     'wallet.errSendCode': 'Failed to send verification code',
     'wallet.errVerify': 'Verification failed',
     'wallet.errInvalidAmount': 'Enter a valid amount.',
@@ -361,6 +378,33 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'landing.pill.5': 'Global Payments',
     'landing.pill.6': 'Save in Dollars',
     'landing.crt.footer': "whatsapp this number. that's it.",
+    // ── FAQ ──────────────────────────────────────────────────────
+    'landing.faq.label': 'Q&A',
+    'landing.faq.title': 'Questions, answered',
+    'landing.faq.q1.q': 'How does Sippy work?',
+    'landing.faq.q1.a':
+      'Open WhatsApp and message Sippy. Verify your number once and you can send or receive USDC dollars by chatting. No app to install.',
+    'landing.faq.q2.q': 'Is Sippy free?',
+    'landing.faq.q2.a':
+      'Yes. No fees to send or receive USDC, and tiny blockchain gas costs are covered automatically when needed. Funding or withdrawal partners (onramp / offramp providers) may have their own costs.',
+    'landing.faq.q3.q': 'Is my money safe?',
+    'landing.faq.q3.a':
+      'You own the wallet. Sippy can only move funds through a spend permission you approve, capped by the daily limit you set. You can revoke that permission anytime in settings. The wallet itself runs on Coinbase wallet infrastructure on Arbitrum.',
+    'landing.faq.q4.q': 'What if I lose access to my WhatsApp?',
+    'landing.faq.q4.a':
+      'Your wallet is also reachable with the email you used during setup. If you lose your phone or your WhatsApp account, you can recover access at sippy.lat/setup using that email. The funds stay yours.',
+    'landing.faq.q5.q': 'Can I block or mute the Sippy chat?',
+    'landing.faq.q5.a':
+      'Yes. Sippy is just a contact in WhatsApp, so you can block, mute, or archive it from WhatsApp itself like any other chat. Your wallet stays active, and you can unblock whenever you want to come back.',
+    'landing.faq.q6.q': 'Will Sippy ever ask for my password or codes?',
+    'landing.faq.q6.a':
+      'Never. Sippy will not ask you for passwords, recovery phrases, or verification codes through chat. If someone messages you claiming to be Sippy support and asks for any of those, it is a scam.',
+    'landing.faq.q7.q': 'What if someone pretends to be Sippy?',
+    'landing.faq.q7.a':
+      'Our only official number is the one shown on sippy.lat. We do not have agents or representatives who message you proactively. If someone does, ignore and block them.',
+    'landing.faq.q8.q': 'Do I need an app or a bank account?',
+    'landing.faq.q8.a':
+      'Neither. Sippy lives inside WhatsApp, nothing to download. And you do not need a bank account: anyone with WhatsApp can send and receive USDC.',
     'landing.cta.label': 'GET STARTED',
     'landing.cta.title': 'Get Started',
     'landing.cta.desc': 'Open WhatsApp, say hi, and start moving money in seconds.',
@@ -368,9 +412,11 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'landing.cta.trust': 'non-custodial \u00b7 you control your funds',
     'landing.footer.desc': 'WhatsApp interface to send and receive USDC\nin Latin America',
     'landing.footer.features': '/features',
+    'landing.footer.faq': '/faq',
     'landing.footer.fund': '/fund',
     'landing.footer.about': '/about',
     'landing.footer.stats': '/stats',
+    'landing.footer.blog': '/blog',
     'landing.footer.support': '/support',
     'landing.footer.docs': '/docs',
     'landing.footer.contact': '/contact',
@@ -815,6 +861,12 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.cmdBalance': 'balance',
     'setup.cmdSend': 'enviar $XX a un amigo',
     'setup.cmdHistory': 'historial',
+    'setup.eventCheckedIn': 'Estás dentro de',
+    'setup.claimPoap': 'Reclama tu POAP',
+    'setup.eventTaggedTitle': '¡Asistencia registrada!',
+    'setup.eventTaggedBody': 'Marcamos tu asistencia al evento.',
+    'setup.continueToWallet': 'Volver a la billetera',
+    'setup.poapAlreadyClaimed': 'POAP reclamado',
     'setup.poweredBy': 'Sippy — powered by Arbitrum',
     'setup.errSendCode': 'No se pudo enviar el código de verificación',
     'setup.errVerify': 'Verificación fallida',
@@ -883,6 +935,13 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'wallet.settings': 'Configuración',
     'wallet.signOut': 'Cerrar Sesión',
     'wallet.poweredBy': 'Sippy — powered by Arbitrum',
+    'wallet.action.send': 'Enviar',
+    'wallet.action.payQr': 'Mi QR',
+    'wallet.action.fund': 'Recargar',
+    'wallet.action.invite': 'Invitar',
+    'wallet.invite.shareTitle': 'Prueba Sippy',
+    'wallet.invite.shareText': 'Estoy usando Sippy para enviar plata por WhatsApp. Pruébalo:',
+    'wallet.invite.copied': 'Link copiado',
     'wallet.errSendCode': 'No se pudo enviar el código de verificación',
     'wallet.errVerify': 'Verificación fallida',
     'wallet.errInvalidAmount': 'Ingresa un monto válido.',
@@ -1097,6 +1156,33 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'landing.pill.5': 'Pagos Globales',
     'landing.pill.6': 'Ahorrar en D\u00f3lares',
     'landing.crt.footer': 'manda WhatsApp a este n\u00famero. eso es todo.',
+    // \u2500\u2500 FAQ \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    'landing.faq.label': 'PREGUNTAS Y RESPUESTAS',
+    'landing.faq.title': 'Preguntas que te puedas hacer',
+    'landing.faq.q1.q': '\u00bfC\u00f3mo funciona Sippy?',
+    'landing.faq.q1.a':
+      'Abre WhatsApp y escr\u00edbele a Sippy. Verificas tu n\u00famero una vez y ya puedes enviar y recibir d\u00f3lares USDC chateando. Sin app que instalar.',
+    'landing.faq.q2.q': '\u00bfSippy es gratis?',
+    'landing.faq.q2.a':
+      'S\u00ed. No cobramos por enviar o recibir USDC, y los peque\u00f1os costos de gas de la red se cubren autom\u00e1ticamente cuando hace falta. Los proveedores de recarga o retiro (onramp / offramp) pueden tener sus propios costos.',
+    'landing.faq.q3.q': '\u00bfMi plata est\u00e1 segura?',
+    'landing.faq.q3.a':
+      'T\u00fa eres due\u00f1o de la billetera. Sippy solo puede mover fondos a trav\u00e9s de un permiso de gasto que t\u00fa apruebas, con el l\u00edmite diario que t\u00fa defines. Puedes revocar ese permiso en cualquier momento desde ajustes. La billetera corre sobre la infraestructura de Coinbase en Arbitrum.',
+    'landing.faq.q4.q': '\u00bfY si pierdo acceso a mi WhatsApp?',
+    'landing.faq.q4.a':
+      'Tu billetera tambi\u00e9n es accesible con el correo que usaste al registrarte. Si pierdes el tel\u00e9fono o tu WhatsApp, recuperas el acceso en sippy.lat/setup con ese correo. Los fondos siguen siendo tuyos.',
+    'landing.faq.q5.q': '\u00bfPuedo bloquear o silenciar el chat de Sippy?',
+    'landing.faq.q5.a':
+      'S\u00ed. Sippy es un contacto m\u00e1s en WhatsApp: lo puedes bloquear, silenciar o archivar desde WhatsApp como cualquier otro chat. Tu billetera sigue activa y puedes desbloquear cuando quieras volver.',
+    'landing.faq.q6.q': '\u00bfSippy me va a pedir contrase\u00f1as o c\u00f3digos?',
+    'landing.faq.q6.a':
+      'Nunca. Sippy no te va a pedir contrase\u00f1as, frases de recuperaci\u00f3n ni c\u00f3digos de verificaci\u00f3n por chat. Si alguien te escribe diciendo ser soporte de Sippy y te pide eso, es un fraude.',
+    'landing.faq.q7.q': '\u00bfY si alguien se hace pasar por Sippy?',
+    'landing.faq.q7.a':
+      'El \u00fanico n\u00famero oficial de Sippy es el que aparece en sippy.lat. No tenemos agentes ni "representantes" que te escriban primero. Si alguien lo hace, ign\u00f3ralo y bloqu\u00e9alo.',
+    'landing.faq.q8.q': '\u00bfNecesito una app o una cuenta de banco?',
+    'landing.faq.q8.a':
+      'Ninguna de las dos. Sippy vive dentro de WhatsApp, no hay nada que descargar. Y no necesitas cuenta bancaria: cualquier persona con WhatsApp puede enviar y recibir USDC.',
     'landing.cta.label': 'EMPIEZA',
     'landing.cta.title': 'Empieza Ya',
     'landing.cta.desc': 'Abre WhatsApp, saluda y empieza a mover plata en segundos.',
@@ -1105,9 +1191,11 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'landing.footer.desc':
       'Interfaz para enviar y recibir USDC por WhatsApp\npara Latinoam\u00e9rica',
     'landing.footer.features': '/funciones',
+    'landing.footer.faq': '/preguntas',
     'landing.footer.fund': '/fondear',
     'landing.footer.about': '/nosotros',
     'landing.footer.stats': '/estadísticas',
+    'landing.footer.blog': '/blog',
     'landing.footer.support': '/soporte',
     'landing.footer.docs': '/docs',
     'landing.footer.contact': '/contacto',
@@ -1277,6 +1365,12 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'setup.cmdBalance': 'balance',
     'setup.cmdSend': 'enviar $XX para um amigo',
     'setup.cmdHistory': 'historico',
+    'setup.eventCheckedIn': 'Você está dentro de',
+    'setup.claimPoap': 'Reivindique seu POAP',
+    'setup.eventTaggedTitle': 'Presença registrada!',
+    'setup.eventTaggedBody': 'Marcamos sua presença no evento.',
+    'setup.continueToWallet': 'Voltar à carteira',
+    'setup.poapAlreadyClaimed': 'POAP reivindicado',
     'setup.poweredBy': 'Sippy — powered by Arbitrum',
     'setup.errSendCode': 'Falha ao enviar código de verificação',
     'setup.errVerify': 'Verificação falhou',
@@ -1346,6 +1440,14 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'wallet.settings': 'Configurações',
     'wallet.signOut': 'Sair',
     'wallet.poweredBy': 'Sippy — powered by Arbitrum',
+    'wallet.action.send': 'Enviar',
+    'wallet.action.payQr': 'Meu QR',
+    'wallet.action.fund': 'Recarregar',
+    'wallet.action.invite': 'Convidar',
+    'wallet.invite.shareTitle': 'Experimente o Sippy',
+    'wallet.invite.shareText':
+      'Estou usando o Sippy para enviar dinheiro pelo WhatsApp. Experimenta:',
+    'wallet.invite.copied': 'Link copiado',
     'wallet.errSendCode': 'Falha ao enviar código de verificação',
     'wallet.errVerify': 'Verificação falhou',
     'wallet.errInvalidAmount': 'Digite um valor válido.',
@@ -1563,6 +1665,33 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'landing.pill.5': 'Pagamentos Globais',
     'landing.pill.6': 'Poupar em D\u00f3lares',
     'landing.crt.footer': 'manda WhatsApp pra esse n\u00famero. s\u00f3 isso.',
+    // \u2500\u2500 FAQ \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    'landing.faq.label': 'PERGUNTAS E RESPOSTAS',
+    'landing.faq.title': 'Perguntas que voc\u00ea possa ter',
+    'landing.faq.q1.q': 'Como o Sippy funciona?',
+    'landing.faq.q1.a':
+      'Abra o WhatsApp e mande mensagem para o Sippy. Voc\u00ea verifica seu n\u00famero uma vez e j\u00e1 pode enviar e receber d\u00f3lares USDC pelo chat. Sem app pra instalar.',
+    'landing.faq.q2.q': 'O Sippy \u00e9 gr\u00e1tis?',
+    'landing.faq.q2.a':
+      'Sim. N\u00e3o cobramos para enviar ou receber USDC, e os pequenos custos de g\u00e1s da rede s\u00e3o cobertos automaticamente quando necess\u00e1rio. Provedores de recarga ou saque (onramp / offramp) podem ter seus pr\u00f3prios custos.',
+    'landing.faq.q3.q': 'Meu dinheiro est\u00e1 seguro?',
+    'landing.faq.q3.a':
+      'Voc\u00ea \u00e9 dono da carteira. O Sippy s\u00f3 pode mover fundos por meio de uma permiss\u00e3o de gasto que voc\u00ea aprova, com o limite di\u00e1rio que voc\u00ea define. Voc\u00ea pode revogar essa permiss\u00e3o a qualquer momento nas configura\u00e7\u00f5es. A carteira em si roda na infraestrutura da Coinbase na Arbitrum.',
+    'landing.faq.q4.q': 'E se eu perder o acesso ao WhatsApp?',
+    'landing.faq.q4.a':
+      'Sua carteira tamb\u00e9m \u00e9 acess\u00edvel pelo e-mail que voc\u00ea usou no cadastro. Se perder o celular ou o WhatsApp, voc\u00ea recupera o acesso em sippy.lat/setup com esse e-mail. Os fundos continuam seus.',
+    'landing.faq.q5.q': 'Posso bloquear ou silenciar o chat do Sippy?',
+    'landing.faq.q5.a':
+      'Sim. O Sippy \u00e9 s\u00f3 um contato no WhatsApp, ent\u00e3o voc\u00ea pode bloquear, silenciar ou arquivar como qualquer outro chat. Sua carteira segue ativa e d\u00e1 pra desbloquear quando quiser voltar.',
+    'landing.faq.q6.q': 'O Sippy vai pedir senha ou c\u00f3digos?',
+    'landing.faq.q6.a':
+      'Nunca. O Sippy n\u00e3o vai pedir senhas, frases de recupera\u00e7\u00e3o ou c\u00f3digos de verifica\u00e7\u00e3o pelo chat. Se algu\u00e9m mandar mensagem dizendo ser do suporte e pedir isso, \u00e9 golpe.',
+    'landing.faq.q7.q': 'E se algu\u00e9m se passar pelo Sippy?',
+    'landing.faq.q7.a':
+      'O \u00fanico n\u00famero oficial do Sippy \u00e9 o que aparece em sippy.lat. N\u00e3o temos agentes nem "representantes" que mandem mensagem primeiro. Se algu\u00e9m fizer isso, ignore e bloqueie.',
+    'landing.faq.q8.q': 'Preciso de app ou conta no banco?',
+    'landing.faq.q8.a':
+      'Nenhum dos dois. O Sippy vive dentro do WhatsApp, nada pra baixar. E voc\u00ea n\u00e3o precisa de conta banc\u00e1ria: qualquer pessoa com WhatsApp pode enviar e receber USDC.',
     'landing.cta.label': 'COMECE',
     'landing.cta.title': 'Comece Agora',
     'landing.cta.desc': 'Abra o WhatsApp, mande um oi e comece a movimentar dinheiro em segundos.',
@@ -1571,9 +1700,11 @@ const TRANSLATIONS: Record<Language, Record<string, string>> = {
     'landing.footer.desc':
       'Interface para enviar e receber USDC pelo WhatsApp\npara a Am\u00e9rica Latina',
     'landing.footer.features': '/recursos',
+    'landing.footer.faq': '/perguntas',
     'landing.footer.fund': '/financiar',
     'landing.footer.about': '/sobre',
     'landing.footer.stats': '/estatísticas',
+    'landing.footer.blog': '/blog',
     'landing.footer.support': '/suporte',
     'landing.footer.docs': '/docs',
     'landing.footer.contact': '/contato',

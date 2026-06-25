@@ -26,11 +26,14 @@ const IP_RESOLVE_WINDOW = 60 * 1000 // 1 minute
 const USER_RESOLVE_LIMIT = 20 // lookups per window
 const USER_RESOLVE_WINDOW = 60 * 60 * 1000 // 1 hour
 
-const LOGIN_LIMIT = 5 // attempts per window
-const LOGIN_WINDOW = 15 * 60 * 1000 // 15 minutes
+const LOGIN_LIMIT = 30 // attempts per window
+const LOGIN_WINDOW = 2 * 60 * 1000 // 15 minutes
 
 const CDP_EXCHANGE_LIMIT = 5 // exchanges per window
 const CDP_EXCHANGE_WINDOW = 15 * 60 * 1000 // 15 minutes
+
+const QR_SCAN_LIMIT = 100 // scans per shortId per window
+const QR_SCAN_WINDOW = 60 * 1000 // 1 minute
 
 const MAX_MAP_ENTRIES = 100_000 // hard cap to prevent unbounded memory growth
 
@@ -86,6 +89,19 @@ export default class RateLimitService {
    * phone (E.164) -> { count, resetAt }
    */
   private cdpExchangeThrottle: Map<string, ThrottleBucket> = new Map()
+
+  /**
+   * Map 7: QR scan per-shortId throttle
+   *
+   * Keyed on short-id rather than IP because the public /q/:shortId scan
+   * endpoint is reached via the Next.js server (apps/web Server Component),
+   * which means all scans share one apparent IP from the backend's perspective.
+   * Per-shortId throttle prevents single-QR abuse without false-positiving
+   * legitimate Pizza Day traffic.
+   *
+   * shortId -> { count, resetAt }
+   */
+  private qrScanThrottle: Map<string, ThrottleBucket> = new Map()
 
   /** Interval handles so we can stop them on shutdown */
   private cleanupTimers: ReturnType<typeof setInterval>[] = []
@@ -235,6 +251,44 @@ export default class RateLimitService {
 
   // ── Map 6: CDP Exchange Per-Phone Throttle ──────────────────────────────────
 
+  // ── Map 7: QR Scan Per-ShortId Throttle ────────────────────────────────────
+
+  /**
+   * Checks whether a given QR short-id has exceeded the scan rate limit.
+   * Returns `{ allowed: false, retryAfter }` (seconds) when the limit is hit.
+   *
+   * Used by the QR scan controller. Per-shortId rather than per-IP because
+   * legitimate scans are funneled through the apps/web Server Component,
+   * so per-IP would always see the same Next.js server IP. Per-shortId
+   * caps single-QR abuse (someone hammering one printed QR) without
+   * affecting other QRs.
+   *
+   * NOTE: This does not protect against an attacker brute-forcing many
+   * different short-ids (each new short-id starts with a fresh bucket).
+   * That class of abuse is intended to be caught upstream once real-IP
+   * forwarding is in place; tracked as post-freeze work.
+   */
+  checkQrScanThrottle(shortId: string): { allowed: boolean; retryAfter?: number } {
+    const now = Date.now()
+    const entry = this.qrScanThrottle.get(shortId)
+
+    if (!entry || now > entry.resetAt) {
+      if (this.qrScanThrottle.size >= MAX_MAP_ENTRIES) {
+        this.cleanExpiredThrottleEntries()
+      }
+      this.qrScanThrottle.set(shortId, { count: 1, resetAt: now + QR_SCAN_WINDOW })
+      return { allowed: true }
+    }
+
+    entry.count++
+    if (entry.count > QR_SCAN_LIMIT) {
+      const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
+      return { allowed: false, retryAfter }
+    }
+
+    return { allowed: true }
+  }
+
   checkCdpExchangeThrottle(phoneNumber: string): { allowed: boolean; retryAfter?: number } {
     const now = Date.now()
     const entry = this.cdpExchangeThrottle.get(phoneNumber)
@@ -319,6 +373,9 @@ export default class RateLimitService {
     for (const [key, entry] of this.cdpExchangeThrottle) {
       if (entry.resetAt < now) this.cdpExchangeThrottle.delete(key)
     }
+    for (const [key, entry] of this.qrScanThrottle) {
+      if (entry.resetAt < now) this.qrScanThrottle.delete(key)
+    }
   }
 
   // ── Cleanup Timers ─────────────────────────────────────────────────────────
@@ -396,9 +453,23 @@ export default class RateLimitService {
           }
         }
 
-        if (ipCleaned > 0 || userCleaned > 0 || loginCleaned > 0 || cdpCleaned > 0) {
+        let qrScanCleaned = 0
+        for (const [key, entry] of this.qrScanThrottle) {
+          if (entry.resetAt < now) {
+            this.qrScanThrottle.delete(key)
+            qrScanCleaned++
+          }
+        }
+
+        if (
+          ipCleaned > 0 ||
+          userCleaned > 0 ||
+          loginCleaned > 0 ||
+          cdpCleaned > 0 ||
+          qrScanCleaned > 0
+        ) {
           this.logger?.debug(
-            `RateLimitService cleanup: ${ipCleaned} IP, ${userCleaned} user-resolve, ${loginCleaned} login, ${cdpCleaned} cdp-exchange entries`
+            `RateLimitService cleanup: ${ipCleaned} IP, ${userCleaned} user-resolve, ${loginCleaned} login, ${cdpCleaned} cdp-exchange, ${qrScanCleaned} qr-scan entries`
           )
         }
       } catch (err) {

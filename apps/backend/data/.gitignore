@@ -1,0 +1,5 @@
+# Event payload files (POAP code pools, seed data with PII-adjacent URLs, etc.)
+# Ignore everything by default; commit only README / structural placeholders.
+*
+!.gitignore
+!README.md

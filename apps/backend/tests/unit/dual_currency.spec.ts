@@ -110,3 +110,59 @@ test.group('formatBalanceMessage | dual currency integration', () => {
     assert.include(result, '~0 COP')
   })
 })
+
+// Dashboard link surfaced in balance reply — the "bot is the front door"
+// principle: a user asking for balance is at peak engagement, so the
+// reply takes them one tap into the full web hub. Suppressed when no
+// phone is provided (the /wallet route is phone-scoped and we don't
+// want a broken or unscoped link).
+test.group('formatBalanceMessage | dashboard link surfacing', () => {
+  test('en: includes "Full view" + /wallet URL when phoneNumber set', ({ assert }) => {
+    const result = formatBalanceMessage(
+      { balance: 10, wallet: '0x1234567890abcdef1234', phoneNumber: '+573009999999' },
+      'en'
+    )
+    assert.include(result, 'Full view:')
+    assert.include(result, '/wallet?phone=')
+    assert.include(result, encodeURIComponent('+573009999999'))
+  })
+
+  test('es: includes "Ver todo" + /wallet URL', ({ assert }) => {
+    const result = formatBalanceMessage(
+      { balance: 10, wallet: '0x1234567890abcdef1234', phoneNumber: '+573009999999' },
+      'es'
+    )
+    assert.include(result, 'Ver todo:')
+    assert.include(result, '/wallet?phone=')
+  })
+
+  test('pt: includes "Ver tudo" + /wallet URL', ({ assert }) => {
+    const result = formatBalanceMessage(
+      { balance: 10, wallet: '0x1234567890abcdef1234', phoneNumber: '+5511999999999' },
+      'pt'
+    )
+    assert.include(result, 'Ver tudo:')
+    assert.include(result, '/wallet?phone=')
+  })
+
+  test('omits dashboard link when phoneNumber is missing', ({ assert }) => {
+    // /wallet route is phone-scoped — a phoneless link would land on a
+    // logged-out hub. Better to drop the line than send a broken link.
+    const result = formatBalanceMessage({ balance: 10, wallet: '0x1234567890abcdef1234' }, 'en')
+    assert.notInclude(result, 'Full view')
+    assert.notInclude(result, '/wallet?phone=')
+  })
+
+  test('dashboard link appears AFTER the fund link', ({ assert }) => {
+    // Order matters for thumb scan: fund is the more common follow-up
+    // action after seeing balance; dashboard is the broader view.
+    const result = formatBalanceMessage(
+      { balance: 10, wallet: '0x1234567890abcdef1234', phoneNumber: '+573009999999' },
+      'es'
+    )
+    const fundIdx = result.indexOf('Agregar fondos')
+    const dashIdx = result.indexOf('Ver todo')
+    assert.isAbove(fundIdx, -1)
+    assert.isAbove(dashIdx, fundIdx, 'dashboard link should follow fund link')
+  })
+})

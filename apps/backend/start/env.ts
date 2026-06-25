@@ -22,6 +22,11 @@ export default await Env.create(new URL('../', import.meta.url), {
   WHATSAPP_BUTTONS: Env.schema.string.optional(),
   SIPPY_WHATSAPP_NUMBER: Env.schema.string.optional(),
 
+  // Superadmin lock. Only this email can perform irreversible actions like
+  // draining an event operator wallet. Defaults to `admin@sippy.lat` at the
+  // call site; override per-environment via env.
+  SUPER_ADMIN_EMAIL: Env.schema.string.optional(),
+
   // CDP SDK
   CDP_API_KEY_NAME: Env.schema.string.optional(),
   CDP_PRIVATE_KEY: Env.schema.string.optional(),
@@ -54,6 +59,7 @@ export default await Env.create(new URL('../', import.meta.url), {
   SIPPY_SPENDER_ADDRESS: Env.schema.string.optional(),
   ARBITRUM_RPC_URL: Env.schema.string.optional(),
   BASE_RPC_URL: Env.schema.string.optional(),
+  ARBITRUM_SEPOLIA_RPC_URL: Env.schema.string.optional(),
   BASE_SEPOLIA_RPC_URL: Env.schema.string.optional(),
   BASE_CHAIN_ID: Env.schema.string.optional(),
 
@@ -123,6 +129,7 @@ export default await Env.create(new URL('../', import.meta.url), {
   COLURS_USERNAME: Env.schema.string.optional(),
   COLURS_PASSWORD: Env.schema.string.optional(),
   COLURS_USER_PASSWORD_SECRET: Env.schema.string.optional(), // HMAC secret for deriving per-user Colurs passwords
+  COLURS_UPLOAD_HASH_KEY: Env.schema.string.optional(), // Shared HMAC-SHA1 key used by POST /base/upload_file/ sign field
 
   // Sippy ETH mainnet hot wallet (Colurs sends USDT here for onramp bridge)
   SIPPY_ETH_DEPOSIT_ADDRESS: Env.schema.string.optional(),
@@ -131,4 +138,107 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // Onramp bridge flag: true = Colurs sends USDC directly (no LiFi); false = USDT→LiFi→USDC
   COLURS_DIRECT_USDC: Env.schema.string.optional(),
+
+  // Cobre account IDs for COP→USDT dispersion via /v2/exchange/initiate/.
+  // Source = our COP account where R2P payments land.
+  // Destination = our USDT/USD account that receives the converted balance.
+  // Ask Colurs for the right values. Until both are set, the dispersion job
+  // skips `paid` orders (they rest at status='paid' instead of failing).
+  COLURS_DISPERSION_SOURCE_ACCOUNT_ID: Env.schema.string.optional(),
+  COLURS_DISPERSION_DESTINATION_ACCOUNT_ID: Env.schema.string.optional(),
+
+  // KYC passthrough: when "true", treat profile.document_status === "APPROVED" as
+  // sufficient to unlock onramp (level bumped to 5 in getColursKycLevel). Colurs dev
+  // confirmed this mapping in sandbox. Keep unset / "false" in production so the
+  // full level>=5 + kyc_approved gate still applies.
+  COLURS_KYC_PASSTHROUGH_ALLOWED: Env.schema.string.optional(),
+
+  // Event-linked onboarding — per-event POAP claim URLs read by the seeders.
+  // If unset, the event row is created with poap_claim_url=NULL and the EventCard
+  // won't render the "Claim your POAP" CTA. Declare new events here as we add them.
+  PIZZA_DAY_POAP_URL: Env.schema.string.optional(),
+
+  // Pizza Day exchange-staff phones — comma-separated E.164. Read by
+  // `app/utils/special_accounts.ts` for Quest exclusion: exchange staff
+  // sends are onramp distribution, not social P2P, so we filter them out
+  // of the leaderboard. ~2-3 known phones.
+  //
+  // No vendor env list. Pay-QRs are universal (any user can mint one via
+  // /wallet/pay-qr) so there's no clean per-phone "is merchant" signal
+  // yet. When real vendor mode lands, wire it into getQuestExcludedPhones.
+  PIZZA_DAY_EXCHANGE_PHONES: Env.schema.string.optional(),
+
+  // Operator send caps. Per-tx is enforced before submission; per-hour is a
+  // rolling SUM over `operator_sends` where status IN (pending,submitted,confirmed).
+  // Operator can request a temporary cap raise via env-var update without redeploy.
+  OPERATOR_MAX_PER_TX_USDC: Env.schema.number.optional(),
+  OPERATOR_MAX_PER_HOUR_USDC: Env.schema.number.optional(),
+
+  // ── SMART MODE ───────────────────────────────────────────────────────
+  // Killswitch + cohort gate. With SMART_MODE_ENABLED=false the dispatcher
+  // skips classifier calls entirely; the existing regex+LLM parser stays
+  // in charge. Default off so a config-less deploy can't accidentally
+  // burn Groq tokens or change behavior.
+  //
+  // Activation: SMART_MODE_ENABLED=true turns the code path on.
+  // Cohort gate: per-user check `isSmartModeEnabledFor(phone)` then decides
+  // whether THIS user actually hits SMART MODE — looks at user_event_links
+  // for source=pizza-day metadata. Set SMART_MODE_COHORT_ALL=true to
+  // bypass the cohort and route every authenticated user (post-event v2).
+  SMART_MODE_ENABLED: Env.schema.string.optional(),
+  SMART_MODE_COHORT_ALL: Env.schema.string.optional(),
+
+  // Narrow recovery composer (gibberish + OOS only). Stays off by default;
+  // when enabled, low-risk recovery replies get LLM-generated copy instead
+  // of fixed templates. Templates remain the fallback if the composer
+  // fails or returns sanitizer-rejected text. Money paths NEVER touch this.
+  SMART_MODE_COMPOSER_ENABLED: Env.schema.string.optional(),
+
+  // ── Sippy Quest (Pizza Day inauguration) ─────────────────────────────
+  // Event-scoped quest. Two parts:
+  //   • Task 1 (gate): a qualifying send/receive (≥ $0.10) with another
+  //     event attendee DURING the event window. Counterparty must be
+  //     event-linked, not a vendor/exchange, not self, distinct phone.
+  //   • Entries: 1 per successful referral, capped at
+  //     QUEST_MAX_ENTRIES_PER_USER. Draw picks N winners post-event.
+  //
+  // Window timestamps are ISO 8601 with timezone — UTC works, but
+  // explicit Cartagena offset (e.g. 2026-05-22T17:00:00-05:00) reads
+  // cleaner. Both START and END are required to score Task 1; if either
+  // is unset the Quest endpoint reports "not yet open" rather than
+  // crash. Lets us deploy the code before the schedule lands.
+  PIZZA_DAY_EVENT_START_AT: Env.schema.string.optional(),
+  PIZZA_DAY_EVENT_END_AT: Env.schema.string.optional(),
+  // Caps the whale-inviter outcome. 5 chosen by design call 2026-05-18.
+  QUEST_MAX_ENTRIES_PER_USER: Env.schema.number.optional(),
+
+  // Currently active event slug (e.g. `pizza-day-ctg-2026`, `techx-colcaribe-2026`).
+  // Drives quest scoping, leaderboard URL, and referral attribution in the bot.
+  // When unset, the bot operates in "no active event" mode: referral codes still
+  // work but without event attribution, and quest_status replies that no event
+  // is currently running. Flip per-event without redeploying code.
+  SIPPY_CURRENT_EVENT_SLUG: Env.schema.string.optional(),
+
+  // ── Season 1 — usage score (measurement core, Phase A) ───────────────
+  // Master killswitch for everything under #season/*. Default OFF: when
+  // unset (or anything other than "true") the score projector never runs,
+  // the backfill command refuses, and the admin recompute route is gated —
+  // a config-less deploy cannot touch the bot. Flip to "true" to enable
+  // shadow-mode computation (no user-facing surface ships in Phase A).
+  // Mirrors the SMART_MODE_ENABLED / SIPPY_CURRENT_EVENT_SLUG guard style.
+  SEASON1_ENABLED: Env.schema.string.optional(),
+
+  // ── Gas → AA (off-CDP sponsorship, Phase 2 slice 1) ──────────────────
+  // Master killswitch for the off-CDP sponsored submission path. Default OFF:
+  // when unset (or not "true") every gas-bearing lane is byte-identical to the
+  // legacy CDP-submit + GasRefuel path. Mirrors SEASON1_ENABLED / SMART_MODE.
+  GAS_AA_ENABLED: Env.schema.string.optional(),
+  // Pimlico bundler+paymaster API key (URL-keyed) and the sponsorship-policy
+  // webhook secret used to verify inbound Pimlico webhook signatures over the
+  // RAW body. Both from the Pimlico dashboard. Without them the AA path can't run.
+  PIMLICO_API_KEY: Env.schema.string.optional(),
+  PIMLICO_WEBHOOK_SECRET: Env.schema.string.optional(),
+  // The Pimlico sponsorship policy id passed in the paymaster context (never an
+  // empty context in product code — the policy holds the global/per-key caps).
+  PIMLICO_SPONSORSHIP_POLICY_ID: Env.schema.string.optional(),
 })

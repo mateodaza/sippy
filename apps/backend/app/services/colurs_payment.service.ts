@@ -39,9 +39,37 @@ export interface InitiatePaymentParams {
   externalId: string
   /** PSE only — bank institution code */
   financialInstitutionCode?: string
+  /**
+   * Internal Sippy order id — appended to redirect_url so the success page
+   * can poll status by orderId without depending on Colurs's `transferCode` param.
+   */
+  orderId?: string
+}
+
+/**
+ * Build the redirect URL Colurs will send the user to after payment.
+ * Includes our internal orderId so the success page can poll status.
+ */
+function buildRedirectUrl(orderId?: string): string {
+  const base = env.get('FRONTEND_URL', 'https://www.sippy.lat')
+  const url = `${base}/onramp`
+  return orderId ? `${url}?orderId=${encodeURIComponent(orderId)}` : url
 }
 
 // ── Counterparty ─────────────────────────────────────────────────────────────
+
+/**
+ * Maps Sippy internal id_type codes to the counterparty `id_type` enum
+ * accepted by POST /api/reload/r2p/counterparty/. Per Colurs Recargas y Retiros
+ * Postman: valid values are "cc", "ce", "nit", "passport". Note Sippy's "PA"
+ * must become "passport" (not "pa") — that was the previous bug.
+ */
+const COUNTERPARTY_ID_TYPE_MAP: Record<string, string> = {
+  CC: 'cc',
+  CE: 'ce',
+  NIT: 'nit',
+  PA: 'passport',
+}
 
 /**
  * Creates a Colurs payer counterparty for the user.
@@ -55,10 +83,14 @@ export async function createCounterparty(opts: {
   idNumber: string
   email: string
 }): Promise<ColursCounterparty> {
+  const idType = COUNTERPARTY_ID_TYPE_MAP[opts.idType.toUpperCase()]
+  if (!idType) {
+    throw new Error(`Unsupported id_type "${opts.idType}" for counterparty creation`)
+  }
   logger.info(`colurs_payment: creating counterparty for ${maskPhone(opts.phoneNumber)}`)
   return colursPost<ColursCounterparty>('/api/reload/r2p/counterparty/', {
     fullname: opts.fullname,
-    id_type: opts.idType.toLowerCase(), // Colurs expects lowercase: cc, ce, nit, pa
+    id_type: idType,
     id_number: opts.idNumber,
     phone: opts.phoneNumber,
     email: opts.email,
@@ -83,7 +115,7 @@ export async function initiatePSE(params: InitiatePaymentParams): Promise<Colurs
     external_id: params.externalId,
     description_to_payer: 'Fondear Sippy',
     description_to_payee: 'Recarga usuario',
-    redirect_url: `${env.get('FRONTEND_URL', 'https://app.sippy.lat')}/onramp/success`,
+    redirect_url: buildRedirectUrl(params.orderId),
     financial_institution_code: params.financialInstitutionCode,
     fee_mode: 'payer',
   })
@@ -103,7 +135,7 @@ export async function initiateNequi(params: InitiatePaymentParams): Promise<Colu
     external_id: params.externalId,
     description_to_payer: 'Fondear Sippy',
     description_to_payee: 'Recarga usuario',
-    redirect_url: `${env.get('FRONTEND_URL', 'https://app.sippy.lat')}/onramp/success`,
+    redirect_url: buildRedirectUrl(params.orderId),
     fee_mode: 'payer',
   })
 }
@@ -124,7 +156,7 @@ export async function initiateBancolombia(
     external_id: params.externalId,
     description_to_payer: 'Fondear Sippy',
     description_to_payee: 'Recarga usuario',
-    redirect_url: `${env.get('FRONTEND_URL', 'https://app.sippy.lat')}/onramp/success`,
+    redirect_url: buildRedirectUrl(params.orderId),
     fee_mode: 'payer',
   })
 }
@@ -133,7 +165,20 @@ export async function initiateBancolombia(
 
 export interface ColursPaymentStatus {
   money_movement_id: string
-  status: 'initiated' | 'pending' | 'processing' | 'succeeded' | 'failed' | 'expired' | string
+  status:
+    | 'initiated'
+    | 'pending'
+    | 'processing'
+    | 'succeeded'
+    | 'failed'
+    | 'expired'
+    | 'canceled'
+    | 'returned'
+    | string
+  /** Machine-readable short code, e.g. "PAYMENT_COMPLETED", "PAYMENT_PENDING". */
+  status_code?: string
+  /** Human-readable reason string, useful for debugging failures. */
+  status_description?: string
   tracking_key?: string
   [key: string]: unknown
 }
@@ -141,9 +186,12 @@ export interface ColursPaymentStatus {
 /**
  * Poll the status of an R2P payment (PSE / Nequi / Bancolombia).
  * Status progression: initiated → pending → processing → succeeded / failed / expired
+ *
+ * Uses the public preview endpoint — same payload as /status/ but reliable on
+ * Colurs's side (the legacy /status/ endpoint has been returning 500s).
  */
-export async function getPaymentStatus(moneyMovementId: string): Promise<ColursPaymentStatus> {
-  return colursGet<ColursPaymentStatus>(`/api/reload/r2p/status/${moneyMovementId}/`)
+export async function getPaymentPreview(moneyMovementId: string): Promise<ColursPaymentStatus> {
+  return colursGet<ColursPaymentStatus>(`/api/reload/r2p/preview/${moneyMovementId}/`)
 }
 
 // ── Dispatcher ───────────────────────────────────────────────────────────────

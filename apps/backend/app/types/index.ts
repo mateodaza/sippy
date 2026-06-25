@@ -34,13 +34,38 @@ export interface PendingTransaction {
   recipient: string // canonical E.164 phone
   timestamp: number // Date.now()
   lang: Lang // user's lang at time of send command
+  // True iff this pending confirm originated from a pay-QR scan. Carried
+  // across the confirm step so post-transfer flows (e.g. event-POAP claim
+  // DM) can fire only on QR-initiated sends, not on chat-typed sends.
+  // Required (not optional) so future send paths can't silently disable
+  // POAP delivery by forgetting to thread the flag.
+  payQrScan: boolean
 }
 
 export interface PartialSend {
   amount?: number // present if user gave an amount
   recipient?: string // present if user gave a phone (canonical E.164)
+  recipientRaw?: string // present if user gave an alias/name that still needs resolution
   timestamp: number // Date.now()
   lang: Lang
+  // Set when the user has expressed send intent but has not supplied either
+  // required slot yet. Lets the next standalone "1" or "Carlos" advance the
+  // same partial-send state machine instead of being parsed as a fresh turn.
+  sendIntent?: boolean
+  // Set when the user filled the amount slot with a local-currency word
+  // ("200 pesos", "50 reais", "10 soles"). Carries the ISO/LOCAL code so
+  // the eventual `complete` resolution synthesizes a ParsedCommand with
+  // both `amount` AND `localCurrency` set — without this, the downstream
+  // FX step skips conversion and we'd send USDC at the local face value
+  // (a 400x money-correctness bug for COP/VES sends).
+  localCurrency?: string
+  // ── Pay-QR scan context (set by the kind='pay' bracket dispatcher) ─────
+  // Present when this partial was created by a pay-QR scan. Carries forward
+  // so the resolved send command can use the friendly display name in the
+  // confirmation prompt instead of a masked phone, and so the send flow
+  // can force the confirmation step regardless of CONFIRM_THRESHOLD.
+  recipientDisplayName?: string
+  payQrScan?: boolean
 }
 
 type Lang = 'en' | 'es' | 'pt'
@@ -59,6 +84,7 @@ export interface ParsedCommand {
     | 'social'
     | 'privacy'
     | 'fund'
+    | 'pay_qr'
     | 'invite'
     | 'confirm'
     | 'cancel'
@@ -66,6 +92,12 @@ export interface ParsedCommand {
     | 'delete_contact'
     | 'list_contacts'
     | 'withdraw'
+    | 'dashboard'
+    | 'referral_code'
+    | 'quest_status'
+    | 'season_score'
+    | 'pizza_day'
+    | 'poap_code'
     | 'unknown'
   amount?: number
   recipient?: string
@@ -93,6 +125,24 @@ export interface ParsedCommand {
   isLargeAmount?: boolean // true iff amount > 500 and no amountError
   localCurrency?: string // currency word detected in send (e.g. "pesos" → used for conversion)
   localAmount?: number // original amount in local currency before USDC conversion
+  // ── Pay-QR scan context (carried over from PartialSend when this
+  //    command was synthesized by resolving a pay-QR scan) ──────────────
+  recipientDisplayName?: string
+  payQrScan?: boolean
+  // ── SMART MODE fall-through hint (set when SMART classified the
+  //    inbound as out_of_scope or gibberish and then fell through to
+  //    the regex/LLM parser, which also returned 'unknown'). Read by
+  //    the unknown handler to pick a state-aware variant instead of
+  //    the single static fallback. Unset for non-SMART paths. ────────
+  smartCategory?: 'out_of_scope' | 'gibberish'
+  smartOosRedirect?: string
+  // ── Address-query intent on a balance route ────────────────────────────
+  // True when the user asked specifically for their wallet address
+  // ("mi address", "cuál es mi billetera", "wallet address", …) rather
+  // than the balance number ("saldo", "balance"). Both route to the
+  // balance handler, but the reply must show the FULL public address —
+  // not the masked `0x80d6...948A` — so the user can copy/share it.
+  addressQuery?: boolean
 }
 
 export interface WalletInfo {

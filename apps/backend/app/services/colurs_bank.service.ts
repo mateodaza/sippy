@@ -54,35 +54,60 @@ export interface RegisterBankAccountParams {
 export interface ColursBankAccount {
   id: number // colurs_id (pk returned by Colurs)
   account_holder_name: string
-  account_type: 0 | 1
+  account_type: 1 | 2 // 1 = Ahorros, 2 = Corriente
   account_number: string
   bank_name: number
   state: string
   country_registered: string
 }
 
+// ── Response shape helpers ────────────────────────────────────────────────────
+
+/**
+ * Colurs list endpoints have been observed to return either a bare array or a
+ * wrapper like `{results:[...]}` (DRF pagination) / `{data:[...]}`. Normalise so
+ * callers always get an array.
+ */
+function toArray<T>(res: unknown): T[] {
+  if (Array.isArray(res)) return res as T[]
+  if (res && typeof res === 'object') {
+    const r = res as Record<string, unknown>
+    if (Array.isArray(r.results)) return r.results as T[]
+    if (Array.isArray(r.data)) return r.data as T[]
+  }
+  return []
+}
+
 // ── Document type mapping ─────────────────────────────────────────────────────
 
-// In-memory cache — document types rarely change
-let docTypeCache: ColursDocumentType[] | null = null
+/**
+ * Withdrawal-specific document type enum. Per Colurs Recargas y Retiros Postman
+ * (section "Crear cuenta bancaria de tercero"): 1=CC, 2=CE, 3=NIT, 4=Pasaporte.
+ * Note this is a different enum than `/base/document_type/` uses for /user/
+ * registration (which returns 0=CC, 1=CE, 2=TI, 3=NIT, 4=PSP, ...).
+ */
+const WITHDRAWAL_DOCUMENT_TYPES: Array<ColursDocumentType> = [
+  { id: 1, name: 'CC' },
+  { id: 2, name: 'CE' },
+  { id: 3, name: 'NIT' },
+  { id: 4, name: 'PA' },
+]
 
 export async function getDocumentTypes(): Promise<ColursDocumentType[]> {
-  if (docTypeCache) return docTypeCache
-  const result = await colursGet<ColursDocumentType[]>('/base/document_type/')
-  docTypeCache = result
-  return result
+  return WITHDRAWAL_DOCUMENT_TYPES
 }
 
 /**
- * Maps a display code (CC, CE, NIT, TI, PPT) to the Colurs numeric document type ID.
- * Throws if the code is not found in the Colurs list.
+ * Maps a display code (CC, CE, NIT, PA) to the Colurs numeric document type ID
+ * used by POST /api/create_third_party_banks/.
  */
 async function resolveDocumentTypeId(displayCode: string): Promise<number> {
-  const types = await getDocumentTypes()
-  const match = types.find((t) => t.name.toUpperCase() === displayCode.toUpperCase())
+  const match = WITHDRAWAL_DOCUMENT_TYPES.find(
+    (t) => t.name.toUpperCase() === displayCode.toUpperCase()
+  )
   if (!match) {
     throw new Error(
-      `Document type "${displayCode}" not found in Colurs. Available: ${types.map((t) => t.name).join(', ')}`
+      `Document type "${displayCode}" not supported. Allowed: ${WITHDRAWAL_DOCUMENT_TYPES.map((t) => t.name).join(', ')}`
     )
   }
   return match.id
@@ -93,21 +118,25 @@ async function resolveDocumentTypeId(displayCode: string): Promise<number> {
 let bankCache: ColursBank[] | null = null
 
 /**
- * List available Colombian banks from Colurs.
+ * List available Colombian banks for the withdrawal account-registration dropdown.
  * Cached in memory — changes infrequently.
+ *
+ * Reverted to `/banks/?country=CO` after sandbox returned 502 on the Postman-documented
+ * `/api/bank_list_third_party_withdraw/?country=CO`. Pending Colurs confirmation of
+ * which path is canonical — ask in the next sync.
  */
 export async function getBanks(): Promise<ColursBank[]> {
   if (bankCache) return bankCache
-  // Docs: GET /list_third_party_banks/?country=CO
-  const result = await colursGet<ColursBank[]>('/list_third_party_banks/?country=CO')
-  bankCache = result
-  return result
+  const result = await colursGet<unknown>('/banks/?country=CO')
+  bankCache = toArray<ColursBank>(result)
+  return bankCache
 }
 
 // ── Account type mapping ──────────────────────────────────────────────────────
 
-function resolveAccountType(displayType: 'savings' | 'checking'): 0 | 1 {
-  return displayType === 'savings' ? 0 : 1
+function resolveAccountType(displayType: 'savings' | 'checking'): 1 | 2 {
+  // Per Colurs Recargas y Retiros Postman: 1 = Ahorros (savings), 2 = Corriente (checking).
+  return displayType === 'savings' ? 1 : 2
 }
 
 // ── Bank account registration ─────────────────────────────────────────────────
@@ -140,21 +169,44 @@ export async function registerBankAccount(params: RegisterBankAccountParams): Pr
   const documentTypeId = await resolveDocumentTypeId(documentType)
   const accountTypeInt = resolveAccountType(accountType)
 
-  const colursResponse = await colursPost<Record<string, unknown>>('/create_third_party_banks/', {
+  const payload = {
     account_holder_name: holderName,
     account_type: accountTypeInt,
     account_holder_document_type: documentTypeId,
     account_holder_document: documentNumber,
     account_number: accountNumber,
-    bank_name: bankId, // numeric bank ID from /banks/
+    bank_name: bankId,
     country_registered: 'CO',
-  })
+  }
 
-  // ⚠ UNKNOWN: exact response shape not confirmed (schema missing from api-colurs.json).
-  // Try top-level `id` first, then `data.id` as fallback for wrapped responses.
+  logger.info(
+    {
+      account_holder_name: holderName,
+      account_type: accountTypeInt,
+      account_holder_document_type: documentTypeId,
+      account_holder_document_length: documentNumber.length,
+      account_holder_document_last4: documentNumber.slice(-4),
+      account_number_length: accountNumber.length,
+      account_number_last4: accountNumber.slice(-4),
+      bank_name: bankId,
+      bank_name_display: bankName,
+      country_registered: 'CO',
+    },
+    `colurs_bank: POST /create_third_party_banks/ payload for ${maskPhone(phoneNumber)}`
+  )
+
+  const colursResponse = await colursPost<Record<string, unknown>>(
+    '/create_third_party_banks/',
+    payload
+  )
+
+  // Per Colurs Recargas y Retiros Postman the response is `{ pk, account_holder_name, ... }`.
+  // We also accept `id` and `data.id` as fallbacks since older Colurs surfaces may vary.
   const rawId =
+    (colursResponse.pk as number | undefined) ??
     (colursResponse.id as number | undefined) ??
-    ((colursResponse.data as Record<string, unknown> | undefined)?.id as number | undefined)
+    ((colursResponse.data as Record<string, unknown> | undefined)?.id as number | undefined) ??
+    ((colursResponse.data as Record<string, unknown> | undefined)?.pk as number | undefined)
 
   if (rawId === null || rawId === undefined || !Number.isFinite(Number(rawId))) {
     // Log response shape only — values may contain account PII

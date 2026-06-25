@@ -21,10 +21,46 @@ export async function query<T = any>(
 ): Promise<{ rows: T[]; rowCount: number }> {
   const start = Date.now()
   try {
-    // Lucid rawQuery uses ? placeholders (knex convention), not PostgreSQL $1 syntax.
-    // Convert $1, $2, ... to ? for compatibility with migrated Express queries.
-    const knexText = text.replace(/\$\d+/g, '?')
-    const result = await db.rawQuery(knexText, params ?? [])
+    // Lucid rawQuery uses ? placeholders (knex convention), not PostgreSQL
+    // $1 syntax. We translate pg-style → knex-style, but with two wrinkles:
+    //
+    //   (a) Placeholder reuse. pg allows the same $N to be referenced N
+    //       times with a single binding (`WHERE a = $1 OR b = $1`); knex
+    //       demands one binding per ?. A naive `replace(/\$\d+/g, '?')`
+    //       turns every reference into its own ? and knex then throws
+    //       "Expected X bindings, saw Y" — root cause of incident #1
+    //       on 2026-05-18 (every `mi quest` reply errored with "Algo
+    //       salio mal"). We fix this by expanding the bindings array as
+    //       we replace, so each emitted ? carries its own copy of the
+    //       indexed value.
+    //
+    //   (b) $N inside SQL comments. A blanket regex also matches `$N` in
+    //       `--` and `/* */` comment text. After comment stripping, pg
+    //       sees a "hole" in the numbered parameter sequence (e.g. real
+    //       placeholders at $1,$2,$4..$8 with $3 absent) and errors with
+    //       "could not determine data type of parameter $3" — root cause
+    //       of incident #2 on 2026-05-18 (the post-fix-#1 retry still
+    //       errored because scoring.service.ts had `-- e.slug = $1` in a
+    //       comment that documented the bind). We fix this by making the
+    //       regex comment-aware: comment runs are matched as a whole and
+    //       passed through unchanged, with no binding pushed.
+    //
+    // String-literal awareness is intentionally NOT added. No call site
+    // in this codebase embeds `$N` inside a SQL string literal (would be
+    // an anti-pattern — pg parameters are how you parameterize, not via
+    // string concatenation). If that ever becomes a need, this regex
+    // would need a third alternative for `'...'` runs.
+    const expandedBindings: unknown[] = []
+    const knexText = text.replace(
+      /--[^\n]*|\/\*[\s\S]*?\*\/|\$(\d+)/g,
+      (match, indexStr: string | undefined) => {
+        // Comment runs (`--...` or `/* ... */`): leave intact, push no binding.
+        if (indexStr === undefined) return match
+        expandedBindings.push(params?.[Number(indexStr) - 1])
+        return '?'
+      }
+    )
+    const result = await db.rawQuery(knexText, expandedBindings)
     const duration = Date.now() - start
     logger.info(`Query executed in ${duration}ms`)
     // rowCount is provided by the pg driver for DML statements (UPDATE/INSERT/DELETE).
@@ -259,6 +295,11 @@ export async function setUserLanguage(
 // ============================================================================
 
 export interface ContextMessage {
+  // Currently only inbound user messages are persisted. Resolving
+  // affirmations like "muy bien si" against prior bot turns would
+  // require also storing assistant messages + adding them to the SMART
+  // prompt — see backlog item "pendingSuggestion state machine +
+  // assistant context" tied to the 2026-05-21 incident. Not shipped.
   role: 'user'
   content: string
 }

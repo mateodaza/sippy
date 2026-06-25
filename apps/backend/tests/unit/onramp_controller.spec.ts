@@ -275,20 +275,39 @@ test.group('OnrampController | kycRegister — success', (group) => {
   let origFetch: typeof global.fetch
   group.each.setup(() => {
     origFetch = global.fetch
+    // Colurs HMAC secret used to derive per-user passwords during registration.
     process.env.COLURS_USER_PASSWORD_SECRET = 'test-hmac-secret-at-least-32-chars!!'
+    // Colurs auth credentials: getAccessToken() throws synchronously when
+    // any of these three are missing (see colurs_auth.service.ts: isConfigured),
+    // before global.fetch is ever called. Stubbing fetch alone would leave
+    // kycQuickRegister → createCounterparty → colursPost erroring with 502.
+    process.env.COLURS_API_KEY = 'test-api-key'
+    process.env.COLURS_USERNAME = 'test-user'
+    process.env.COLURS_PASSWORD = 'test-pass'
   })
   group.each.teardown(() => {
     global.fetch = origFetch
     delete process.env.COLURS_USER_PASSWORD_SECRET
+    delete process.env.COLURS_API_KEY
+    delete process.env.COLURS_USERNAME
+    delete process.env.COLURS_PASSWORD
     restoreModels()
   })
 
   test('201 with ok:true when Colurs registration and DB upsert succeed', async ({ assert }) => {
+    // Quick-flow registration calls TWO Colurs endpoints under the hood:
+    //   1. POST /token/                          (colurs_auth.login)
+    //   2. POST /api/reload/r2p/counterparty/    (createCounterparty)
+    // Both must be mocked. /token/ returns a 3-part JWT-shaped string with
+    // a far-future exp claim so storeAccessToken accepts it and the next
+    // call doesn't try to refresh. Payload `{"exp":9999999999}` base64.
+    // Don't bother with /user/ — quick-register skips POST /user/ entirely
+    // (per the kycQuickRegister docstring: "skip POST /user/ + OTPs + doc
+    // upload entirely and just create the R2P counterparty").
+    const farFutureExpJwt = 'h.eyJleHAiOjk5OTk5OTk5OTl9.s'
     global.fetch = makeMockFetch([
-      {
-        url: '/user/',
-        response: { id: 99, username: 'juan@example.com', email: 'juan@example.com' },
-      },
+      { url: '/token/', response: { access: farFutureExpJwt, refresh: 'r.r.r' } },
+      { url: '/api/reload/r2p/counterparty/', response: { id: 'cp_test_123' } },
     ]) as any
 
     // updateOrCreate is a noop in mock — no DB SELECT needed
@@ -307,7 +326,11 @@ test.group('OnrampController | kycRegister — success', (group) => {
 
     assert.equal(getStatus(), 201)
     assert.equal(getBody().ok, true)
-    assert.equal(getBody().kycStatus, 'registered')
+    // kycQuickRegister sets kycStatus='approved' (level=0 with counterparty
+    // is the quick-flow "ready to onramp" state — see colurs_kyc.service
+    // docstring). The pre-2026-04 'registered' was the old kycRegister path
+    // that's since been replaced by the quick-flow on the controller.
+    assert.equal(getBody().kycStatus, 'approved')
   })
 })
 
@@ -373,8 +396,13 @@ test.group('OnrampController | kycVerifyEmail — validation', () => {
 // ══════════════════════════════════════════════════════════════════════════════
 
 test.group('OnrampController | kycUploadDocument — validation', () => {
-  test('400 when fileBase64 is missing', async ({ assert }) => {
-    const { ctx, getStatus } = buildCtx({ body: { mimeType: 'image/jpeg' } })
+  // 2026-04 schema change: a Colombian CC requires BOTH sides of the ID, so
+  // the endpoint now takes (frontBase64, frontMimeType, backBase64, backMimeType)
+  // and runs the same validator twice. Tests below pass full-shape bodies and
+  // induce the failure via the specific field under test; otherwise the
+  // front-side validator short-circuits with "frontBase64 is required".
+  test('400 when frontBase64 is missing', async ({ assert }) => {
+    const { ctx, getStatus } = buildCtx({ body: { frontMimeType: 'image/jpeg' } })
     const controller = new OnrampController()
     await controller.kycUploadDocument(ctx as any)
     assert.equal(getStatus(), 400)
@@ -382,17 +410,29 @@ test.group('OnrampController | kycUploadDocument — validation', () => {
 
   test('400 when mimeType is unsupported', async ({ assert }) => {
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { fileBase64: 'abc123', mimeType: 'image/gif' },
+      body: {
+        frontBase64: 'abc123',
+        frontMimeType: 'image/gif',
+        backBase64: 'abc123',
+        backMimeType: 'image/jpeg',
+      },
     })
     const controller = new OnrampController()
     await controller.kycUploadDocument(ctx as any)
     assert.equal(getStatus(), 400)
-    assert.include(getBody().error as string, 'mimeType')
+    // Error names which side + which field — match on "MimeType" so the
+    // assertion stays true whether front or back is the offender.
+    assert.include(getBody().error as string, 'MimeType')
   })
 
   test('400 when fileBase64 exceeds 14M chars (>10MB)', async ({ assert }) => {
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { fileBase64: 'x'.repeat(14_000_001), mimeType: 'image/jpeg' },
+      body: {
+        frontBase64: 'x'.repeat(14_000_001),
+        frontMimeType: 'image/jpeg',
+        backBase64: 'x',
+        backMimeType: 'image/jpeg',
+      },
     })
     const controller = new OnrampController()
     await controller.kycUploadDocument(ctx as any)
@@ -432,6 +472,14 @@ test.group('OnrampController | quote — validation', () => {
     const controller = new OnrampController()
     await controller.quote(ctx as any)
     assert.equal(getStatus(), 400)
+  })
+
+  test('400 when amountCop is below minimum 200_000', async ({ assert }) => {
+    const { ctx, getStatus, getBody } = buildCtx({ body: { amountCop: 199_999 } })
+    const controller = new OnrampController()
+    await controller.quote(ctx as any)
+    assert.equal(getStatus(), 400)
+    assert.include((getBody().error as string).toLowerCase(), 'minimum')
   })
 })
 
@@ -493,7 +541,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
     const { ctx, getStatus, getBody } = buildCtx({
       body: {
         method: 'pse',
-        amountCop: 50000,
+        amountCop: 200_000,
         idempotencyKey: crypto.randomUUID(),
         financialInstitutionCode: 'BANCOLOMBIA',
       },
@@ -507,7 +555,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
 
   test('400 when method is invalid', async ({ assert }) => {
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'cash', amountCop: 50000, idempotencyKey: crypto.randomUUID() },
+      body: { method: 'cash', amountCop: 200_000, idempotencyKey: crypto.randomUUID() },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -515,9 +563,9 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
     assert.include(getBody().error as string, 'method')
   })
 
-  test('400 when amountCop is below minimum 1000', async ({ assert }) => {
+  test('400 when amountCop is below minimum 200_000', async ({ assert }) => {
     const { ctx, getStatus } = buildCtx({
-      body: { method: 'nequi', amountCop: 500, idempotencyKey: crypto.randomUUID() },
+      body: { method: 'nequi', amountCop: 199_999, idempotencyKey: crypto.randomUUID() },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -536,7 +584,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
 
   test('400 when idempotencyKey is missing', async ({ assert }) => {
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'nequi', amountCop: 50000 },
+      body: { method: 'nequi', amountCop: 200_000 },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -546,7 +594,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
 
   test('400 when idempotencyKey is too short', async ({ assert }) => {
     const { ctx, getStatus } = buildCtx({
-      body: { method: 'nequi', amountCop: 50000, idempotencyKey: 'short' },
+      body: { method: 'nequi', amountCop: 200_000, idempotencyKey: 'short' },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -568,7 +616,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
     })
 
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'pse', amountCop: 50000, idempotencyKey: crypto.randomUUID() },
+      body: { method: 'pse', amountCop: 200_000, idempotencyKey: crypto.randomUUID() },
       // no financialInstitutionCode
     })
     const controller = new OnrampController()
@@ -580,7 +628,7 @@ test.group('OnrampController | initiate — KYC gate', (group) => {
   test('503 when COLURS_DIRECT_USDC is true', async ({ assert }) => {
     process.env.COLURS_DIRECT_USDC = 'true'
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'nequi', amountCop: 50000, idempotencyKey: crypto.randomUUID() },
+      body: { method: 'nequi', amountCop: 200_000, idempotencyKey: crypto.randomUUID() },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -617,14 +665,14 @@ test.group('OnrampController | initiate — idempotency replay', (group) => {
     mockOnrampQuery({
       id: 'order-uuid-1',
       method: 'nequi',
-      amountCop: '50000',
+      amountCop: '200000',
       paymentLink: null,
       trackingKey: null,
       status: 'initiating_payment',
     })
 
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'nequi', amountCop: 50000, idempotencyKey: key },
+      body: { method: 'nequi', amountCop: 200_000, idempotencyKey: key },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
@@ -646,7 +694,7 @@ test.group('OnrampController | initiate — idempotency replay', (group) => {
     mockOnrampQuery({
       id: 'order-uuid-2',
       method: 'pse',
-      amountCop: '100000',
+      amountCop: '200000',
       paymentLink: 'https://colurs.com/pay/abc123',
       trackingKey: 'TRK-456',
       status: 'pending',
@@ -655,7 +703,7 @@ test.group('OnrampController | initiate — idempotency replay', (group) => {
     const { ctx, getStatus, getBody } = buildCtx({
       body: {
         method: 'pse',
-        amountCop: 100000,
+        amountCop: 200_000,
         idempotencyKey: key,
         financialInstitutionCode: 'BANCOLOMBIA',
       },
@@ -681,14 +729,14 @@ test.group('OnrampController | initiate — idempotency replay', (group) => {
     mockOnrampQuery({
       id: 'order-uuid-3',
       method: 'nequi',
-      amountCop: '50000',
+      amountCop: '200000',
       paymentLink: null,
       trackingKey: 'TRK-789',
       status: 'pending',
     })
 
     const { ctx, getStatus, getBody } = buildCtx({
-      body: { method: 'nequi', amountCop: 50000, idempotencyKey: key },
+      body: { method: 'nequi', amountCop: 200_000, idempotencyKey: key },
     })
     const controller = new OnrampController()
     await controller.initiate(ctx as any)
