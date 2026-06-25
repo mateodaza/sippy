@@ -13,6 +13,7 @@ export default class SchedulerProvider {
     const { pollR2pPayments } = await import('#jobs/poll_r2p_payments')
     const { disperseCopToUsdt } = await import('#jobs/disperse_cop_to_usdt')
     const { pollDispersionMovements } = await import('#jobs/poll_dispersion_movements')
+    const { reconcileGasAaOnce } = await import('#services/gas_aa/reconcile')
 
     // Offramp: poll every 60s — FX takes 1–3 business days
     cron.schedule('* * * * *', async () => {
@@ -50,6 +51,23 @@ export default class SchedulerProvider {
       }
     })
 
-    logger.info('scheduler: started (offramp 60s, onramp R2P 30s, dispersion 30s, settling 30s)')
+    // Gas → AA durability recovery: rebroadcast/settle prepared ops orphaned by a
+    // process crash + expire stale authorized nonce reservations. Runs regardless
+    // of GAS_AA_ENABLED (must clean up after a flag-off rollback); a near-no-op
+    // when there are no rows. Every 60s, plus once on boot to recover fast.
+    cron.schedule('* * * * *', async () => {
+      try {
+        await reconcileGasAaOnce()
+      } catch (err) {
+        logger.error({ err }, 'scheduler: gas_aa reconcile uncaught error')
+      }
+    })
+    reconcileGasAaOnce().catch((err) =>
+      logger.error({ err }, 'scheduler: gas_aa reconcile (boot) error')
+    )
+
+    logger.info(
+      'scheduler: started (offramp 60s, onramp R2P 30s, dispersion 30s, settling 30s, gas_aa reconcile 60s)'
+    )
   }
 }
