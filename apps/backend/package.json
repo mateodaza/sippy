@@ -83,6 +83,7 @@
     "@inertiajs/react": "^2.3.17",
     "@japa/api-client": "^3.2.1",
     "@lifi/sdk": "^3.16.0",
+    "@pimlico/webhook": "^0.0.6",
     "@sippy/shared": "workspace:*",
     "@tuyau/client": "^0.2.10",
     "@tuyau/core": "^1.0.0",
@@ -102,6 +103,7 @@
     "react-dom": "^19.2.4",
     "reflect-metadata": "^0.2.2",
     "resend": "^6.9.3",
+    "viem": "~2.47.2",
     "zod": "^3.25.76"
   },
   "hotHook": {

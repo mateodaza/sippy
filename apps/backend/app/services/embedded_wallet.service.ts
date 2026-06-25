@@ -23,6 +23,7 @@ import {
   getUsdcAddress,
 } from '#config/network'
 import { getRefuelService } from '#services/refuel.service'
+import { isGasAaEnabled } from '#services/gas_aa/flag'
 import { GAS_MIN_BALANCE_ETH } from '@sippy/shared'
 import { type TransferResult } from '#types/index'
 
@@ -320,53 +321,86 @@ export async function sendWithSpendPermission(
 
     logger.info(`Executing batched spend + transfer in one transaction...`)
 
-    // Ensure spender smart account has ETH for gas
-    const refuelService = getRefuelService()
-    if (refuelService.isAvailable()) {
-      const refuelResult = await refuelService.checkAndRefuel(spenderAccount.address)
-      if (refuelResult.success) {
-        logger.info(`Spender gas refueled: ${refuelResult.txHash}`)
-      } else if (refuelResult.error?.includes('sufficient ETH')) {
-        // Already funded, proceed
+    // The legacy submit: GasRefuel the spender, then CDP sendUserOperation.
+    // This is the path when GAS_AA_ENABLED is off (byte-identical to before) AND
+    // the pre-broadcast fallback when it's on — so refuel only ever runs off the
+    // sponsored happy path.
+    const legacySubmit = async (): Promise<{ transactionHash: string; userOpHash: string }> => {
+      // Ensure spender smart account has ETH for gas
+      const refuelService = getRefuelService()
+      if (refuelService.isAvailable()) {
+        const refuelResult = await refuelService.checkAndRefuel(spenderAccount.address)
+        if (refuelResult.success) {
+          logger.info(`Spender gas refueled: ${refuelResult.txHash}`)
+        } else if (refuelResult.error?.includes('sufficient ETH')) {
+          // Already funded, proceed
+        } else {
+          throw new Error(`Spender wallet has no gas and refuel failed: ${refuelResult.error}`)
+        }
       } else {
-        throw new Error(`Spender wallet has no gas and refuel failed: ${refuelResult.error}`)
+        // Refuel service unavailable — check balance directly as a safety net
+        const provider = new ethers.providers.JsonRpcProvider(getRpcUrl())
+        const spenderBalance = await provider.getBalance(spenderAccount.address)
+        const minBalance = ethers.utils.parseEther(GAS_MIN_BALANCE_ETH.toString())
+        if (spenderBalance.lt(minBalance)) {
+          throw new Error('Spender wallet has no gas and refuel service is unavailable')
+        }
       }
-    } else {
-      // Refuel service unavailable — check balance directly as a safety net
-      const provider = new ethers.providers.JsonRpcProvider(getRpcUrl())
-      const spenderBalance = await provider.getBalance(spenderAccount.address)
-      const minBalance = ethers.utils.parseEther(GAS_MIN_BALANCE_ETH.toString())
-      if (spenderBalance.lt(minBalance)) {
-        throw new Error('Spender wallet has no gas and refuel service is unavailable')
+
+      // Execute both calls atomically in a single user operation
+      const userOpResult = await cdp.evm.sendUserOperation({
+        smartAccount: spenderAccount,
+        network: NETWORK as any, // Network string validated at config level
+        calls: [
+          {
+            to: SPEND_PERMISSION_MANAGER as `0x${string}`,
+            value: 0n,
+            data: spendCallData as `0x${string}`,
+          },
+          {
+            to: usdcAddress as `0x${string}`,
+            value: 0n,
+            data: transferCallData as `0x${string}`,
+          },
+        ],
+      })
+
+      // Wait for the user operation to complete
+      const receipt = await spenderAccount.waitForUserOperation(userOpResult)
+      const userOp = await spenderAccount.getUserOperation({
+        userOpHash: receipt.userOpHash,
+      })
+      return {
+        transactionHash: userOp.transactionHash ?? receipt.userOpHash,
+        userOpHash: receipt.userOpHash,
       }
     }
 
-    // Execute both calls atomically in a single user operation
-    const userOpResult = await cdp.evm.sendUserOperation({
-      smartAccount: spenderAccount,
-      network: NETWORK as any, // Network string validated at config level
-      calls: [
-        {
-          to: SPEND_PERMISSION_MANAGER as `0x${string}`,
-          value: 0n,
-          data: spendCallData as `0x${string}`,
-        },
-        {
-          to: usdcAddress as `0x${string}`,
-          value: 0n,
-          data: transferCallData as `0x${string}`,
-        },
-      ],
-    })
-
-    // Wait for the user operation to complete
-    const receipt = await spenderAccount.waitForUserOperation(userOpResult)
-    const userOp = await spenderAccount.getUserOperation({
-      userOpHash: receipt.userOpHash,
-    })
-
-    const txHash = userOp.transactionHash ?? receipt.userOpHash
-    logger.info(`Transfer complete! Hash: ${txHash}`)
+    // Gas → AA (Phase 2 slice 1): when GAS_AA_ENABLED, route the spender free-send
+    // through OffCdpSubmitter (sponsored, no refuel on the happy path; legacySubmit
+    // retained as the pre-broadcast-only fallback). Flag off ⇒ legacy directly.
+    let txHash: string
+    if (isGasAaEnabled()) {
+      const { submitFreeSend } = await import('#services/gas_aa/off_cdp_submitter')
+      const outcome = await submitFreeSend({
+        fromPhoneNumber,
+        userWalletAddress: userWallet.walletAddress,
+        permission,
+        recipient: toAddress,
+        amountUnits: amountInUnits,
+        spenderAddress: spenderAccount.address,
+        usdcAddress,
+        legacySend: legacySubmit,
+      })
+      txHash = outcome.transactionHash
+      logger.info(
+        `Transfer complete via ${outcome.sponsored ? 'AA-sponsored' : 'legacy fallback'} path! Hash: ${txHash}`
+      )
+    } else {
+      const legacy = await legacySubmit()
+      txHash = legacy.transactionHash
+      logger.info(`Transfer complete! Hash: ${txHash}`)
+    }
 
     // Track daily spend for embedded wallet users (mirrors updateLastActivity pattern)
     const { getUserWallet: getWallet, computeNewDailySpent } =

@@ -59,6 +59,7 @@ export default await Env.create(new URL('../', import.meta.url), {
   SIPPY_SPENDER_ADDRESS: Env.schema.string.optional(),
   ARBITRUM_RPC_URL: Env.schema.string.optional(),
   BASE_RPC_URL: Env.schema.string.optional(),
+  ARBITRUM_SEPOLIA_RPC_URL: Env.schema.string.optional(),
   BASE_SEPOLIA_RPC_URL: Env.schema.string.optional(),
   BASE_CHAIN_ID: Env.schema.string.optional(),
 
@@ -226,4 +227,18 @@ export default await Env.create(new URL('../', import.meta.url), {
   // shadow-mode computation (no user-facing surface ships in Phase A).
   // Mirrors the SMART_MODE_ENABLED / SIPPY_CURRENT_EVENT_SLUG guard style.
   SEASON1_ENABLED: Env.schema.string.optional(),
+
+  // ── Gas → AA (off-CDP sponsorship, Phase 2 slice 1) ──────────────────
+  // Master killswitch for the off-CDP sponsored submission path. Default OFF:
+  // when unset (or not "true") every gas-bearing lane is byte-identical to the
+  // legacy CDP-submit + GasRefuel path. Mirrors SEASON1_ENABLED / SMART_MODE.
+  GAS_AA_ENABLED: Env.schema.string.optional(),
+  // Pimlico bundler+paymaster API key (URL-keyed) and the sponsorship-policy
+  // webhook secret used to verify inbound Pimlico webhook signatures over the
+  // RAW body. Both from the Pimlico dashboard. Without them the AA path can't run.
+  PIMLICO_API_KEY: Env.schema.string.optional(),
+  PIMLICO_WEBHOOK_SECRET: Env.schema.string.optional(),
+  // The Pimlico sponsorship policy id passed in the paymaster context (never an
+  // empty context in product code — the policy holds the global/per-key caps).
+  PIMLICO_SPONSORSHIP_POLICY_ID: Env.schema.string.optional(),
 })

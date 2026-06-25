@@ -22,6 +22,7 @@ const EmbeddedWalletController = () => import('#controllers/embedded_wallet_cont
 const AuthApiController = () => import('#controllers/auth_api_controller')
 const SupportController = () => import('#controllers/support_controller')
 const WebhookAlchemyController = () => import('#controllers/webhook_alchemy_controller')
+const WebhookPimlicoController = () => import('#controllers/webhook_pimlico_controller')
 const OnrampController = () => import('#controllers/onramp_controller')
 const OfframpController = () => import('#controllers/offramp_controller')
 const EventController = () => import('#controllers/event_controller')
@@ -43,6 +44,11 @@ router.post('/webhook/whatsapp', [WebhookController, 'handle'])
 
 // ── Alchemy webhook (HMAC-verified, no session auth) ────────────────────
 router.post('/webhook/alchemy/address-activity', [WebhookAlchemyController, 'handle'])
+
+// ── Pimlico sponsorship webhook (Gas → AA). Raw-body signature-verified
+//     (@pimlico/webhook), no session auth. Authorizes paymaster spend ONLY
+//     against a DB-bound gas_aa_prepared_user_ops row. Inert unless GAS_AA_ENABLED.
+router.post('/webhook/pimlico/sponsorship', [WebhookPimlicoController, 'handle'])
 
 // ── Public resolution (IP-throttled, privacy-aware) ─────────────────────────
 router.get('/resolve-phone', [ResolveController, 'byPhone']).use(middleware.ipThrottle())
