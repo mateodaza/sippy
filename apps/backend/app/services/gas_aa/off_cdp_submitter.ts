@@ -7,8 +7,10 @@
  *
  *   • Authorize first  — a gas_aa_prepared_user_ops row (status `authorized`)
  *     exists before anything is built. The webhook sponsors only a matching row.
- *   • Stored-address override — build against the CDP smart-account address
- *     (fail closed if the public-factory derivation diverges from it).
+ *   • Stored-address override — build against the CDP smart-account address (fail
+ *     closed if the override doesn't take). CDP accounts are public-factory v1.1
+ *     wallets (§2.0 gate: address == owner-derivation), so the override is correct
+ *     + defensive; we only warn if the derivation diverges (load-bearing case).
  *   • Nonce lock (P1) — resolve nonce → write row → sign → submit run under a
  *     per-(chain, entryPoint, sender) lock; the shared spender can't double-spend
  *     a nonce. The DB active-nonce unique index is the backstop.
@@ -433,16 +435,23 @@ async function getAccount(sender: string): Promise<any> {
   if (account.address.toLowerCase() !== key) {
     throw new Error('gas_aa: stored-address override did not take (built address != sender)')
   }
-  // Divergence check: the CDP factory address should NOT equal the public-factory
-  // derivation. Equal ⇒ derivation would have targeted the right account anyway,
-  // which is unexpected for a CDP-created account — warn, don't fail.
+  // Invariant check (§2.0 gate, Arbitrum One): a CDP smart account's address
+  // EQUALS viem's public-factory v1.1 derivation of its owner — CDP accounts are
+  // standard public-factory v1.1 Coinbase Smart Wallets, so the override targets
+  // the same address viem would derive. Convergence is EXPECTED. Warn on the
+  // useful case instead: if the derivation DIVERGES from the stored sender, this
+  // is a genuinely non-public-factory account type where the override is
+  // load-bearing (and op1-style public-factory cold deploy would target the wrong
+  // address) — worth surfacing. The override is kept either way (correct + defensive).
   const derived = await toCoinbaseSmartAccount({
     client: publicClient as any,
     owners: [wrapped],
     version: '1.1',
   })
-  if (derived.address.toLowerCase() === key) {
-    logger.warn('gas_aa: public-factory derivation == stored spender (unexpected for CDP account)')
+  if (derived.address.toLowerCase() !== key) {
+    logger.warn(
+      'gas_aa: public-factory derivation != stored sender — override is load-bearing for this account (non-public-factory type?)'
+    )
   }
   accountBySender.set(key, account)
   return account
