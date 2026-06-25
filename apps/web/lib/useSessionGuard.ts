@@ -26,6 +26,13 @@ type ReAuthStep = 'phone' | 'otp'
 type CDPCurrentUser = ReturnType<typeof useCurrentUser>['currentUser']
 type CDPSignOut = ReturnType<typeof useSignOut>['signOut']
 
+// CDP's auth subsystem can still be initializing when the guard mounts
+// ("SDK not initialized"). That's transient, so retry the JWT restore a few
+// times before clearing — otherwise an unlucky init race silently logs out a
+// user holding a perfectly valid token. Mirrors the setup page's cdpInitAttempts.
+const MAX_AUTH_ATTEMPTS = 4
+const AUTH_RETRY_DELAY_MS = 800
+
 export interface SessionGuardResult {
   // Core return values
   isAuthenticated: boolean
@@ -77,6 +84,9 @@ export function useSessionGuard(): SessionGuardResult {
   const [reAuthChannel, setReAuthChannel] = useState<OtpChannel>('sms')
 
   const prevIsSignedInRef = useRef<boolean | undefined>(undefined)
+  const authAttemptsRef = useRef(0)
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [authRetryTick, setAuthRetryTick] = useState(0)
 
   const { authenticateWithJWT } = useAuthenticateWithJWT()
   const { isSignedIn } = useIsSignedIn()
@@ -85,6 +95,7 @@ export function useSessionGuard(): SessionGuardResult {
 
   // Session check on mount — mirrors existing wallet/settings logic
   useEffect(() => {
+    let cancelled = false
     const checkExistingSession = async () => {
       if (hasCheckedSession) return
       if (isSignedIn === undefined) return
@@ -93,12 +104,26 @@ export function useSessionGuard(): SessionGuardResult {
       if (!isSignedIn) {
         const storedJwt = getStoredToken()
         if (storedJwt && !isTokenExpired(storedJwt)) {
-          // Restore CDP session via JWT
+          // Restore CDP session via JWT. A throw here is almost always the CDP
+          // SDK still initializing ("SDK not initialized"), not a bad token —
+          // expiry is already ruled out above. Retry before clearing so the
+          // init race can't nuke a valid token (silent logout); only give up
+          // and clear once the attempts are exhausted.
           try {
             await authenticateWithJWT()
+            authAttemptsRef.current = 0
             return
           } catch (err) {
-            console.warn('Session recovery: JWT auth failed, clearing token', err)
+            if (cancelled) return
+            authAttemptsRef.current += 1
+            if (authAttemptsRef.current < MAX_AUTH_ATTEMPTS) {
+              retryTimerRef.current = setTimeout(
+                () => setAuthRetryTick((n) => n + 1),
+                AUTH_RETRY_DELAY_MS
+              )
+              return
+            }
+            console.warn('Session recovery: JWT auth failed after retries, clearing token', err)
             clearToken()
           }
         }
@@ -137,7 +162,14 @@ export function useSessionGuard(): SessionGuardResult {
     }
 
     checkExistingSession()
-  }, [isSignedIn, currentUser, hasCheckedSession, authenticateWithJWT])
+    return () => {
+      cancelled = true
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current)
+        retryTimerRef.current = null
+      }
+    }
+  }, [isSignedIn, currentUser, hasCheckedSession, authenticateWithJWT, authRetryTick])
 
   // Detect CDP sign-out (isSignedIn transitions true → false) and update auth state
   useEffect(() => {
