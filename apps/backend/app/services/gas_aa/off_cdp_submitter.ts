@@ -83,7 +83,8 @@ export interface FreeSendOutcome {
   userOpHash: string | null
   /** true = landed via off-CDP sponsorship; false = legacy pre-broadcast fallback. */
   sponsored: boolean
-  preparedOpId: string
+  /** The gas_aa row id, or null if authorize itself failed and we fell back to legacy. */
+  preparedOpId: string | null
 }
 
 // ── Injectable dependencies ──────────────────────────────────────────────────
@@ -212,29 +213,35 @@ export async function submitFreeSend(req: FreeSendRequest): Promise<FreeSendOutc
   const cHash = callsHash(calls)
   const capBucket = capBucketForAccount(req.userWalletAddress)
 
-  // Step 0 — authorize. The row is the only thing that authorizes sponsorship.
-  const id = await deps.ledger.insertAuthorized({
-    lane: 'free_send',
-    semanticActionId: `free_send:${maskPhone(req.fromPhoneNumber)}`,
-    sender: req.spenderAddress,
-    decodedUser: req.userWalletAddress,
-    chainId,
-    entryPoint,
-    callsHash: cHash,
-    capBucket,
-  })
-
+  // `id` is declared here but the authorize (insertAuthorized) runs INSIDE the
+  // try below — so a gas_aa infra failure at step 0 (missing table, DB blip)
+  // degrades to the legacy pre-broadcast path instead of HARD-FAILING the send.
+  // The pre-broadcast-fallback guarantee must start at step 0, not after it.
+  let id: string | null = null
   let prepared = false
   let futureNonce = false
   let signedOpHash: string | null = null
 
   try {
+    // Step 0 — authorize. The row is the only thing that authorizes sponsorship.
+    id = await deps.ledger.insertAuthorized({
+      lane: 'free_send',
+      semanticActionId: `free_send:${maskPhone(req.fromPhoneNumber)}`,
+      sender: req.spenderAddress,
+      decodedUser: req.userWalletAddress,
+      chainId,
+      entryPoint,
+      callsHash: cHash,
+      capBucket,
+    })
+    const opId = id // non-null for use inside the lock closure + the happy path
+
     const userOpHash = await withNonceLock(
       nonceLockKey(chainId, entryPoint, req.spenderAddress),
       async () => {
         // a+b. resolve a free nonce (accounting for in-flight rows across
         //      processes) and claim it on the row while still `authorized`.
-        const claimed = await claimNonce(id, req.spenderAddress, chainId, entryPoint)
+        const claimed = await claimNonce(opId, req.spenderAddress, chainId, entryPoint)
         futureNonce = claimed.future
         // c–e. build (paymaster fetch fires the webhook, which now matches on the
         //      nonce), sign via the CDP owner, derive the userOpHash.
@@ -245,7 +252,7 @@ export async function submitFreeSend(req: FreeSendRequest): Promise<FreeSendOutc
         })
         signedOpHash = signed.userOpHash
         // f. PERSIST the full signed op + hash BEFORE the bundler send.
-        await deps.ledger.markPrepared(id, signed.userOpHash, signed.rpcOp)
+        await deps.ledger.markPrepared(opId, signed.userOpHash, signed.rpcOp)
         prepared = true
         // g. submit. Committed from here — never legacy, only idempotent rebroadcast.
         await deps.sendRaw(signed.rpcOp)
@@ -256,16 +263,21 @@ export async function submitFreeSend(req: FreeSendRequest): Promise<FreeSendOutc
     // Reconcile outside the lock (the nonce is already consumed by the send).
     const receipt = await deps.waitReceipt(userOpHash)
     if (!receipt.success) {
-      await deps.ledger.markFailed(id, 'user op reverted on-chain')
+      await deps.ledger.markFailed(opId, 'user op reverted on-chain').catch(() => {})
       throw new OpRevertedError(userOpHash)
     }
-    await deps.ledger.markLanded(id, receipt.transactionHash)
-    logger.info(`gas_aa: free-send landed sponsored (op ${id}) tx ${receipt.transactionHash}`)
+    // The op DEFINITIVELY landed (receipt.success) — money moved. markLanded is
+    // pure bookkeeping and BEST-EFFORT: if it throws (DB blip) we must NOT cascade
+    // into the catch (which would reconcile → rebroadcast → and a thrown failure
+    // would invite a user retry = a second real transfer). Return success
+    // regardless; a stuck `prepared` row self-heals via the reconciler sweep.
+    await deps.ledger.markLanded(opId, receipt.transactionHash).catch(() => {})
+    logger.info(`gas_aa: free-send landed sponsored (op ${opId}) tx ${receipt.transactionHash}`)
     return {
       transactionHash: receipt.transactionHash,
       userOpHash,
       sponsored: true,
-      preparedOpId: id,
+      preparedOpId: opId,
     }
   } catch (err) {
     // Terminal, non-fallback errors surface directly:
@@ -275,20 +287,26 @@ export async function submitFreeSend(req: FreeSendRequest): Promise<FreeSendOutc
     if (err instanceof OpRevertedError || err instanceof NonceContentionError) throw err
     const msg = err instanceof Error ? err.message : String(err)
     if (!prepared) {
-      // A pre-broadcast failure on a FUTURE nonce (one allocated above on-chain
-      // because a lower spender op is still pending) must NOT legacy-fall-back —
-      // legacy would resolve the on-chain (lower, pending) nonce and conflict.
-      // Fail cleanly; the user retries once the lower op clears.
+      // markFailed is BEST-EFFORT: if the gas_aa table/DB is the thing that
+      // failed (e.g. authorize threw because the table is missing), its own write
+      // will fail too — that must NOT break the legacy fallback. `id` is null if
+      // authorize itself never returned a row.
       if (futureNonce) {
+        // A pre-broadcast failure on a FUTURE nonce (allocated above on-chain
+        // because a lower spender op is pending) must NOT legacy-fall-back — legacy
+        // would resolve the on-chain (lower, pending) nonce and conflict.
         logger.warn(
           `gas_aa: pre-broadcast failure on a future nonce for op ${id} (no legacy): ${msg}`
         )
-        await deps.ledger.markFailed(id, `future-nonce pre-broadcast: ${msg}`)
+        if (id)
+          await deps.ledger.markFailed(id, `future-nonce pre-broadcast: ${msg}`).catch(() => {})
         throw new NonceContentionError(req.spenderAddress)
       }
-      // Pre-broadcast failure on the on-chain nonce → legacy path is safe.
-      logger.warn(`gas_aa: pre-broadcast fallback for op ${id}: ${msg}`)
-      await deps.ledger.markFailed(id, `pre-broadcast: ${msg}`)
+      // Any other pre-broadcast failure (incl. authorize itself) → legacy is safe.
+      logger.warn(
+        `gas_aa: pre-broadcast fallback for op ${id ?? '(no row — authorize failed)'}: ${msg}`
+      )
+      if (id) await deps.ledger.markFailed(id, `pre-broadcast: ${msg}`).catch(() => {})
       const legacy = await req.legacySend()
       return {
         transactionHash: legacy.transactionHash,
@@ -297,9 +315,9 @@ export async function submitFreeSend(req: FreeSendRequest): Promise<FreeSendOutc
         preparedOpId: id,
       }
     }
-    // Post-prepare: committed to the exact op. Rebroadcast the SAME signed op.
+    // Post-prepare: committed to the exact op (id is non-null). Rebroadcast it.
     logger.warn(`gas_aa: post-prepare reconcile for op ${id}: ${msg}`)
-    return await reconcilePrepared(id, signedOpHash!)
+    return await reconcilePrepared(id!, signedOpHash!)
   }
 }
 
@@ -331,10 +349,11 @@ export async function reconcilePrepared(id: string, userOpHash: string): Promise
   }
   const receipt = await deps.waitReceipt(userOpHash)
   if (!receipt.success) {
-    await deps.ledger.markFailed(id, 'reverted after rebroadcast')
+    await deps.ledger.markFailed(id, 'reverted after rebroadcast').catch(() => {})
     throw new Error('gas_aa: prepared op did not land after rebroadcast')
   }
-  await deps.ledger.markLanded(id, receipt.transactionHash)
+  // Landed — best-effort bookkeeping; success is owned by the receipt, not the row.
+  await deps.ledger.markLanded(id, receipt.transactionHash).catch(() => {})
   return {
     transactionHash: receipt.transactionHash,
     userOpHash,

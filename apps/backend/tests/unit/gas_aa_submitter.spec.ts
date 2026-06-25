@@ -38,6 +38,10 @@ interface Harness {
 }
 
 interface Opts {
+  insertAuthorizedThrows?: boolean // authorize fails at step 0 (e.g. missing table)
+  markFailedThrows?: boolean // markFailed itself fails (the DB is the problem)
+  markLandedThrows?: boolean // markLanded fails AFTER a successful receipt
+
   setNonceThrows?: boolean // generic (non-collision) error → pre-broadcast fallback
   setNonceCollideTimes?: number // throw 23505 N times, then succeed (retry path)
   setNonceAlwaysCollide?: boolean // always 23505 → exhaustion → NonceContentionError
@@ -73,6 +77,9 @@ function makeHarness(opts: Opts = {}): Harness {
 
   const ledger: SubmitterDeps['ledger'] = {
     insertAuthorized: async (p: any) => {
+      if (opts.insertAuthorizedThrows) {
+        throw new Error('relation "gas_aa_prepared_user_ops" does not exist')
+      }
       const id = `op_${++seq}`
       rows.set(id, { id, status: 'authorized', signedUserOp: null, userOpHash: null, ...p })
       events.push('insertAuthorized')
@@ -98,12 +105,15 @@ function makeHarness(opts: Opts = {}): Harness {
       r.signedUserOp = op
     },
     markLanded: async (id: string) => {
+      if (opts.markLandedThrows) throw new Error('markLanded DB error')
       events.push('markLanded')
       rows.get(id).status = 'landed'
     },
     markFailed: async (id: string) => {
+      if (opts.markFailedThrows) throw new Error('markFailed DB error')
       events.push('markFailed')
-      rows.get(id).status = 'failed'
+      const r = rows.get(id)
+      if (r) r.status = 'failed'
     },
     getById: async (id: string) => rows.get(id) ?? null,
   }
@@ -166,7 +176,8 @@ test.group('gas_aa submitter | happy path', (group) => {
     assert.isTrue(out.sponsored)
     assert.equal(out.transactionHash, '0xtx')
     assert.isBelow(h.events.indexOf('markPrepared'), h.events.indexOf('sendRaw'))
-    assert.equal(h.rows.get(out.preparedOpId).status, 'landed')
+    assert.isNotNull(out.preparedOpId)
+    assert.equal(h.rows.get(out.preparedOpId!).status, 'landed')
     assert.lengthOf(h.legacyCalls, 0)
     assert.lengthOf(h.sentOps, 1)
   })
@@ -248,6 +259,36 @@ test.group('gas_aa submitter | pre-broadcast fallback', (group) => {
     assert.lengthOf(h.sentOps, 0)
     assert.notInclude(h.events, 'prepareAndSign')
   })
+
+  test('authorize failure (e.g. missing gas_aa table) degrades to legacy, never hard-fails', async ({
+    assert,
+  }) => {
+    // insertAuthorized is step 0 but lives INSIDE the fallback envelope — its
+    // failure must NOT propagate to the user; it falls back to legacy.
+    const h = makeHarness({ insertAuthorizedThrows: true })
+    __setDepsForTest(h.deps)
+    const out = await submitFreeSend(h.req) // must NOT throw
+
+    assert.isFalse(out.sponsored)
+    assert.equal(out.transactionHash, '0xLEGACY')
+    assert.isNull(out.preparedOpId) // no row was created
+    assert.lengthOf(h.legacyCalls, 1)
+    assert.lengthOf(h.sentOps, 0)
+    assert.notInclude(h.events, 'prepareAndSign')
+  })
+
+  test('a failing markFailed does not break the legacy fallback', async ({ assert }) => {
+    // authorize succeeds, prepare fails pre-broadcast, AND markFailed throws (the
+    // gas_aa DB is the thing that's down) — the send must still degrade to legacy.
+    const h = makeHarness({ prepareThrows: true, markFailedThrows: true })
+    __setDepsForTest(h.deps)
+    const out = await submitFreeSend(h.req) // must NOT throw
+
+    assert.isFalse(out.sponsored)
+    assert.equal(out.transactionHash, '0xLEGACY')
+    assert.lengthOf(h.legacyCalls, 1)
+    assert.lengthOf(h.sentOps, 0)
+  })
 })
 
 test.group('gas_aa submitter | post-prepare commitment', (group) => {
@@ -288,5 +329,21 @@ test.group('gas_aa submitter | post-prepare commitment', (group) => {
       1
     )
     assert.lengthOf(h.sentOps, 1) // the single original broadcast, no rebroadcast
+  })
+
+  test('a failing markLanded after a successful receipt still returns SUCCESS (no retry, no double-send)', async ({
+    assert,
+  }) => {
+    // The op landed (receipt.success). If markLanded throws it must NOT cascade
+    // into reconcile (which would rebroadcast) nor surface as a failure to the
+    // user (which would invite a retry = a second real transfer).
+    const h = makeHarness({ markLandedThrows: true })
+    __setDepsForTest(h.deps)
+    const out = await submitFreeSend(h.req) // must NOT throw
+
+    assert.isTrue(out.sponsored)
+    assert.equal(out.transactionHash, '0xtx')
+    assert.lengthOf(h.sentOps, 1) // exactly one broadcast — no cascade-rebroadcast
+    assert.lengthOf(h.legacyCalls, 0)
   })
 })
