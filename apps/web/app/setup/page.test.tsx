@@ -22,7 +22,9 @@ const mocks = vi.hoisted(() => ({
   signOut: vi.fn(),
   searchParamsGet: vi.fn((_: string) => null as string | null),
   routerReplace: vi.fn(),
+  isTokenExpired: vi.fn((_: string) => false as boolean),
   state: {
+    isInitialized: true as boolean,
     isSignedIn: false as boolean | undefined,
     currentUser: null as unknown,
   },
@@ -42,6 +44,7 @@ vi.mock('@coinbase/cdp-hooks', () => ({
     status: null,
   }),
   useCurrentUser: () => ({ currentUser: mocks.state.currentUser }),
+  useIsInitialized: () => ({ isInitialized: mocks.state.isInitialized }),
   useIsSignedIn: () => ({ isSignedIn: mocks.state.isSignedIn }),
   useSignOut: () => ({ signOut: mocks.signOut }),
   useGetAccessToken: () => ({ getAccessToken: vi.fn().mockResolvedValue('cdp-test-token') }),
@@ -79,6 +82,7 @@ vi.mock('../../lib/auth', () => ({
     _storedToken = null
   },
   getFreshToken: () => _storedToken,
+  isTokenExpired: (...args: unknown[]) => mocks.isTokenExpired(...(args as [string])),
 }))
 
 vi.mock('viem', () => ({
@@ -273,6 +277,8 @@ async function goToPermissionStep(otpCode = '123456') {
 beforeEach(() => {
   vi.clearAllMocks()
   _storedToken = null
+  mocks.isTokenExpired.mockReturnValue(false)
+  mocks.state.isInitialized = true
   mocks.state.isSignedIn = false
   mocks.state.currentUser = null
   // Default: provide a Colombian phone via URL (Twilio auth mode)
@@ -552,12 +558,7 @@ describe('ensureGasReady', () => {
       isNewUser: true,
     })
 
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => '',
-      json: async () => ({ ready: true }),
-    })
-    vi.stubGlobal('fetch', mockFetch)
+    const mockFetch = mockFetchByUrl({ '/api/ensure-gas': { ready: true } })
 
     await renderPage()
     await goToOtpStep('+573001234567')
@@ -589,12 +590,7 @@ describe('handleApprovePermission', () => {
     })
     mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
 
-    const mockFetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => '',
-      json: async () => ({ ready: true }),
-    })
-    vi.stubGlobal('fetch', mockFetch)
+    const mockFetch = mockFetchByUrl({ '/api/ensure-gas': { ready: true } })
 
     await renderPage()
     await goToOtpStep('+573001234567')
@@ -618,6 +614,142 @@ describe('handleApprovePermission', () => {
     expect(viem.parseUnits).toHaveBeenCalledWith('50', 6)
 
     vi.unstubAllGlobals()
+  })
+})
+
+// A2 — session recovery must not clear a valid token on a CDP-init lag (F7).
+describe('session recovery (A2) — CDP init race', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('does not touch the token while the SDK is still initializing', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isInitialized = false // SDK not ready yet
+    mocks.state.isSignedIn = false
+    _storedToken = 'valid-token'
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, text: async () => '', json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderPage()
+    await flushAsync()
+
+    // An uninitialized SDK reports isSignedIn=false even for a valid token. We must
+    // neither authenticate nor clear — just wait for initialization.
+    expect(mocks.authenticateWithJWT).not.toHaveBeenCalled()
+    expect(_storedToken).toBe('valid-token')
+  })
+
+  it('retries authenticateWithJWT before clearing — a valid token survives an init-race failure', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isInitialized = true
+    mocks.state.isSignedIn = false // CDP still bootstrapping the session
+    _storedToken = 'valid-token'
+    mocks.isTokenExpired.mockReturnValue(false)
+    // Transient "SDK not initialized" race on the restore attempt.
+    mocks.authenticateWithJWT.mockRejectedValue(new Error('SDK not initialized'))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, text: async () => '', json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderPage()
+    await flushAsync()
+
+    // It attempted to restore the session...
+    expect(mocks.authenticateWithJWT).toHaveBeenCalled()
+    // ...but a transient failure must NOT clear a valid (non-expired) token — the
+    // retry is scheduled instead. This is the F7 fix (no silent mid-onboarding logout).
+    expect(_storedToken).toBe('valid-token')
+  })
+
+  it('clears an expired token without retrying (expiry is terminal, not a race)', async () => {
+    vi.stubEnv('NEXT_PUBLIC_BACKEND_URL', 'http://localhost:3001')
+    mocks.state.isInitialized = true
+    mocks.state.isSignedIn = false
+    _storedToken = 'expired-token'
+    mocks.isTokenExpired.mockReturnValue(true)
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, text: async () => '', json: async () => ({}) })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await renderPage()
+    await flushAsync()
+
+    // Expiry is filtered upstream — don't retry a dead token; clear it and start fresh.
+    expect(mocks.authenticateWithJWT).not.toHaveBeenCalled()
+    expect(_storedToken).toBeNull()
+  })
+})
+
+// A3 — register-permission idempotency rail (adopt-existing before any re-grant).
+describe('handleApprovePermission idempotency (A3)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('grant landed but indexing lagged: registers via justCreated, never re-calls createSpendPermission', async () => {
+    setupOtpMocksWithBackend()
+    vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '0xspender')
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
+    // adopt-first probe → 404 (fresh user, no existing permission); the post-grant
+    // register (justCreated) succeeds because the backend rode out the indexing lag.
+    const fetchMock = mockFetchByUrl({ '/api/ensure-gas': { ready: true } })
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goToPermissionStep('123456')
+    await flushAsync()
+
+    // Granted exactly once — the indexing lag is the backend's to ride out, never a
+    // reason to re-grant on the client.
+    expect(mocks.createSpendPermission).toHaveBeenCalledTimes(1)
+    // The registration that succeeds is the post-grant one, flagged justCreated.
+    const postGrant = fetchMock.mock.calls.find(
+      (c: unknown[]) =>
+        typeof c[0] === 'string' &&
+        c[0].includes('/api/register-permission') &&
+        JSON.parse((c[1] as RequestInit).body as string).justCreated === true
+    )
+    expect(postGrant).toBeDefined()
+  })
+
+  it('reload/adopt: an already-landed permission is adopted inline, never re-granted', async () => {
+    setupOtpMocksWithBackend()
+    vi.stubEnv('NEXT_PUBLIC_SIPPY_SPENDER_ADDRESS', '0xspender')
+    mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
+    // A permission already landed on-chain (grant succeeded, register failed before
+    // → resume/retry). The adopt-first probe finds it.
+    const fetchMock = mockFetchByUrl(
+      { '/api/ensure-gas': { ready: true } },
+      { adoptExisting: true }
+    )
+
+    await renderPage()
+    await goToOtpStep('+573001234567')
+    await goToPermissionStep('123456')
+    await flushAsync()
+
+    // Idempotency rail: the existing permission is adopted; the approve op is never
+    // created a second time, and there is no post-grant (justCreated) register.
+    expect(mocks.createSpendPermission).not.toHaveBeenCalled()
+    const adoptProbe = fetchMock.mock.calls.find(
+      (c: unknown[]) =>
+        typeof c[0] === 'string' &&
+        c[0].includes('/api/register-permission') &&
+        !JSON.parse((c[1] as RequestInit).body as string).justCreated
+    )
+    expect(adoptProbe).toBeDefined()
+    const postGrant = fetchMock.mock.calls.find(
+      (c: unknown[]) =>
+        typeof c[0] === 'string' &&
+        c[0].includes('/api/register-permission') &&
+        JSON.parse((c[1] as RequestInit).body as string).justCreated === true
+    )
+    expect(postGrant).toBeUndefined()
   })
 })
 
@@ -747,9 +879,25 @@ function setupOtpMocksWithBackend() {
 /**
  * Create a fetch mock that routes by URL pattern.
  * register-wallet always succeeds; other URLs are configurable.
+ *
+ * register-permission is body-aware to model the A3 idempotency rail:
+ *  - post-grant register (justCreated:true) always succeeds;
+ *  - the adopt-first probe / recovery adopt (no justCreated) returns 404
+ *    "no existing permission" by default, so the grant path runs — unless
+ *    `opts.adoptExisting` is set, simulating a permission that already landed
+ *    on-chain (resume / retry-after-register-failure → adopt, never re-grant).
  */
-function mockFetchByUrl(routes: Record<string, object>) {
-  const fn = vi.fn().mockImplementation((url: string) => {
+function mockFetchByUrl(routes: Record<string, object>, opts: { adoptExisting?: boolean } = {}) {
+  const fn = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    if (url.includes('/api/register-permission')) {
+      const body = init?.body ? JSON.parse(init.body as string) : {}
+      const ok = body.justCreated === true || opts.adoptExisting === true
+      return Promise.resolve({
+        ok,
+        text: async () => (ok ? '' : 'not found'),
+        json: async () => ({}),
+      })
+    }
     for (const [pattern, body] of Object.entries(routes)) {
       if (url.includes(pattern)) {
         return Promise.resolve({ ok: true, text: async () => '', json: async () => body })
@@ -872,7 +1020,7 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
   it('wallet-status returns non-OK → falls back to ToS step (does not block onboarding)', async () => {
     setupOtpMocksWithBackend()
     mocks.createSpendPermission.mockResolvedValue({ userOperationHash: '0xhash' })
-    const fn = vi.fn().mockImplementation((url: string) => {
+    const fn = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
       if (url.includes('/api/wallet-status')) {
         return Promise.resolve({
           ok: false,
@@ -885,6 +1033,17 @@ describe('advanceToCorrectStep (after OTP verify with backend)', () => {
           ok: true,
           text: async () => '',
           json: async () => ({ ready: true }),
+        })
+      }
+      if (url.includes('/api/register-permission')) {
+        // A3: adopt-first probe (no justCreated) finds nothing → grant runs;
+        // the post-grant register (justCreated) succeeds.
+        const body = init?.body ? JSON.parse(init.body as string) : {}
+        const ok = body.justCreated === true
+        return Promise.resolve({
+          ok,
+          text: async () => (ok ? '' : 'not found'),
+          json: async () => ({}),
         })
       }
       return Promise.resolve({ ok: true, text: async () => '', json: async () => ({}) })
