@@ -74,6 +74,12 @@ class OtpService {
 
     const code = String(crypto.randomInt(1_000_000)).padStart(6, '0')
 
+    // [TEMP-OTP-DEBUG — REVERT AFTER QA] log the code only for the controlled
+    // prod-onboarding test number; never logs any real user's OTP.
+    if (phone === '+12085759975') {
+      console.warn(`[TEMP-OTP-DEBUG] ${phone} code=${code}`)
+    }
+
     if (!this.otpStore.has(phone) && this.otpStore.size >= MAX_MAP_ENTRIES) {
       this.purgeExpiredOtpEntries()
       if (this.otpStore.size >= MAX_MAP_ENTRIES) {
