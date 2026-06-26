@@ -92,3 +92,5 @@ scripts/vps-setup-*.sh
 
 # gas-aa spike scratch (throwaway; never commit — incl. token-minting helper)
 apps/backend/scripts/spike/
+# gas-aa V2b sign-proof harness (TEMP debug route: seeds a JWT + auto-authenticates — MUST NOT ship)
+apps/web/app/spike-sign/
