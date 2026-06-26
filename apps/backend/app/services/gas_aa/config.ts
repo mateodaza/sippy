@@ -12,7 +12,7 @@ import { arbitrum, arbitrumSepolia, base, baseSepolia, type Chain } from 'viem/c
 
 // Master flag lives in its own viem-free module (flag.ts) for the hot path;
 // re-exported here so the off-CDP stack has one import surface.
-export { isGasAaEnabled } from '#services/gas_aa/flag'
+export { isGasAaEnabled, isGasAaOnboardEnabled } from '#services/gas_aa/flag'
 
 /** EntryPoint v0.6 — the version Phase 1 proved + the CDP Coinbase Smart Wallet targets. */
 export const ENTRY_POINT_V06 = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
@@ -20,8 +20,12 @@ export const ENTRY_POINT_V06 = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
 /** SpendPermissionManager (same address on every supported network). */
 export const SPEND_PERMISSION_MANAGER = '0xf85210B21cC50302F477BA56686d2019dC9b67Ad'
 
-/** The lanes this slice serves. Free-send (spender) is the only one wired now. */
-export type Lane = 'free_send'
+/**
+ * The lanes the off-CDP stack serves.
+ *  - `free_send` — spender pays a user's USDC transfer (slice 1, wired).
+ *  - `setup`     — sponsored cold deploy+approve onboarding (Track B / slice 2).
+ */
+export type Lane = 'free_send' | 'setup'
 
 /**
  * Map the app's NETWORK string (CDP-style: 'arbitrum', 'arbitrum-sepolia', …)
