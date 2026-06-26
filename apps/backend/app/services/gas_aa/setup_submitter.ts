@@ -143,6 +143,7 @@ export interface SetupSubmitterDeps {
     markFailed: typeof ledger.markFailed
     markLanded: typeof ledger.markLanded
     getById: typeof ledger.getById
+    findResumableSetupOp: typeof ledger.findResumableSetupOp
   }
 }
 
@@ -209,26 +210,51 @@ export async function prepareSetupOp(req: PrepareSetupRequest): Promise<PrepareS
   const { initCodeHash } = expectedSetupInitCode(req.userEoa, SPEND_PERMISSION_MANAGER)
 
   // The whole critical section is inside the try (R5): a DB blip on insertAuthorized
-  // or the sponsorship fetch degrades to legacy, it never hard-fails onboarding.
+  // or the sponsorship fetch degrades to legacy, it never hard-fails onboarding. The
+  // per-sender nonce lock also makes /prepare IDEMPOTENT (redline #5): the resume
+  // check + insert + build all run under it, so concurrent double-taps serialize and
+  // the second sees the first's awaiting_signature op and resumes it — no second
+  // sponsored op, no second nonce burned on the active-nonce index.
   let id: string | null = null
   try {
-    id = await deps.ledger.insertAuthorized({
-      lane: 'setup',
-      semanticActionId: `setup:${maskPhone(req.fromPhoneNumber)}`,
-      sender: req.walletAddress,
-      decodedUser: req.walletAddress, // permission.account == sender
-      chainId,
-      entryPoint,
-      callsHash: cHash,
-      capBucket,
-      initCodeHash,
-      meta: { userEoa: req.userEoa.toLowerCase() },
-    })
-    const opId = id
-
-    const sponsored = await withNonceLock(
+    const result = await withNonceLock(
       nonceLockKey(chainId, entryPoint, req.walletAddress),
-      async () => {
+      async (): Promise<{
+        opId: string
+        unsignedUserOp: Record<string, unknown>
+        userOpHash: string
+      }> => {
+        // Resume an already-prepared op for this sender (double-tab / retried /prepare):
+        // the user signs the one that's there. No insert, no nonce, no sponsorship fetch.
+        const resumable = await deps.ledger.findResumableSetupOp(
+          chainId,
+          entryPoint,
+          req.walletAddress
+        )
+        if (resumable?.unsignedUserOp && resumable.userOpHash) {
+          logger.info(
+            `gas_aa setup: resuming awaiting_signature op ${resumable.id} for ${maskPhone(req.fromPhoneNumber)}`
+          )
+          return {
+            opId: resumable.id,
+            unsignedUserOp: resumable.unsignedUserOp,
+            userOpHash: resumable.userOpHash,
+          }
+        }
+
+        id = await deps.ledger.insertAuthorized({
+          lane: 'setup',
+          semanticActionId: `setup:${maskPhone(req.fromPhoneNumber)}`,
+          sender: req.walletAddress,
+          decodedUser: req.walletAddress, // permission.account == sender
+          chainId,
+          entryPoint,
+          callsHash: cHash,
+          capBucket,
+          initCodeHash,
+          meta: { userEoa: req.userEoa.toLowerCase() },
+        })
+        const opId = id
         const nonce = await claimSetupNonce(opId, req.walletAddress, chainId, entryPoint)
         // paymaster fetch fires the webhook, which matches this authorized row (incl.
         // init_code_hash) and sponsors. Returns the UNSIGNED op + its userOpHash.
@@ -243,14 +269,14 @@ export async function prepareSetupOp(req: PrepareSetupRequest): Promise<PrepareS
           unsignedUserOp: built.unsignedUserOp,
           userEoa: req.userEoa,
         })
-        return built
+        return { opId, unsignedUserOp: built.unsignedUserOp, userOpHash: built.userOpHash }
       }
     )
     return {
       sponsored: true,
-      opId,
-      unsignedUserOp: sponsored.unsignedUserOp,
-      userOpHash: sponsored.userOpHash,
+      opId: result.opId,
+      unsignedUserOp: result.unsignedUserOp,
+      userOpHash: result.userOpHash,
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -458,6 +484,7 @@ function makeDefaultDeps(): SetupSubmitterDeps {
       markFailed: ledger.markFailed,
       markLanded: ledger.markLanded,
       getById: ledger.getById,
+      findResumableSetupOp: ledger.findResumableSetupOp,
     },
   }
 }

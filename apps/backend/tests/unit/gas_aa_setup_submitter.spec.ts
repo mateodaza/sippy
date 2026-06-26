@@ -126,6 +126,16 @@ function makeHarness(opts: Opts = {}) {
       if (r) r.status = 'landed'
     },
     getById: async (id: string) => rows.get(id) ?? null,
+    findResumableSetupOp: async (_chainId: number, _entryPoint: string, sender: string) => {
+      for (const r of rows.values()) {
+        if (
+          r.status === 'awaiting_signature' &&
+          String(r.sender ?? '').toLowerCase() === sender.toLowerCase()
+        )
+          return r
+      }
+      return null
+    },
   }
 
   const deps: SetupSubmitterDeps = {
@@ -217,6 +227,26 @@ test.group('gas_aa setup submitter | prepare', (group) => {
     assert.isFalse(out.sponsored)
     assert.include(h.events, 'markFailed')
     assert.notInclude(h.events, 'markAwaitingSignature')
+  })
+
+  // Redline #5 — a double-tab / retried /prepare resumes the existing awaiting_signature
+  // op instead of minting a second sponsored op (and burning a second nonce).
+  test('idempotent: an existing awaiting_signature op is resumed, not rebuilt', async ({
+    assert,
+  }) => {
+    const h = makeHarness()
+    const existingId = h.seedAwaiting() // already awaiting_signature for WALLET
+    __setDepsForTest(h.deps)
+    const out = await prepareSetupOp(h.req)
+    assert.isTrue(out.sponsored)
+    if (out.sponsored) {
+      assert.equal(out.opId, existingId) // the SAME op, returned for signing
+      assert.equal(out.userOpHash, UOH)
+    }
+    // No second op: no insert, no sponsorship fetch, no second nonce claim.
+    assert.notInclude(h.events, 'insertAuthorized')
+    assert.notInclude(h.events, 'buildAndSponsor')
+    assert.notInclude(h.events, 'setNonce')
   })
 
   test('insertAuthorized failure (missing table) degrades to legacy, never hard-fails', async ({

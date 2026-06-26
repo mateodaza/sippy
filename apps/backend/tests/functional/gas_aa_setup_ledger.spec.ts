@@ -24,6 +24,7 @@ import {
   cancelSetupOp,
   markPreparedFromAwaitingSignature,
   findActiveMatch,
+  findResumableSetupOp,
   sweepExpired,
   type MatchKey,
 } from '#services/gas_aa/ledger'
@@ -192,5 +193,34 @@ dbGroup('gas_aa setup ledger | init_code_hash binding', () => {
     assert.isNotNull(await findActiveMatch(setupMatch())) // correct hash matches
     assert.isNull(await findActiveMatch(setupMatch({ initCodeHash: '0x' + 'dd'.repeat(32) }))) // wrong hash
     assert.isNull(await findActiveMatch(setupMatch({ initCodeHash: null }))) // a free-send-style key (no hash) can't match a setup row
+  })
+})
+
+// B1.1d redline #5 — idempotent /prepare resumes an existing awaiting_signature op.
+dbGroup('gas_aa setup ledger | resumable setup op', () => {
+  test('returns the awaiting_signature op for a sender (its unsigned op + hash)', async ({
+    assert,
+  }) => {
+    const id = await insertAuthorized(setupAuth())
+    await setNonce(id, '0')
+    await markAwaitingSignature(id, AWAIT)
+    const r = await findResumableSetupOp(CHAIN, EP, SENDER)
+    assert.isNotNull(r)
+    assert.equal(r!.id, id)
+    assert.equal(r!.userOpHash, UOH)
+    assert.deepEqual(r!.unsignedUserOp, AWAIT.unsignedUserOp)
+  })
+
+  test('an authorized (pre-signature) op is NOT resumable', async ({ assert }) => {
+    const id = await insertAuthorized(setupAuth())
+    await setNonce(id, '0') // still authorized — no sponsored unsigned op yet
+    assert.isNull(await findResumableSetupOp(CHAIN, EP, SENDER))
+  })
+
+  test('an expired awaiting_signature op is NOT resumable', async ({ assert }) => {
+    const id = await insertAuthorized(setupAuth({ expiresInMinutes: -1 }))
+    await setNonce(id, '0')
+    await markAwaitingSignature(id, AWAIT)
+    assert.isNull(await findResumableSetupOp(CHAIN, EP, SENDER))
   })
 })

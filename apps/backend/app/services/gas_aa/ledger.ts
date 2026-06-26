@@ -290,6 +290,30 @@ export async function getById(id: string): Promise<PreparedOpRow | null> {
   return res.rows[0] ? mapRow(res.rows[0]) : null
 }
 
+/**
+ * The resumable setup op for a sender (idempotent /prepare, B1.1d redline #5): an
+ * `awaiting_signature`, not-expired setup row — sponsored + unsigned, ready for the
+ * browser to sign. A double-tab / retried /prepare returns THIS op so the user signs
+ * the one already prepared, instead of minting a SECOND sponsored op (and burning a
+ * second nonce on the active-nonce index). Most-recent first. `sender`/`entry_point`
+ * are stored lowercased; both sides are lowercased here (A6 casing).
+ */
+export async function findResumableSetupOp(
+  chainId: number,
+  entryPoint: string,
+  sender: string
+): Promise<PreparedOpRow | null> {
+  const res = await query(
+    `SELECT * FROM gas_aa_prepared_user_ops
+       WHERE chain_id = $1 AND entry_point = $2 AND LOWER(sender) = $3
+         AND lane = 'setup' AND status = 'awaiting_signature' AND expires_at > $4
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    [chainId, entryPoint.toLowerCase(), sender.toLowerCase(), nowSec()]
+  )
+  return res.rows[0] ? mapRow(res.rows[0]) : null
+}
+
 export interface MatchKey {
   chainId: number
   entryPoint: string
