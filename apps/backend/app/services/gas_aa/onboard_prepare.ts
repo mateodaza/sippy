@@ -25,12 +25,18 @@ import { CdpClient } from '@coinbase/cdp-sdk'
 import { createPublicClient, http, getAddress, parseUnits, formatUnits } from 'viem'
 import { toCoinbaseSmartAccount } from 'viem/account-abstraction'
 import { getRpcUrl, NETWORK, USDC_ADDRESSES, USDC_DECIMALS } from '#config/network'
-import { SPEND_PERMISSION_MANAGER, getViemChain } from '#services/gas_aa/config'
+import {
+  SPEND_PERMISSION_MANAGER,
+  ENTRY_POINT_V06,
+  getChainId,
+  getViemChain,
+} from '#services/gas_aa/config'
 import {
   prepareSetupOp,
   type PrepareSetupRequest,
   type PrepareSetupOutcome,
 } from '#services/gas_aa/setup_submitter'
+import { findInFlightSetupOp } from '#services/gas_aa/ledger'
 import type { RawPermission } from '#services/gas_aa/decode'
 import {
   findPermissionForRegistration,
@@ -60,6 +66,9 @@ export type PrepareOnboardOutcome =
   | { kind: 'prepared'; opId: string; unsignedUserOp: Record<string, unknown>; userOpHash: string }
   /** A valid on-chain permission already existed — adopted + onboarding completed. */
   | { kind: 'alreadyGranted'; permissionHash: string }
+  /** A prior sponsored op is already broadcasting (`prepared`) for this user — the frontend
+   *  must wait (NOT run legacy: that would duplicate the approve the in-flight op is landing). */
+  | { kind: 'processing' }
   /** Pre-broadcast sponsorship failure — the frontend runs legacy GasRefuel onboarding. */
   | { kind: 'fallback'; reason: string }
   /** A hard rejection mapped straight to an HTTP status (401/403/409). */
@@ -77,6 +86,8 @@ export interface OnboardPrepareDeps {
     phoneNumber: string
     walletAddress: string
   }): Promise<{ adopted: true; permissionHash: string } | { adopted: false }>
+  /** Is a prior sponsored op already `prepared` (broadcasting) for this account? */
+  hasInFlightOp(walletAddress: string): Promise<boolean>
   /** Our own derivation of the smart account from [userEoa, SPM] — the convergence check. */
   deriveSmartAccount(userEoa: string): Promise<string>
   /** Build the tier-capped SpendPermission to grant. */
@@ -137,6 +148,15 @@ export async function prepareOnboard(req: PrepareOnboardRequest): Promise<Prepar
   if (adopt.adopted) {
     logger.info(`gas_aa onboard: adopted existing permission for ${maskPhone(req.phoneNumber)}`)
     return { kind: 'alreadyGranted', permissionHash: adopt.permissionHash }
+  }
+
+  // 4b. In-flight guard: if a prior sponsored op is already `prepared` (broadcasting) for
+  //     this account, do NOT build a second one — a fresh op claims nonce+1 on the still-
+  //     undeployed account, fails, and returns a `fallback` that would send the frontend to
+  //     legacy = a duplicate approve. Signal `processing`; the reconciler settles the op.
+  if (await deps.hasInFlightOp(req.walletAddress)) {
+    logger.info(`gas_aa onboard: in-flight setup op for ${maskPhone(req.phoneNumber)} — processing`)
+    return { kind: 'processing' }
   }
 
   // 5. Convergence (redline #1): our [userEoa, SPM] derivation MUST equal walletAddress.
@@ -357,11 +377,17 @@ async function realNotifySetupCompleted(phoneNumber: string): Promise<void> {
   await notifySetupCompleted({ phone: phoneNumber, lang })
 }
 
+async function realHasInFlightOp(walletAddress: string): Promise<boolean> {
+  const row = await findInFlightSetupOp(getChainId(), ENTRY_POINT_V06, walletAddress)
+  return row !== null
+}
+
 function makeDefaultOnboardDeps(): OnboardPrepareDeps {
   return {
     resolveCdpUser: realResolveCdpUser,
     isTosAccepted: realIsTosAccepted,
     adoptExisting: realAdoptExisting,
+    hasInFlightOp: realHasInFlightOp,
     deriveSmartAccount: realDeriveSmartAccount,
     buildPermission: realBuildPermission,
     prepare: prepareSetupOp,

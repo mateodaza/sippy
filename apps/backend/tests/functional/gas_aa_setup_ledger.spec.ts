@@ -25,6 +25,7 @@ import {
   markPreparedFromAwaitingSignature,
   findActiveMatch,
   findResumableSetupOp,
+  findInFlightSetupOp,
   sweepExpired,
   type MatchKey,
 } from '#services/gas_aa/ledger'
@@ -222,5 +223,37 @@ dbGroup('gas_aa setup ledger | resumable setup op', () => {
     await setNonce(id, '0')
     await markAwaitingSignature(id, AWAIT)
     assert.isNull(await findResumableSetupOp(CHAIN, EP, SENDER))
+  })
+})
+
+// B1.1d in-flight guard — a `prepared` (broadcasting) op blocks a 2nd /prepare.
+dbGroup('gas_aa setup ledger | in-flight setup op', () => {
+  test('a prepared (broadcast) op is in-flight; an awaiting_signature op is NOT', async ({
+    assert,
+  }) => {
+    const id = await insertAuthorized(setupAuth())
+    await setNonce(id, '0')
+    await markAwaitingSignature(id, AWAIT)
+    // awaiting_signature = resumable, not yet broadcast → not in-flight
+    assert.isNull(await findInFlightSetupOp(CHAIN, EP, SENDER))
+    // flip to prepared (signed + broadcast)
+    await markPreparedFromAwaitingSignature(id, {
+      sender: SENDER,
+      nonce: '0x0',
+      signature: '0xsig',
+    })
+    const r = await findInFlightSetupOp(CHAIN, EP, SENDER)
+    assert.isNotNull(r)
+    assert.equal(r!.id, id)
+  })
+
+  test('a landed op is no longer in-flight', async ({ assert }) => {
+    const id = await insertAuthorized(setupAuth())
+    await setNonce(id, '0')
+    await markAwaitingSignature(id, AWAIT)
+    await markPreparedFromAwaitingSignature(id, { sender: SENDER, nonce: '0x0' })
+    assert.isNotNull(await findInFlightSetupOp(CHAIN, EP, SENDER)) // prepared = in-flight
+    await markLanded(id, '0xtx')
+    assert.isNull(await findInFlightSetupOp(CHAIN, EP, SENDER)) // landed = terminal
   })
 })

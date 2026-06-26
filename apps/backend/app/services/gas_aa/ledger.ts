@@ -314,6 +314,31 @@ export async function findResumableSetupOp(
   return res.rows[0] ? mapRow(res.rows[0]) : null
 }
 
+/**
+ * An IN-FLIGHT setup op for a sender (B1.1d in-flight guard): a `prepared` setup row —
+ * signed + broadcast, not yet landed/failed. While one exists, /prepare must NOT build a
+ * SECOND op: a fresh op would claim nonce+1 on the still-undeployed account, fail
+ * validation, and return a `fallback` that sends the frontend to legacy — duplicating the
+ * approve the in-flight op is already landing. The reconciler settles the in-flight op;
+ * the user waits. `prepared` rows are never swept (broadcast → reconciled), so no expiry
+ * filter. Both sides lowercased (A6 casing).
+ */
+export async function findInFlightSetupOp(
+  chainId: number,
+  entryPoint: string,
+  sender: string
+): Promise<PreparedOpRow | null> {
+  const res = await query(
+    `SELECT * FROM gas_aa_prepared_user_ops
+       WHERE chain_id = $1 AND entry_point = $2 AND LOWER(sender) = $3
+         AND lane = 'setup' AND status = 'prepared'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    [chainId, entryPoint.toLowerCase(), sender.toLowerCase()]
+  )
+  return res.rows[0] ? mapRow(res.rows[0]) : null
+}
+
 export interface MatchKey {
   chainId: number
   entryPoint: string

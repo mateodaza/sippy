@@ -39,6 +39,9 @@ export default class SetupOpController {
           })
         case 'alreadyGranted':
           return response.json({ alreadyGranted: true, permissionHash: out.permissionHash })
+        case 'processing':
+          // A prior sponsored op is already broadcasting — the frontend waits (never legacy).
+          return response.json({ processing: true })
         case 'fallback':
           // Pre-broadcast sponsorship failure — the frontend runs legacy GasRefuel onboarding.
           return response.json({ sponsored: false, fallback: true, reason: out.reason })

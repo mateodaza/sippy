@@ -35,7 +35,7 @@ const PERMISSION: RawPermission = {
 }
 
 function makeDeps(over: Partial<OnboardPrepareDeps> = {}) {
-  const calls = { resolve: 0, tos: 0, adopt: 0, derive: 0, build: 0, prepare: 0 }
+  const calls = { resolve: 0, tos: 0, adopt: 0, inflight: 0, derive: 0, build: 0, prepare: 0 }
   const deps: OnboardPrepareDeps = {
     resolveCdpUser: async () => {
       calls.resolve++
@@ -48,6 +48,10 @@ function makeDeps(over: Partial<OnboardPrepareDeps> = {}) {
     adoptExisting: async () => {
       calls.adopt++
       return { adopted: false }
+    },
+    hasInFlightOp: async () => {
+      calls.inflight++
+      return false
     },
     deriveSmartAccount: async () => {
       calls.derive++
@@ -159,6 +163,17 @@ test.group('gas_aa onboard prepare', (group) => {
     assert.equal(out.kind, 'alreadyGranted')
     if (out.kind === 'alreadyGranted') assert.equal(out.permissionHash, '0xperm')
     // No duplicate: convergence + build + sponsor never ran.
+    assert.equal(calls.derive, 0)
+    assert.equal(calls.prepare, 0)
+  })
+
+  // In-flight guard: a prior sponsored op is already broadcasting → processing, NOT a 2nd op.
+  test('an in-flight (prepared) op → processing, never builds a second op', async ({ assert }) => {
+    const { deps, calls } = makeDeps({ hasInFlightOp: async () => true })
+    __setOnboardDepsForTest(deps)
+    const out = await prepareOnboard(REQ)
+    assert.equal(out.kind, 'processing')
+    // Checked after adopt-first, before convergence/build — no duplicate op.
     assert.equal(calls.derive, 0)
     assert.equal(calls.prepare, 0)
   })
