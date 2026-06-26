@@ -241,6 +241,26 @@ export async function markPreparedFromAwaitingSignature(
   return res.rowCount === 1
 }
 
+/**
+ * Durably terminalize a setup op to `failed` and REPORT whether it actually did
+ * (rowCount === 1). Unlike `markFailed` (best-effort, void), the caller needs to
+ * know: legacy onboarding may run ONLY if the row was terminalized. If this returns
+ * false (the row already advanced/landed) or throws, the caller must NOT fall back —
+ * a still-`prepared` row would be rebroadcast by the reconciler and race the legacy
+ * grant (double-grant). Covers the non-terminal setup states.
+ */
+export async function failSetupOp(id: string, reason: string): Promise<boolean> {
+  const res = await query(
+    `UPDATE gas_aa_prepared_user_ops
+       SET status = 'failed',
+           meta = meta || jsonb_build_object('failed_reason', $2::text, 'failed_at', $3::bigint),
+           updated_at = NOW()
+     WHERE id = $1 AND status IN ('authorized', 'awaiting_signature', 'prepared')`,
+    [id, reason, nowSec()]
+  )
+  return res.rowCount === 1
+}
+
 export async function markLanded(id: string, txHash?: string | null): Promise<void> {
   await query(
     `UPDATE gas_aa_prepared_user_ops

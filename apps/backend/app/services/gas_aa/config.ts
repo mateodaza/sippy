@@ -71,6 +71,17 @@ export function getSponsorshipPolicyId(): string {
   return id
 }
 
+/**
+ * The Pimlico policy id for the SETUP lane (Track B). A SEPARATE policy from the
+ * free-send one (its own caps + per-op gas limit ≥ ~478k for the cold deploy+approve),
+ * so a setup op is never sponsored under the free-send budget and vice-versa.
+ */
+export function getSetupSponsorshipPolicyId(): string {
+  const id = env.get('PIMLICO_SETUP_SPONSORSHIP_POLICY_ID', '')
+  if (!id) throw new Error('gas_aa: PIMLICO_SETUP_SPONSORSHIP_POLICY_ID not set')
+  return id
+}
+
 // ── Per-(chain_id, entry_point, sender) nonce lock (P1) ──────────────────────
 //
 // The spender is a SHARED backend account: two concurrent free-sends could
