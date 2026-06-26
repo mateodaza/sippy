@@ -51,12 +51,14 @@ Frontend + light backend; low-risk; recovers the 26 and stops new failures befor
 - **A2 — Mirror the guard fix into setup (F7).** Port `useSessionGuard`'s retry-before-clear into setup's own mount recovery (`setup:506-524`) so a valid token isn't nuked mid-onboarding. *Permanent — survives B.*
 - **A3 — Harden register-permission (F3/F4).** Real backoff retry on the indexing lag, and run the on-chain **adoption** path (recover an existing permission) **inline**, not only on a fresh reload. *Permanent — survives B.*
 - **A4 — Diagnosable errors, two layers.** Internally, log the full provider/CDP/RPC cause + a stable error **code** so failures are measurable. To the **user**, surface only the stable code + human copy — never raw provider/CDP/RPC details. Replaces today's opaque `errCreatePermission`/`errRegisterPermission`. *Permanent.*
-- **A5 — Recover the existing 27 (dry-run first, three buckets).** Classify each stuck user — **dry-run, no writes** — into:
-  - **auto-adopt** — only when the match is **unambiguous**: ToS accepted, `phone_registry.wallet_address` matches, spender/token/network exact, allowance within effective tier, and a **single** valid permission (or a deterministic latest *with* audit output). Backend adopts; emit an audit CSV; no user action.
-  - **ambiguous** — anything not cleanly matched (e.g. register's null-`dailyLimit` "most recent" fallback at `ctrl:252` could adopt the wrong permission) → **never silent-adopt**; route to nudge.
-  - **nudge** — no on-chain permission, or ambiguous → a **WhatsApp "finish your wallet"** message (gas is present, setup resumes and completes).
+- **A5 — Recover the existing 27 (classifier RAN 2026-06-26, read-only; recovery = nudge + manual, no bulk writes).** A read-only classifier (DB session pinned `read_only`, on-chain `isValid` + `wallet==account` checks, per-wallet gas balance) bucketed the 27:
+  - **0 auto-adopt** — nothing was cleanly, unambiguously adoptable. **The silent-adopt DB write-path is therefore dropped as the default** — no bulk auto-write, and the [P1] adoption-safety-rails surface goes with it.
+  - **18 clean → nudge (only after A2/A3 ship).** 16 `finish-setup` (gas-ready), 1 `refuel-then-setup` (0 ETH → drip first or it re-strands), 1 `tos-nudge`. Nudge into the *hardened* flow so re-runs don't re-hit F3/F4/F7.
+  - **8 manual batch (not a product flow).** 6 `verify-email+tos` — the **closed pre-fix $500 cohort** (onboarded before `UNVERIFIED_DAILY_LIMIT_USDC='50'`; hold an unusable $500 perm; **5 have no `user_preferences` row** → guided re-entry, not a settings toggle); 1 `disambiguate` (2 perms → `ctrl:305` null-limit fallback risk); 1 `re-setup` (CDP-listed but `isValid=false` on-chain). Handle by hand.
+  - **1 excluded — Pascal (`+4915121090333`), personal handling only.**
+  - **Banked lever:** `SpendPermissionManager.revokeAsSpender(permission)` exists (no CDP SDK helper → hand-encoded from the Sippy spender, staging-tested) — kept as a manual/admin tool to clear a stale perm if ever needed, **not** a built flow.
 
-  **Pascal is handled personally, out of any bulk automation.**
+  Artifacts: `classify_recovery.mjs` (gitignored spike dir, re-runnable as the list works down); audit CSV at a scratch path (PII, uncommitted).
 - **A6 — Normalize address casing** in backend gas/permission lookups (the checksummed-vs-lowercase smell). *Permanent.*
 
 **Track A exit:** recent success rate from ~94% toward ~99%+, 27 stuck driven to near-zero, no dead-ends (every step retries/resumes).
@@ -72,7 +74,7 @@ Sponsor the confirmed cold op so onboarding needs **zero** user ETH; then decomm
 
 ## 6. Sequencing & ownership
 
-1. **Now:** A2, A3, A4, A6 (permanent hardening) + A1 (interim race fix) + A5 recovery split → nudge/adopt the 27. → immediate reliability, recovers stuck users.
+1. **Now:** A2, A3, A4, A6 (permanent hardening) + A1 (interim, idempotent race fix). **Then** run A5 recovery: nudge the clean **18** into the now-hardened flow, and work the **8**-user manual batch by hand (Pascal personal). The classifier already ran (0 auto-adopt → no bulk writes). → immediate reliability + stuck-user recovery.
 2. **Then:** B1–B3 (sponsored onboarding) behind `GAS_AA_ONBOARD_ENABLED` (default off) → staging validation → prod canary.
 3. **Finally:** B4 decommission GasRefuel.
 
