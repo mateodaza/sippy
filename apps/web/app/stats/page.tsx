@@ -63,6 +63,7 @@ interface TopSender {
 interface SeasonStats {
   seasonId: string
   transactedVolume: string
+  totalMoved: string
   onboarded: string
   maw: number
   activeThisWeek: number
@@ -263,22 +264,40 @@ export default async function StatsPage() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-8 sm:py-12">
-        {/* Hero — Transacted Volume (verified value-out). The un-blend: this is
-            real money sent by Sippy users, NOT deposits+sends mixed together.
-            On-ramped lives in its own tile below and is never added in here. */}
+        {/* Hero — two figures side by side. Left: Transacted Volume (verified value-out, the
+            un-blend: real money sent by Sippy users). Right: Total Moved (gross deposits+sends
+            throughput). They are distinct and labeled, never summed; on-ramped is its own tile. */}
         <div className="panel-frame rounded-xl p-6 sm:p-10 mb-4 sm:mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            <p className="spec-label">TRANSACTED VOLUME</p>
-            <span className="rounded-sm border border-brand-crypto/40 px-1.5 py-[1px] font-mono text-[11px] tracking-wider text-brand-crypto">
-              VALUE-OUT
-            </span>
+          <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-6">
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <p className="spec-label">TRANSACTED VOLUME</p>
+                <span className="rounded-sm border border-brand-crypto/40 px-1.5 py-[1px] font-mono text-[11px] tracking-wider text-brand-crypto">
+                  VALUE-OUT
+                </span>
+              </div>
+              <p className="font-display text-5xl font-bold leading-none text-[var(--text-primary)] sm:text-7xl">
+                {formatUSDC(stats.transactedVolume)}
+              </p>
+              <p className="mt-4 font-mono text-xs font-semibold tracking-[0.12em] uppercase text-[var(--text-secondary)]">
+                USDC SENT BY SIPPY USERS · ALL-TIME
+              </p>
+            </div>
+            <div className="sm:border-l sm:border-[var(--border-default)] sm:pl-6">
+              <div className="flex items-center gap-3 mb-4">
+                <p className="spec-label">TOTAL MOVED</p>
+                <span className="rounded-sm border border-[var(--border-default)] px-1.5 py-[1px] font-mono text-[11px] tracking-wider text-[var(--text-secondary)]">
+                  GROSS
+                </span>
+              </div>
+              <p className="font-display text-5xl font-bold leading-none text-[var(--text-primary)] sm:text-7xl">
+                {formatUSDC(stats.totalMoved)}
+              </p>
+              <p className="mt-4 font-mono text-xs font-semibold tracking-[0.12em] uppercase text-[var(--text-secondary)]">
+                USDC MOVED THROUGH SIPPY · ALL-TIME
+              </p>
+            </div>
           </div>
-          <p className="font-display text-6xl font-bold leading-none text-[var(--text-primary)] sm:text-8xl">
-            {formatUSDC(stats.transactedVolume)}
-          </p>
-          <p className="mt-4 font-mono text-xs font-semibold tracking-[0.12em] uppercase text-[var(--text-secondary)]">
-            USDC SENT BY SIPPY USERS · ALL-TIME
-          </p>
         </div>
 
         {/* Lead grant-KPI proof row — Onchain Transactions + Monthly Active Wallets

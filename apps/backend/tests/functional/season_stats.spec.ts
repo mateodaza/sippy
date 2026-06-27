@@ -46,7 +46,10 @@ test.group('Season | GET /api/season/stats', (group) => {
     assert.property(body, 'onboarded')
     assert.isString(body.transactedVolume)
     assert.isString(body.onboarded)
-    // The old blended headline must be gone.
+    // Total moved (gross deposits+sends) is a SEPARATE, clearly-labeled figure shown beside the
+    // value-out hero — present and a string, but never resurrected under the old `totalVolume` key.
+    assert.property(body, 'totalMoved')
+    assert.isString(body.totalMoved)
     assert.notProperty(body, 'totalVolume')
 
     // Usage tiles, all numeric.
