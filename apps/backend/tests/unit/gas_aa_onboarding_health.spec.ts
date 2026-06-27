@@ -10,6 +10,7 @@ import {
   evaluateHealth,
   auditOnboard,
   runOnboardingHealthOnce,
+  shouldEscalateReadFailure,
   AUDIT_WINDOW_MS,
   type OnboardingHealthDeps,
   type NewlyDoneOnboard,
@@ -23,9 +24,20 @@ const SPENDER = SIPPY_SPENDER_ADDRESS
 const ACCOUNT = '0xf0aeAea578783e982749e6F3B439137F79Ae1833' // the prod canary account (checksummed)
 const OWNER_EOA = '0x1111111111111111111111111111111111111111'
 const ZERO_PM = '0x0000000000000000000000000000000000000000'
+// The orchestration group's injected "now". A read failure on an onboard this recent is transient
+// (warn), well inside the 48h window — distinct from the near-expiry escalation case.
+const NOW_ISO = '2026-06-30T09:00:00Z'
+const RECENT_MS = Date.parse(NOW_ISO) - 60 * 60 * 1000
 
 function cleanOnboard(over: Partial<NewlyDoneOnboard> = {}): NewlyDoneOnboard {
-  return { account: ACCOUNT, dailyLimit: 50, setupTxHash: '0xsetup', userEoa: OWNER_EOA, ...over }
+  return {
+    account: ACCOUNT,
+    dailyLimit: 50,
+    setupTxHash: '0xsetup',
+    userEoa: OWNER_EOA,
+    permissionCreatedAtMs: RECENT_MS,
+    ...over,
+  }
 }
 function cleanAudit(over: Partial<OnChainAudit> = {}): OnChainAudit {
   return {
@@ -180,7 +192,7 @@ test.group('onboarding health | Part B integrity', () => {
 
 // ── orchestration: the flag gate + error tolerance ─────────────────────────────
 test.group('onboarding health | orchestration', () => {
-  const NOW = new Date('2026-06-30T09:00:00Z')
+  const NOW = new Date(NOW_ISO)
   function deps(over: Partial<OnboardingHealthDeps> = {}): OnboardingHealthDeps {
     return {
       countOnboards7d: async () => ({ reg7d: 10, done7d: 10 }),
@@ -218,7 +230,9 @@ test.group('onboarding health | orchestration', () => {
     )
   })
 
-  test('a transient on-chain read error is swallowed (no throw, not paged)', async ({ assert }) => {
+  test('a transient on-chain read error is swallowed (counted as a read failure, not paged)', async ({
+    assert,
+  }) => {
     const r = await runOnboardingHealthOnce(
       NOW,
       deps({
@@ -227,8 +241,30 @@ test.group('onboarding health | orchestration', () => {
         },
       })
     )
-    assert.equal(r.audited, 1) // counted
-    assert.lengthOf(r.misses, 0) // skipped, not paged
+    assert.equal(r.audited, 0) // the read failed → NOT counted as audited
+    assert.equal(r.auditReadFailures, 1) // tracked instead
+    assert.lengthOf(r.misses, 0) // skipped, not paged as an integrity miss
+  })
+
+  test('an onboard unreadable on its LAST pass before aging out is escalated (counted)', async ({
+    assert,
+  }) => {
+    // ~30m before the 48h window edge → shouldEscalateReadFailure is true, so a persistent read
+    // failure here pages (logger.error) instead of vanishing. The escalate decision itself is
+    // unit-tested via shouldEscalateReadFailure; here we assert it's counted as a read failure.
+    const nearExpiryMs = NOW.getTime() - (AUDIT_WINDOW_MS - 30 * 60 * 1000)
+    const r = await runOnboardingHealthOnce(
+      NOW,
+      deps({
+        listNewlyDone: async () => [cleanOnboard({ permissionCreatedAtMs: nearExpiryMs })],
+        auditOnChain: async () => {
+          throw new Error('bad tx_hash')
+        },
+      })
+    )
+    assert.equal(r.audited, 0)
+    assert.equal(r.auditReadFailures, 1)
+    assert.isTrue(shouldEscalateReadFailure(NOW.getTime() - nearExpiryMs))
   })
 
   // #3: the audit window is floored at monitorStartMs so legacy-era onboards (pre-flip but
@@ -262,5 +298,18 @@ test.group('onboarding health | orchestration', () => {
       })
     )
     assert.equal(cutoff, NOW.getTime() - AUDIT_WINDOW_MS)
+  })
+})
+
+// ── pure: the read-failure escalation gate ─────────────────────────────────────
+test.group('onboarding health | read-failure escalation gate', () => {
+  test('a recent read failure is transient → no escalation', ({ assert }) => {
+    assert.isFalse(shouldEscalateReadFailure(0))
+    assert.isFalse(shouldEscalateReadFailure(60 * 60 * 1000)) // 1h old
+  })
+
+  test('a read failure within one cron interval of the window edge escalates', ({ assert }) => {
+    assert.isTrue(shouldEscalateReadFailure(AUDIT_WINDOW_MS - 60 * 60 * 1000)) // 1h before aging out
+    assert.isTrue(shouldEscalateReadFailure(AUDIT_WINDOW_MS)) // already at the edge
   })
 })

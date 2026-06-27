@@ -39,6 +39,17 @@ export const AUDIT_WINDOW_MS = 48 * 60 * 60 * 1000
 const ZERO_ADDR = '0x0000000000000000000000000000000000000000'
 const SUMMARY_DOW = 1 // Monday (UTC) — the weekly-summary day
 
+// Daily cron cadence (providers/scheduler_provider.ts runs this at 09:00 UTC). A per-onboard
+// audit READ that still fails on the last pass before the onboard ages out of AUDIT_WINDOW_MS is
+// persistent (a bad tx_hash / RPC-decode failure), not a transient blip — so it is PAGED rather
+// than left to warn-then-vanish. Grace = one cron interval + 1h jitter, i.e. escalate one pass
+// before the row leaves the window, so a permanently-unreadable onboard can never slip through.
+const CRON_INTERVAL_MS = 24 * 60 * 60 * 1000
+const READ_FAIL_ESCALATE_GRACE_MS = CRON_INTERVAL_MS + 60 * 60 * 1000
+export function shouldEscalateReadFailure(ageMs: number): boolean {
+  return ageMs >= AUDIT_WINDOW_MS - READ_FAIL_ESCALATE_GRACE_MS
+}
+
 const lc = (s: string | null | undefined) => (s ?? '').toLowerCase()
 const pct = (r: number | null) => (r === null ? 'n/a' : `${(r * 100).toFixed(1)}%`)
 
@@ -52,6 +63,7 @@ export interface NewlyDoneOnboard {
   dailyLimit: number | null // the registered limit = the expected on-chain allowance
   setupTxHash: string | null // gas_aa landed setup row meta.tx_hash (null ⇒ no sponsored op)
   userEoa: string | null // gas_aa setup row user_eoa (the owner the browser signed with)
+  permissionCreatedAtMs: number // pr.permission_created_at (epoch-ms) — age drives read-failure escalation
 }
 export interface GrantStruct {
   account: string
@@ -181,7 +193,8 @@ export interface OnboardingHealthResult {
   done7d: number
   rate: number | null
   stuck: number
-  audited: number
+  audited: number // onboards whose on-chain/DB read SUCCEEDED and were audited this pass
+  auditReadFailures: number // onboards skipped because a read threw (transient warn or, near expiry, paged)
   misses: IntegrityMiss[]
 }
 
@@ -212,12 +225,12 @@ export async function runOnboardingHealthOnce(
   // Part B — only for sponsored onboards (flag on); else every onboard is legacy by design.
   const allMisses: IntegrityMiss[] = []
   let audited = 0
+  let auditReadFailures = 0
   if (d.flagOn()) {
     // Audit window, floored at the monitor start so legacy-era onboards (completed before
     // the flag went live but still within 48h) aren't classified as sponsored failures.
     const cutoff = Math.max(now.getTime() - AUDIT_WINDOW_MS, d.monitorStartMs())
     const newly = await d.listNewlyDone(cutoff)
-    audited = newly.length
     for (const o of newly) {
       let chain: OnChainAudit | null = null
       let eoa: EoaState | null = null
@@ -227,12 +240,31 @@ export async function runOnboardingHealthOnce(
         refuel = await d.hasRefuelEvent(o.account)
         if (o.userEoa) eoa = await d.getEoaState(o.userEoa)
       } catch (e) {
-        // A transient RPC/DB read error shouldn't page — the next daily run retries.
-        logger.warn(
-          `gas_aa onboarding-health: audit read failed for ${o.account}: ${e instanceof Error ? e.message : e}`
-        )
+        // A read failed. A transient blip shouldn't page (the next daily pass retries) — but a
+        // PERSISTENT failure (bad tx_hash / undecodable receipt) would warn every pass, then the
+        // onboard ages out of the window unaudited. So on the last pass before expiry, escalate.
+        auditReadFailures++
+        const ageMs = now.getTime() - o.permissionCreatedAtMs
+        const msg = e instanceof Error ? e.message : String(e)
+        if (shouldEscalateReadFailure(ageMs)) {
+          logger.error(
+            {
+              alert: 'gas-aa-onboarding-audit-unreadable',
+              account: o.account,
+              setupTxHash: o.setupTxHash,
+              ageMs,
+              err: msg,
+            },
+            `onboard ${o.account} unreadable on its last pass before aging out of the ${AUDIT_WINDOW_MS / 3_600_000}h window — persistent read failure, investigate`
+          )
+        } else {
+          logger.warn(
+            `gas_aa onboarding-health: audit read failed for ${o.account} (transient, will retry next pass): ${msg}`
+          )
+        }
         continue
       }
+      audited++
       const misses = auditOnboard(o, chain, eoa, refuel)
       for (const m of misses) {
         logger.error(
@@ -250,6 +282,7 @@ export async function runOnboardingHealthOnce(
     rate: h.rate,
     stuck: h.stuck,
     audited,
+    auditReadFailures,
     misses: allMisses,
   }
 }
@@ -270,7 +303,7 @@ const APPROVED_EVENT = parseAbiItem(
   'event SpendPermissionApproved(bytes32 indexed hash, (address account,address spender,address token,uint160 allowance,uint48 period,uint48 start,uint48 end,uint256 salt,bytes extraData) spendPermission)'
 )
 
-async function realCountOnboards7d(): Promise<OnboardCounts> {
+export async function realCountOnboards7d(): Promise<OnboardCounts> {
   // created_at is epoch MILLISECONDS → to_timestamp(created_at/1000).
   const res = await query(
     `SELECT
@@ -282,33 +315,44 @@ async function realCountOnboards7d(): Promise<OnboardCounts> {
   return { reg7d: Number(res.rows[0].reg_7d), done7d: Number(res.rows[0].done_7d) }
 }
 
-async function realListNewlyDone(cutoffMs: number): Promise<NewlyDoneOnboard[]> {
+// How close a landed setup row's updated_at must sit to the onboard's permission_created_at to
+// count as THIS onboard's setup. The setup op lands seconds-to-minutes before the hash is
+// recorded; ±2h absorbs webhook/retry delay while still excluding a stale prior-onboard setup row
+// (which is hours-to-days older), so that row can't mask a later legacy fallback.
+const SETUP_MATCH_TOLERANCE_MS = 2 * 60 * 60 * 1000
+
+export async function realListNewlyDone(cutoffMs: number): Promise<NewlyDoneOnboard[]> {
   // Onboards whose permission was recorded at/after the cutoff. The setup op is joined via a
-  // LATERAL that takes the MOST-RECENT landed setup row for the wallet AND only one landed
-  // within the window — so a stale older sponsored row can't mask a later legacy fallback,
-  // and multiple landed rows can't fan the onboard into duplicates. lower() both sides on
-  // the address join (registry checksummed, sender lowercased).
+  // LATERAL that takes the MOST-RECENT landed setup row for the wallet, matched to THIS onboard's
+  // permission_created_at (± tolerance) rather than the rolling audit cutoff. Anchoring to the
+  // moving cutoff false-alarmed missing_setup_row for an onboard straddling the window edge (setup
+  // lands just before the hash records, so a setup just outside the cutoff was dropped). The ±
+  // tolerance still excludes a stale prior-onboard setup row (far older than this permission
+  // record), so it can't mask a legacy fallback. lower() both sides on the address join (registry
+  // checksummed, sender lowercased).
   const res = await query(
-    `SELECT pr.wallet_address, pr.daily_limit, op.user_eoa, op.tx_hash
+    `SELECT pr.wallet_address, pr.daily_limit, pr.permission_created_at, op.user_eoa, op.tx_hash
        FROM phone_registry pr
        LEFT JOIN LATERAL (
          SELECT o.user_eoa, o.meta->>'tx_hash' AS tx_hash
            FROM gas_aa_prepared_user_ops o
           WHERE o.lane = 'setup' AND o.status = 'landed'
             AND LOWER(o.sender) = LOWER(pr.wallet_address)
-            AND o.updated_at > to_timestamp($1::bigint / 1000.0)
+            AND o.updated_at >  to_timestamp((pr.permission_created_at - $2::bigint) / 1000.0)
+            AND o.updated_at <= to_timestamp((pr.permission_created_at + $2::bigint) / 1000.0)
           ORDER BY o.updated_at DESC
           LIMIT 1
        ) op ON true
       WHERE pr.spend_permission_hash IS NOT NULL
         AND pr.permission_created_at > $1`,
-    [cutoffMs]
+    [cutoffMs, SETUP_MATCH_TOLERANCE_MS]
   )
   return res.rows.map((r: any) => ({
     account: r.wallet_address,
     dailyLimit: r.daily_limit !== null ? Number(r.daily_limit) : null,
     setupTxHash: r.tx_hash ?? null,
     userEoa: r.user_eoa ?? null,
+    permissionCreatedAtMs: Number(r.permission_created_at),
   }))
 }
 
@@ -392,7 +436,7 @@ async function realGetEoaState(eoa: string): Promise<EoaState> {
   return { balanceWei, nonce }
 }
 
-async function realHasRefuelEvent(account: string): Promise<boolean> {
+export async function realHasRefuelEvent(account: string): Promise<boolean> {
   // refuel_event."user" is the lowercased Refueled-event address = the smart account.
   const res = await query(
     `SELECT 1 FROM onchain.refuel_event WHERE LOWER("user") = LOWER($1) LIMIT 1`,
