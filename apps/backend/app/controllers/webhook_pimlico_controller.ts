@@ -2,9 +2,13 @@
  * Pimlico Sponsorship Webhook Controller (Gas → AA).
  *
  * Internet-reachable and it authorizes paymaster spend, so it is authenticated
- * FIRST — every request is verified with `@pimlico/webhook` over the RAW body
- * (PIMLICO_WEBHOOK_SECRET) before ANY DB work. Unsigned / tampered / wrong-secret
- * requests are rejected up front.
+ * FIRST — every request is verified with `@pimlico/webhook` over the RAW body before
+ * ANY DB work. Verification is PER-POLICY: Pimlico signs each sponsorship policy's
+ * webhook with that policy's OWN secret, so the verifier selects the secret from the
+ * payload's `sponsorshipPolicyId` (free-send id → PIMLICO_WEBHOOK_SECRET, setup id →
+ * PIMLICO_SETUP_WEBHOOK_SECRET) and checks ONLY that one — never blind-try-both, which
+ * would let a leaked free-send secret authenticate setup payloads (and vice-versa).
+ * Unsigned / tampered / wrong-secret / unknown-policy requests are rejected up front.
  *
  * LANE DISPATCH (B1.1c). Two lanes share one webhook:
  *   • free_send — spender pays a user's USDC transfer (slice 1).
@@ -74,11 +78,55 @@ function setupPolicyId(): string {
   return env.get('PIMLICO_SETUP_SPONSORSHIP_POLICY_ID', '')
 }
 
+// The per-policy webhook secrets are injectable for the same reason as the policy ids —
+// the per-policy isolation tests drive the REAL verify() without the gitignored .env.test.
+// undefined = use env.
+let freeSendSecretOverride: string | undefined
+let setupSecretOverride: string | undefined
+export function __setWebhookSecretsForTest(
+  v: { freeSend?: string | null; setup?: string | null } | null
+): void {
+  if (v === null) {
+    freeSendSecretOverride = undefined
+    setupSecretOverride = undefined
+    return
+  }
+  if ('freeSend' in v) freeSendSecretOverride = v.freeSend === null ? undefined : v.freeSend
+  if ('setup' in v) setupSecretOverride = v.setup === null ? undefined : v.setup
+}
+function freeSendSecret(): string {
+  return freeSendSecretOverride !== undefined
+    ? freeSendSecretOverride
+    : env.get('PIMLICO_WEBHOOK_SECRET', '')
+}
+function setupSecret(): string {
+  return setupSecretOverride !== undefined
+    ? setupSecretOverride
+    : env.get('PIMLICO_SETUP_WEBHOOK_SECRET', '')
+}
+
+/** Map the payload's sponsorship policy id to its OWN webhook secret. null ⇒ reject. */
+function secretForPolicy(policyId: string): string | null {
+  if (!policyId) return null
+  if (policyId === freeSendPolicyId()) return freeSendSecret() || null
+  if (policyId === setupPolicyId()) return setupSecret() || null
+  return null // unknown / unconfigured policy id
+}
+
 function verify(headers: any, payload: string): any {
   if (verifierOverride) return verifierOverride(headers, payload)
-  const secret = env.get('PIMLICO_WEBHOOK_SECRET', '')
-  if (!secret) throw new Error('PIMLICO_WEBHOOK_SECRET not set')
-  return pimlicoWebhookVerifier(secret)(headers, payload)
+  // Parse the raw body ONLY to choose which per-policy secret to check. The
+  // pimlicoWebhookVerifier call below is the actual authentication gate — an attacker can
+  // claim any policy id but can't forge a signature for a secret they don't hold.
+  let policyId = ''
+  try {
+    policyId = String(extractObject(JSON.parse(payload))?.sponsorshipPolicyId ?? '')
+  } catch {
+    throw new Error('malformed webhook body')
+  }
+  const secret = secretForPolicy(policyId)
+  if (!secret) throw new Error('unknown or unconfigured sponsorship policy id')
+  return pimlicoWebhookVerifier(secret)(headers, payload) // wrong secret for this policy ⇒ throws ⇒ 401
 }
 
 /** Pimlico nests the payload under `data.object`; tolerate flatter shapes too. */

@@ -28,6 +28,7 @@ import {
   __setWebhookVerifierForTest,
   __setConfiguredPolicyForTest,
   __setSetupPolicyForTest,
+  __setWebhookSecretsForTest,
 } from '#controllers/webhook_pimlico_controller'
 import { ENTRY_POINT_V06, SPEND_PERMISSION_MANAGER } from '#services/gas_aa/config'
 import {
@@ -57,6 +58,9 @@ const SECRET =
   'pim_whsec_' + B58.encode(Buffer.from(Array.from({ length: 24 }, (_, i) => (i * 31 + 7) & 0xff)))
 const WRONG_SECRET =
   'pim_whsec_' + B58.encode(Buffer.from(Array.from({ length: 24 }, (_, i) => (i * 17 + 3) & 0xff)))
+// The setup lane's OWN per-policy secret — distinct from the free-send SECRET.
+const SETUP_SECRET =
+  'pim_whsec_' + B58.encode(Buffer.from(Array.from({ length: 24 }, (_, i) => (i * 13 + 5) & 0xff)))
 const realVerify = pimlicoWebhookVerifier(SECRET)
 
 function secretHex(secret: string): string {
@@ -648,5 +652,77 @@ test.group('gas_aa webhook | setup lane', (group) => {
     const res = await post(client, setupEvent('finalized', { nonce: '0x99' }))
     assert.equal(res.status(), 200)
     assert.equal(res.body().reconciled, false)
+  })
+})
+
+// ── per-policy webhook-secret isolation (B3 §2) ──────────────────────────────
+// Pimlico signs each policy's webhook with that policy's OWN secret. The REAL verify()
+// selects the secret by the payload's sponsorshipPolicyId and checks ONLY that one — so a
+// leaked free-send secret can't authenticate a setup payload (and vice-versa). This group
+// runs the real verifier (no verifierOverride) with both policy ids + both secrets bound.
+test.group('gas_aa webhook | per-policy secret isolation', (group) => {
+  group.each.setup(async (t) => {
+    if (!(await isDbAvailable()) || !(await ensureSchema())) {
+      t.skip(true, 'No local DB / gas_aa/phone_registry not migrated')
+      return
+    }
+    __setWebhookVerifierForTest(null) // exercise the REAL policy-bound verify()
+    __setConfiguredPolicyForTest('sp_test') // free-send policy id
+    __setSetupPolicyForTest('sp_setup') // setup policy id
+    __setWebhookSecretsForTest({ freeSend: SECRET, setup: SETUP_SECRET })
+    await clean()
+    await cleanSetup()
+  })
+  group.each.teardown(async () => {
+    __setConfiguredPolicyForTest(null)
+    __setSetupPolicyForTest(null)
+    __setWebhookSecretsForTest(null)
+    if (await isDbAvailable()) {
+      await clean()
+      await cleanSetup()
+    }
+  })
+
+  // 200 here = auth PASSED and the request reached lane dispatch; 401 = verify() rejected it.
+  test('free-send policy id + free-send secret → accepted (reaches dispatch)', async ({
+    client,
+    assert,
+  }) => {
+    const res = await post(client, requestedEvent({ policyId: 'sp_test' }), SECRET)
+    assert.equal(res.status(), 200)
+  })
+
+  test('setup policy id + setup secret → accepted (reaches dispatch)', async ({
+    client,
+    assert,
+  }) => {
+    const res = await post(client, setupEvent('requested', { policyId: 'sp_setup' }), SETUP_SECRET)
+    assert.equal(res.status(), 200)
+  })
+
+  test('setup policy id signed with the FREE-SEND secret → 401 (wrong secret for the policy)', async ({
+    client,
+    assert,
+  }) => {
+    const res = await post(client, setupEvent('requested', { policyId: 'sp_setup' }), SECRET)
+    assert.equal(res.status(), 401)
+  })
+
+  test('free-send policy id signed with the SETUP secret → 401 (wrong secret for the policy)', async ({
+    client,
+    assert,
+  }) => {
+    const res = await post(client, requestedEvent({ policyId: 'sp_test' }), SETUP_SECRET)
+    assert.equal(res.status(), 401)
+  })
+
+  test('unknown sponsorshipPolicyId → 401 (no secret to select)', async ({ client, assert }) => {
+    const res = await post(client, requestedEvent({ policyId: 'sp_unknown' }), SECRET)
+    assert.equal(res.status(), 401)
+  })
+
+  test('missing sponsorshipPolicyId → 401 (finalized)', async ({ client, assert }) => {
+    const res = await post(client, finalizedEvent({ policyId: null }), SECRET)
+    assert.equal(res.status(), 401)
   })
 })

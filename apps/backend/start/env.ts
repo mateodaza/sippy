@@ -251,4 +251,9 @@ export default await Env.create(new URL('../', import.meta.url), {
   // limit ≥ ~478k for the cold op), so a setup op is never sponsored under the
   // free-send budget and vice-versa.
   PIMLICO_SETUP_SPONSORSHIP_POLICY_ID: Env.schema.string.optional(),
+  // The setup lane's OWN Pimlico webhook secret. Pimlico signs each policy's webhook
+  // with a distinct per-policy secret, so the verifier selects it by sponsorshipPolicyId
+  // (alongside PIMLICO_WEBHOOK_SECRET for free-send). Unset → setup webhooks can't be
+  // verified, so the setup lane stays dark.
+  PIMLICO_SETUP_WEBHOOK_SECRET: Env.schema.string.optional(),
 })
