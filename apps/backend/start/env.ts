@@ -256,4 +256,8 @@ export default await Env.create(new URL('../', import.meta.url), {
   // (alongside PIMLICO_WEBHOOK_SECRET for free-send). Unset → setup webhooks can't be
   // verified, so the setup lane stays dark.
   PIMLICO_SETUP_WEBHOOK_SECRET: Env.schema.string.optional(),
+  // Epoch-ms sponsored onboarding went live — set when GAS_AA_ONBOARD_ENABLED is flipped on.
+  // The onboarding-health integrity audit floors its window here so legacy-era onboards
+  // (completed before the flip but still within 48h) aren't classified as sponsored failures.
+  GAS_AA_ONBOARD_MONITOR_START_MS: Env.schema.string.optional(),
 })

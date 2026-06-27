@@ -14,6 +14,7 @@ export default class SchedulerProvider {
     const { disperseCopToUsdt } = await import('#jobs/disperse_cop_to_usdt')
     const { pollDispersionMovements } = await import('#jobs/poll_dispersion_movements')
     const { reconcileGasAaOnce } = await import('#services/gas_aa/reconcile')
+    const { runOnboardingHealthOnce } = await import('#services/gas_aa/onboarding_health')
 
     // Offramp: poll every 60s — FX takes 1–3 business days
     cron.schedule('* * * * *', async () => {
@@ -66,8 +67,19 @@ export default class SchedulerProvider {
       logger.error({ err }, 'scheduler: gas_aa reconcile (boot) error')
     )
 
+    // Gas → AA onboarding-health monitor: daily 7-day success rate (always) + per-onboard
+    // integrity audit (only when GAS_AA_ONBOARD_ENABLED). Read-only; alerts via structured
+    // logs. Daily at 09:00 UTC — no boot-run (health is a trend, not a recovery).
+    cron.schedule('0 9 * * *', async () => {
+      try {
+        await runOnboardingHealthOnce()
+      } catch (err) {
+        logger.error({ err }, 'scheduler: onboarding-health uncaught error')
+      }
+    })
+
     logger.info(
-      'scheduler: started (offramp 60s, onramp R2P 30s, dispersion 30s, settling 30s, gas_aa reconcile 60s)'
+      'scheduler: started (offramp 60s, onramp R2P 30s, dispersion 30s, settling 30s, gas_aa reconcile 60s, onboarding-health daily 09:00 UTC)'
     )
   }
 }
