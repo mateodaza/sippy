@@ -19,6 +19,7 @@ const ResolveController = () => import('#controllers/resolve_controller')
 const NotifyController = () => import('#controllers/notify_controller')
 const DebugController = () => import('#controllers/debug_controller')
 const EmbeddedWalletController = () => import('#controllers/embedded_wallet_controller')
+const SetupOpController = () => import('#controllers/setup_op_controller')
 const AuthApiController = () => import('#controllers/auth_api_controller')
 const SupportController = () => import('#controllers/support_controller')
 const WebhookAlchemyController = () => import('#controllers/webhook_alchemy_controller')
@@ -133,6 +134,9 @@ router
     router.post('/register-permission', [EmbeddedWalletController, 'registerPermission'])
     router.post('/revoke-permission', [EmbeddedWalletController, 'revokePermission'])
     router.post('/ensure-gas', [EmbeddedWalletController, 'ensureGas'])
+    // Gas → AA Track B (B1.1d): sponsored onboarding, flag-gated (404 when off).
+    router.post('/setup-op/prepare', [SetupOpController, 'prepare'])
+    router.post('/setup-op/submit', [SetupOpController, 'submit'])
     router.get('/wallet-status', [EmbeddedWalletController, 'walletStatus'])
 
     // Season 1 — the signed-in user's own reputation standing (Phase D). Wallet

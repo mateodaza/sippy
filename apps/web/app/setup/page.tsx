@@ -6,9 +6,12 @@ import {
   useAuthenticateWithJWT,
   useCreateSpendPermission,
   useCurrentUser,
+  useIsInitialized,
   useIsSignedIn,
   useSignOut,
   useGetAccessToken,
+  useSignEvmHash,
+  useEvmAccounts,
 } from '@coinbase/cdp-hooks'
 import {
   sendOtp,
@@ -19,6 +22,7 @@ import {
   getStoredToken,
   clearToken,
   getFreshToken,
+  isTokenExpired,
   type OtpChannel,
 } from '../../lib/auth'
 import {
@@ -32,6 +36,7 @@ import {
   t,
 } from '../../lib/i18n'
 import { parseUnits } from 'viem'
+import { attemptSponsoredOnboarding } from '../../lib/sponsoredOnboarding'
 import { SippyPhoneInput } from '../../components/ui/phone-input'
 import { isBlockedPrefix, isNANP } from '@sippy/shared'
 import { getDefaultChannel, canSwitchChannel } from '../../lib/auth-mode'
@@ -100,6 +105,15 @@ const USDC_ADDRESSES: Record<string, string> = {
   base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
 }
 const USDC_ADDRESS = USDC_ADDRESSES[NETWORK] || USDC_ADDRESSES.arbitrum
+
+// Session recovery (A2): CDP's auth subsystem can still be initializing when
+// /setup mounts under CDPProviderCustomAuth (isSignedIn=false / "SDK not
+// initialized"). That's transient, so retry the JWT restore a few times before
+// clearing a valid token — otherwise an unlucky init race bounces a returning
+// user back to the phone step mid-onboarding (F7). Mirrors useSessionGuard's
+// bounded retry-before-clear.
+const MAX_CDP_AUTH_ATTEMPTS = 4
+const CDP_AUTH_RETRY_DELAY_MS = 800
 
 type Step =
   | 'phone'
@@ -239,7 +253,6 @@ function SetupContent({
   const [isPreparingWallet, setIsPreparingWallet] = useState(false) // Waiting for gas
   const [gasReady, setGasReady] = useState(false)
   const [hasCheckedSession, setHasCheckedSession] = useState(false) // Only check once on mount
-  const [cdpInitAttempts, setCdpInitAttempts] = useState(0) // Track CDP initialization attempts to prevent infinite wait
   const [email, setEmail] = useState('')
   const [emailCode, setEmailCode] = useState('')
   const [emailSent, setEmailSent] = useState(false)
@@ -267,10 +280,28 @@ function SetupContent({
   const { authenticateWithJWT } = useAuthenticateWithJWT()
   const { createSpendPermission, status: permissionStatus } = useCreateSpendPermission()
   const { currentUser } = useCurrentUser()
+  const { isInitialized } = useIsInitialized()
   const { isSignedIn } = useIsSignedIn()
   const { signOut } = useSignOut()
 
   const { getAccessToken } = useGetAccessToken()
+  // Gas → AA Track B: the owner EOA the browser signs the sponsored op with, and the
+  // CDP sign primitive. `useEvmAccounts` returns the owner EOA(s) (vs the smart account).
+  const { signEvmHash } = useSignEvmHash()
+  const { evmAccounts } = useEvmAccounts()
+  const ownerEoa: string | null = (() => {
+    const a: unknown = evmAccounts?.[0]
+    if (typeof a === 'string') return a
+    if (a && typeof a === 'object' && 'address' in a)
+      return String((a as { address: unknown }).address)
+    return null
+  })()
+
+  // A2 session-recovery retry: count CDP-auth attempts + schedule retries via a
+  // tick so a transient init race can't clear a valid token (see useSessionGuard).
+  const cdpAuthAttemptsRef = useRef(0)
+  const cdpAuthRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [cdpAuthRetryTick, setCdpAuthRetryTick] = useState(0)
 
   // OTP channel: +1 → whatsapp only, others → sms with whatsapp fallback
   const [otpChannel, setOtpChannel] = useState<OtpChannel>('sms')
@@ -490,44 +521,18 @@ function SetupContent({
       })
   }, [step, eventSlug])
 
-  // Recovery: Check for existing session on mount (only once)
+  // Recovery: check for an existing session on mount (only once). A2 — never clear
+  // a valid token on a CDP-init lag: gate on isInitialized, then retry the JWT
+  // restore a few times before clearing (mirrors useSessionGuard).
   useEffect(() => {
-    // Only run this check once on mount
     if (hasCheckedSession) return
-
-    // Wait for CDP to initialize
-    if (isSignedIn === undefined) return
-
-    // Under CDPProviderCustomAuth, CDP uses getJwt() (our stored JWT) to
-    // bootstrap. On the first render cycle isSignedIn may still be false
-    // while CDP is authenticating. Don't clear the token or give up yet —
-    // schedule a retry after 1s so CDP has time to complete.
-    // Give up after 3 retries (~3s) to avoid hanging forever.
-    if (!isSignedIn && getStoredToken() && cdpInitAttempts < 3) {
-      const timer = setTimeout(() => setCdpInitAttempts((prev) => prev + 1), 1000)
-      return () => clearTimeout(timer)
-    }
-
-    // If CDP init retries were exhausted, log it for diagnosability
-    if (!isSignedIn && cdpInitAttempts >= 3) {
-      console.warn('CDP initialization failed after 3 attempts — clearing stale session')
-    }
-
-    // Mark that we've checked
-    setHasCheckedSession(true)
+    let cancelled = false
 
     const checkExistingSession = async () => {
-      // If not signed in after CDP init retries, wipe any stale JWT and show the phone step
-      if (!isSignedIn || !currentUser) {
-        clearToken()
-        setIsCheckingSession(false)
-        return
-      }
-
       try {
-        // Get wallet address from current user
+        // Get wallet address from current user (guaranteed present by recover()'s guards)
         const smartAccountAddress =
-          currentUser.evmSmartAccounts?.[0] || currentUser.evmAccounts?.[0]
+          currentUser!.evmSmartAccounts?.[0] || currentUser!.evmAccounts?.[0]
         if (!smartAccountAddress) {
           clearToken()
           await signOut()
@@ -678,8 +683,73 @@ function SetupContent({
       }
     }
 
-    checkExistingSession()
-  }, [isSignedIn, currentUser, hasCheckedSession, cdpInitAttempts]) // eslint-disable-line react-hooks/exhaustive-deps
+    const recover = async () => {
+      // Wait for the SDK to finish initializing. An uninitialized SDK reports
+      // isSignedIn=false even for a user holding a valid token — acting on that
+      // would clear a good session (F7). This isn't a failed attempt; just wait.
+      if (!isInitialized) return
+      if (isSignedIn === undefined) return
+      // Signed in but the user object hasn't hydrated yet — wait for it.
+      if (isSignedIn && !currentUser) return
+
+      // Not signed in: we may hold a valid JWT that CDP hasn't restored yet (init
+      // race under CDPProviderCustomAuth). Mirror useSessionGuard — actively retry
+      // authenticateWithJWT a few times before clearing, so the race can't nuke a
+      // valid token. Expiry is filtered here; a dead token isn't worth retrying.
+      if (!isSignedIn) {
+        const storedJwt = getStoredToken()
+        if (storedJwt && !isTokenExpired(storedJwt)) {
+          try {
+            await authenticateWithJWT()
+            cdpAuthAttemptsRef.current = 0
+            return // success → isSignedIn flips → effect re-runs into the resume path
+          } catch (err) {
+            if (cancelled) return
+            cdpAuthAttemptsRef.current += 1
+            if (cdpAuthAttemptsRef.current < MAX_CDP_AUTH_ATTEMPTS) {
+              cdpAuthRetryTimerRef.current = setTimeout(
+                () => setCdpAuthRetryTick((n) => n + 1),
+                CDP_AUTH_RETRY_DELAY_MS
+              )
+              return
+            }
+            console.warn(
+              'Setup session recovery: JWT auth failed after retries — clearing token',
+              err
+            )
+            clearToken()
+          }
+        } else if (storedJwt) {
+          // An expired token is dead, not an init race — clear it (don't retry).
+          clearToken()
+        }
+        // No token, expired, or attempts exhausted → start fresh at the phone step.
+        setHasCheckedSession(true)
+        setIsCheckingSession(false)
+        return
+      }
+
+      // Signed in with a hydrated user → resume from the correct step.
+      setHasCheckedSession(true)
+      await checkExistingSession()
+    }
+
+    recover()
+    return () => {
+      cancelled = true
+      if (cdpAuthRetryTimerRef.current) {
+        clearTimeout(cdpAuthRetryTimerRef.current)
+        cdpAuthRetryTimerRef.current = null
+      }
+    }
+  }, [
+    isInitialized,
+    isSignedIn,
+    currentUser,
+    hasCheckedSession,
+    cdpAuthRetryTick,
+    authenticateWithJWT,
+  ]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ensure wallet has gas before allowing permission creation
   const ensureGasReady = async (): Promise<boolean> => {
@@ -1109,6 +1179,25 @@ function SetupContent({
   }
 
   // Step 4: Create Spend Permission
+  // Register a permission with the backend. `justCreated` tells the backend to
+  // ride out listSpendPermissions indexing lag for a permission we just granted
+  // on-chain; omit it for a quick adopt-existing check (single read, no wait).
+  const registerPermissionWithBackend = (
+    accessToken: string,
+    opts: { dailyLimit: string | null; justCreated?: boolean }
+  ): Promise<Response> =>
+    fetch(`${BACKEND_URL}/api/register-permission`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        dailyLimit: opts.dailyLimit,
+        ...(opts.justCreated ? { justCreated: true } : {}),
+      }),
+    })
+
   const handleApprovePermission = async () => {
     setIsLoading(true)
     setError(null)
@@ -1139,7 +1228,90 @@ function SetupContent({
         throw new Error('Sippy spender address not configured.')
       }
 
-      // First ensure wallet has gas (this will wait for refuel if needed)
+      // A3 idempotency rail: before granting, adopt an existing valid permission if
+      // one already landed on-chain. A grant that succeeded but failed to register
+      // (network blip mid-flow, or a resumed/retried permission step) must be
+      // adopted, never re-granted — re-granting creates a duplicate approve op.
+      // Only fall through to createSpendPermission when no existing permission is
+      // found. (This replaces the permissionFired one-shot as the retry-safety.)
+      if (BACKEND_URL) {
+        const accessToken = getFreshToken()
+        if (!accessToken) {
+          setIsSessionExpired(true)
+          throw new Error(
+            lang === 'es'
+              ? 'Sesión expirada. Recarga la página e intenta de nuevo.'
+              : lang === 'pt'
+                ? 'Sessão expirada. Recarregue a página e tente novamente.'
+                : 'Session expired. Please refresh the page and try again.'
+          )
+        }
+        const adoptRes = await registerPermissionWithBackend(accessToken, {
+          dailyLimit: tierLimit,
+        })
+        if (adoptRes.ok) {
+          // Existing on-chain permission adopted — skip the grant entirely.
+          setStep('done')
+          return
+        }
+      }
+
+      // Gas → AA Track B: try the SPONSORED cold deploy+approve op before legacy. The
+      // backend 404s /api/setup-op/* when GAS_AA_ONBOARD_ENABLED is off, so a 404 (or any
+      // pre-broadcast fallback / sign-reject / network error) returns 'legacy' and falls
+      // through to the UNCHANGED legacy path below — flag-off costs only a token-fetch +
+      // a 404 probe before it. Once the op LANDS we never legacy (would double-grant); a
+      // landed-but-unrecorded op recovers via adopt-first on the next attempt.
+      if (BACKEND_URL && ownerEoa) {
+        const accessToken = getFreshToken()
+        if (accessToken) {
+          const auth = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          }
+          const sponsored = await attemptSponsoredOnboarding({
+            ownerEoa,
+            getCdpToken: () => getCdpTokenWithRetry(getAccessToken),
+            prepare: (cdpAccessToken) =>
+              fetch(`${BACKEND_URL}/api/setup-op/prepare`, {
+                method: 'POST',
+                headers: auth,
+                body: JSON.stringify({ cdpAccessToken }),
+              }),
+            signHash: async ({ evmAccount, hash }) => {
+              const { signature } = await signEvmHash({
+                evmAccount: evmAccount as `0x${string}`,
+                hash: hash as `0x${string}`,
+              })
+              return signature
+            },
+            submit: ({ opId, signature }) =>
+              fetch(`${BACKEND_URL}/api/setup-op/submit`, {
+                method: 'POST',
+                headers: auth,
+                body: JSON.stringify({ opId, signature }),
+              }),
+            recordPermission: () =>
+              registerPermissionWithBackend(accessToken, {
+                dailyLimit: tierLimit,
+                justCreated: true,
+              }),
+          })
+          if (sponsored.kind === 'done') {
+            setStep('done')
+            return
+          }
+          if (sponsored.kind === 'error') {
+            // Landed but the hash didn't record — a retry records it via adopt-first.
+            setError(t('setup.errRegisterPermission', lang))
+            setIsLoading(false)
+            return
+          }
+          // sponsored.kind === 'legacy' → fall through to legacy onboarding below.
+        }
+      }
+
+      // No existing permission → ensure wallet has gas (waits for refuel if needed).
       const hasGas = await ensureGasReady()
       if (!hasGas) {
         // ensureGasReady already set the specific error in state — just bail
@@ -1160,8 +1332,9 @@ function SetupContent({
       // The userOpHash is NOT the permissionHash - we need to let the backend
       // fetch the actual permissionHash from CDP after the permission is created onchain
 
-      // Register permission with backend - this MUST succeed for transfers to work
-      // Backend will verify and fetch the actual permissionHash from CDP
+      // Register the just-created permission. justCreated=true → the backend rides
+      // out listSpendPermissions indexing lag (F3/F4) targeting this specific tier.
+      // This MUST succeed for transfers to work.
       if (BACKEND_URL) {
         const accessToken = getFreshToken()
         if (!accessToken) {
@@ -1175,15 +1348,9 @@ function SetupContent({
           )
         }
 
-        const response = await fetch(`${BACKEND_URL}/api/register-permission`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            dailyLimit: tierLimit,
-          }),
+        const response = await registerPermissionWithBackend(accessToken, {
+          dailyLimit: tierLimit,
+          justCreated: true,
         })
 
         if (!response.ok) {

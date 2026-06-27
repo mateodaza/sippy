@@ -18,6 +18,10 @@ import { CdpClient } from '@coinbase/cdp-sdk'
 import { ethers } from 'ethers'
 import { query, logExportEvent, logWebSend } from '#services/db'
 import {
+  findPermissionForRegistration,
+  type RawSpendPermission,
+} from '#services/spend_permission_lookup'
+import {
   getSippySpenderAccount,
   sendToAddress,
   sendToPhoneNumber,
@@ -28,6 +32,7 @@ import {
   getSecurityLimitStatus,
 } from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
+import { isGasAaOnboardEnabled } from '#services/gas_aa/flag'
 import { registerWalletWithAlchemy } from '#services/alchemy.service'
 import { drainPendingReferral } from '#services/quest/referral.service'
 import { exportEventSchema, webSendEventSchema, sendFromWebBodySchema } from '#types/schemas'
@@ -45,6 +50,13 @@ import { getUserLanguage } from '#services/db'
 
 // Concurrency guard: prevent duplicate web sends from the same user
 const webActiveSends = new Set<string>()
+
+// register-permission indexing backoff (A3). A just-created grant can take a few
+// seconds to appear in listSpendPermissions; ride it out with bounded, increasing
+// delays (1s, 2s, 3s, 4s → ~10s worst case) before giving up. Adopt-existing checks
+// (justCreated=false) do a single read and never wait.
+const PERMISSION_INDEX_ATTEMPTS = 5
+const PERMISSION_INDEX_BASE_DELAY_MS = 1000
 
 // CDP client for spend permission queries — lazy to avoid crashing on import
 // when CDP credentials are not configured (e.g., in test environments)
@@ -139,18 +151,26 @@ export default class EmbeddedWalletController {
         )
       }
 
-      // Auto-refuel new wallet with gas if needed
-      const refuelService = getRefuelService()
-      if (refuelService.isAvailable()) {
-        logger.info('Checking if wallet needs refuel...')
-        const refuelResult = await refuelService.checkAndRefuel(walletAddress)
-        if (refuelResult.success) {
-          logger.info(`Wallet refueled: ${refuelResult.txHash}`)
-        } else {
-          logger.warn(`Refuel failed or skipped: ${refuelResult.error}`)
-        }
+      // Auto-refuel new wallet with gas if needed. Skipped under sponsored onboarding
+      // (Track B): the cold deploy+approve op is Pimlico-sponsored, so the onboarding
+      // drip is redundant. A fallback-to-legacy onboarding still gets gas via
+      // /api/ensure-gas (the legacy branch), so no user is stranded. Behavior is
+      // unchanged when GAS_AA_ONBOARD_ENABLED is off.
+      if (isGasAaOnboardEnabled()) {
+        logger.info('gas_aa onboard: skipping register-wallet auto-refuel (sponsored onboarding)')
       } else {
-        logger.warn('Refuel service not available - user will need ETH for gas')
+        const refuelService = getRefuelService()
+        if (refuelService.isAvailable()) {
+          logger.info('Checking if wallet needs refuel...')
+          const refuelResult = await refuelService.checkAndRefuel(walletAddress)
+          if (refuelResult.success) {
+            logger.info(`Wallet refueled: ${refuelResult.txHash}`)
+          } else {
+            logger.warn(`Refuel failed or skipped: ${refuelResult.error}`)
+          }
+        } else {
+          logger.warn('Refuel service not available - user will need ETH for gas')
+        }
       }
 
       // Register with Alchemy webhook (fire-and-forget — never blocks signup)
@@ -185,7 +205,10 @@ export default class EmbeddedWalletController {
   async registerPermission({ request, response, cdpUser }: HttpContext) {
     try {
       const { phoneNumber, walletAddress } = cdpUser!
-      const { dailyLimit } = request.body()
+      // `justCreated` = the caller just granted on-chain and wants us to ride out
+      // listSpendPermissions indexing lag. Adopt-existing/recovery checks omit it
+      // (single read, no backoff) so a fresh user isn't made to wait.
+      const { dailyLimit, justCreated } = request.body()
 
       // Enforce ToS server-side: a spend permission must never be registered
       // before the user accepts the Terms of Service. UI routing alone is
@@ -208,109 +231,60 @@ export default class EmbeddedWalletController {
       const spenderAccount = await getSippySpenderAccount()
       const spenderAddress = spenderAccount.address
 
-      // Find the permission onchain by matching criteria
-      const allPermissions = await getCdpClient().evm.listSpendPermissions({
-        address: walletAddress as `0x${string}`,
+      // Resolve the permission to register. When the caller just granted on-chain
+      // (justCreated), ride out listSpendPermissions indexing lag with a bounded
+      // backoff that targets the SPECIFIC requested allowance — never the most-
+      // recent fallback, which could register a different/wrong permission.
+      // Adopt-existing/recovery checks (justCreated falsy) do a single read; a
+      // null dailyLimit takes the most-recent match (nothing specific to wait for).
+      const usdcAddress = USDC_ADDRESSES[NETWORK]
+      const requestedAllowance = dailyLimit ? Number.parseFloat(dailyLimit) : null
+      const lookupAttempts = justCreated ? PERMISSION_INDEX_ATTEMPTS : 1
+
+      const matchingPermission = await findPermissionForRegistration({
+        listFn: async () => {
+          const res = await getCdpClient().evm.listSpendPermissions({
+            address: walletAddress as `0x${string}`,
+          })
+          return (res.spendPermissions ?? []) as unknown as RawSpendPermission[]
+        },
+        spender: spenderAddress,
+        token: usdcAddress,
+        network: NETWORK,
+        requestedAllowance,
+        decimals: USDC_DECIMALS,
+        attempts: lookupAttempts,
+        baseDelayMs: PERMISSION_INDEX_BASE_DELAY_MS,
+        onAttempt: ({ attempt, matched, matchingCount }) =>
+          logger.info(
+            `   register-permission lookup attempt ${attempt}/${lookupAttempts}: matching=${matchingCount} matched=${matched}`
+          ),
       })
 
-      const usdcAddress = USDC_ADDRESSES[NETWORK]
-
-      // Find all matching permissions (spender + token + network)
-      const matchingPermissions = (
-        (allPermissions.spendPermissions ?? []) as unknown as Array<{
-          permissionHash: string
-          network: string
-          permission: { spender: string; token: string; allowance: bigint | string; start: number }
-        }>
-      ).filter(
-        (p) =>
-          p.permission?.spender?.toLowerCase() === spenderAddress.toLowerCase() &&
-          p.permission?.token?.toLowerCase() === usdcAddress.toLowerCase() &&
-          p.network === NETWORK
-      )
-
-      if (matchingPermissions.length === 0) {
+      if (!matchingPermission) {
+        if (requestedAllowance !== null) {
+          // Specific allowance requested but never indexed — reject rather than
+          // silently registering a different (wrong) permission.
+          logger.error(
+            `   Requested allowance $${requestedAllowance} not found onchain after ${lookupAttempts} attempt(s).`
+          )
+          return response.status(400).json({
+            error:
+              'Permission not found onchain for the requested amount. Please try again in a few seconds.',
+          })
+        }
         logger.error(
           'No permission found onchain for this wallet with expected spender/token/network'
         )
-        logger.info(`   Expected spender: ${spenderAddress}`)
-        logger.info(`   Expected token: ${usdcAddress}`)
-        logger.info(`   Expected network: ${NETWORK}`)
         return response.status(400).json({
           error: 'Permission not found onchain. Please try creating the permission again.',
         })
       }
 
-      // CDP doesn't return permissionHash from createSpendPermission, so we
-      // match by allowance the frontend just requested, then break ties by
-      // most-recent start time.
-      const byStartDesc = (
-        a: (typeof matchingPermissions)[0],
-        b: (typeof matchingPermissions)[0]
-      ) => Number(b.permission?.start || 0) - Number(a.permission?.start || 0)
-
-      const requestedAllowance = dailyLimit ? Number.parseFloat(dailyLimit) : null
-
-      // Helper: find permissions matching the requested allowance
-      const findAllowanceMatches = (perms: typeof matchingPermissions) =>
-        requestedAllowance !== null
-          ? perms.filter((p) => {
-              const allowance = Number.parseFloat(
-                ethers.utils.formatUnits(p.permission.allowance, USDC_DECIMALS)
-              )
-              return Math.abs(allowance - requestedAllowance) < 0.01
-            })
-          : []
-
-      let allowanceMatches = findAllowanceMatches(matchingPermissions)
-
-      // Retry if allowance match fails — listSpendPermissions may not
-      // have indexed the just-created permission yet (race condition).
-      if (allowanceMatches.length === 0 && requestedAllowance !== null) {
-        logger.info('   No allowance match on first try, retrying after 5s...')
-        await new Promise((resolve) => setTimeout(resolve, 5000))
-        const retryPermissions = await getCdpClient().evm.listSpendPermissions({
-          address: walletAddress as `0x${string}`,
-        })
-        const retryMatching = (
-          (retryPermissions.spendPermissions ?? []) as unknown as typeof matchingPermissions
-        ).filter(
-          (p) =>
-            p.permission?.spender?.toLowerCase() === spenderAddress.toLowerCase() &&
-            p.permission?.token?.toLowerCase() === usdcAddress.toLowerCase() &&
-            p.network === NETWORK
-        )
-        allowanceMatches = findAllowanceMatches(retryMatching)
-
-        // If retry found new permissions, use the full retry set
-        if (retryMatching.length > matchingPermissions.length) {
-          matchingPermissions.length = 0
-          matchingPermissions.push(...retryMatching)
-        }
-      }
-
-      // If a specific allowance was requested but never found, reject instead
-      // of silently falling back to a different (wrong) permission.
-      if (requestedAllowance !== null && allowanceMatches.length === 0) {
-        logger.error(
-          `   Requested allowance $${requestedAllowance} not found onchain after retry. ` +
-            `Available: ${matchingPermissions.map((p) => ethers.utils.formatUnits(p.permission.allowance, USDC_DECIMALS)).join(', ')}`
-        )
-        return response.status(400).json({
-          error:
-            'Permission not found onchain for the requested amount. Please try again in a few seconds.',
-        })
-      }
-
-      const matchingPermission =
-        allowanceMatches.length > 0
-          ? allowanceMatches.sort(byStartDesc)[0]
-          : matchingPermissions.sort(byStartDesc)[0]
-
       const permissionHash = matchingPermission.permissionHash
       const permission = matchingPermission.permission
       logger.info(
-        `   Found ${matchingPermissions.length} permission(s), using most recent: ${permissionHash}`
+        `   Using permission ${permissionHash} (${requestedAllowance !== null ? `allowance $${requestedAllowance}` : 'most-recent adopt'})`
       )
 
       // Derive daily_limit from the onchain permission allowance (source of truth)

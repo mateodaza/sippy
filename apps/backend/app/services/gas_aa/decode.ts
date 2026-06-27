@@ -20,6 +20,8 @@ import {
   encodeFunctionData,
   decodeFunctionData,
   getAddress,
+  pad,
+  concat,
   type Hex,
   type Address,
 } from 'viem'
@@ -210,6 +212,19 @@ export function encodeExecuteBatch(calls: Call[]): Hex {
   })
 }
 
+/**
+ * Encode a single call as Coinbase Smart Wallet `execute` callData — the envelope
+ * viem's `encodeCalls` emits for a ONE-call op (vs `executeBatch` for batches).
+ * Round-trips with `decodeCalls`. Used by tests + any single-call caller.
+ */
+export function encodeExecute(call: Call): Hex {
+  return encodeFunctionData({
+    abi: SMART_WALLET_EXEC_ABI,
+    functionName: 'execute',
+    args: [getAddress(call.to), call.value, call.data],
+  })
+}
+
 // ── Decoding (webhook side) ──────────────────────────────────────────────────
 
 /** Decode a UserOp's `callData` into the underlying calls (executeBatch/execute). */
@@ -308,4 +323,188 @@ export function decodeFreeSendOp(
  */
 export function capBucketForAccount(account: string): string {
   return `acct:${account.toLowerCase()}`
+}
+
+// ── Setup lane (Track B) — sponsored cold deploy + approve ────────────────────
+//
+// The onboarding op is a SINGLE-call `approve(SpendPermission)` from the user's
+// own (counterfactual) smart account, carrying the public-factory initCode that
+// deploys it in the same op. This is the exact shape decoded from a real prod
+// grant (~478k gas, self-paid today → Pimlico-sponsored here). The encode/decode
+// + bindings below are the pure half of the lane; the row/webhook wiring is B1.1.
+
+/**
+ * Public Coinbase Smart Wallet Factory (v1.1) — the factory present in every real
+ * grant's initCode on Arbitrum One. `createAccount([userEOA, SPM], 0)` → the user
+ * account. (Convergence with viem's `toCoinbaseSmartAccount` is pinned by a test.)
+ */
+export const COINBASE_SMART_WALLET_FACTORY = '0xba5ed110efdba3d005bfc882d75358acbbb85842'
+
+const APPROVE_ABI = [
+  {
+    type: 'function',
+    name: 'approve',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'spendPermission', type: 'tuple', components: SPEND_PERMISSION_COMPONENTS }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
+
+const FACTORY_ABI = [
+  {
+    type: 'function',
+    name: 'createAccount',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'owners', type: 'bytes[]' },
+      { name: 'nonce', type: 'uint256' },
+    ],
+    outputs: [{ name: 'account', type: 'address' }],
+  },
+] as const
+
+/** RawPermission → the on-chain SpendPermission struct (canonical field order). */
+function permToStruct(p: RawPermission) {
+  return {
+    account: getAddress(p.account),
+    spender: getAddress(p.spender),
+    token: getAddress(p.token),
+    allowance: toBig(p.allowance),
+    period: Number(p.period),
+    start: Number(p.start),
+    end: Number(p.end),
+    salt: toBig(p.salt),
+    extraData: (p.extraData as Hex) || '0x',
+  }
+}
+
+/** Encode `SpendPermissionManager.approve(permission)`. */
+export function encodeApproveCall(spendManager: string, permission: RawPermission): Call {
+  const data = encodeFunctionData({
+    abi: APPROVE_ABI,
+    functionName: 'approve',
+    args: [permToStruct(permission)],
+  })
+  return { to: getAddress(spendManager), value: 0n, data }
+}
+
+/** The single-call `[approve]` batch for a sponsored setup (the cold deploy+approve op). */
+export function buildSetupCalls(params: {
+  spendManager: string
+  permission: RawPermission
+}): Call[] {
+  return [encodeApproveCall(params.spendManager, params.permission)]
+}
+
+/**
+ * Expected `initCode` for a setup op: the public factory's
+ * `createAccount([userEOA, SPM], 0)`. Part of the setup security boundary — the
+ * webhook binds the op's initCode to exactly this. Owners are abi-encoded as
+ * 32-byte words (the Coinbase Smart Wallet owner-bytes encoding for EOA owners).
+ */
+export function expectedSetupInitCode(
+  userEOA: string,
+  spendManager: string,
+  factory: string = COINBASE_SMART_WALLET_FACTORY
+): { initCode: Hex; initCodeHash: Hex } {
+  const owners = [
+    pad(getAddress(userEOA), { size: 32 }),
+    pad(getAddress(spendManager), { size: 32 }),
+  ]
+  const factoryData = encodeFunctionData({
+    abi: FACTORY_ABI,
+    functionName: 'createAccount',
+    args: [owners, 0n],
+  })
+  const initCode = concat([getAddress(factory), factoryData])
+  return { initCode, initCodeHash: keccak256(initCode) }
+}
+
+export interface DecodedSetupOp {
+  calls: Call[]
+  account: Address // permission.account — must equal the op sender
+  spender: Address
+  token: Address
+  allowance: bigint
+  callsHash: Hex
+}
+
+/**
+ * Decode + shape-check a setup op: EXACTLY one call, `approve(SpendPermission)`
+ * targeting the SpendPermissionManager, with no ETH value. Returns null if the op
+ * isn't that shape (caller treats null as "not a sponsorable setup op"). The
+ * contextual bindings (account==sender, spender, token, allowance≤tier, initCode)
+ * are checked by `checkSetupOp`.
+ */
+export function decodeSetupOp(
+  callData: Hex,
+  opts: { spendManager: string }
+): DecodedSetupOp | null {
+  let calls: Call[]
+  try {
+    calls = decodeCalls(callData)
+  } catch {
+    return null
+  }
+  if (calls.length !== 1) return null // exactly one call — no extra calls
+  const [approveCall] = calls
+  if (getAddress(approveCall.to) !== getAddress(opts.spendManager)) return null
+  if (approveCall.value !== 0n) return null // no ETH value
+
+  try {
+    const decoded = decodeFunctionData({ abi: APPROVE_ABI, data: approveCall.data })
+    if (decoded.functionName !== 'approve') return null
+    const [perm] = decoded.args as readonly [
+      { account: Address; spender: Address; token: Address; allowance: bigint },
+    ]
+    return {
+      calls,
+      account: getAddress(perm.account),
+      spender: getAddress(perm.spender),
+      token: getAddress(perm.token),
+      allowance: perm.allowance,
+      callsHash: callsHash(calls),
+    }
+  } catch {
+    return null
+  }
+}
+
+export interface SetupCheckContext {
+  sender: string // the op sender (the user's smart account)
+  userEOA: string // the account owner — for the initCode binding
+  spender: string // the Sippy spender
+  usdcAddress: string
+  tierCapUnits: bigint // max allowance in USDC base units
+  spendManager: string
+  initCode: Hex // the op's initCode (from the UserOp)
+  factory?: string
+}
+
+/**
+ * The contextual setup bindings (§5 of GAS_AA_SETUP_OP_CONTRACT.md). Every check
+ * has a matching negative test. The webhook runs this AFTER decodeSetupOp; the DB
+ * row stays the authority — this only derives + checks the bound fields.
+ */
+export function checkSetupOp(
+  decoded: DecodedSetupOp,
+  ctx: SetupCheckContext
+): { ok: true } | { ok: false; reason: string } {
+  if (decoded.account.toLowerCase() !== ctx.sender.toLowerCase()) {
+    return { ok: false, reason: 'permission.account != sender' }
+  }
+  if (decoded.spender.toLowerCase() !== ctx.spender.toLowerCase()) {
+    return { ok: false, reason: 'permission.spender != Sippy spender' }
+  }
+  if (decoded.token.toLowerCase() !== ctx.usdcAddress.toLowerCase()) {
+    return { ok: false, reason: 'token is not USDC' }
+  }
+  if (decoded.allowance > ctx.tierCapUnits) {
+    return { ok: false, reason: 'allowance exceeds tier cap' }
+  }
+  const expected = expectedSetupInitCode(ctx.userEOA, ctx.spendManager, ctx.factory)
+  if (ctx.initCode.toLowerCase() !== expected.initCode.toLowerCase()) {
+    return { ok: false, reason: 'initCode != factory.createAccount([userEOA, SPM], 0)' }
+  }
+  return { ok: true }
 }

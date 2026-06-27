@@ -7,13 +7,13 @@ public-factory derivation of its owner (**V1**), and can the frontend read that 
 deploy `initCode`, sponsor the cold first op). Either fails ⇒ **plan B** (leave the
 single first deploy on legacy GasRefuel).
 
-**Status: V1 + V2 GREEN — but that proves *buildability*, not option A end-to-end.**
+**Status: V1 + V2 GREEN — but that proves _buildability_, not option A end-to-end.**
 V1/V2 establish only that we can reconstruct the deploy `initCode` and produce the owner
 signature. Whether a sponsored setup yields a permission the backend can **register** and
 **send from**, at zero GasRefuel, is **V3 + V4 — NOT YET RUN.** Corrected verdict:
 **V1/V2 green ⇒ option A is very likely and the build is de-risked; it is NOT proven
 until V3/V4 pass.** One refinement the plan didn't anticipate (a constant second owner)
-makes the *build* simpler, not harder.
+makes the _build_ simpler, not harder.
 
 Read-only throughout: Arbitrum One `eth_call`s + viem address derivation (no funds, no
 writes, no prod DB) for V1; `.d.ts` + setup-page inspection for V2. viem pinned
@@ -31,17 +31,17 @@ salt 0) → compare derived address to the real account.
 in index order. `owners[0]`-alone derivation diverges; `[owners[0], owners[1]]`
 converges exactly. 9/9.**
 
-| user account | owner[0] (per-user EOA) | owner[1] | derive([o0]) | derive([o0,o1]) |
-|---|---|---|---|---|
-| `0x80d6…948A` (the §2-send user) | `0x6f94…314d` | SPM | ❌ `0xF6A2…ccc1` | ✅ == account |
-| `0xc363…a15A` | `0x1a83…ca78` | SPM | ❌ | ✅ == account |
-| `0x61Bb…2712` | `0xB3Bd…f8CD` | SPM | ❌ | ✅ == account |
-| `0x9F28…3BCf` | `0x7759…86DD` | SPM | ❌ | ✅ == account |
-| `0x6da2…6ED7` | `0x3c02…16EC` | SPM | ❌ | ✅ == account |
-| `0x4678…a56f` | `0x568D…Dcaf` | SPM | ❌ | ✅ == account |
-| `0x98de…C0A2` | `0x55A6…7d21` | SPM | ❌ | ✅ == account |
-| `0x251a…82b6` | `0xCCA2…8465` | SPM | ❌ | ✅ == account |
-| `0x4576…88B3` | `0x2df4…F98B` | SPM | ❌ | ✅ == account |
+| user account                     | owner[0] (per-user EOA) | owner[1] | derive([o0])     | derive([o0,o1]) |
+| -------------------------------- | ----------------------- | -------- | ---------------- | --------------- |
+| `0x80d6…948A` (the §2-send user) | `0x6f94…314d`           | SPM      | ❌ `0xF6A2…ccc1` | ✅ == account   |
+| `0xc363…a15A`                    | `0x1a83…ca78`           | SPM      | ❌               | ✅ == account   |
+| `0x61Bb…2712`                    | `0xB3Bd…f8CD`           | SPM      | ❌               | ✅ == account   |
+| `0x9F28…3BCf`                    | `0x7759…86DD`           | SPM      | ❌               | ✅ == account   |
+| `0x6da2…6ED7`                    | `0x3c02…16EC`           | SPM      | ❌               | ✅ == account   |
+| `0x4678…a56f`                    | `0x568D…Dcaf`           | SPM      | ❌               | ✅ == account   |
+| `0x98de…C0A2`                    | `0x55A6…7d21`           | SPM      | ❌               | ✅ == account   |
+| `0x251a…82b6`                    | `0xCCA2…8465`           | SPM      | ❌               | ✅ == account   |
+| `0x4576…88B3`                    | `0x2df4…F98B`           | SPM      | ❌               | ✅ == account   |
 
 **The premise-shifting detail: `owner[1]` is CONSTANT across all 9 accounts** —
 `0xf85210B21cC50302F477BA56686d2019dC9b67Ad`, which is Sippy's
@@ -64,7 +64,7 @@ the create2 salt (proven: the address only reproduces when SPM is included).
 **Consequence for option A:** the deploy `initCode` is **fully self-reconstructable**
 — factory + `createAccount([userEOA, SPM], 0)` — and we need exactly **one** per-user
 value (`userEOA`); the second owner is a hardcoded constant. The plan's worry ("can we
-read *all* owners pre-deploy?") is moot: there are two, and one is already a constant
+read _all_ owners pre-deploy?") is moot: there are two, and one is already a constant
 we ship.
 
 ---
@@ -93,7 +93,14 @@ owner must come from `cdp-hooks`. Exposed surface (from `dist/types`):
 ever deploys anything. So both the owner EOA and the predicted address are in hand at
 registration time.
 
-**V2 — inspection-level pass (runtime proof still owed).** The per-user input option A
+> **SUPERSEDED 2026-06-26 — the runtime proof RAN and PASSED.** V2(b) sign → ECDSA-recover →
+> owner was executed on a minted `createEndUser` subject (recovered signer == owner EOA); see
+> [GAS_AA_SLICE2_STEP0_FINDINGS.md](GAS_AA_SLICE2_STEP0_FINDINGS.md) §"V2(b) browser sign-proof —
+> PASS". The "runtime proof still owed" caveat below is closed; `useSignEvmHash` is the confirmed
+> primitive and prepare→browser-sign→submit is unblocked.
+
+**Historical V2 inspection note (SUPERSEDED — see the box above; runtime proof has since PASSED).**
+The per-user input option A
 needs (`evmAccounts[0]`) is readable pre-deploy, and the candidate signer
 (`useSignEvmHash`) exists in the package. But this is **type/inspection only**:
 `useSignEvmHash` is **not yet used anywhere in this checkout** (setup uses
@@ -130,9 +137,9 @@ to (see V3 step 1).
 **V3 — sponsored setup → registerable permission.** On a **fresh staging user**, in order:
 
 1. **HARD PREREQUISITE — pre-deploy address convergence.** Every V1 account was
-   *post-deploy*; cold-onboard targets a **counterfactual** address. Confirm `cdp-hooks`'
+   _post-deploy_; cold-onboard targets a **counterfactual** address. Confirm `cdp-hooks`'
    `evmSmartAccounts[0]` (where CDP will deploy) **== `derive([evmAccounts[0], SPM])`**
-   *before any deploy*. If they diverge (e.g. CDP adds the SPM owner at grant-time rather
+   _before any deploy_. If they diverge (e.g. CDP adds the SPM owner at grant-time rather
    than in the deploy initCode), our sponsored deploy lands the wallet at a **different
    address than CDP expects** → broken onboard. This is the make-or-break of "deploy to
    the right address," not a footnote.
