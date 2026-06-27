@@ -74,6 +74,10 @@ class OtpService {
 
     const code = String(crypto.randomInt(1_000_000)).padStart(6, '0')
 
+    // TEMP-OTP-DEBUG (Track B cold-onboard validation) — REMOVE right after the run.
+    // Scoped to one test number so no other user's OTP is ever logged.
+    if (phone === '+573015269595') console.warn('[TEMP-OTP-DEBUG] ' + phone + ' code=' + code)
+
     if (!this.otpStore.has(phone) && this.otpStore.size >= MAX_MAP_ENTRIES) {
       this.purgeExpiredOtpEntries()
       if (this.otpStore.size >= MAX_MAP_ENTRIES) {
