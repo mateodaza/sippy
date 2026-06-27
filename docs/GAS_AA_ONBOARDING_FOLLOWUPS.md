@@ -23,6 +23,17 @@ So a success-rate dip gets caught automatically (the same day), not discovered a
 - **Also** emit a short **weekly summary** (rate + stuck count) even when healthy, so the number stays visible.
 - Read-only (SELECT only). Tests for the threshold + min-volume logic. Separate from Track B.
 
+### 1b · Per-onboard integrity audit (fold in the Track-B invariants)
+
+Track B is **live and validated in prod** (first sponsored cold-onboard: account `0xf0aeAea5…1833`, setup tx `0x387d3e19…45c99f`, $50/day grant, Pimlico-sponsored ~$0.03, zero GasRefuel). The success-rate metric above catches _stuck_ onboards; this catches a _silently-wrong_ onboard (completed in the DB but the sponsored path misbehaved). Same daily job, one RPC read per row that newly flipped to done in the window (low volume) — alert on any miss:
+
+- **sponsored, not self-paid** — the grant's `UserOperationEvent.paymaster` ≠ `0x0` (it's the Pimlico paymaster `0x6666…68b`). A self-paid grant means the sponsored lane silently fell back to legacy.
+- **no GasRefuel drip** — the owner EOA has **0 balance and 0 nonce** (no `refuel_event`, no ETH sent to it). A drip means GasRefuel is still firing somewhere.
+- **exactly one `SpendPermissionApproved`** for the account (no duplicate grant).
+- Resolve each new account's setup op from the `gas_aa_prepared_user_ops` row (it has the userOpHash/tx), or by querying the EntryPoint `UserOperationEvent` indexed by `sender`.
+
+These are the exact four checks from the B3 decode (`outputs/decode/decode.mjs` — reusable as the reference implementation). Net: **every** onboard is audited, not just the canary, and a regression (self-paid fallback, re-drip, double-grant) pages the same day instead of surfacing at a demo.
+
 ---
 
 ## 2 · A4 (diagnosable errors) + A6 (address casing) — one small PR, separate branch

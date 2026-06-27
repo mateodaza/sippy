@@ -21,6 +21,13 @@ export const ENTRY_POINT_V06 = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
 export const SPEND_PERMISSION_MANAGER = '0xf85210B21cC50302F477BA56686d2019dC9b67Ad'
 
 /**
+ * Pimlico's verifying paymaster — the expected `UserOperationEvent.paymaster` on a
+ * sponsored op. Used by the onboarding-health audit to assert a sponsored onboard wasn't
+ * silently self-paid (paymaster `0x0` = the sponsored lane fell back to legacy).
+ */
+export const PIMLICO_PAYMASTER = '0x6666666666667849c56f2850848cE1C4da65c68b'
+
+/**
  * The lanes the off-CDP stack serves.
  *  - `free_send` — spender pays a user's USDC transfer (slice 1, wired).
  *  - `setup`     — sponsored cold deploy+approve onboarding (Track B / slice 2).
