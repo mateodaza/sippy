@@ -70,6 +70,7 @@ interface ScoreBlocks {
 interface StatsPayload {
   seasonId: string
   transactedVolume: string
+  totalMoved: string
   onboarded: string
   maw: number
   activeThisWeek: number
@@ -142,6 +143,7 @@ export default class SeasonStatsController {
         dailyVolumes,
       ],
       onboarded,
+      totalMoved,
       transferCount,
       registeredUsers,
       countries,
@@ -149,6 +151,7 @@ export default class SeasonStatsController {
     ] = await Promise.all([
       coreP,
       this.onboardedInflow(),
+      this.totalMoved(),
       this.transferCount(),
       this.registeredUsers(),
       this.countryRows(),
@@ -162,6 +165,9 @@ export default class SeasonStatsController {
       seasonId,
       // Hero — verified value-out, all-time. The un-blend: NOT deposits+sends.
       transactedVolume: String(heroVolume),
+      // Gross throughput (deposits + sends), shown beside the value-out hero as a clearly-labeled
+      // second figure. A broad-set tile (onchain.daily_volume), NOT folded into transactedVolume.
+      totalMoved,
       // Separate, clearly-labeled inflow tile. Never added into the hero.
       onboarded,
       // Usage tiles (strict floor).
@@ -206,6 +212,24 @@ export default class SeasonStatsController {
       return String(res.rows?.[0]?.total ?? '0')
     } catch (error) {
       logger.warn({ err: error }, 'season stats: onboarded inflow degraded to 0')
+      return '0'
+    }
+  }
+
+  /**
+   * Gross USDC moved (broad set): the blended deposits+sends throughput from the
+   * onchain.daily_volume rollup — identical to public_stats "totalVolume". Shown beside the
+   * value-out hero as a clearly-labeled second figure, never folded into it. Degrades to '0'.
+   */
+  private async totalMoved(): Promise<string> {
+    try {
+      const row = await db
+        .from('onchain.daily_volume')
+        .select(db.raw('COALESCE(SUM(total_usdc_volume), 0)::text as total'))
+        .first()
+      return String(row?.total ?? '0')
+    } catch (error) {
+      logger.warn({ err: error }, 'season stats: total moved degraded to 0')
       return '0'
     }
   }
