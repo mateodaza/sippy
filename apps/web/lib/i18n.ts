@@ -2014,12 +2014,13 @@ export function localizeError(err: unknown, context: ErrorContext, lang: Languag
 // ── Localized formatRelativeTime ───────────────────────────────────────────────
 
 /**
- * Format a timestamp as a human-readable relative time string.
- * Independent implementation (does not call blockscout.ts).
+ * Format a timestamp as a human-readable relative time string. `timestamp` is in
+ * MILLISECONDS (matching `NormalizedTransaction.timestamp` and blockscout.ts's
+ * formatRelativeTime). Independent implementation (does not call blockscout.ts).
  */
 export function formatRelativeTime(timestamp: number, lang: Language): string {
   const now = Date.now()
-  const diffSec = Math.floor((now - timestamp * 1000) / 1000)
+  const diffSec = Math.floor((now - timestamp) / 1000)
   const diffMin = Math.floor(diffSec / 60)
   const diffHour = Math.floor(diffMin / 60)
   const diffDay = Math.floor(diffHour / 24)
