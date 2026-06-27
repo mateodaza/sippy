@@ -10,6 +10,8 @@ import {
   useIsSignedIn,
   useSignOut,
   useGetAccessToken,
+  useSignEvmHash,
+  useEvmAccounts,
 } from '@coinbase/cdp-hooks'
 import {
   sendOtp,
@@ -34,6 +36,7 @@ import {
   t,
 } from '../../lib/i18n'
 import { parseUnits } from 'viem'
+import { attemptSponsoredOnboarding } from '../../lib/sponsoredOnboarding'
 import { SippyPhoneInput } from '../../components/ui/phone-input'
 import { isBlockedPrefix, isNANP } from '@sippy/shared'
 import { getDefaultChannel, canSwitchChannel } from '../../lib/auth-mode'
@@ -282,6 +285,17 @@ function SetupContent({
   const { signOut } = useSignOut()
 
   const { getAccessToken } = useGetAccessToken()
+  // Gas → AA Track B: the owner EOA the browser signs the sponsored op with, and the
+  // CDP sign primitive. `useEvmAccounts` returns the owner EOA(s) (vs the smart account).
+  const { signEvmHash } = useSignEvmHash()
+  const { evmAccounts } = useEvmAccounts()
+  const ownerEoa: string | null = (() => {
+    const a: unknown = evmAccounts?.[0]
+    if (typeof a === 'string') return a
+    if (a && typeof a === 'object' && 'address' in a)
+      return String((a as { address: unknown }).address)
+    return null
+  })()
 
   // A2 session-recovery retry: count CDP-auth attempts + schedule retries via a
   // tick so a transient init race can't clear a valid token (see useSessionGuard).
@@ -1239,6 +1253,61 @@ function SetupContent({
           // Existing on-chain permission adopted — skip the grant entirely.
           setStep('done')
           return
+        }
+      }
+
+      // Gas → AA Track B: try the SPONSORED cold deploy+approve op before legacy. The
+      // backend 404s /api/setup-op/* when GAS_AA_ONBOARD_ENABLED is off, so a 404 (or any
+      // pre-broadcast fallback / sign-reject / network error) returns 'legacy' and falls
+      // through to the UNCHANGED legacy path below — flag-off costs only a token-fetch +
+      // a 404 probe before it. Once the op LANDS we never legacy (would double-grant); a
+      // landed-but-unrecorded op recovers via adopt-first on the next attempt.
+      if (BACKEND_URL && ownerEoa) {
+        const accessToken = getFreshToken()
+        if (accessToken) {
+          const auth = {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`,
+          }
+          const sponsored = await attemptSponsoredOnboarding({
+            ownerEoa,
+            getCdpToken: () => getCdpTokenWithRetry(getAccessToken),
+            prepare: (cdpAccessToken) =>
+              fetch(`${BACKEND_URL}/api/setup-op/prepare`, {
+                method: 'POST',
+                headers: auth,
+                body: JSON.stringify({ cdpAccessToken }),
+              }),
+            signHash: async ({ evmAccount, hash }) => {
+              const { signature } = await signEvmHash({
+                evmAccount: evmAccount as `0x${string}`,
+                hash: hash as `0x${string}`,
+              })
+              return signature
+            },
+            submit: ({ opId, signature }) =>
+              fetch(`${BACKEND_URL}/api/setup-op/submit`, {
+                method: 'POST',
+                headers: auth,
+                body: JSON.stringify({ opId, signature }),
+              }),
+            recordPermission: () =>
+              registerPermissionWithBackend(accessToken, {
+                dailyLimit: tierLimit,
+                justCreated: true,
+              }),
+          })
+          if (sponsored.kind === 'done') {
+            setStep('done')
+            return
+          }
+          if (sponsored.kind === 'error') {
+            // Landed but the hash didn't record — a retry records it via adopt-first.
+            setError(t('setup.errRegisterPermission', lang))
+            setIsLoading(false)
+            return
+          }
+          // sponsored.kind === 'legacy' → fall through to legacy onboarding below.
         }
       }
 

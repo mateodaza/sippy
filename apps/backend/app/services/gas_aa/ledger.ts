@@ -15,7 +15,14 @@
 import { randomUUID } from 'node:crypto'
 import { query } from '#services/db'
 
-export type GasAaStatus = 'authorized' | 'prepared' | 'landed' | 'failed' | 'expired'
+export type GasAaStatus =
+  | 'authorized'
+  | 'awaiting_signature' // setup lane: sponsored + nonce-held, browser-signing pending (no signed op yet)
+  | 'prepared'
+  | 'landed'
+  | 'failed'
+  | 'expired'
+  | 'cancelled' // setup lane: fallback-terminalized so legacy GasRefuel could run
 
 export interface PreparedOpRow {
   id: string
@@ -35,6 +42,10 @@ export interface PreparedOpRow {
   expiresAt: number // unix seconds
   createdAt: string
   updatedAt: string
+  // ── setup lane (Track B); NULL for free_send ──
+  initCodeHash: string | null // §5 binding: the op's expected initCode hash
+  unsignedUserOp: Record<string, unknown> | null // the sponsored op /submit attaches the sig to
+  userEoa: string | null // the owner /submit verifies the sig recovers to
 }
 
 /** Default authorization window — MINUTES, not hours (stale-row safety, P2). */
@@ -60,6 +71,9 @@ function mapRow(r: any): PreparedOpRow {
     expiresAt: Number(r.expires_at),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    initCodeHash: r.init_code_hash ?? null,
+    unsignedUserOp: r.unsigned_user_op ?? null,
+    userEoa: r.user_eoa ?? null,
   }
 }
 
@@ -80,6 +94,8 @@ export interface InsertAuthorizedParams {
   capBucket?: string | null
   expiresInMinutes?: number
   meta?: Record<string, unknown>
+  /** Setup lane only: the expected initCode hash bound at the webhook (§5). */
+  initCodeHash?: string | null
 }
 
 /**
@@ -93,8 +109,8 @@ export async function insertAuthorized(params: InsertAuthorizedParams): Promise<
   await query(
     `INSERT INTO gas_aa_prepared_user_ops
        (id, lane, semantic_action_id, sender, decoded_user, chain_id, entry_point,
-        calls_hash, cap_bucket, status, meta, expires_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'authorized', $10::jsonb, $11)`,
+        calls_hash, cap_bucket, status, meta, expires_at, init_code_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'authorized', $10::jsonb, $11, $12)`,
     [
       id,
       params.lane,
@@ -107,6 +123,7 @@ export async function insertAuthorized(params: InsertAuthorizedParams): Promise<
       params.capBucket ?? null,
       JSON.stringify(params.meta ?? {}),
       expiresAt,
+      params.initCodeHash ? params.initCodeHash.toLowerCase() : null,
     ]
   )
   return id
@@ -153,6 +170,97 @@ export async function markPrepared(
   }
 }
 
+// ── setup lane (Track B) ──────────────────────────────────────────────────────
+
+/**
+ * Setup lane: the op was built + sponsored (paymaster fetched) and returned to the
+ * browser to sign. Persist the unsigned op, the `userOpHash` (which IS the hashToSign
+ * — raw v0.6 hash, sig-seam spike), and the owner EOA `/submit` must recover to; flip
+ * `authorized → awaiting_signature`. The row stays NONCE-ACTIVE; there is NO
+ * `signed_user_op` yet, so it remains fallback-eligible until `/submit`.
+ */
+export async function markAwaitingSignature(
+  id: string,
+  args: { userOpHash: string; unsignedUserOp: Record<string, unknown>; userEoa: string }
+): Promise<void> {
+  const res = await query(
+    `UPDATE gas_aa_prepared_user_ops
+       SET status = 'awaiting_signature',
+           user_op_hash = $2,
+           unsigned_user_op = $3::jsonb,
+           user_eoa = $4,
+           updated_at = NOW()
+     WHERE id = $1 AND status = 'authorized'`,
+    [
+      id,
+      args.userOpHash.toLowerCase(),
+      JSON.stringify(args.unsignedUserOp),
+      args.userEoa.toLowerCase(),
+    ]
+  )
+  if (res.rowCount === 0) {
+    throw new Error(`gas_aa: markAwaitingSignature found no authorized row ${id}`)
+  }
+}
+
+/**
+ * Fallback-terminalize (atomic): flip `awaiting_signature → cancelled` so legacy
+ * GasRefuel onboarding can run. Returns true ONLY if it won the row (`rowCount=1`);
+ * false ⇒ the op already advanced (`prepared`/landed) ⇒ legacy must NOT run. Shares
+ * the `WHERE status='awaiting_signature'` guard with `markPreparedFromAwaitingSignature`,
+ * so cancel and submit are mutually exclusive — exactly one wins.
+ */
+export async function cancelSetupOp(id: string): Promise<boolean> {
+  const res = await query(
+    `UPDATE gas_aa_prepared_user_ops
+       SET status = 'cancelled', updated_at = NOW()
+     WHERE id = $1 AND status = 'awaiting_signature'`,
+    [id]
+  )
+  return res.rowCount === 1
+}
+
+/**
+ * Setup lane `/submit`: the browser signature is verified + wrapped into the op.
+ * Persist the FULL signed op and flip `awaiting_signature → prepared` under the SAME
+ * conditional guard as `cancelSetupOp` (mutual exclusion). Returns true if it flipped
+ * (point of no return — rebroadcast-only thereafter); false ⇒ the row was cancelled or
+ * already advanced ⇒ caller returns 409, NO broadcast. (`user_op_hash` was set at
+ * `markAwaitingSignature`; the unique index already guards it.)
+ */
+export async function markPreparedFromAwaitingSignature(
+  id: string,
+  signedUserOp: Record<string, unknown>
+): Promise<boolean> {
+  const res = await query(
+    `UPDATE gas_aa_prepared_user_ops
+       SET status = 'prepared', signed_user_op = $2::jsonb, updated_at = NOW()
+     WHERE id = $1 AND status = 'awaiting_signature'`,
+    [id, JSON.stringify(signedUserOp)]
+  )
+  return res.rowCount === 1
+}
+
+/**
+ * Durably terminalize a setup op to `failed` and REPORT whether it actually did
+ * (rowCount === 1). Unlike `markFailed` (best-effort, void), the caller needs to
+ * know: legacy onboarding may run ONLY if the row was terminalized. If this returns
+ * false (the row already advanced/landed) or throws, the caller must NOT fall back —
+ * a still-`prepared` row would be rebroadcast by the reconciler and race the legacy
+ * grant (double-grant). Covers the non-terminal setup states.
+ */
+export async function failSetupOp(id: string, reason: string): Promise<boolean> {
+  const res = await query(
+    `UPDATE gas_aa_prepared_user_ops
+       SET status = 'failed',
+           meta = meta || jsonb_build_object('failed_reason', $2::text, 'failed_at', $3::bigint),
+           updated_at = NOW()
+     WHERE id = $1 AND status IN ('authorized', 'awaiting_signature', 'prepared')`,
+    [id, reason, nowSec()]
+  )
+  return res.rowCount === 1
+}
+
 export async function markLanded(id: string, txHash?: string | null): Promise<void> {
   await query(
     `UPDATE gas_aa_prepared_user_ops
@@ -182,6 +290,55 @@ export async function getById(id: string): Promise<PreparedOpRow | null> {
   return res.rows[0] ? mapRow(res.rows[0]) : null
 }
 
+/**
+ * The resumable setup op for a sender (idempotent /prepare, B1.1d redline #5): an
+ * `awaiting_signature`, not-expired setup row — sponsored + unsigned, ready for the
+ * browser to sign. A double-tab / retried /prepare returns THIS op so the user signs
+ * the one already prepared, instead of minting a SECOND sponsored op (and burning a
+ * second nonce on the active-nonce index). Most-recent first. `sender`/`entry_point`
+ * are stored lowercased; both sides are lowercased here (A6 casing).
+ */
+export async function findResumableSetupOp(
+  chainId: number,
+  entryPoint: string,
+  sender: string
+): Promise<PreparedOpRow | null> {
+  const res = await query(
+    `SELECT * FROM gas_aa_prepared_user_ops
+       WHERE chain_id = $1 AND entry_point = $2 AND LOWER(sender) = $3
+         AND lane = 'setup' AND status = 'awaiting_signature' AND expires_at > $4
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    [chainId, entryPoint.toLowerCase(), sender.toLowerCase(), nowSec()]
+  )
+  return res.rows[0] ? mapRow(res.rows[0]) : null
+}
+
+/**
+ * An IN-FLIGHT setup op for a sender (B1.1d in-flight guard): a `prepared` setup row —
+ * signed + broadcast, not yet landed/failed. While one exists, /prepare must NOT build a
+ * SECOND op: a fresh op would claim nonce+1 on the still-undeployed account, fail
+ * validation, and return a `fallback` that sends the frontend to legacy — duplicating the
+ * approve the in-flight op is already landing. The reconciler settles the in-flight op;
+ * the user waits. `prepared` rows are never swept (broadcast → reconciled), so no expiry
+ * filter. Both sides lowercased (A6 casing).
+ */
+export async function findInFlightSetupOp(
+  chainId: number,
+  entryPoint: string,
+  sender: string
+): Promise<PreparedOpRow | null> {
+  const res = await query(
+    `SELECT * FROM gas_aa_prepared_user_ops
+       WHERE chain_id = $1 AND entry_point = $2 AND LOWER(sender) = $3
+         AND lane = 'setup' AND status = 'prepared'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    [chainId, entryPoint.toLowerCase(), sender.toLowerCase()]
+  )
+  return res.rows[0] ? mapRow(res.rows[0]) : null
+}
+
 export interface MatchKey {
   chainId: number
   entryPoint: string
@@ -190,6 +347,12 @@ export interface MatchKey {
   callsHash: string
   decodedUser: string
   capBucket: string
+  /**
+   * Setup lane only — the op's initCode hash (§5 binding). Omitted for free_send,
+   * where it matches NULL rows (the free-send rows have no init_code_hash), so the
+   * existing free-send match is behaviour-preserving.
+   */
+  initCodeHash?: string | null
 }
 
 /**
@@ -208,8 +371,9 @@ export async function findActiveMatch(key: MatchKey): Promise<PreparedOpRow | nu
        AND calls_hash = $5
        AND decoded_user = $6
        AND cap_bucket = $7
-       AND status IN ('authorized', 'prepared')
-       AND expires_at > $8
+       AND init_code_hash IS NOT DISTINCT FROM $8
+       AND status IN ('authorized', 'awaiting_signature', 'prepared')
+       AND expires_at > $9
      LIMIT 1`,
     [
       key.chainId,
@@ -219,6 +383,7 @@ export async function findActiveMatch(key: MatchKey): Promise<PreparedOpRow | nu
       key.callsHash.toLowerCase(),
       key.decodedUser.toLowerCase(),
       key.capBucket,
+      key.initCodeHash ? key.initCodeHash.toLowerCase() : null,
       nowSec(),
     ]
   )
@@ -241,7 +406,8 @@ export async function maxActiveNonce(
   const res = await query(
     `SELECT MAX(sender_nonce) AS max FROM gas_aa_prepared_user_ops
      WHERE chain_id = $1 AND entry_point = $2 AND sender = $3
-       AND sender_nonce IS NOT NULL AND status IN ('authorized', 'prepared')`,
+       AND sender_nonce IS NOT NULL
+       AND status IN ('authorized', 'awaiting_signature', 'prepared')`,
     [chainId, entryPoint.toLowerCase(), sender.toLowerCase()]
   )
   const max = res.rows[0]?.max
@@ -262,6 +428,7 @@ export async function stampSponsorshipFinalized(key: MatchKey): Promise<string |
            updated_at = NOW()
      WHERE chain_id = $1 AND entry_point = $2 AND sender = $3 AND sender_nonce = $4
        AND calls_hash = $5 AND decoded_user = $6 AND cap_bucket = $7
+       AND init_code_hash IS NOT DISTINCT FROM $9
      RETURNING id`,
     [
       key.chainId,
@@ -272,16 +439,20 @@ export async function stampSponsorshipFinalized(key: MatchKey): Promise<string |
       key.decodedUser.toLowerCase(),
       key.capBucket,
       nowSec(),
+      key.initCodeHash ? key.initCodeHash.toLowerCase() : null,
     ]
   )
   return res.rows[0]?.id ?? null
 }
 
 /**
- * Cleanup sweep (P2): expire stale `authorized` rows past their window — these
- * RESERVED a nonce but were never broadcast (no signed op), so expiring them
- * releases the nonce from both the active-nonce unique index AND maxActiveNonce
- * (status-based), keeping allocation from drifting forward after a crash.
+ * Cleanup sweep (P2): expire stale `authorized` AND `awaiting_signature` rows past
+ * their window — these RESERVED a nonce but were never broadcast (no signed op), so
+ * expiring them releases the nonce from both the active-nonce unique index AND
+ * maxActiveNonce (status-based), keeping allocation from drifting forward after a
+ * crash. `awaiting_signature` is the setup-lane abandoned-after-prepare reclaim: a
+ * user who prepared then closed the tab (signed or not, never submitted) must not
+ * strand the nonce — the sweep frees it for a retry or the legacy fallback.
  *
  * `prepared` rows are deliberately NOT swept: they were broadcast and hold a real
  * on-chain nonce until mined, so they're reconciled to their true outcome
@@ -292,7 +463,7 @@ export async function sweepExpired(): Promise<string[]> {
   const res = await query(
     `UPDATE gas_aa_prepared_user_ops
        SET status = 'expired', updated_at = NOW()
-     WHERE status = 'authorized' AND expires_at <= $1
+     WHERE status IN ('authorized', 'awaiting_signature') AND expires_at <= $1
      RETURNING id`,
     [nowSec()]
   )

@@ -32,6 +32,7 @@ import {
   getSecurityLimitStatus,
 } from '#services/cdp_wallet.service'
 import { getRefuelService } from '#services/refuel.service'
+import { isGasAaOnboardEnabled } from '#services/gas_aa/flag'
 import { registerWalletWithAlchemy } from '#services/alchemy.service'
 import { drainPendingReferral } from '#services/quest/referral.service'
 import { exportEventSchema, webSendEventSchema, sendFromWebBodySchema } from '#types/schemas'
@@ -150,18 +151,26 @@ export default class EmbeddedWalletController {
         )
       }
 
-      // Auto-refuel new wallet with gas if needed
-      const refuelService = getRefuelService()
-      if (refuelService.isAvailable()) {
-        logger.info('Checking if wallet needs refuel...')
-        const refuelResult = await refuelService.checkAndRefuel(walletAddress)
-        if (refuelResult.success) {
-          logger.info(`Wallet refueled: ${refuelResult.txHash}`)
-        } else {
-          logger.warn(`Refuel failed or skipped: ${refuelResult.error}`)
-        }
+      // Auto-refuel new wallet with gas if needed. Skipped under sponsored onboarding
+      // (Track B): the cold deploy+approve op is Pimlico-sponsored, so the onboarding
+      // drip is redundant. A fallback-to-legacy onboarding still gets gas via
+      // /api/ensure-gas (the legacy branch), so no user is stranded. Behavior is
+      // unchanged when GAS_AA_ONBOARD_ENABLED is off.
+      if (isGasAaOnboardEnabled()) {
+        logger.info('gas_aa onboard: skipping register-wallet auto-refuel (sponsored onboarding)')
       } else {
-        logger.warn('Refuel service not available - user will need ETH for gas')
+        const refuelService = getRefuelService()
+        if (refuelService.isAvailable()) {
+          logger.info('Checking if wallet needs refuel...')
+          const refuelResult = await refuelService.checkAndRefuel(walletAddress)
+          if (refuelResult.success) {
+            logger.info(`Wallet refueled: ${refuelResult.txHash}`)
+          } else {
+            logger.warn(`Refuel failed or skipped: ${refuelResult.error}`)
+          }
+        } else {
+          logger.warn('Refuel service not available - user will need ETH for gas')
+        }
       }
 
       // Register with Alchemy webhook (fire-and-forget — never blocks signup)

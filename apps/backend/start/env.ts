@@ -241,4 +241,19 @@ export default await Env.create(new URL('../', import.meta.url), {
   // The Pimlico sponsorship policy id passed in the paymaster context (never an
   // empty context in product code — the policy holds the global/per-key caps).
   PIMLICO_SPONSORSHIP_POLICY_ID: Env.schema.string.optional(),
+
+  // ── Gas → AA Track B (sponsored onboarding, slice 2) ─────────────────
+  // Separate killswitch for the setup lane (sponsored cold deploy+approve in
+  // place of GasRefuel + self-paid createSpendPermission). Default OFF →
+  // onboarding is byte-identical to the legacy path. Independent of GAS_AA_ENABLED.
+  GAS_AA_ONBOARD_ENABLED: Env.schema.string.optional(),
+  // The setup lane's OWN Pimlico sponsorship policy (its own caps + per-op gas
+  // limit ≥ ~478k for the cold op), so a setup op is never sponsored under the
+  // free-send budget and vice-versa.
+  PIMLICO_SETUP_SPONSORSHIP_POLICY_ID: Env.schema.string.optional(),
+  // The setup lane's OWN Pimlico webhook secret. Pimlico signs each policy's webhook
+  // with a distinct per-policy secret, so the verifier selects it by sponsorshipPolicyId
+  // (alongside PIMLICO_WEBHOOK_SECRET for free-send). Unset → setup webhooks can't be
+  // verified, so the setup lane stays dark.
+  PIMLICO_SETUP_WEBHOOK_SECRET: Env.schema.string.optional(),
 })
